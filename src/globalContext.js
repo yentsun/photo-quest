@@ -14,7 +14,6 @@ export const reducer = (state, action) => {
             return {...state,
                 settingsLoaded: true,
                 selfId: action.selfId,
-                companyId: action.settings.selectedCompanyId,
                 settings: action.settings };
 
         case a.SETTING_UPDATED:
