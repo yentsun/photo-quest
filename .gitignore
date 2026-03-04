@@ -1,3 +1,16 @@
 node_modules/
+dist/
 build/
 .idea/
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+# Transcoded media output
+transcoded/
+
+# Environment
+.env
+.env.local

@@ -1,0 +1,14 @@
+{
+  "name": "@photo-quest/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch index.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@photo-quest/shared": "workspace:*",
+    "sql.js": "^1.11.0"
+  }
+}

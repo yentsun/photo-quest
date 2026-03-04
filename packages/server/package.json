@@ -1,0 +1,16 @@
+{
+  "name": "@photo-quest/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch boot.js",
+    "start": "node boot.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@photo-quest/shared": "workspace:*",
+    "kojo": "^8.2.1",
+    "sql.js": "^1.11.0"
+  }
+}

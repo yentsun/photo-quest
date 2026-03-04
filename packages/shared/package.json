@@ -1,0 +1,13 @@
+{
+  "name": "@photo-quest/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./constants": "./constants.js",
+    "./schema": "./schema.js",
+    "./routes": "./routes.js"
+  }
+}
