@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@photo-quest/shared": "workspace:*",
-    "kojo": "^8.2.1",
+    "kojo": "^9.0.4",
     "sql.js": "^1.11.0"
   }
 }

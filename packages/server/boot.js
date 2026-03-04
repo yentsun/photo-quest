@@ -15,7 +15,7 @@
 import Kojo from 'kojo';
 import { initDb } from './src/db.js';
 
-export default async function () {
+export default async function boot() {
 
   const PORT = process.env.PORT || 4000;
 
@@ -26,6 +26,7 @@ export default async function () {
     name: 'photo-quest',
     functionsDir: 'ops',
     subsDir: 'endpoints',
+    logLevel: 'debug',
   });
 
   /* HTTP route table -- endpoints push into this via addHttpRoute op. */
@@ -36,15 +37,25 @@ export default async function () {
 
   /* SQLite database (sql.js WASM, no native compilation needed).
    * Stored in kojo state so all ops can access it via kojo.get('db'). */
+  console.debug('[boot] Initialising database...');
   const db = await initDb();
   kojo.set('db', db);
 
   /* Auto-discover ops/ and endpoints/. During this phase every
    * endpoint file calls kojo.ops.addHttpRoute() to register its route. */
+  console.debug('[boot] Loading ops and endpoints...');
   await kojo.ready();
 
+  /* Unpack ops for direct access. */
+  const { requestMiddleware } = kojo.ops;
+
   /* All routes are now registered -- start the HTTP server. */
-  kojo.ops.http();
+  const routes = kojo.get('routes') || [];
+  console.debug(`[boot] ${routes.length} routes registered`);
+  requestMiddleware();
 
   return kojo;
 }
+
+/* Self-invoke when run directly (e.g. `node boot.js`). */
+boot();

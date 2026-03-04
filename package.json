@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm run --parallel dev:web dev:server dev:worker",
+    "dev": "pnpm --parallel --filter @photo-quest/web --filter @photo-quest/server --filter @photo-quest/worker dev",
     "dev:web": "pnpm --filter @photo-quest/web dev",
     "dev:server": "pnpm --filter @photo-quest/server dev",
     "dev:worker": "pnpm --filter @photo-quest/worker dev",

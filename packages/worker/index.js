@@ -34,9 +34,10 @@ const POLL_INTERVAL = process.env.POLL_INTERVAL || 3000;
 
 /* Ensure the database tables exist.  initDb() is async because sql.js
  * needs to load its WASM binary before we can use the database. */
+console.debug('[worker] Initialising database...');
 await initDb();
 
-console.log('Worker started, polling for jobs...');
+console.log('[worker] Started, polling for jobs...');
 
 /**
  * Main polling loop.  Calls itself recursively via setImmediate (fast path)
@@ -61,7 +62,7 @@ async function poll() {
     /* Log and continue rather than crashing.  The failing job has already
      * been marked as FAILED inside processNextJob's own catch block, so
      * this catch handles truly unexpected errors (e.g. DB connection lost). */
-    console.error('Worker error:', err);
+    console.error('[worker] Poll error:', err);
   }
 
   /* Queue is empty or an error occurred -- wait before polling again. */

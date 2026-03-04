@@ -16,7 +16,7 @@
  */
 
 export default function (config, handler) {
-  const [kojo] = this;
+  const [kojo, logger] = this;
 
   /* Lazy-initialise the routes array on first call. */
   let routes = kojo.get('routes');
@@ -28,11 +28,15 @@ export default function (config, handler) {
   /* Compile the pathname into a URLPattern for fast matching. */
   const pattern = new URLPattern({ pathname: config.pathname });
 
+  const method = config.method.toUpperCase();
+
   routes.push({
     pattern,
-    method: config.method.toUpperCase(),
+    method,
     handler,
     access: config.access || null,
     schema: config.schema || null,
   });
+
+  logger.debug(`${method} ${config.pathname}`);
 }

@@ -44,7 +44,7 @@ export async function processNextJob() {
   const job = claimNextJob();
   if (!job) return false;
 
-  console.log(`Processing job ${job.id}: ${job.type} for "${job.media_title}"`);
+  console.debug(`[pipeline] Job #${job.id} claimed: ${job.type} for "${job.media_title}"`);
 
   try {
     switch (job.type) {
@@ -57,9 +57,10 @@ export async function processNextJob() {
       default:
         throw new Error(`Unknown job type: ${job.type}`);
     }
+    console.debug(`[pipeline] Job #${job.id} completed`);
     return true;
   } catch (err) {
-    console.error(`Job ${job.id} failed:`, err.message);
+    console.error(`[pipeline] Job #${job.id} failed:`, err.message);
 
     /* Mark the job as failed and the media as errored. */
     failJob(job.id, err.message);
@@ -92,10 +93,10 @@ async function handleProbe(job) {
 
   if (needsTranscode) {
     createJob(job.media_id, JOB_TYPE.TRANSCODE);
-    console.log(`  Queued transcode for "${job.media_title}"`);
+    console.debug(`[pipeline] Queued transcode for "${job.media_title}"`);
   } else {
     updateMediaStatus(job.media_id, MEDIA_STATUS.READY);
-    console.log(`  "${job.media_title}" already in target format, marked ready`);
+    console.debug(`[pipeline] "${job.media_title}" already H.264 MP4, marked ready`);
   }
 }
 
@@ -117,5 +118,5 @@ async function handleTranscode(job) {
     }
   });
 
-  console.log(`  Transcoded "${job.media_title}" → ${outputPath}`);
+  console.debug(`[pipeline] Transcoded "${job.media_title}" → ${outputPath}`);
 }

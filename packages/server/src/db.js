@@ -68,7 +68,7 @@ export async function initDb() {
   /* Persist the freshly-created schema to disk. */
   saveDb();
 
-  console.log('Database initialized');
+  console.debug(`[db] Initialised (${fs.existsSync(DB_PATH) ? 'loaded from disk' : 'new database'})`);
   return db;
 }
 
