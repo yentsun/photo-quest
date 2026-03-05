@@ -9,7 +9,7 @@ export default function () {
   const [kojo] = this;
   const db = kojo.get('db');
 
-  const stmt = db.prepare('SELECT * FROM media ORDER BY created_at DESC');
+  const stmt = db.prepare('SELECT * FROM media WHERE hidden = 0 ORDER BY created_at DESC');
   const results = [];
 
   while (stmt.step()) {

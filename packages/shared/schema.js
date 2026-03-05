@@ -20,6 +20,8 @@
  *                      will not create duplicate rows (INSERT OR IGNORE).
  *  - `title`           Human-readable name derived from the filename (without
  *                      the extension).
+ *  - `type`            Either 'video' or 'image' -- see MEDIA_TYPE enum.
+ *  - `folder`          Parent directory path for folder-based filtering.
  *  - `duration`        Length in seconds, populated after the ffprobe step.
  *  - `width` / `height` Video resolution in pixels, populated after probe.
  *  - `codec`           Video codec name (e.g. "h264", "vp9"), from ffprobe.
@@ -27,6 +29,11 @@
  *  - `transcoded_path` Absolute path to the transcoded MP4, or NULL if the
  *                      original is already in the target format.
  *  - `size`            File size in bytes.
+ *  - `likes`           Cumulative like count (unlimited, each click adds 1).
+ *  - `hidden`          1 if folder was removed (preserves likes/metadata for
+ *                      re-adding later), 0 otherwise.
+ *  - `hash`            Content hash (first 64KB + size) for identifying same
+ *                      media across different paths/filenames.
  *  - `created_at` /
  *    `updated_at`      ISO-8601 timestamps managed by SQLite defaults and
  *                      explicit UPDATEs in the worker.
@@ -38,6 +45,8 @@ export const CREATE_MEDIA_TABLE = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     path TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'video',
+    folder TEXT,
     duration REAL,
     width INTEGER,
     height INTEGER,
@@ -45,6 +54,9 @@ export const CREATE_MEDIA_TABLE = `
     status TEXT NOT NULL DEFAULT 'pending',
     transcoded_path TEXT,
     size INTEGER,
+    likes INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    hash TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )

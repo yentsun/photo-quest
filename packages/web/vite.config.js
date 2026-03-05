@@ -53,9 +53,27 @@ export default defineConfig({
         /* Cache app shell (JS, CSS, HTML) for offline access. */
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
 
-        /* Don't cache API calls -- they should always hit the server. */
+        /* Don't cache API data endpoints -- they should always hit the server. */
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/media/, /^\/stream/, /^\/jobs/],
+        navigateFallbackDenylist: [/^\/media/, /^\/stream/, /^\/image/, /^\/jobs/],
+
+        /* Runtime caching for viewed images - cache them for offline access. */
+        runtimeCaching: [
+          {
+            urlPattern: /^\/image\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'media-images',
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
       },
     }),
   ],
@@ -63,9 +81,14 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/media': 'http://localhost:4000',
+      '/media': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
       '/stream': 'http://localhost:4000',
+      '/image': 'http://localhost:4000',
       '/jobs': 'http://localhost:4000',
+      '/network': 'http://localhost:4000',
     },
   },
 });

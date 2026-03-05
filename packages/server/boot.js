@@ -19,6 +19,13 @@ export default async function boot() {
 
   const PORT = process.env.PORT || 4000;
 
+  /* Media paths -- directories the server can scan for media files.
+   * Set via MEDIA_PATHS env var as semicolon-separated paths.
+   * Example: MEDIA_PATHS=/home/user/Pictures;/home/user/Videos */
+  const MEDIA_PATHS = process.env.MEDIA_PATHS
+    ? process.env.MEDIA_PATHS.split(';').map(p => p.trim()).filter(Boolean)
+    : [];
+
   /* Kojo -- event-driven microservice framework.
    * `functionsDir: 'ops'`  → business logic lives in ops/
    * `subsDir: 'endpoints'` → route handlers live in endpoints/ */
@@ -34,6 +41,11 @@ export default async function boot() {
 
   /* Config values that ops and endpoints need. */
   kojo.set('port', PORT);
+  kojo.set('mediaPaths', MEDIA_PATHS);
+
+  if (MEDIA_PATHS.length > 0) {
+    console.debug(`[boot] Media paths configured: ${MEDIA_PATHS.join(', ')}`);
+  }
 
   /* SQLite database (sql.js WASM, no native compilation needed).
    * Stored in kojo state so all ops can access it via kojo.get('db'). */

@@ -41,7 +41,16 @@ export const initialState = {
 
   /** The HTTP status code associated with the current error (e.g. 500), or
    *  null.  Used to decide whether to prefix the toaster with "Server Error". */
-  errorStatus: null
+  errorStatus: null,
+
+  /** List of all media items from the server. */
+  media: [],
+
+  /** Whether media is currently being loaded. */
+  mediaLoading: true,
+
+  /** Unique folder paths derived from media. */
+  folders: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -95,6 +104,48 @@ export const reducer = (state, action) => {
         errorMessage: null,
         errorStatus: null
       };
+
+    /*
+     * MEDIA_LOADED is dispatched when the media list is fetched from server.
+     * Derives unique folders from media paths.
+     */
+    case actions.MEDIA_LOADED: {
+      const folders = [...new Set(action.media.map(m => m.folder).filter(Boolean))];
+      return {
+        ...state,
+        media: action.media,
+        mediaLoading: false,
+        folders,
+      };
+    }
+
+    /*
+     * MEDIA_LIKED is dispatched when a media item is liked.
+     * Updates the like count for the specific media item.
+     */
+    case actions.MEDIA_LIKED:
+      return {
+        ...state,
+        media: state.media.map(m =>
+          m.id === action.mediaId
+            ? { ...m, likes: (m.likes || 0) + 1 }
+            : m
+        ),
+      };
+
+    /*
+     * MEDIA_ADDED is dispatched when new media items are added from a folder scan.
+     * Appends new items to the media list and updates folders.
+     */
+    case actions.MEDIA_ADDED: {
+      const newMedia = [...state.media, ...action.media];
+      const folders = [...new Set(newMedia.map(m => m.folder).filter(Boolean))];
+      return {
+        ...state,
+        media: newMedia,
+        folders,
+      };
+    }
 
     default:
       throw new Error('unknown action type: ' + action.type);

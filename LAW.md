@@ -6,51 +6,61 @@ The governing rules of the photo-quest project. This document is the source of t
 
 ## Section 1 — Client
 
-### Article 1.1 — PWA Access
-The user must be able to load the PWA client via a URL.
+**1.1** The user must be able to load the PWA client via a URL.
 
-### Article 1.2 — Initial Setup
-After installation and server start, the client must prompt the user to add a folder from their hard drive to the media library.
+**1.2** After installation and server start, the client must prompt the user to add a folder from their hard drive to the media library. The user must be able to pick the folder using the native file picker UI only — no text inputs for paths.
 
-### Article 1.3 — Library View
-After media files are indexed, the user must be able to see processed media in the Library section of the PWA.
+**1.3** After media files are indexed, the user must be able to see processed media in the Library section of the PWA.
 
-### Article 1.4 — Slideshow
-If the user has media in their library, they must be able to launch a slideshow in randomized order.
+**1.4** If the user has media in their library, they must be able to launch a slideshow in randomized order.
 
-### Article 1.5 — Slideshow Controls
-The user must be able to stop the slideshow and use next/previous buttons to navigate.
+**1.5** The user must be able to stop the slideshow and use next/previous buttons to navigate.
 
-### Article 1.6 — Slideshow Resume
-The user must be able to resume the auto slideshow after stopping it.
+**1.6** The user must be able to resume the auto slideshow after stopping it.
 
-### Article 1.7 — Like Media
-The user must be able to like a media item. Likes are unlimited — each click adds to the total count.
+**1.7** The user must be able to like a media item. Likes are unlimited — each click adds to the total count. The like count must update immediately in the UI.
 
-### Article 1.8 — Liked Section
-The user must be able to view liked items in a separate section and launch a slideshow from it.
+**1.8** The user must be able to view liked items in a separate section and launch a slideshow from it. Items must be sorted by like count descending by default.
 
-### Article 1.9 — Folder Slideshow
-The user must be able to launch a slideshow from the folder containing a media item, in either random or sequential order.
+**1.9** The user must be able to launch a slideshow from the folder containing a media item, in either random or sequential order.
 
-### Article 1.10 — Offline Access
-Items loaded into the PWA must remain available even when offline.
+**1.10** Items loaded into the PWA must remain available even when offline.
 
-### Article 1.11 — Download Media
-The user must be able to download a media item to their device storage (desktop or mobile).
+**1.11** The user must be able to download a media item to their device storage (desktop or mobile).
 
-### Article 1.12 — Responsive UI
-The PWA UI must work on any display, mobile or desktop.
+**1.12** The PWA UI must work on any display, mobile or desktop.
+
+**1.13** The user must be able to update the media library to pick up new files.
+
+**1.14** The user must be able to add multiple media folders to the library.
+
+**1.15** Clicking a media preview on any PWA client must open that media item for viewing, not start a slideshow.
+
+**1.16** Randomized slideshow must only start by pressing a dedicated Slideshow button above the previews.
+
+**1.17** All UI buttons must have clear explanations (labels or tooltips).
+
+**1.18** Preview background icons must be different for image and video media.
+
+**1.19** The user must be able to see a clear local network URL in the PWA client UI to connect from other devices.
+
+**1.20** Media previews and full media must display correctly on mobile PWA clients. There should be no broken image icons.
+
+**1.21** Media URLs must be consistent for all PWA clients (e.g., `/image/123`). No device-specific blob URLs.
+
+**1.22** The user must not be required to set anything technical (env vars, config files, command line args).
+
+**1.23** The user must be able to remove a media folder from the library. Records should be preserved (hidden, not deleted) so likes and metadata are restored if the folder is re-added later.
+
+**1.24** The server must persistently identify media using a content hash. Same media file should be recognized regardless of path or filename.
 
 ---
 
 ## Section 2 — Server
 
-### Article 2.1 — Installation
-The user must be able to download and install the server from GitHub.
+**2.1** The user must be able to download and install the server from GitHub.
 
-### Article 2.2 — Media Indexing
-The server must read and index all media files (images and videos) in all subfolders recursively.
+**2.2** The server must read and index all media files (images and videos) in all subfolders recursively.
 
 ---
 

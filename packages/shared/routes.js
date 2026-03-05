@@ -28,7 +28,13 @@ export const clientRoutes = {
   login: '/login',
 
   /** Main media library dashboard -- the default landing page. */
-  dashboard: '/dashboard'
+  dashboard: '/dashboard',
+
+  /** Liked media section -- shows items with likes > 0. */
+  liked: '/liked',
+
+  /** Folder view -- shows media filtered by folder path. */
+  folder: '/folder/:path'
 };
 
 // ---------------------------------------------------------------------------
@@ -59,12 +65,27 @@ export const apiRoutes = {
   /** GET / DELETE -- fetch or remove a single media item by its numeric ID. */
   mediaById: '/media/:id',
 
+  /** PATCH -- increment the like count for a media item. */
+  mediaLike: '/media/:id/like',
+
   /** POST -- trigger a directory scan.  Body: { path: "/absolute/dir" }. */
   mediaScan: '/media/scan',
+
+  /** POST -- add media items from client-side folder scan. */
+  mediaAdd: '/media/add',
+
+  /** POST -- find folder by name in server's configured media paths. */
+  mediaFindFolder: '/media/find-folder',
+
+  /** DELETE -- remove a folder from library (hides records, preserves likes). */
+  mediaFolder: '/media/folder/:name',
 
   /** GET  -- stream the video file for a given media ID (supports HTTP range
    *  requests for seeking). */
   stream: '/stream/:id',
+
+  /** GET  -- serve an image file for a given media ID. */
+  image: '/image/:id',
 
   /** GET  -- list all jobs (probe + transcode). */
   jobs: '/jobs',
@@ -72,5 +93,8 @@ export const apiRoutes = {
   /** GET  -- Server-Sent Events (SSE) endpoint.  The server pushes real-time
    *  job progress updates to connected clients over this long-lived
    *  connection. */
-  jobEvents: '/jobs/events'
+  jobEvents: '/jobs/events',
+
+  /** GET  -- Server network info for connecting from other devices. */
+  network: '/network'
 };

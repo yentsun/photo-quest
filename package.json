@@ -7,7 +7,8 @@
     "dev:web": "pnpm --filter @photo-quest/web dev",
     "dev:server": "pnpm --filter @photo-quest/server dev",
     "dev:worker": "pnpm --filter @photo-quest/worker dev",
-    "build": "pnpm --filter @photo-quest/web build"
+    "build": "pnpm --filter @photo-quest/web build",
+    "test": "pnpm --filter @photo-quest/server test"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

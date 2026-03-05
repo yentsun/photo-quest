@@ -19,6 +19,7 @@
 import React, { useContext, useEffect } from 'react';
 import GlobalContext from '../globalContext';
 import { actions, toasterTimeout } from '@photo-quest/shared';
+import { IconButton } from './ui/index.js';
 
 /**
  * Renders a dismissible error toast notification.
@@ -72,13 +73,13 @@ export default function ToasterMessage() {
 
       {/* Manual dismiss button -- dispatches the same action as the auto-
           dismiss timer so the reducer logic stays in one place. */}
-      <button
+      <IconButton
+        icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
         onClick={() => dispatch({ type: actions.ERROR_DISMISSED })}
-        className="text-white hover:text-gray-200"
-        title="Dismiss message"
-      >
-        &times;
-      </button>
+        label="Dismiss message"
+        size="sm"
+        className="text-white hover:text-gray-200 hover:bg-transparent"
+      />
     </div>
   );
 }

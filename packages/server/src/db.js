@@ -65,6 +65,9 @@ export async function initDb() {
   db.run(CREATE_MEDIA_TABLE);
   db.run(CREATE_JOBS_TABLE);
 
+  /* Run migrations for existing databases. */
+  migrateDb();
+
   /* Persist the freshly-created schema to disk. */
   saveDb();
 
@@ -108,5 +111,33 @@ export function reloadDb() {
     const fileBuffer = fs.readFileSync(DB_PATH);
     db = new SQL.Database(fileBuffer);
     db.run('PRAGMA foreign_keys = ON');
+  }
+}
+
+/**
+ * Run database migrations to add new columns to existing tables.
+ *
+ * This handles the case where a database was created before the likes,
+ * type, and folder columns were added to the schema.
+ *
+ * SQLite's ALTER TABLE ADD COLUMN is used. Errors are silently ignored
+ * because they indicate the column already exists.
+ */
+function migrateDb() {
+  const migrations = [
+    'ALTER TABLE media ADD COLUMN likes INTEGER NOT NULL DEFAULT 0',
+    "ALTER TABLE media ADD COLUMN type TEXT NOT NULL DEFAULT 'video'",
+    'ALTER TABLE media ADD COLUMN folder TEXT',
+    'ALTER TABLE media ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE media ADD COLUMN hash TEXT',
+  ];
+
+  for (const sql of migrations) {
+    try {
+      db.run(sql);
+      console.debug(`[db] Migration applied: ${sql.substring(0, 50)}...`);
+    } catch (err) {
+      /* Column already exists -- ignore. */
+    }
   }
 }

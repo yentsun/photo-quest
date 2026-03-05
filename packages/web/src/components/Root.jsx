@@ -5,21 +5,25 @@
  * Router renders it for the "/" path and injects the matched child route via
  * the `<Outlet>` component.
  *
- * Right now it is a pass-through -- it renders nothing of its own and simply
- * delegates to the child route.  As the app grows this is where you would add
- * persistent chrome such as a navigation bar, sidebar, or footer that should
- * appear on every page.
+ * Includes the persistent Header navigation that appears on every page.
  */
 
-import React from 'react';
 import { Outlet } from 'react-router-dom';
+import { Header } from './layout/index.js';
 
 /**
  * Layout wrapper rendered by React Router for the root ("/") path.
- * Child routes are rendered into the `<Outlet>` slot.
+ * Includes Header and renders child routes into the `<Outlet>` slot.
  *
- * @returns {React.ReactElement} The child route's element (via Outlet).
+ * @returns {React.ReactElement} The layout with header and child route content.
  */
 export default function Root() {
-  return <Outlet />;
+  return (
+    <div className="min-h-screen bg-gray-900">
+      <Header />
+      <main>
+        <Outlet />
+      </main>
+    </div>
+  );
 }

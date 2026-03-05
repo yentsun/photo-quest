@@ -9,10 +9,26 @@
  */
 
 import http from 'node:http';
+import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { json } from '../src/http.js';
+
+/**
+ * Get the local network IP address.
+ */
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -81,8 +97,11 @@ export default function () {
     }
   });
 
-  server.listen(PORT, () => {
-    logger.info(`Server listening on http://localhost:${PORT}`);
+  server.listen(PORT, '0.0.0.0', () => {
+    const localIP = getLocalIP();
+    logger.info(`Server listening on:`);
+    logger.info(`  Local:   http://localhost:${PORT}`);
+    logger.info(`  Network: http://${localIP}:${PORT}`);
   });
 }
 

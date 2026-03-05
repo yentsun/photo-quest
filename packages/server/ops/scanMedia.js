@@ -3,18 +3,44 @@
  *
  * Kojo op: accessed as `kojo.ops.scanMedia(dirPath)`.
  *
- * Recursively walks the given directory, finds files with supported video
- * extensions, inserts new ones into the `media` table, and creates a
- * `probe` job for each new entry so the worker will extract metadata.
+ * Recursively walks the given directory, finds files with supported media
+ * extensions (both video and image), inserts new ones into the `media` table.
+ * For videos, creates a `probe` job so the worker will extract metadata.
+ * For images, sets status directly to 'ready' (no processing needed).
+ *
+ * Uses content hashing to identify media across different paths. If a hidden
+ * media item with matching hash is found, it's restored instead of creating
+ * a duplicate.
  *
  * @param {string} dirPath - Absolute path to the directory to scan.
- * @returns {{ scanned: number, added: number }}
+ * @returns {{ scanned: number, added: number, restored: number }}
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { SUPPORTED_EXTENSIONS, JOB_TYPE } from '@photo-quest/shared';
+import crypto from 'node:crypto';
+import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, JOB_TYPE, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { saveDb } from '../src/db.js';
+
+/**
+ * Compute a content hash for a file.
+ * Uses first 64KB + file size for fast but reliable identification.
+ */
+function computeFileHash(filePath) {
+  const stat = fs.statSync(filePath);
+  const hash = crypto.createHash('sha256');
+
+  // Read first 64KB
+  const fd = fs.openSync(filePath, 'r');
+  const buffer = Buffer.alloc(Math.min(65536, stat.size));
+  fs.readSync(fd, buffer, 0, buffer.length, 0);
+  fs.closeSync(fd);
+
+  hash.update(buffer);
+  hash.update(String(stat.size)); // Include file size for uniqueness
+
+  return hash.digest('hex').substring(0, 32); // 32 char hash
+}
 
 export default function (dirPath) {
   const [kojo, logger] = this;
@@ -32,47 +58,82 @@ export default function (dirPath) {
   /* Find all media files recursively. */
   const files = findMediaFiles(dirPath);
   let added = 0;
+  let restored = 0;
 
   for (const filePath of files) {
-    const title = path.basename(filePath, path.extname(filePath));
+    const ext = path.extname(filePath).toLowerCase();
+    const title = path.basename(filePath, ext);
+    const folder = path.dirname(filePath);
+    const isImage = IMAGE_EXTENSIONS.includes(ext);
+    const mediaType = isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO;
+    const status = isImage ? MEDIA_STATUS.READY : MEDIA_STATUS.PENDING;
 
-    /* Try to insert -- ignore if the path already exists (UNIQUE constraint). */
     try {
+      /* Compute content hash for identification. */
+      const hash = computeFileHash(filePath);
+
+      /* Check if hidden media with same hash exists (restore case). */
+      const hiddenStmt = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 1');
+      hiddenStmt.bind([hash]);
+      const hasHidden = hiddenStmt.step();
+      let hiddenId = null;
+      if (hasHidden) {
+        hiddenId = hiddenStmt.getAsObject().id;
+      }
+      hiddenStmt.free();
+
+      if (hiddenId) {
+        /* Restore hidden media with new path. */
+        db.run(
+          'UPDATE media SET path = ?, folder = ?, hidden = 0, updated_at = datetime("now") WHERE id = ?',
+          [filePath, folder, hiddenId]
+        );
+        restored++;
+        logger.debug(`Restored media id=${hiddenId} at ${filePath}`);
+        continue;
+      }
+
+      /* Check if path already exists. */
+      const existsStmt = db.prepare('SELECT id FROM media WHERE path = ?');
+      existsStmt.bind([filePath]);
+      const exists = existsStmt.step();
+      existsStmt.free();
+
+      if (exists) {
+        /* Path exists, just update hash if missing. */
+        db.run('UPDATE media SET hash = ? WHERE path = ? AND hash IS NULL', [hash, filePath]);
+        continue;
+      }
+
+      /* Insert new media. */
       db.run(
-        "INSERT OR IGNORE INTO media (path, title, status) VALUES (?, ?, 'pending')",
-        [filePath, title]
+        'INSERT INTO media (path, title, type, folder, status, hash) VALUES (?, ?, ?, ?, ?, ?)',
+        [filePath, title, mediaType, folder, status, hash]
       );
+      added++;
 
-      /* Check if the row was actually inserted by looking at changes(). */
-      const changesStmt = db.prepare('SELECT changes() as c');
-      changesStmt.step();
-      const changes = changesStmt.getAsObject().c;
-      changesStmt.free();
-
-      if (changes > 0) {
-        /* Get the ID of the newly-inserted media row. */
+      /* Videos need a probe job to extract metadata. */
+      if (!isImage) {
         const idStmt = db.prepare('SELECT last_insert_rowid() as id');
         idStmt.step();
         const mediaId = idStmt.getAsObject().id;
         idStmt.free();
 
-        /* Queue a probe job for this new media. */
         db.run(
           "INSERT INTO jobs (media_id, type, status) VALUES (?, ?, 'pending')",
           [mediaId, JOB_TYPE.PROBE]
         );
-        added++;
       }
     } catch (err) {
-      logger.warn(`Failed to insert ${filePath}: ${err.message}`);
+      logger.warn(`Failed to process ${filePath}: ${err.message}`);
     }
   }
 
   /* Persist all changes to disk so the worker can see them. */
   saveDb();
 
-  logger.info(`Scanned ${files.length} files, added ${added} new`);
-  return { scanned: files.length, added };
+  logger.info(`Scanned ${files.length} files, added ${added} new, restored ${restored}`);
+  return { scanned: files.length, added, restored };
 }
 
 /**
