@@ -14,13 +14,37 @@ import { isFileSystemSupported } from '../services/fileSystem.js';
  * Main library dashboard showing all media.
  */
 export default function Dashboard() {
-  const { media, loading, folders, likeMedia, pickAndAddFolder, addFolderWithPath, addFolderClientSide, removeFolder } = useMedia();
+  const { media, loading, folders, likeMedia, pickAndAddFolder, addFolderWithPath, addFolderClientSide, removeFolder, refreshLibrary } = useMedia();
   const { start: startSlideshow, open: openMedia } = useSlideshow();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(null);
   const [showFolders, setShowFolders] = useState(false);
   const [pathPrompt, setPathPrompt] = useState(null); // { folderName, folderId, files }
   const manualPathRef = useRef(null);
+
+  const handleRefresh = async () => {
+    if (folders.length === 0) {
+      setScanProgress('No folders to refresh. Add a folder first.');
+      setTimeout(() => setScanProgress(null), 3000);
+      return;
+    }
+
+    setScanning(true);
+    setScanProgress('Refreshing library...');
+
+    try {
+      const result = await refreshLibrary((progress) => setScanProgress(progress));
+      const totalFolders = result.serverFolders + result.clientFolders;
+      setScanProgress(`Refreshed ${totalFolders} folder${totalFolders !== 1 ? 's' : ''}. Found ${result.newFiles} file${result.newFiles !== 1 ? 's' : ''}.`);
+      setTimeout(() => setScanProgress(null), 3000);
+    } catch (err) {
+      console.error('Failed to refresh library:', err);
+      setScanProgress('Refresh failed: ' + err.message);
+      setTimeout(() => setScanProgress(null), 5000);
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const handleAddFolder = async () => {
     if (!isFileSystemSupported()) {
@@ -165,8 +189,18 @@ export default function Dashboard() {
               Slideshow
             </Button>
           )}
+          {folders.length > 0 && (
+            <Button
+              variant="ghost"
+              onClick={handleRefresh}
+              disabled={scanning}
+              title="Rescan folders for new files"
+            >
+              Refresh
+            </Button>
+          )}
           <Button onClick={handleAddFolder} disabled={scanning}>
-            {scanning ? 'Adding...' : 'Add Folder'}
+            {scanning ? 'Scanning...' : 'Add Folder'}
           </Button>
         </div>
       </div>

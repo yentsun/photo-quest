@@ -6,7 +6,7 @@ import { useContext, useEffect, useCallback } from 'react';
 import GlobalContext from '../globalContext.js';
 import { actions, IMAGE_EXTENSIONS, MEDIA_TYPE } from '@photo-quest/shared';
 import { fetchMedia, likeMedia as likeMediaApi, scanMedia as scanMediaApi, addMedia as addMediaApi, findFolder, removeFolder as removeFolderApi } from '../utils/api.js';
-import { pickFolder as pickFolderFS } from '../services/fileSystem.js';
+import { pickFolder as pickFolderFS, rescanFolder as rescanFolderFS, getStoredFolders } from '../services/fileSystem.js';
 
 /**
  * Hook for accessing and managing media data.
@@ -172,6 +172,64 @@ export function useMedia() {
 
   const likedMedia = state.media.filter(m => m.likes > 0);
 
+  /**
+   * Refresh library by rescanning all folders for new files.
+   * Server-scanned folders are rescanned via API.
+   * Client-scanned folders are rescanned via stored handles.
+   *
+   * @param {Function} onProgress - Called with progress updates
+   * @returns {Promise<{serverFolders: number, clientFolders: number, newFiles: number}>}
+   */
+  const refreshLibrary = useCallback(async (onProgress) => {
+    let serverFolders = 0;
+    let clientFolders = 0;
+    let newFiles = 0;
+
+    // Get unique server-scanned folder paths (real filesystem paths, not folder-xxx:)
+    const serverFolderPaths = [...new Set(
+      state.media
+        .filter(m => m.folder && !m.path.startsWith('folder-'))
+        .map(m => m.folder)
+    )];
+
+    // Rescan server folders
+    for (const folderPath of serverFolderPaths) {
+      try {
+        onProgress?.(`Scanning ${folderPath.split(/[/\\]/).pop()}...`);
+        const result = await scanMediaApi(folderPath);
+        newFiles += result.added || 0;
+        serverFolders++;
+      } catch (err) {
+        console.error(`Failed to rescan ${folderPath}:`, err);
+      }
+    }
+
+    // Get client-scanned folders from IndexedDB
+    try {
+      const storedFolders = await getStoredFolders();
+      for (const { id, name, hasPermission } of storedFolders) {
+        if (!hasPermission) continue;
+
+        try {
+          onProgress?.(`Scanning ${name}...`);
+          const { files } = await rescanFolderFS(id);
+          await addMediaApi(id, name, files);
+          newFiles += files.length;
+          clientFolders++;
+        } catch (err) {
+          console.error(`Failed to rescan ${name}:`, err);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to get stored folders:', err);
+    }
+
+    // Refresh media list
+    await refresh();
+
+    return { serverFolders, clientFolders, newFiles };
+  }, [state.media, refresh]);
+
   // Load media on mount
   useEffect(() => {
     refresh();
@@ -183,6 +241,7 @@ export function useMedia() {
     folders: state.folders,
     likedMedia,
     refresh,
+    refreshLibrary,
     likeMedia,
     scanFolder,
     addMediaFromFolder,

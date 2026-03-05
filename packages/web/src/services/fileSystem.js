@@ -185,3 +185,28 @@ export async function getStoredFolders() {
 
   return folders;
 }
+
+/**
+ * Rescan a folder using its stored handle.
+ * @returns {Promise<{id: string, name: string, files: Array}>}
+ */
+export async function rescanFolder(folderId) {
+  const dirHandle = await getHandle(folderId);
+  if (!dirHandle) {
+    throw new Error('Folder handle not found');
+  }
+
+  // Verify/request permission
+  const permission = await dirHandle.queryPermission({ mode: 'read' });
+  if (permission !== 'granted') {
+    const newPermission = await dirHandle.requestPermission({ mode: 'read' });
+    if (newPermission !== 'granted') {
+      throw new Error('Permission denied');
+    }
+  }
+
+  // Rescan for media files
+  const files = await scanDirectory(dirHandle, '');
+
+  return { id: folderId, name: dirHandle.name, files };
+}
