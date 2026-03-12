@@ -179,6 +179,8 @@ function processQueue(kojo, scanId, logger) {
   const progress = progressStmt.getAsObject();
   progressStmt.free();
 
+  logger.debug(`[scan ${scanId}] ${progress.processed}/${progress.total} ${item.path}`);
+
   broadcastSse({
     type: 'import_progress',
     scanId,

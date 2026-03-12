@@ -13,6 +13,7 @@
  */
 
 import Kojo from 'kojo';
+import config from '@photo-quest/shared/config.js';
 import { initDb } from './src/db.js';
 import { resumeIncompleteScans } from './ops/scanMedia.js';
 
@@ -31,7 +32,7 @@ for (const stream of ['stdout', 'stderr']) {
 
 export default async function boot() {
 
-  const PORT = process.env.SERVER_PORT || 3000;
+  const PORT = config.serverPort;
 
   /* Media paths -- directories the server can scan for media files.
    * Set via MEDIA_PATHS env var as semicolon-separated paths.

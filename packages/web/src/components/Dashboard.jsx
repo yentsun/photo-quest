@@ -67,10 +67,11 @@ function usePathValidation() {
  * Main library dashboard showing all media.
  */
 export default function Dashboard() {
-  const { media, loading, folders, getMediaByFolder, addFolderWithPath, removeFolder, refreshLibrary } = useMedia();
+  const { media, loading, folders, getMediaByFolder, addFolderWithPath, removeFolder, refreshLibrary, refresh } = useMedia();
   const { start: startSlideshow } = useSlideshow();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(null);
+  const [importProgress, setImportProgress] = useState(null); // { total, processed }
   const [showAddFolder, setShowAddFolder] = useState(false);
   const pathRef = useRef(null);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
@@ -109,16 +110,42 @@ export default function Dashboard() {
     if (!folderPath || !pathValid) return;
 
     setScanning(true);
-    setScanProgress('Scanning folder...');
+    setImportProgress(null);
 
     try {
-      const result = await addFolderWithPath(folderPath);
-      setScanProgress(`Added ${result.added} files.`);
+      const { scanId, total } = await addFolderWithPath(folderPath);
+      setImportProgress({ total, processed: 0 });
+
+      /* Listen to SSE for import progress. */
+      await new Promise((resolve, reject) => {
+        const es = new EventSource('/jobs/events');
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.scanId !== scanId) return;
+
+            if (data.type === 'import_progress') {
+              setImportProgress({ total: data.total, processed: data.processed });
+            }
+            if (data.type === 'import_complete') {
+              setImportProgress({ total: data.total, processed: data.processed });
+              es.close();
+              resolve();
+            }
+          } catch { /* ignore parse errors */ }
+        };
+        es.onerror = () => { es.close(); reject(new Error('Lost connection')); };
+      });
+
+      await refresh();
+      setScanProgress(`Imported ${total} files.`);
       setShowAddFolder(false);
+      setImportProgress(null);
       setTimeout(() => setScanProgress(null), 3000);
     } catch (err) {
       console.error('Failed to scan folder:', err);
       setScanProgress('Failed: ' + err.message);
+      setImportProgress(null);
       setTimeout(() => setScanProgress(null), 5000);
     } finally {
       setScanning(false);
@@ -233,8 +260,22 @@ export default function Dashboard() {
                 </p>
               )}
             </div>
+            {importProgress && (
+              <div>
+                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                  <span>Importing files...</span>
+                  <span>{importProgress.processed}/{importProgress.total}</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-200"
+                    style={{ width: `${importProgress.total ? (importProgress.processed / importProgress.total) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            )}
             <Button type="submit" disabled={scanning || !pathValid}>
-              {scanning ? 'Scanning...' : 'Add'}
+              {scanning ? 'Importing...' : 'Add'}
             </Button>
           </form>
         </div>

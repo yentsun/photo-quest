@@ -8,6 +8,7 @@
     ".": "./index.js",
     "./constants": "./constants.js",
     "./schema": "./schema.js",
-    "./routes": "./routes.js"
+    "./routes": "./routes.js",
+    "./config.js": "./config.js"
   }
 }

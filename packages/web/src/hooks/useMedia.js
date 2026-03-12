@@ -34,12 +34,12 @@ export function useMedia() {
 
   /**
    * Add folder using a server path.
+   * Returns { scanId, total } — caller should listen to SSE for progress.
    */
   const addFolderWithPath = useCallback(async (folderPath) => {
-    const scanResult = await scanMediaApi(folderPath);
-    await refresh();
-    return { added: scanResult.added };
-  }, [refresh]);
+    const result = await scanMediaApi(folderPath);
+    return result;
+  }, []);
 
   /**
    * Remove a folder from the library.

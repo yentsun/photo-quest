@@ -13,10 +13,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import config from '@photo-quest/shared/config.js';
 
-const API_PORT = process.env.SERVER_PORT || 3000;
-const WEBAPP_PORT = process.env.WEBAPP_PORT || 5000;
-const API_TARGET = `http://localhost:${API_PORT}`;
+const API_TARGET = `http://localhost:${config.serverPort}`;
 
 export default defineConfig({
   plugins: [
@@ -83,7 +82,7 @@ export default defineConfig({
   ],
 
   server: {
-    port: WEBAPP_PORT,
+    port: config.webappPort,
     proxy: {
       '/media': {
         target: API_TARGET,

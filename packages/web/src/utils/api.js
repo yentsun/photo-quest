@@ -35,9 +35,10 @@ export async function likeMedia(id) {
 
 /**
  * Scan a directory for media files.
+ * Returns immediately with { scanId, total }. Progress is reported via SSE.
  *
  * @param {string} path - Absolute path to scan
- * @returns {Promise<{scanned: number, added: number}>}
+ * @returns {Promise<{scanId: number, total: number}>}
  */
 export async function scanMedia(path) {
   const response = await fetch(apiRoutes.mediaScan, {
