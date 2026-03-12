@@ -4,3 +4,4 @@
 
 export { default as LikedPage } from './LikedPage.jsx';
 export { default as FolderPage } from './FolderPage.jsx';
+export { default as MediaPage } from './MediaPage.jsx';

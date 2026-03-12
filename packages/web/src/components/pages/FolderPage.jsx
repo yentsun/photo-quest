@@ -30,8 +30,7 @@ export default function FolderPage() {
   const breadcrumbs = folder ? getBreadcrumbs(folder.id) : [];
 
   const handleMediaClick = (clickedMedia) => {
-    const index = directMedia.findIndex(m => m.id === clickedMedia.id);
-    openMedia(directMedia, index);
+    navigate(`/media/${clickedMedia.id}`);
   };
 
   const handleRandomSlideshow = () => {

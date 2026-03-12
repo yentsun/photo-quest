@@ -34,7 +34,10 @@ export const clientRoutes = {
   liked: '/liked',
 
   /** Folder view -- shows media filtered by folder ID. */
-  folder: '/folder/:id'
+  folder: '/folder/:id',
+
+  /** Single media item view. */
+  media: '/media/:id'
 };
 
 // ---------------------------------------------------------------------------

@@ -56,6 +56,10 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.25** When displaying a loading spinner, the UI must also show the status of the loading task (e.g., "Loading database…", "Scanning…", etc.).
 
+**1.26** Every media item must have its own shareable URL (e.g., `/media/5`). Navigating to this URL must display the media item directly.
+
+**1.27** When viewing a media item, navigation controls (left/right arrows) must always be present. When opened from a folder, previous/next navigate sequentially within that folder. When in slideshow mode, next picks a random item and previous goes back.
+
 ---
 
 ## Section 2 — Server

@@ -3,6 +3,7 @@
  */
 
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMedia } from '../../hooks/useMedia.js';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MediaGrid } from '../media/index.js';
@@ -13,8 +14,9 @@ import { Button, Icon, Spinner } from '../ui/index.js';
  * Page showing all liked media items.
  */
 export default function LikedPage() {
+  const navigate = useNavigate();
   const { loading, likedMedia, likeMedia } = useMedia();
-  const { start: startSlideshow, open: openMedia } = useSlideshow();
+  const { start: startSlideshow } = useSlideshow();
 
   // Sort by like count descending
   const sortedLikedMedia = useMemo(() => {
@@ -22,8 +24,7 @@ export default function LikedPage() {
   }, [likedMedia]);
 
   const handleMediaClick = (clickedMedia) => {
-    const index = sortedLikedMedia.findIndex(m => m.id === clickedMedia.id);
-    openMedia(sortedLikedMedia, index);
+    navigate(`/media/${clickedMedia.id}`);
   };
 
   if (loading) {

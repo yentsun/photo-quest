@@ -27,7 +27,7 @@ import { clientRoutes as r } from '@photo-quest/shared';
 import ErrorBoundary from './ErrorBoundary';
 import Root from './Root';
 import Dashboard from './Dashboard';
-import { LikedPage, FolderPage } from './pages/index.js';
+import { LikedPage, FolderPage, MediaPage } from './pages/index.js';
 import Slideshow from './slideshow/Slideshow.jsx';
 import ToasterMessage from './ToasterMessage';
 
@@ -76,6 +76,9 @@ export default function Router() {
 
                 {/* Folder-filtered view. */}
                 <Route path={r.folder} element={<FolderPage />} />
+
+                {/* Single media item view. */}
+                <Route path={r.media} element={<MediaPage />} />
               </Route>
 
               {/* Catch-all: any unrecognised path redirects to the root. */}
