@@ -20,8 +20,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm install` — Install all workspace dependencies
 - `pnpm dev` — Run all packages (web + server + worker) in parallel
 - `pnpm dev:web` — Vite dev server on port 3000
-- `pnpm dev:server` — Node HTTP server on port 4000 (auto-restart via --watch)
-- `pnpm dev:worker` — Worker process (auto-restart via --watch)
+- `pnpm dev:server` — Node HTTP server on port 4000
+- `pnpm dev:worker` — Worker process
 - `pnpm build` — Production build of web package
 - `pnpm --filter @photo-quest/server test` — Run server tests
 

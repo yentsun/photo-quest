@@ -6,13 +6,17 @@
  *  - vite-plugin-pwa generates a service worker and web manifest so the
  *    app is installable as a PWA and auto-updates on new deployments.
  *  - The dev server listens on port 5000 so it does not collide with the
- *    API server on port 3000.
- *  - API requests (/media, /stream, /jobs) are proxied to the back-end.
+ *    API server (PORT env var, defaults to 3000).
+ *  - API requests (/media, /stream, /jobs, /scans) are proxied to the back-end.
  */
 
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+
+const API_PORT = process.env.SERVER_PORT || 3000;
+const WEBAPP_PORT = process.env.WEBAPP_PORT || 5000;
+const API_TARGET = `http://localhost:${API_PORT}`;
 
 export default defineConfig({
   plugins: [
@@ -79,16 +83,17 @@ export default defineConfig({
   ],
 
   server: {
-    port: 5000,
+    port: WEBAPP_PORT,
     proxy: {
       '/media': {
-        target: 'http://localhost:3000',
+        target: API_TARGET,
         changeOrigin: true,
       },
-      '/stream': 'http://localhost:3000',
-      '/image': 'http://localhost:3000',
-      '/jobs': 'http://localhost:3000',
-      '/network': 'http://localhost:3000',
+      '/stream': API_TARGET,
+      '/image': API_TARGET,
+      '/jobs': API_TARGET,
+      '/network': API_TARGET,
+      '/scans': API_TARGET,
     },
   },
 });

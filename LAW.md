@@ -76,6 +76,8 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **3.3** The server must check if its port is free before starting. If occupied, report and exit immediately.
 
+**3.4** Never use Node.js `--watch` mode. It creates unkillable child processes on Windows that hold ports and cannot be terminated even with admin privileges.
+
 ---
 
 ## Glossary

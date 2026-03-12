@@ -31,7 +31,7 @@ for (const stream of ['stdout', 'stderr']) {
 
 export default async function boot() {
 
-  const PORT = process.env.PORT || 3000;
+  const PORT = process.env.SERVER_PORT || 3000;
 
   /* Media paths -- directories the server can scan for media files.
    * Set via MEDIA_PATHS env var as semicolon-separated paths.
