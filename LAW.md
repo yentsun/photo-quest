@@ -60,6 +60,18 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.27** Media viewing must use a single unified viewer with navigation controls (left/right arrows). When browsing a folder, prev/next navigate sequentially. When in slideshow mode, prev/next navigate through the slideshow list (which may be shuffled). No auto-advance — all navigation is manual.
 
+**1.28** The app logo/title in the header must link to the dashboard (library).
+
+**1.29** The PWA must serve previously viewed/loaded media (images and videos) from cache when offline. Already-seen content must remain accessible without a network connection.
+
+**1.30** When in slideshow (shuffle) mode, left/right controls navigate through the shuffled slideshow list. Up/down controls navigate sequentially within the current item's folder.
+
+**1.31** During import, files with unknown or unsupported media types must be silently ignored. Only files with recognized extensions should be queued and processed.
+
+**1.32** Media content hash must always be computed from the actual file content, not from metadata like filename or timestamps.
+
+**1.33** Import progress must always be visible to the user. On page load, if an import is in progress, the UI must show the import modal with a progress bar and block interaction until the import completes.
+
 ---
 
 ## Section 2 — Server

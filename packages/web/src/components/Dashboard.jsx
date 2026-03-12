@@ -83,6 +83,43 @@ export default function Dashboard() {
     if (!showAddFolder) reset();
   }, [showAddFolder, reset]);
 
+  /* LAW 1.33: Check for active imports on mount and show progress. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/scans');
+        const scans = await res.json();
+        const active = scans.find(s => s.status === 'importing' || s.status === 'discovering');
+        if (!active || cancelled) return;
+
+        setScanning(true);
+        setImportProgress({ total: active.total, processed: active.processed });
+
+        /* Listen to SSE for ongoing progress. */
+        const es = new EventSource('/jobs/events');
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.scanId !== active.id) return;
+
+            if (data.type === 'import_progress') {
+              setImportProgress({ total: data.total, processed: data.processed });
+            }
+            if (data.type === 'import_complete') {
+              setImportProgress(null);
+              setScanning(false);
+              es.close();
+              refresh();
+            }
+          } catch { /* ignore */ }
+        };
+        es.onerror = () => { es.close(); setScanning(false); setImportProgress(null); };
+      } catch { /* server unreachable */ }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleShuffle = () => {
     if (media.length === 0) return;
     pendingShuffle.current = true;
@@ -292,6 +329,30 @@ export default function Dashboard() {
               {scanning ? 'Importing...' : 'Add'}
             </Button>
           </form>
+        </div>
+      </Modal>
+
+      {/* Import Progress Modal (LAW 1.33) */}
+      <Modal
+        open={!showAddFolder && scanning && importProgress !== null}
+        onClose={() => {}}
+        closable={false}
+        title="Importing Media"
+      >
+        <div className="space-y-4">
+          <div>
+            <div className="flex justify-between text-xs text-gray-400 mb-1">
+              <span>Importing files...</span>
+              <span>{importProgress?.processed || 0}/{importProgress?.total || 0}</span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2">
+              <div
+                className="bg-blue-500 h-2 rounded-full transition-all duration-200"
+                style={{ width: `${importProgress?.total ? (importProgress.processed / importProgress.total) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+          <p className="text-gray-400 text-sm">Please wait while media files are being imported.</p>
         </div>
       </Modal>
 

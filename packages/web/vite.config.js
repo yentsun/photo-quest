@@ -58,9 +58,9 @@ export default defineConfig({
 
         /* Don't cache API data endpoints -- they should always hit the server. */
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/media/, /^\/stream/, /^\/image/, /^\/jobs/, /^\/folders/],
+        navigateFallbackDenylist: [/^\/media\/(?!\d+$)/, /^\/stream/, /^\/image/, /^\/jobs/, /^\/folders/],
 
-        /* Runtime caching for viewed images - cache them for offline access. */
+        /* Runtime caching — serve previously viewed media offline (LAW 1.29). */
         runtimeCaching: [
           {
             urlPattern: /^\/image\//,
@@ -76,6 +76,48 @@ export default defineConfig({
               },
             },
           },
+          {
+            urlPattern: /^\/stream\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'media-videos',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^\/media$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'media-api',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^\/folders$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'folders-api',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
         ],
       },
     }),
@@ -84,9 +126,13 @@ export default defineConfig({
   server: {
     port: config.webappPort,
     proxy: {
+      /* Proxy /media requests to the API, but skip /media/:id (digits only)
+       * which is a client route for the unified viewer. */
       '/media': {
         target: API_TARGET,
-        changeOrigin: true,
+        bypass(req) {
+          if (/^\/media\/\d+$/.test(req.url)) return req.url;
+        },
       },
       '/stream': API_TARGET,
       '/image': API_TARGET,

@@ -15,6 +15,7 @@ import IconButton from './IconButton.jsx';
  * @param {string} [props.title] - Optional modal title
  * @param {React.ReactNode} props.children - Modal content
  * @param {string} [props.className] - Additional CSS classes for modal body
+ * @param {boolean} [props.closable=true] - Whether the modal can be closed
  */
 export default function Modal({
   open,
@@ -22,12 +23,13 @@ export default function Modal({
   title,
   children,
   className = '',
+  closable = true,
 }) {
   const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && closable) {
       onClose();
     }
-  }, [onClose]);
+  }, [onClose, closable]);
 
   useEffect(() => {
     if (open) {
@@ -48,7 +50,7 @@ export default function Modal({
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/70"
-        onClick={onClose}
+        onClick={closable ? onClose : undefined}
       />
 
       {/* Modal content */}
@@ -56,12 +58,14 @@ export default function Modal({
         {title && (
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <h2 className="text-lg font-semibold text-white">{title}</h2>
-            <IconButton
-              icon={<Icon name="close" />}
-              onClick={onClose}
-              label="Close modal"
-              className="text-gray-400 hover:text-white"
-            />
+            {closable && (
+              <IconButton
+                icon={<Icon name="close" />}
+                onClick={onClose}
+                label="Close modal"
+                className="text-gray-400 hover:text-white"
+              />
+            )}
           </div>
         )}
         <div className="p-4">

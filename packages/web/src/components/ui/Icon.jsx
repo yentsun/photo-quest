@@ -14,6 +14,8 @@ const paths = {
   pause: { d: 'M6 4h4v16H6V4zm8 0h4v16h-4V4z', fill: true },
   prev: { d: 'M15 19l-7-7 7-7', stroke: true },
   next: { d: 'M9 5l7 7-7 7', stroke: true },
+  up: { d: 'M5 15l7-7 7 7', stroke: true },
+  down: { d: 'M19 9l-7 7-7-7', stroke: true },
   shuffle: { d: 'M4 4h2.5l4 9m0 0l4-9H19m-7.5 9l2.5 5m-2.5-5h-5m5 0l-2.5 5m0 0H4m7 0h6', stroke: true },
   list: { d: 'M4 6h16M4 12h16M4 18h16', stroke: true },
 };

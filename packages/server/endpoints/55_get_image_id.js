@@ -44,29 +44,25 @@ export default async (kojo, logger) => {
     };
     const contentType = mimeTypes[ext] || 'image/jpeg';
 
-    /* Orientation 1 = normal, null = unknown/no EXIF.
-     * Only run through sharp if rotation is needed. */
-    const needsRotation = row.orientation && row.orientation !== 1;
+    /* Always run through sharp.rotate() which auto-rotates based on EXIF.
+     * It's a no-op when no rotation is needed, and avoids relying on the
+     * stored orientation value which may be stale or incorrect. */
+    try {
+      const buffer = await sharp(filePath)
+        .rotate() // auto-rotate based on EXIF
+        .toBuffer();
 
-    if (needsRotation) {
-      try {
-        const buffer = await sharp(filePath)
-          .rotate() // auto-rotate based on EXIF
-          .toBuffer();
-
-        res.writeHead(200, {
-          'Content-Length': buffer.length,
-          'Content-Type': contentType,
-          'Cache-Control': 'public, max-age=31536000',
-        });
-        return res.end(buffer);
-      } catch (err) {
-        logger.error(`Failed to rotate image ${filePath}: ${err.message}`);
-        /* Fall through to raw serving. */
-      }
+      res.writeHead(200, {
+        'Content-Length': buffer.length,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000',
+      });
+      return res.end(buffer);
+    } catch (err) {
+      logger.error(`Failed to process image ${filePath}: ${err.message}`);
     }
 
-    /* Serve raw file (no rotation needed or sharp failed). */
+    /* Fallback: serve raw file if sharp fails. */
     const stat = fs.statSync(filePath);
     res.writeHead(200, {
       'Content-Length': stat.size,

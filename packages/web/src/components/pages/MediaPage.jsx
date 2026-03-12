@@ -3,6 +3,7 @@
  * LAW 1.26: every media item has a shareable URL.
  * LAW 1.27: single viewer — folder mode navigates sequentially,
  *           slideshow mode navigates through shuffled list. No auto-advance.
+ * LAW 1.30: in slideshow mode, left/right = shuffle nav, up/down = folder nav.
  */
 
 import { useEffect, useCallback } from 'react';
@@ -58,15 +59,32 @@ export default function MediaPage() {
     }
   }, [hasNext, inSlideshow, slideshow, navigate, navItems, currentIndex]);
 
+  /* In slideshow mode, up/down navigate within the current folder (LAW 1.30) */
+  const folderIndex = folderMedia.findIndex(m => m.id === Number(id));
+  const hasFolderPrev = inSlideshow && folderIndex > 0;
+  const hasFolderNext = inSlideshow && folderIndex < folderMedia.length - 1;
+
+  const goFolderPrev = useCallback(() => {
+    if (!hasFolderPrev) return;
+    navigate(`/media/${folderMedia[folderIndex - 1].id}`);
+  }, [hasFolderPrev, navigate, folderMedia, folderIndex]);
+
+  const goFolderNext = useCallback(() => {
+    if (!hasFolderNext) return;
+    navigate(`/media/${folderMedia[folderIndex + 1].id}`);
+  }, [hasFolderNext, navigate, folderMedia, folderIndex]);
+
   /* Keyboard navigation */
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
+      if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); goFolderNext(); }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext]);
 
   if (loading) {
     return (
@@ -121,6 +139,26 @@ export default function MediaPage() {
             title="Next"
           >
             <Icon name="next" className="w-8 h-8" />
+          </button>
+        )}
+
+        {/* Up/down arrows for in-folder navigation during slideshow (LAW 1.30) */}
+        {hasFolderPrev && (
+          <button
+            onClick={goFolderPrev}
+            className="absolute top-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all"
+            title="Previous in folder"
+          >
+            <Icon name="up" className="w-8 h-8" />
+          </button>
+        )}
+        {hasFolderNext && (
+          <button
+            onClick={goFolderNext}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all"
+            title="Next in folder"
+          >
+            <Icon name="down" className="w-8 h-8" />
           </button>
         )}
       </div>

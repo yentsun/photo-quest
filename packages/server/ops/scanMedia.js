@@ -20,96 +20,59 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import sharp from 'sharp';
 import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, JOB_TYPE, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
 import { saveDb } from '../src/db.js';
 import { broadcastSse } from '../src/sse.js';
 
 /**
  * Compute a content hash for a file.
- * Uses first 64KB + file size for fast but reliable identification.
+ * Uses first 64KB + file size for reliable identification (LAW 1.24).
+ * Async with timeout to avoid hanging on cloud-synced files.
  */
-function computeFileHash(filePath) {
+async function computeFileHash(filePath, timeoutMs = 5000) {
   const stat = fs.statSync(filePath);
+  const chunkSize = Math.min(65536, stat.size);
+
+  const buffer = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('File read timed out'));
+    }, timeoutMs);
+
+    const chunks = [];
+    let read = 0;
+    const stream = fs.createReadStream(filePath, { start: 0, end: chunkSize - 1 });
+    stream.on('data', (chunk) => {
+      chunks.push(chunk);
+      read += chunk.length;
+      if (read >= chunkSize) stream.destroy();
+    });
+    stream.on('end', () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
+    stream.on('close', () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
+    stream.on('error', (err) => { clearTimeout(timer); reject(err); });
+  });
+
   const hash = crypto.createHash('sha256');
-
-  const fd = fs.openSync(filePath, 'r');
-  const buffer = Buffer.alloc(Math.min(65536, stat.size));
-  fs.readSync(fd, buffer, 0, buffer.length, 0);
-  fs.closeSync(fd);
-
   hash.update(buffer);
   hash.update(String(stat.size));
-
   return hash.digest('hex').substring(0, 32);
 }
 
 /**
- * Extract EXIF metadata from an image using sharp.
- * Returns { orientation, width, height, camera, dateTaken } or nulls.
- */
-async function extractExif(filePath) {
-  try {
-    const meta = await sharp(filePath).metadata();
-    return {
-      orientation: meta.orientation || null,
-      width: meta.width || null,
-      height: meta.height || null,
-      camera: meta.exif ? parseCameraFromExif(meta) : null,
-      dateTaken: meta.exif ? parseDateFromExif(meta) : null,
-    };
-  } catch {
-    return { orientation: null, width: null, height: null, camera: null, dateTaken: null };
-  }
-}
-
-/**
- * Try to parse camera model from sharp metadata.
- * Sharp doesn't directly expose EXIF tags, so we parse the raw EXIF buffer.
- */
-function parseCameraFromExif(meta) {
-  if (!meta.exif) return null;
-  try {
-    // Look for ASCII strings that match common camera model patterns
-    const str = meta.exif.toString('ascii', 0, Math.min(meta.exif.length, 4096));
-    // EXIF stores Make and Model as null-terminated ASCII strings
-    // We'll extract readable substrings
-    const readable = str.match(/[\x20-\x7E]{4,}/g) || [];
-    // Camera models typically contain brand names
-    const model = readable.find(s =>
-      /fuji|canon|nikon|sony|olympus|panasonic|samsung|apple|google|huawei|xiaomi|dji|gopro|leica/i.test(s)
-    );
-    return model?.trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Try to parse date taken from EXIF buffer.
- * EXIF dates are in "YYYY:MM:DD HH:MM:SS" format.
- */
-function parseDateFromExif(meta) {
-  if (!meta.exif) return null;
-  try {
-    const str = meta.exif.toString('ascii', 0, Math.min(meta.exif.length, 4096));
-    const match = str.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
-    if (match) {
-      return `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}`;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Process a single import queue item: hash, dedup, insert media record.
- * Async because EXIF extraction uses sharp.
  * Exported for testing.
  */
 export async function processOneItem(db, itemId, filePath, logger) {
   const ext = path.extname(filePath).toLowerCase();
+
+  /* Skip files with unsupported extensions (LAW 1.31). */
+  if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+    db.run(
+      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?',
+      [IMPORT_STATUS.FAILED, 'Unsupported file type', itemId]
+    );
+    return;
+  }
+
   const title = path.basename(filePath, ext);
   const folder = path.dirname(filePath);
   const isImage = IMAGE_EXTENSIONS.includes(ext);
@@ -125,16 +88,10 @@ export async function processOneItem(db, itemId, filePath, logger) {
     return;
   }
 
-  const hash = computeFileHash(filePath);
+  const hash = await computeFileHash(filePath);
 
   /* Ensure folder has a record in the folders table. */
   db.run('INSERT OR IGNORE INTO folders (path) VALUES (?)', [folder]);
-
-  /* Extract EXIF for images. */
-  let exif = { orientation: null, width: null, height: null, camera: null, dateTaken: null };
-  if (isImage) {
-    exif = await extractExif(filePath);
-  }
 
   /* Check if hidden media with same hash exists (restore case). */
   const hiddenStmt = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 1');
@@ -149,11 +106,8 @@ export async function processOneItem(db, itemId, filePath, logger) {
   if (hiddenId) {
     db.run(
       `UPDATE media SET path = ?, folder = ?, hidden = 0,
-       orientation = ?, camera = ?, date_taken = ?,
-       width = COALESCE(width, ?), height = COALESCE(height, ?),
        updated_at = datetime("now") WHERE id = ?`,
-      [filePath, folder, exif.orientation, exif.camera, exif.dateTaken,
-       exif.width, exif.height, hiddenId]
+      [filePath, folder, hiddenId]
     );
     logger.debug(`Restored media id=${hiddenId} at ${filePath}`);
   } else {
@@ -168,11 +122,9 @@ export async function processOneItem(db, itemId, filePath, logger) {
     } else {
       /* Insert new media. */
       db.run(
-        `INSERT INTO media (path, title, type, folder, status, hash,
-         orientation, width, height, camera, date_taken)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [filePath, title, mediaType, folder, status, hash,
-         exif.orientation, exif.width, exif.height, exif.camera, exif.dateTaken]
+        `INSERT INTO media (path, title, type, folder, status, hash)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [filePath, title, mediaType, folder, status, hash]
       );
 
       /* Videos need a probe job. */
@@ -199,7 +151,7 @@ export async function processOneItem(db, itemId, filePath, logger) {
 
 /**
  * Process the import queue for a given scan, one item at a time.
- * Uses setTimeout to avoid blocking the event loop.
+ * Uses setTimeout to yield to the event loop between batches.
  */
 async function processQueue(kojo, scanId, logger) {
   const db = kojo.get('db');
@@ -247,9 +199,7 @@ async function processQueue(kojo, scanId, logger) {
 
   /* Increment processed count. */
   db.run('UPDATE scans SET processed = processed + 1 WHERE id = ?', [scanId]);
-  saveDb();
 
-  /* Broadcast progress. */
   const progressStmt = db.prepare('SELECT total, processed FROM scans WHERE id = ?');
   progressStmt.bind([scanId]);
   progressStmt.step();
@@ -257,6 +207,11 @@ async function processQueue(kojo, scanId, logger) {
   progressStmt.free();
 
   logger.debug(`[scan ${scanId}] ${progress.processed}/${progress.total} ${item.path}`);
+
+  /* Save to disk and broadcast every 50 items (or on last item). */
+  if (progress.processed % 50 === 0 || progress.processed === progress.total) {
+    saveDb();
+  }
 
   broadcastSse({
     type: 'import_progress',

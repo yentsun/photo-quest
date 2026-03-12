@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { clientRoutes } from '@photo-quest/shared';
 import { fetchNetworkInfo } from '../../utils/api.js';
 import { Button, Icon } from '../ui/index.js';
@@ -42,7 +42,9 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex items-center">
-            <h1 className="text-xl font-bold text-white">Photo Quest</h1>
+            <Link to={clientRoutes.dashboard} className="text-xl font-bold text-white hover:text-gray-200 transition-colors">
+              Photo Quest
+            </Link>
           </div>
 
           {/* Navigation */}
