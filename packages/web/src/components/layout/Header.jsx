@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { clientRoutes } from '@photo-quest/shared';
 import { fetchNetworkInfo } from '../../utils/api.js';
-import { Button } from '../ui/index.js';
+import { Button, Icon } from '../ui/index.js';
 
 /**
  * Navigation header component.
@@ -63,7 +63,7 @@ export default function Header() {
                 size="sm"
                 onClick={handleCopyUrl}
                 title="Click to copy network URL for other devices"
-                icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" /></svg>}
+                icon={<Icon name="network" className="w-4 h-4" />}
               >
                 <span className="hidden sm:inline">{networkUrl}</span>
                 <span className="sm:hidden">Network</span>

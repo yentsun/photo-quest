@@ -7,7 +7,7 @@ import { useMedia } from '../../hooks/useMedia.js';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Spinner } from '../ui/index.js';
+import { Button, Icon, Spinner } from '../ui/index.js';
 
 /**
  * Page showing all liked media items.
@@ -28,17 +28,14 @@ export default function LikedPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
         <Spinner size="lg" />
+        <p className="text-gray-400 text-sm">Loading liked items...</p>
       </div>
     );
   }
 
-  const heartIcon = (
-    <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-    </svg>
-  );
+  const heartIcon = <Icon name="heart" className="w-16 h-16" />;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

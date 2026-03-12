@@ -9,7 +9,7 @@ import { MEDIA_TYPE } from '@photo-quest/shared';
 import { MediaPlayer, ImageViewer, LikeButton } from '../media/index.js';
 import SlideshowControls from './SlideshowControls.jsx';
 import { getMediaUrl, downloadMedia } from '../../utils/api.js';
-import { IconButton } from '../ui/index.js';
+import { Icon, IconButton } from '../ui/index.js';
 
 /**
  * Full-screen slideshow overlay with auto-advance and controls.
@@ -115,11 +115,7 @@ export default function Slideshow() {
       {/* Like and Download buttons */}
       <div className="absolute top-4 right-4 flex gap-2">
         <IconButton
-          icon={
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          }
+          icon={<Icon name="download" />}
           label="Download"
           onClick={() => downloadMedia(current)}
           size="md"

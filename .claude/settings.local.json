@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm list:*)",
+      "Bash(dir /b packages)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(pnpm --filter @photo-quest/web build:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm --filter @photo-quest/server test)",
+      "Bash(npx kill-port:*)",
+      "Bash(exit 0)",
+      "Bash(pnpm dev:*)",
+      "Bash(timeout /t 5 /nobreak)",
+      "Bash(ping:*)",
+      "Bash(pnpm test:*)",
+      "Bash(sqlite3:*)",
+      "Bash(curl:*)",
+      "Bash(timeout 8 tail:*)",
+      "Bash(timeout 10 tail:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "WebSearch",
+      "Bash(node -e \"const initSqlJs = require\\('sql.js'\\); const fs = require\\('fs'\\); \\(async \\(\\) => { const SQL = await initSqlJs\\(\\); const buf = fs.readFileSync\\('packages/server/photo-quest.db'\\); const db = new SQL.Database\\(buf\\); const media = db.exec\\('SELECT COUNT\\(*\\) as count FROM media'\\); console.log\\('Media count:', media[0]?.values[0][0] || 0\\); const jobs = db.exec\\('SELECT COUNT\\(*\\) as count FROM jobs'\\); console.log\\('Jobs count:', jobs[0]?.values[0][0] || 0\\); }\\)\\(\\);\")",
+      "Bash(node --input-type=module -e \"import initSqlJs from 'sql.js'; import fs from 'fs'; const SQL = await initSqlJs\\(\\); const buf = fs.readFileSync\\('packages/server/photo-quest.db'\\); const db = new SQL.Database\\(buf\\); console.log\\('Media:', db.exec\\('SELECT COUNT\\(*\\) FROM media'\\)[0]?.values[0][0]\\); console.log\\('Jobs:', db.exec\\('SELECT COUNT\\(*\\) FROM jobs'\\)[0]?.values[0][0]\\); const sample = db.exec\\('SELECT id, title, status FROM media LIMIT 5'\\); if \\(sample.length\\) { console.log\\('Sample:', JSON.stringify\\(sample[0].values\\)\\); }\")"
+    ]
+  }
+}

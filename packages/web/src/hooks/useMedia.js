@@ -53,6 +53,10 @@ export function useMedia() {
 
   const likedMedia = state.media.filter(m => m.likes > 0);
 
+  const getMediaByFolder = useCallback((folder) => {
+    return state.media.filter(m => m.folder === folder);
+  }, [state.media]);
+
   /**
    * Refresh library by rescanning all known server folders for new files.
    */
@@ -94,6 +98,7 @@ export function useMedia() {
     refresh,
     refreshLibrary,
     likeMedia,
+    getMediaByFolder,
     addFolderWithPath,
     removeFolder,
   };

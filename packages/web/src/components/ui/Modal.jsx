@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useCallback } from 'react';
+import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
 
 /**
@@ -56,7 +57,7 @@ export default function Modal({
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <h2 className="text-lg font-semibold text-white">{title}</h2>
             <IconButton
-              icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
+              icon={<Icon name="close" />}
               onClick={onClose}
               label="Close modal"
               className="text-gray-400 hover:text-white"

@@ -5,9 +5,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useMedia } from '../hooks/useMedia.js';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
-import { MediaGrid } from './media/index.js';
+import { FolderCard } from './media/index.js';
 import { EmptyState } from './layout/index.js';
-import { Button, IconButton, Modal, Spinner } from './ui/index.js';
+import { Button, Icon, Input, Modal, Spinner } from './ui/index.js';
 
 /**
  * Debounced path validation against the server.
@@ -67,11 +67,10 @@ function usePathValidation() {
  * Main library dashboard showing all media.
  */
 export default function Dashboard() {
-  const { media, loading, folders, likeMedia, addFolderWithPath, removeFolder, refreshLibrary } = useMedia();
-  const { start: startSlideshow, open: openMedia } = useSlideshow();
+  const { media, loading, folders, getMediaByFolder, addFolderWithPath, removeFolder, refreshLibrary } = useMedia();
+  const { start: startSlideshow } = useSlideshow();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(null);
-  const [showFolders, setShowFolders] = useState(false);
   const [showAddFolder, setShowAddFolder] = useState(false);
   const pathRef = useRef(null);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
@@ -126,11 +125,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleMediaClick = (clickedMedia) => {
-    const index = media.findIndex(m => m.id === clickedMedia.id);
-    openMedia(media, index);
-  };
-
   const handleRemoveFolder = async (folderName) => {
     if (!confirm(`Remove "${folderName}" from library?\n\nYour likes will be preserved if you re-add this folder later.`)) {
       return;
@@ -147,24 +141,16 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
         <Spinner size="lg" />
+        <p className="text-gray-400 text-sm">Loading library...</p>
       </div>
     );
   }
 
-  const folderIcon = (
-    <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-    </svg>
-  );
+  const folderIcon = <Icon name="folder" className="w-16 h-16" />;
 
-  // Border color for path input
-  const borderColor = pathValid === true
-    ? 'border-green-500'
-    : pathValid === false
-      ? 'border-red-500'
-      : 'border-gray-600';
+  const inputVariant = pathValid === true ? 'success' : pathValid === false ? 'error' : 'default';
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -175,15 +161,6 @@ export default function Dashboard() {
           <p className="text-gray-400 text-sm">{media.length} items</p>
         </div>
         <div className="flex gap-2">
-          {folders.length > 0 && (
-            <Button
-              variant="ghost"
-              onClick={() => setShowFolders(!showFolders)}
-              title="Manage folders"
-            >
-              {showFolders ? 'Hide Folders' : `Folders (${folders.length})`}
-            </Button>
-          )}
           {media.length > 0 && (
             <Button
               variant="secondary"
@@ -208,33 +185,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Folders Section */}
-      {showFolders && folders.length > 0 && (
-        <div className="mb-6 p-4 bg-gray-800/50 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-400 mb-3">Library Folders</h3>
-          <div className="flex flex-wrap gap-2">
-            {folders.map(folder => (
-              <div
-                key={folder}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-700 rounded-lg"
-              >
-                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                <span className="text-gray-200">{folder}</span>
-                <IconButton
-                  icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
-                  onClick={() => handleRemoveFolder(folder)}
-                  label={`Remove "${folder}" from library`}
-                  size="sm"
-                  className="ml-1 text-gray-500 hover:text-red-400"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Scan Progress */}
       {scanProgress && (
         <div className="mb-6 p-4 bg-blue-900/30 border border-blue-700/50 rounded-lg">
@@ -257,11 +207,11 @@ export default function Dashboard() {
           </p>
           <form onSubmit={handleAddFolder} className="space-y-3">
             <div>
-              <input
+              <Input
                 ref={pathRef}
                 type="text"
                 placeholder="e.g. C:\Users\work\Pictures\Vacation"
-                className={`w-full px-3 py-2 bg-gray-700 border ${borderColor} rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500`}
+                variant={inputVariant}
                 autoFocus
                 onChange={(e) => {
                   const cleaned = e.target.value.replace(/^["']+|["']+$/g, '').trim();
@@ -290,23 +240,29 @@ export default function Dashboard() {
         </div>
       </Modal>
 
-      {/* Media Grid or Empty State */}
-      <MediaGrid
-        items={media}
-        onItemClick={handleMediaClick}
-        onItemLike={likeMedia}
-        emptyState={
-          <EmptyState
-            icon={folderIcon}
-            title="No media yet"
-            description="Add a folder from your device to start building your library."
-            action={{
-              label: 'Add Folder',
-              onClick: () => setShowAddFolder(true),
-            }}
-          />
-        }
-      />
+      {/* Folder Grid or Empty State */}
+      {folders.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {folders.map(folder => (
+            <FolderCard
+              key={folder}
+              folderPath={folder}
+              items={getMediaByFolder(folder)}
+              onRemove={() => handleRemoveFolder(folder)}
+            />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          icon={folderIcon}
+          title="No media yet"
+          description="Add a folder from your device to start building your library."
+          action={{
+            label: 'Add Folder',
+            onClick: () => setShowAddFolder(true),
+          }}
+        />
+      )}
     </div>
   );
 }
