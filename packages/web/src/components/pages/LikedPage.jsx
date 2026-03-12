@@ -2,7 +2,7 @@
  * @file Liked media page - shows items with likes > 0.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMedia } from '../../hooks/useMedia.js';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
@@ -16,7 +16,8 @@ import { Button, Icon, Spinner } from '../ui/index.js';
 export default function LikedPage() {
   const navigate = useNavigate();
   const { loading, likedMedia, likeMedia } = useMedia();
-  const { start: startSlideshow } = useSlideshow();
+  const slideshow = useSlideshow();
+  const pendingShuffle = useRef(false);
 
   // Sort by like count descending
   const sortedLikedMedia = useMemo(() => {
@@ -26,6 +27,19 @@ export default function LikedPage() {
   const handleMediaClick = (clickedMedia) => {
     navigate(`/media/${clickedMedia.id}`);
   };
+
+  const handleShuffle = () => {
+    if (sortedLikedMedia.length === 0) return;
+    pendingShuffle.current = true;
+    slideshow.start(sortedLikedMedia, { order: 'random' });
+  };
+
+  useEffect(() => {
+    if (pendingShuffle.current && slideshow.active && slideshow.current) {
+      pendingShuffle.current = false;
+      navigate(`/media/${slideshow.current.id}`);
+    }
+  }, [slideshow.active, slideshow.current, navigate]);
 
   if (loading) {
     return (
@@ -47,11 +61,8 @@ export default function LikedPage() {
           <p className="text-gray-400 text-sm">{sortedLikedMedia.length} items</p>
         </div>
         {sortedLikedMedia.length > 0 && (
-          <Button
-            variant="secondary"
-            onClick={() => startSlideshow(sortedLikedMedia, { order: 'random' })}
-          >
-            Slideshow
+          <Button variant="secondary" onClick={handleShuffle}>
+            Shuffle
           </Button>
         )}
       </div>

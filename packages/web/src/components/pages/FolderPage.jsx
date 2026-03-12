@@ -3,6 +3,7 @@
  * LAW 2.7: maintains folder hierarchy with breadcrumb navigation.
  */
 
+import { useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMedia } from '../../hooks/useMedia.js';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
@@ -11,9 +12,6 @@ import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, Spinner } from '../ui/index.js';
 
-/**
- * Page showing subfolders and media from a specific folder.
- */
 export default function FolderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -21,7 +19,8 @@ export default function FolderPage() {
     loading, likeMedia, getFolderById, getSubfolders,
     getMediaByFolder, getMediaInSubtree, getBreadcrumbs,
   } = useMedia();
-  const { start: startSlideshow, open: openMedia } = useSlideshow();
+  const slideshow = useSlideshow();
+  const pendingShuffle = useRef(false);
 
   const folder = getFolderById(Number(id));
   const subfolders = folder ? getSubfolders(folder.id) : [];
@@ -33,13 +32,19 @@ export default function FolderPage() {
     navigate(`/media/${clickedMedia.id}`);
   };
 
-  const handleRandomSlideshow = () => {
-    startSlideshow(subtreeMedia, { order: 'random' });
+  const handleShuffle = () => {
+    if (subtreeMedia.length === 0) return;
+    pendingShuffle.current = true;
+    slideshow.start(subtreeMedia, { order: 'random' });
   };
 
-  const handleSequentialSlideshow = () => {
-    startSlideshow(subtreeMedia, { order: 'sequential' });
-  };
+  /* Navigate to first shuffled item after slideshow starts. */
+  useEffect(() => {
+    if (pendingShuffle.current && slideshow.active && slideshow.current) {
+      pendingShuffle.current = false;
+      navigate(`/media/${slideshow.current.id}`);
+    }
+  }, [slideshow.active, slideshow.current, navigate]);
 
   if (loading) {
     return (
@@ -101,14 +106,9 @@ export default function FolderPage() {
           </p>
         </div>
         {subtreeMedia.length > 0 && (
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={handleSequentialSlideshow}>
-              Sequential
-            </Button>
-            <Button onClick={handleRandomSlideshow}>
-              Random
-            </Button>
-          </div>
+          <Button variant="secondary" onClick={handleShuffle}>
+            Shuffle
+          </Button>
         )}
       </div>
 

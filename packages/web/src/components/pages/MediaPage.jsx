@@ -1,7 +1,8 @@
 /**
- * @file Single media item page - displays a media item at its own URL.
+ * @file Unified media viewer with prev/next navigation.
  * LAW 1.26: every media item has a shareable URL.
- * LAW 1.27: prev/next controls navigate within folder context.
+ * LAW 1.27: single viewer — folder mode navigates sequentially,
+ *           slideshow mode navigates through shuffled list. No auto-advance.
  */
 
 import { useEffect, useCallback } from 'react';
@@ -18,24 +19,44 @@ export default function MediaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { media, loading, likeMedia, folders, getMediaByFolder } = useMedia();
-  const { start: startSlideshow } = useSlideshow();
+  const slideshow = useSlideshow();
 
   const item = media.find(m => m.id === Number(id));
 
+  /* Determine navigation list: slideshow items or folder media */
+  const inSlideshow = slideshow.active;
+
   const folder = item ? folders.find(f => f.path === item.folder) : null;
   const folderMedia = item ? getMediaByFolder(item.folder) : [];
-  const currentIndex = folderMedia.findIndex(m => m.id === Number(id));
 
-  const hasPrev = currentIndex > 0;
-  const hasNext = currentIndex < folderMedia.length - 1;
+  const navItems = inSlideshow ? slideshow.items : folderMedia;
+  const currentIndex = navItems.findIndex(m => m.id === Number(id));
+
+  /* Slideshow wraps around; folder mode doesn't */
+  const hasPrev = inSlideshow ? navItems.length > 1 : currentIndex > 0;
+  const hasNext = inSlideshow ? navItems.length > 1 : currentIndex < navItems.length - 1;
 
   const goPrev = useCallback(() => {
-    if (hasPrev) navigate(`/media/${folderMedia[currentIndex - 1].id}`);
-  }, [hasPrev, navigate, folderMedia, currentIndex]);
+    if (!hasPrev) return;
+    if (inSlideshow) {
+      slideshow.prev();
+      const prevIndex = currentIndex === 0 ? navItems.length - 1 : currentIndex - 1;
+      navigate(`/media/${navItems[prevIndex].id}`);
+    } else {
+      navigate(`/media/${navItems[currentIndex - 1].id}`);
+    }
+  }, [hasPrev, inSlideshow, slideshow, navigate, navItems, currentIndex]);
 
   const goNext = useCallback(() => {
-    if (hasNext) navigate(`/media/${folderMedia[currentIndex + 1].id}`);
-  }, [hasNext, navigate, folderMedia, currentIndex]);
+    if (!hasNext) return;
+    if (inSlideshow) {
+      slideshow.next();
+      const nextIndex = (currentIndex + 1) % navItems.length;
+      navigate(`/media/${navItems[nextIndex].id}`);
+    } else {
+      navigate(`/media/${navItems[currentIndex + 1].id}`);
+    }
+  }, [hasNext, inSlideshow, slideshow, navigate, navItems, currentIndex]);
 
   /* Keyboard navigation */
   useEffect(() => {
@@ -70,10 +91,6 @@ export default function MediaPage() {
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(item);
   const folderName = item.folder?.split(/[/\\]/).filter(Boolean).pop();
-
-  const handleSlideshow = () => {
-    startSlideshow(folderMedia, { order: 'sequential', startIndex: currentIndex >= 0 ? currentIndex : 0 });
-  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -113,24 +130,32 @@ export default function MediaPage() {
         <div className="min-w-0">
           <h1 className="text-white font-medium truncate">{item.title}</h1>
           <div className="flex items-center gap-2 text-sm text-gray-400">
-            {folder && (
+            {inSlideshow ? (
+              <span className="text-blue-400">Slideshow</span>
+            ) : folder ? (
               <button
                 onClick={() => navigate(`/folder/${folder.id}`)}
                 className="hover:text-white transition-colors truncate"
               >
                 {folderName}
               </button>
-            )}
-            {folderMedia.length > 1 && (
-              <span>{currentIndex + 1} / {folderMedia.length}</span>
+            ) : null}
+            {navItems.length > 1 && (
+              <span>{currentIndex + 1} / {navItems.length}</span>
             )}
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {folderMedia.length > 1 && (
-            <Button variant="ghost" size="sm" onClick={handleSlideshow}>
-              Slideshow
+          {inSlideshow && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                slideshow.stop();
+                if (folder) navigate(`/folder/${folder.id}`);
+              }}
+            >
+              Stop
             </Button>
           )}
           <IconButton

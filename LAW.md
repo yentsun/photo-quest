@@ -12,11 +12,11 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.3** After media files are indexed, the user must be able to see processed media in the Library section of the PWA.
 
-**1.4** If the user has media in their library, they must be able to launch a slideshow in randomized order.
+**1.4** If the user has media in their library, they must be able to launch a slideshow (optionally shuffled). Slideshow is manual — no auto-advance, only prev/next controls.
 
-**1.5** The user must be able to stop the slideshow and use next/previous buttons to navigate.
+**1.5** _(removed)_
 
-**1.6** The user must be able to resume the auto slideshow after stopping it.
+**1.6** _(removed)_
 
 **1.7** The user must be able to like a media item. Likes are unlimited — each click adds to the total count. The like count must update immediately in the UI.
 
@@ -58,7 +58,7 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.26** Every media item must have its own shareable URL (e.g., `/media/5`). Navigating to this URL must display the media item directly.
 
-**1.27** When viewing a media item, navigation controls (left/right arrows) must always be present. When opened from a folder, previous/next navigate sequentially within that folder. When in slideshow mode, next picks a random item and previous goes back.
+**1.27** Media viewing must use a single unified viewer with navigation controls (left/right arrows). When browsing a folder, prev/next navigate sequentially. When in slideshow mode, prev/next navigate through the slideshow list (which may be shuffled). No auto-advance — all navigation is manual.
 
 ---
 

@@ -1,9 +1,9 @@
 /**
  * @file Slideshow state management context.
+ * LAW 1.27: slideshow is manual (no auto-advance), uses the unified MediaPage viewer.
  */
 
 import { createContext, useContext, useReducer, useCallback } from 'react';
-import { slideshowInterval } from '@photo-quest/shared';
 import { shuffle } from '../utils/shuffle.js';
 
 const SlideshowContext = createContext();
@@ -12,9 +12,7 @@ const initialState = {
   active: false,
   items: [],
   currentIndex: 0,
-  playing: false,
-  order: 'random', // 'random' | 'sequential'
-  interval: slideshowInterval,
+  order: 'random',
 };
 
 function reducer(state, action) {
@@ -25,28 +23,11 @@ function reducer(state, action) {
         active: true,
         items: action.order === 'random' ? shuffle(action.items) : action.items,
         currentIndex: action.startIndex || 0,
-        playing: true,
         order: action.order || 'random',
       };
 
-    case 'OPEN':
-      return {
-        ...state,
-        active: true,
-        items: action.items,
-        currentIndex: action.startIndex || 0,
-        playing: false,
-        order: 'sequential',
-      };
-
     case 'STOP':
-      return {
-        ...state,
-        active: false,
-        items: [],
-        currentIndex: 0,
-        playing: false,
-      };
+      return { ...initialState };
 
     case 'NEXT':
       return {
@@ -62,11 +43,8 @@ function reducer(state, action) {
           : state.currentIndex - 1,
       };
 
-    case 'TOGGLE_PLAY':
-      return {
-        ...state,
-        playing: !state.playing,
-      };
+    case 'SET_INDEX':
+      return { ...state, currentIndex: action.index };
 
     case 'SET_ORDER': {
       const newItems = action.order === 'random'
@@ -79,16 +57,6 @@ function reducer(state, action) {
         currentIndex: 0,
       };
     }
-
-    case 'UPDATE_ITEM':
-      return {
-        ...state,
-        items: state.items.map(item =>
-          item.id === action.itemId
-            ? { ...item, ...action.updates }
-            : item
-        ),
-      };
 
     default:
       return state;
@@ -105,9 +73,6 @@ export function SlideshowProvider({ children }) {
   );
 }
 
-/**
- * Hook for accessing slideshow state and controls.
- */
 export function useSlideshow() {
   const { state, dispatch } = useContext(SlideshowContext);
 
@@ -117,14 +82,6 @@ export function useSlideshow() {
       items,
       startIndex: options.startIndex,
       order: options.order || 'random',
-    });
-  }, [dispatch]);
-
-  const open = useCallback((items, index = 0) => {
-    dispatch({
-      type: 'OPEN',
-      items,
-      startIndex: index,
     });
   }, [dispatch]);
 
@@ -140,16 +97,12 @@ export function useSlideshow() {
     dispatch({ type: 'PREV' });
   }, [dispatch]);
 
-  const togglePlay = useCallback(() => {
-    dispatch({ type: 'TOGGLE_PLAY' });
+  const setIndex = useCallback((index) => {
+    dispatch({ type: 'SET_INDEX', index });
   }, [dispatch]);
 
   const setOrder = useCallback((order) => {
     dispatch({ type: 'SET_ORDER', order });
-  }, [dispatch]);
-
-  const updateItem = useCallback((itemId, updates) => {
-    dispatch({ type: 'UPDATE_ITEM', itemId, updates });
   }, [dispatch]);
 
   const current = state.items[state.currentIndex] || null;
@@ -158,18 +111,14 @@ export function useSlideshow() {
     active: state.active,
     items: state.items,
     currentIndex: state.currentIndex,
-    playing: state.playing,
     order: state.order,
-    interval: state.interval,
     current,
     start,
-    open,
     stop,
     next,
     prev,
-    togglePlay,
+    setIndex,
     setOrder,
-    updateItem,
   };
 }
 

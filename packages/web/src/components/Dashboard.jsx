@@ -3,6 +3,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMedia } from '../hooks/useMedia.js';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { FolderCard } from './media/index.js';
@@ -67,8 +68,10 @@ function usePathValidation() {
  * Main library dashboard showing all media.
  */
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { media, loading, rootFolders, getMediaInSubtree, addFolderWithPath, removeFolder, refreshLibrary, refresh } = useMedia();
-  const { start: startSlideshow } = useSlideshow();
+  const slideshow = useSlideshow();
+  const pendingShuffle = useRef(false);
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(null);
   const [importProgress, setImportProgress] = useState(null); // { total, processed }
@@ -79,6 +82,19 @@ export default function Dashboard() {
   useEffect(() => {
     if (!showAddFolder) reset();
   }, [showAddFolder, reset]);
+
+  const handleShuffle = () => {
+    if (media.length === 0) return;
+    pendingShuffle.current = true;
+    slideshow.start(media, { order: 'random' });
+  };
+
+  useEffect(() => {
+    if (pendingShuffle.current && slideshow.active && slideshow.current) {
+      pendingShuffle.current = false;
+      navigate(`/media/${slideshow.current.id}`);
+    }
+  }, [slideshow.active, slideshow.current, navigate]);
 
   const handleRefresh = async () => {
     if (rootFolders.length === 0) {
@@ -190,11 +206,8 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-2">
           {media.length > 0 && (
-            <Button
-              variant="secondary"
-              onClick={() => startSlideshow(media, { order: 'random' })}
-            >
-              Slideshow
+            <Button variant="secondary" onClick={handleShuffle}>
+              Shuffle
             </Button>
           )}
           {rootFolders.length > 0 && (
