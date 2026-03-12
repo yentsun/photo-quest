@@ -36,5 +36,8 @@ export const actions = {
   SLIDESHOW_PREV: 'SLIDESHOW_PREV',
 
   /** Fired when media items are added from a folder scan. */
-  MEDIA_ADDED: 'MEDIA_ADDED'
+  MEDIA_ADDED: 'MEDIA_ADDED',
+
+  /** Fired when folders list is fetched from the server. */
+  FOLDERS_LOADED: 'FOLDERS_LOADED'
 };

@@ -58,7 +58,7 @@ export default defineConfig({
 
         /* Don't cache API data endpoints -- they should always hit the server. */
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/media/, /^\/stream/, /^\/image/, /^\/jobs/],
+        navigateFallbackDenylist: [/^\/media/, /^\/stream/, /^\/image/, /^\/jobs/, /^\/folders/],
 
         /* Runtime caching for viewed images - cache them for offline access. */
         runtimeCaching: [
@@ -91,6 +91,7 @@ export default defineConfig({
       '/stream': API_TARGET,
       '/image': API_TARGET,
       '/jobs': API_TARGET,
+      '/folders': API_TARGET,
       '/network': API_TARGET,
       '/scans': API_TARGET,
     },

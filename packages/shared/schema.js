@@ -1,10 +1,11 @@
 /**
  * @file SQLite table definitions shared between the server and the worker.
  *
- * Both the server and the worker call `database.exec(CREATE_MEDIA_TABLE)` and
- * `database.exec(CREATE_JOBS_TABLE)` at startup so that whichever process
- * starts first will create the tables, and subsequent starts are no-ops
- * thanks to `CREATE TABLE IF NOT EXISTS`.
+ * Both the server and the worker run all CREATE TABLE statements at startup
+ * so that whichever process starts first will create the tables, and
+ * subsequent starts are no-ops thanks to `CREATE TABLE IF NOT EXISTS`.
+ *
+ * Tables: media, jobs, scans, import_queue, folders.
  *
  * IMPORTANT: if you change a column here you will also need a migration
  * strategy for existing databases -- `IF NOT EXISTS` only applies to the whole
@@ -34,6 +35,10 @@
  *                      re-adding later), 0 otherwise.
  *  - `hash`            Content hash (first 64KB + size) for identifying same
  *                      media across different paths/filenames.
+ *  - `orientation`     EXIF orientation tag (1-8). 1 = normal, 6 = 90° CW,
+ *                      etc. NULL for videos or images without EXIF.
+ *  - `camera`          Camera make/model from EXIF (e.g. "FUJIFILM X100").
+ *  - `date_taken`      ISO-8601 datetime from EXIF DateTimeOriginal.
  *  - `created_at` /
  *    `updated_at`      ISO-8601 timestamps managed by SQLite defaults and
  *                      explicit UPDATEs in the worker.
@@ -57,6 +62,9 @@ export const CREATE_MEDIA_TABLE = `
     likes INTEGER NOT NULL DEFAULT 0,
     hidden INTEGER NOT NULL DEFAULT 0,
     hash TEXT,
+    orientation INTEGER,
+    camera TEXT,
+    date_taken TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
@@ -119,6 +127,22 @@ export const CREATE_SCANS_TABLE = `
  *
  * @type {string}
  */
+/**
+ * SQL statement that creates the `folders` table.
+ *
+ * Maps folder paths to integer IDs for clean URLs.
+ * Populated during media scan; the UNIQUE constraint on path prevents
+ * duplicate records when the same directory is scanned more than once.
+ *
+ * @type {string}
+ */
+export const CREATE_FOLDERS_TABLE = `
+  CREATE TABLE IF NOT EXISTS folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL UNIQUE
+  )
+`;
+
 export const CREATE_IMPORT_QUEUE_TABLE = `
   CREATE TABLE IF NOT EXISTS import_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

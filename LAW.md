@@ -64,7 +64,15 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **2.2** The server must read and index all media files (images and videos) in all subfolders recursively.
 
-**2.3** Media import must use a database-backed queue. When a scan is initiated, discovered files must be queued as individual import tasks in the database. The server must report current import progress (e.g., "imported 45/200 files"). If the process is interrupted (crash, restart, etc.), it must resume from where it left off — already-imported files must not be re-processed.
+**2.3** Photos must be displayed according to their EXIF orientation data. If a photo has rotation metadata, the server must apply it so the image displays correctly in the client.
+
+**2.4** EXIF metadata (orientation, dimensions, camera model, date taken, etc.) must be extracted and stored in the database during media import.
+
+**2.6** URLs must be clean and human-readable. No filesystem paths in URLs. Entities like folders must be referenced by database IDs (e.g., `/folder/5` not `/folder/C%3A%5CUsers%5C...`).
+
+**2.7** Folder navigation must maintain the original folder hierarchy from disk. The dashboard shows root-level scanned folders. Clicking a folder shows its subfolders and direct media. Users can drill down into nested subfolders. Breadcrumb navigation must allow navigating back up the hierarchy.
+
+**2.5** Media import must use a database-backed queue. When a scan is initiated, discovered files must be queued as individual import tasks in the database. The server must report current import progress (e.g., "imported 45/200 files"). If the process is interrupted (crash, restart, etc.), it must resume from where it left off — already-imported files must not be re-processed.
 
 ---
 

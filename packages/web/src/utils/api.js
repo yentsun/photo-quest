@@ -97,14 +97,27 @@ export async function fetchNetworkInfo() {
 }
 
 /**
- * Remove a folder from the library.
+ * Fetch all folders with their IDs.
+ *
+ * @returns {Promise<Array<{id: number, path: string}>>}
+ */
+export async function fetchFolders() {
+  const response = await fetch(apiRoutes.folders);
+  if (!response.ok) {
+    throw new Error('Failed to fetch folders');
+  }
+  return response.json();
+}
+
+/**
+ * Remove a folder from the library by ID.
  * Records are hidden (not deleted) so likes are preserved if re-added.
  *
- * @param {string} folderName - Name of the folder to remove
+ * @param {number} folderId - ID of the folder to remove
  * @returns {Promise<{folder: string, hidden: number}>}
  */
-export async function removeFolder(folderName) {
-  const response = await fetch(`/media/folder/${encodeURIComponent(folderName)}`, {
+export async function removeFolder(folderId) {
+  const response = await fetch(`/media/folder/${folderId}`, {
     method: 'DELETE',
   });
   if (!response.ok) {

@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import sharp from 'sharp';
 import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, JOB_TYPE, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
 import { saveDb } from '../src/db.js';
 import { broadcastSse } from '../src/sse.js';
@@ -44,10 +45,70 @@ function computeFileHash(filePath) {
 }
 
 /**
+ * Extract EXIF metadata from an image using sharp.
+ * Returns { orientation, width, height, camera, dateTaken } or nulls.
+ */
+async function extractExif(filePath) {
+  try {
+    const meta = await sharp(filePath).metadata();
+    return {
+      orientation: meta.orientation || null,
+      width: meta.width || null,
+      height: meta.height || null,
+      camera: meta.exif ? parseCameraFromExif(meta) : null,
+      dateTaken: meta.exif ? parseDateFromExif(meta) : null,
+    };
+  } catch {
+    return { orientation: null, width: null, height: null, camera: null, dateTaken: null };
+  }
+}
+
+/**
+ * Try to parse camera model from sharp metadata.
+ * Sharp doesn't directly expose EXIF tags, so we parse the raw EXIF buffer.
+ */
+function parseCameraFromExif(meta) {
+  if (!meta.exif) return null;
+  try {
+    // Look for ASCII strings that match common camera model patterns
+    const str = meta.exif.toString('ascii', 0, Math.min(meta.exif.length, 4096));
+    // EXIF stores Make and Model as null-terminated ASCII strings
+    // We'll extract readable substrings
+    const readable = str.match(/[\x20-\x7E]{4,}/g) || [];
+    // Camera models typically contain brand names
+    const model = readable.find(s =>
+      /fuji|canon|nikon|sony|olympus|panasonic|samsung|apple|google|huawei|xiaomi|dji|gopro|leica/i.test(s)
+    );
+    return model?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Try to parse date taken from EXIF buffer.
+ * EXIF dates are in "YYYY:MM:DD HH:MM:SS" format.
+ */
+function parseDateFromExif(meta) {
+  if (!meta.exif) return null;
+  try {
+    const str = meta.exif.toString('ascii', 0, Math.min(meta.exif.length, 4096));
+    const match = str.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+    if (match) {
+      return `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Process a single import queue item: hash, dedup, insert media record.
+ * Async because EXIF extraction uses sharp.
  * Exported for testing.
  */
-export function processOneItem(db, itemId, filePath, logger) {
+export async function processOneItem(db, itemId, filePath, logger) {
   const ext = path.extname(filePath).toLowerCase();
   const title = path.basename(filePath, ext);
   const folder = path.dirname(filePath);
@@ -66,6 +127,15 @@ export function processOneItem(db, itemId, filePath, logger) {
 
   const hash = computeFileHash(filePath);
 
+  /* Ensure folder has a record in the folders table. */
+  db.run('INSERT OR IGNORE INTO folders (path) VALUES (?)', [folder]);
+
+  /* Extract EXIF for images. */
+  let exif = { orientation: null, width: null, height: null, camera: null, dateTaken: null };
+  if (isImage) {
+    exif = await extractExif(filePath);
+  }
+
   /* Check if hidden media with same hash exists (restore case). */
   const hiddenStmt = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 1');
   hiddenStmt.bind([hash]);
@@ -78,8 +148,12 @@ export function processOneItem(db, itemId, filePath, logger) {
 
   if (hiddenId) {
     db.run(
-      'UPDATE media SET path = ?, folder = ?, hidden = 0, updated_at = datetime("now") WHERE id = ?',
-      [filePath, folder, hiddenId]
+      `UPDATE media SET path = ?, folder = ?, hidden = 0,
+       orientation = ?, camera = ?, date_taken = ?,
+       width = COALESCE(width, ?), height = COALESCE(height, ?),
+       updated_at = datetime("now") WHERE id = ?`,
+      [filePath, folder, exif.orientation, exif.camera, exif.dateTaken,
+       exif.width, exif.height, hiddenId]
     );
     logger.debug(`Restored media id=${hiddenId} at ${filePath}`);
   } else {
@@ -94,8 +168,11 @@ export function processOneItem(db, itemId, filePath, logger) {
     } else {
       /* Insert new media. */
       db.run(
-        'INSERT INTO media (path, title, type, folder, status, hash) VALUES (?, ?, ?, ?, ?, ?)',
-        [filePath, title, mediaType, folder, status, hash]
+        `INSERT INTO media (path, title, type, folder, status, hash,
+         orientation, width, height, camera, date_taken)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [filePath, title, mediaType, folder, status, hash,
+         exif.orientation, exif.width, exif.height, exif.camera, exif.dateTaken]
       );
 
       /* Videos need a probe job. */
@@ -124,7 +201,7 @@ export function processOneItem(db, itemId, filePath, logger) {
  * Process the import queue for a given scan, one item at a time.
  * Uses setTimeout to avoid blocking the event loop.
  */
-function processQueue(kojo, scanId, logger) {
+async function processQueue(kojo, scanId, logger) {
   const db = kojo.get('db');
 
   /* Claim next pending item for this scan. */
@@ -159,7 +236,7 @@ function processQueue(kojo, scanId, logger) {
   stmt.free();
 
   try {
-    processOneItem(db, item.id, item.path, logger);
+    await processOneItem(db, item.id, item.path, logger);
   } catch (err) {
     logger.warn(`Failed to import ${item.path}: ${err.message}`);
     db.run(
@@ -217,6 +294,28 @@ export function resumeIncompleteScans(kojo, logger) {
   }
 }
 
+/**
+ * Create folder records for the scan root and all intermediate directories.
+ * This ensures the full folder hierarchy is navigable, not just leaf dirs.
+ */
+function createFolderHierarchy(db, scanRoot, files) {
+  const dirs = new Set();
+  dirs.add(scanRoot);
+
+  for (const filePath of files) {
+    let current = path.dirname(filePath);
+    while (current.length >= scanRoot.length && current !== path.dirname(current)) {
+      dirs.add(current);
+      if (current === scanRoot) break;
+      current = path.dirname(current);
+    }
+  }
+
+  for (const dir of dirs) {
+    db.run('INSERT OR IGNORE INTO folders (path) VALUES (?)', [dir]);
+  }
+}
+
 export default function (dirPath) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
@@ -234,6 +333,9 @@ export default function (dirPath) {
 
   /* Phase 1: Discovery — walk directory and populate import queue. */
   const files = findMediaFiles(dirPath);
+
+  /* Create folder hierarchy — scan root + all intermediate directories. */
+  createFolderHierarchy(db, dirPath, files);
 
   /* Create scan record. */
   db.run(

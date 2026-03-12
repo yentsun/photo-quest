@@ -10,9 +10,9 @@ import { Icon, IconButton } from '../ui/index.js';
 /**
  * Folder card showing a preview image, folder name, and item count.
  */
-export default function FolderCard({ folderPath, items, onRemove }) {
+export default function FolderCard({ folder, items, onRemove }) {
   const navigate = useNavigate();
-  const folderName = folderPath.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
+  const folderName = folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
 
   const previewItem = items.find(m => m.type === MEDIA_TYPE.IMAGE);
   const thumbnailUrl = previewItem ? getImageUrl(previewItem.id) : null;
@@ -23,7 +23,7 @@ export default function FolderCard({ folderPath, items, onRemove }) {
   return (
     <div
       className="relative aspect-square rounded-lg overflow-hidden bg-gray-800 cursor-pointer group"
-      onClick={() => navigate(`/folder/${encodeURIComponent(folderPath)}`)}
+      onClick={() => navigate(`/folder/${folder.id}`)}
     >
       {thumbnailUrl ? (
         <img

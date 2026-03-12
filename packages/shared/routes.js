@@ -33,8 +33,8 @@ export const clientRoutes = {
   /** Liked media section -- shows items with likes > 0. */
   liked: '/liked',
 
-  /** Folder view -- shows media filtered by folder path. */
-  folder: '/folder/:path'
+  /** Folder view -- shows media filtered by folder ID. */
+  folder: '/folder/:id'
 };
 
 // ---------------------------------------------------------------------------
@@ -77,8 +77,11 @@ export const apiRoutes = {
   /** POST -- find folder by name in server's configured media paths. */
   mediaFindFolder: '/media/find-folder',
 
+  /** GET  -- list all folders with IDs. */
+  folders: '/folders',
+
   /** DELETE -- remove a folder from library (hides records, preserves likes). */
-  mediaFolder: '/media/folder/:name',
+  mediaFolder: '/media/folder/:id',
 
   /** GET  -- stream the video file for a given media ID (supports HTTP range
    *  requests for seeking). */

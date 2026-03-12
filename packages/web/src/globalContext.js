@@ -109,15 +109,18 @@ export const reducer = (state, action) => {
      * MEDIA_LOADED is dispatched when the media list is fetched from server.
      * Derives unique folders from media paths.
      */
-    case actions.MEDIA_LOADED: {
-      const folders = [...new Set(action.media.map(m => m.folder).filter(Boolean))];
+    case actions.MEDIA_LOADED:
       return {
         ...state,
         media: action.media,
         mediaLoading: false,
-        folders,
       };
-    }
+
+    case actions.FOLDERS_LOADED:
+      return {
+        ...state,
+        folders: action.folders,
+      };
 
     /*
      * MEDIA_LIKED is dispatched when a media item is liked.
@@ -137,15 +140,11 @@ export const reducer = (state, action) => {
      * MEDIA_ADDED is dispatched when new media items are added from a folder scan.
      * Appends new items to the media list and updates folders.
      */
-    case actions.MEDIA_ADDED: {
-      const newMedia = [...state.media, ...action.media];
-      const folders = [...new Set(newMedia.map(m => m.folder).filter(Boolean))];
+    case actions.MEDIA_ADDED:
       return {
         ...state,
-        media: newMedia,
-        folders,
+        media: [...state.media, ...action.media],
       };
-    }
 
     default:
       throw new Error('unknown action type: ' + action.type);

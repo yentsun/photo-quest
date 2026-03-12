@@ -2,10 +2,10 @@
  * @file Hook for fetching and managing media data.
  */
 
-import { useContext, useEffect, useCallback } from 'react';
+import { useContext, useEffect, useCallback, useMemo } from 'react';
 import GlobalContext from '../globalContext.js';
 import { actions } from '@photo-quest/shared';
-import { fetchMedia, likeMedia as likeMediaApi, scanMedia as scanMediaApi, removeFolder as removeFolderApi } from '../utils/api.js';
+import { fetchMedia, fetchFolders, likeMedia as likeMediaApi, scanMedia as scanMediaApi, removeFolder as removeFolderApi } from '../utils/api.js';
 
 /**
  * Hook for accessing and managing media data.
@@ -15,8 +15,9 @@ export function useMedia() {
 
   const refresh = useCallback(async () => {
     try {
-      const media = await fetchMedia();
+      const [media, folders] = await Promise.all([fetchMedia(), fetchFolders()]);
       dispatch({ type: actions.MEDIA_LOADED, media });
+      dispatch({ type: actions.FOLDERS_LOADED, folders });
     } catch (err) {
       console.error('Failed to fetch media:', err);
     }
@@ -42,20 +43,58 @@ export function useMedia() {
   }, []);
 
   /**
-   * Remove a folder from the library.
+   * Remove a folder from the library by ID.
    * Records are hidden (not deleted) so likes are preserved if re-added.
    */
-  const removeFolder = useCallback(async (folderName) => {
-    const result = await removeFolderApi(folderName);
+  const removeFolder = useCallback(async (folderId) => {
+    const result = await removeFolderApi(folderId);
     await refresh();
     return result;
   }, [refresh]);
 
   const likedMedia = state.media.filter(m => m.likes > 0);
 
+  /** Get media directly in a specific folder (exact match). */
   const getMediaByFolder = useCallback((folder) => {
     return state.media.filter(m => m.folder === folder);
   }, [state.media]);
+
+  /** Get all media in a folder's subtree (folder + all descendants). */
+  const getMediaInSubtree = useCallback((folderPath) => {
+    const normalized = folderPath.replace(/\\/g, '/');
+    return state.media.filter(m => {
+      const mFolder = (m.folder || '').replace(/\\/g, '/');
+      return mFolder === normalized || mFolder.startsWith(normalized + '/');
+    });
+  }, [state.media]);
+
+  /** Get root folders (no parent in the folders table). */
+  const rootFolders = useMemo(() => {
+    return state.folders.filter(f => f.parentId === null);
+  }, [state.folders]);
+
+  /** Get direct subfolders of a folder. */
+  const getSubfolders = useCallback((folderId) => {
+    return state.folders.filter(f => f.parentId === folderId);
+  }, [state.folders]);
+
+  /** Get a folder by ID. */
+  const getFolderById = useCallback((id) => {
+    return state.folders.find(f => f.id === id);
+  }, [state.folders]);
+
+  /** Get breadcrumb chain from root to the given folder. */
+  const getBreadcrumbs = useCallback((folderId) => {
+    const crumbs = [];
+    let current = state.folders.find(f => f.id === folderId);
+    while (current) {
+      crumbs.unshift(current);
+      current = current.parentId
+        ? state.folders.find(f => f.id === current.parentId)
+        : null;
+    }
+    return crumbs;
+  }, [state.folders]);
 
   /**
    * Refresh library by rescanning all known server folders for new files.
@@ -94,11 +133,16 @@ export function useMedia() {
     media: state.media,
     loading: state.mediaLoading,
     folders: state.folders,
+    rootFolders,
     likedMedia,
     refresh,
     refreshLibrary,
     likeMedia,
     getMediaByFolder,
+    getMediaInSubtree,
+    getSubfolders,
+    getFolderById,
+    getBreadcrumbs,
     addFolderWithPath,
     removeFolder,
   };

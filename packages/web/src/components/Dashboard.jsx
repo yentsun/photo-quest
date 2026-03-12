@@ -67,7 +67,7 @@ function usePathValidation() {
  * Main library dashboard showing all media.
  */
 export default function Dashboard() {
-  const { media, loading, folders, getMediaByFolder, addFolderWithPath, removeFolder, refreshLibrary, refresh } = useMedia();
+  const { media, loading, rootFolders, getMediaInSubtree, addFolderWithPath, removeFolder, refreshLibrary, refresh } = useMedia();
   const { start: startSlideshow } = useSlideshow();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(null);
@@ -81,7 +81,7 @@ export default function Dashboard() {
   }, [showAddFolder, reset]);
 
   const handleRefresh = async () => {
-    if (folders.length === 0) {
+    if (rootFolders.length === 0) {
       setScanProgress('No folders to refresh. Add a folder first.');
       setTimeout(() => setScanProgress(null), 3000);
       return;
@@ -152,12 +152,13 @@ export default function Dashboard() {
     }
   };
 
-  const handleRemoveFolder = async (folderName) => {
+  const handleRemoveFolder = async (folder) => {
+    const folderName = folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
     if (!confirm(`Remove "${folderName}" from library?\n\nYour likes will be preserved if you re-add this folder later.`)) {
       return;
     }
     try {
-      const result = await removeFolder(folderName);
+      const result = await removeFolder(folder.id);
       setScanProgress(`Removed "${folderName}" (${result.hidden} items hidden)`);
       setTimeout(() => setScanProgress(null), 3000);
     } catch (err) {
@@ -196,7 +197,7 @@ export default function Dashboard() {
               Slideshow
             </Button>
           )}
-          {folders.length > 0 && (
+          {rootFolders.length > 0 && (
             <Button
               variant="ghost"
               onClick={handleRefresh}
@@ -282,13 +283,13 @@ export default function Dashboard() {
       </Modal>
 
       {/* Folder Grid or Empty State */}
-      {folders.length > 0 ? (
+      {rootFolders.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {folders.map(folder => (
+          {rootFolders.map(folder => (
             <FolderCard
-              key={folder}
-              folderPath={folder}
-              items={getMediaByFolder(folder)}
+              key={folder.id}
+              folder={folder}
+              items={getMediaInSubtree(folder.path)}
               onRemove={() => handleRemoveFolder(folder)}
             />
           ))}

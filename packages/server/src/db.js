@@ -15,7 +15,7 @@ import initSqlJs from 'sql.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE } from '@photo-quest/shared';
 
 /* Compute __dirname for ES modules. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -66,6 +66,7 @@ export async function initDb() {
   db.run(CREATE_JOBS_TABLE);
   db.run(CREATE_SCANS_TABLE);
   db.run(CREATE_IMPORT_QUEUE_TABLE);
+  db.run(CREATE_FOLDERS_TABLE);
 
   /* Run migrations for existing databases. */
   migrateDb();
@@ -132,6 +133,9 @@ function migrateDb() {
     'ALTER TABLE media ADD COLUMN folder TEXT',
     'ALTER TABLE media ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE media ADD COLUMN hash TEXT',
+    'ALTER TABLE media ADD COLUMN orientation INTEGER',
+    'ALTER TABLE media ADD COLUMN camera TEXT',
+    'ALTER TABLE media ADD COLUMN date_taken TEXT',
   ];
 
   for (const sql of migrations) {
@@ -141,5 +145,14 @@ function migrateDb() {
     } catch (err) {
       /* Column already exists -- ignore. */
     }
+  }
+
+  /* Populate folders table from existing media (one-time migration). */
+  try {
+    db.run(
+      'INSERT OR IGNORE INTO folders (path) SELECT DISTINCT folder FROM media WHERE folder IS NOT NULL'
+    );
+  } catch (err) {
+    /* Table may not exist yet on first run -- ignore. */
   }
 }

@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import initSqlJs from 'sql.js';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
 import scanMedia, { processOneItem, resumeIncompleteScans } from '../ops/scanMedia.js';
 
 /** Create a temp directory tree with nested folders and media files. */
@@ -54,6 +54,7 @@ async function makeDb() {
   db.run(CREATE_JOBS_TABLE);
   db.run(CREATE_SCANS_TABLE);
   db.run(CREATE_IMPORT_QUEUE_TABLE);
+  db.run(CREATE_FOLDERS_TABLE);
   return db;
 }
 
@@ -99,12 +100,12 @@ function getScan(db, scanId) {
   return row;
 }
 
-/** Process all pending queue items synchronously (for testing). */
-function drainQueue(db, scanId, logger) {
+/** Process all pending queue items (for testing). */
+async function drainQueue(db, scanId, logger) {
   const items = allQueueItems(db, scanId).filter(i => i.status === IMPORT_STATUS.PENDING);
   for (const item of items) {
     try {
-      processOneItem(db, item.id, item.path, logger);
+      await processOneItem(db, item.id, item.path, logger);
     } catch (err) {
       db.run(
         'UPDATE import_queue SET status = ?, error = ? WHERE id = ?',
@@ -189,7 +190,7 @@ test('scanMedia — processing phase', async (t) => {
     const scan = scanMedia.bind(ctx);
 
     const { scanId } = scan(root);
-    drainQueue(db, scanId, ctx[1]);
+    await drainQueue(db, scanId, ctx[1]);
 
     const rows = allMedia(db);
     const titles = rows.map(r => r.title).sort();
@@ -202,7 +203,7 @@ test('scanMedia — processing phase', async (t) => {
     const scan = scanMedia.bind(ctx);
 
     const { scanId } = scan(root);
-    drainQueue(db, scanId, ctx[1]);
+    await drainQueue(db, scanId, ctx[1]);
 
     const rows = allMedia(db);
     const byTitle = Object.fromEntries(rows.map(r => [r.title, r]));
@@ -220,7 +221,7 @@ test('scanMedia — processing phase', async (t) => {
     const scan = scanMedia.bind(ctx);
 
     const { scanId } = scan(root);
-    drainQueue(db, scanId, ctx[1]);
+    await drainQueue(db, scanId, ctx[1]);
 
     const rows = allMedia(db);
     const byTitle = Object.fromEntries(rows.map(r => [r.title, r]));
@@ -237,7 +238,7 @@ test('scanMedia — processing phase', async (t) => {
     const scan = scanMedia.bind(ctx);
 
     const { scanId } = scan(root);
-    drainQueue(db, scanId, ctx[1]);
+    await drainQueue(db, scanId, ctx[1]);
 
     const stmt = db.prepare('SELECT j.type, m.title FROM jobs j JOIN media m ON j.media_id = m.id ORDER BY m.title');
     const jobs = [];
@@ -257,7 +258,7 @@ test('scanMedia — processing phase', async (t) => {
     const scan = scanMedia.bind(ctx);
 
     const { scanId } = scan(root);
-    drainQueue(db, scanId, ctx[1]);
+    await drainQueue(db, scanId, ctx[1]);
 
     const items = allQueueItems(db, scanId);
     for (const item of items) {
@@ -279,40 +280,50 @@ test('scanMedia — progress tracking', async (t) => {
   await t.test('scan.processed increments as items are processed', async () => {
     const db = await makeDb();
     const { ctx } = makeContext(db);
-    const scan = scanMedia.bind(ctx);
 
-    const { scanId } = scan(root);
+    // Create scan record and queue directly (without triggering background processing)
+    db.run('INSERT INTO scans (dir_path, total, status) VALUES (?, 3, ?)', [root, SCAN_STATUS.IMPORTING]);
+    const scanId = 1;
+    db.run('INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)',
+      [scanId, path.join(root, 'photo.jpg'), IMPORT_STATUS.PENDING]);
+    db.run('INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)',
+      [scanId, path.join(root, 'video.mp4'), IMPORT_STATUS.PENDING]);
+    db.run('INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)',
+      [scanId, path.join(root, 'subdir', 'nested.png'), IMPORT_STATUS.PENDING]);
 
-    // Before processing
     t.assert.strictEqual(getScan(db, scanId).processed, 0);
 
-    // Process one item manually
     const items = allQueueItems(db, scanId);
-    processOneItem(db, items[0].id, items[0].path, ctx[1]);
+    await processOneItem(db, items[0].id, items[0].path, ctx[1]);
     db.run('UPDATE scans SET processed = processed + 1 WHERE id = ?', [scanId]);
-
     t.assert.strictEqual(getScan(db, scanId).processed, 1);
 
-    // Process the rest
-    for (let i = 1; i < items.length; i++) {
-      processOneItem(db, items[i].id, items[i].path, ctx[1]);
-      db.run('UPDATE scans SET processed = processed + 1 WHERE id = ?', [scanId]);
-    }
+    await processOneItem(db, items[1].id, items[1].path, ctx[1]);
+    db.run('UPDATE scans SET processed = processed + 1 WHERE id = ?', [scanId]);
+    t.assert.strictEqual(getScan(db, scanId).processed, 2);
 
-    t.assert.strictEqual(getScan(db, scanId).processed, 5);
+    await processOneItem(db, items[2].id, items[2].path, ctx[1]);
+    db.run('UPDATE scans SET processed = processed + 1 WHERE id = ?', [scanId]);
+    t.assert.strictEqual(getScan(db, scanId).processed, 3);
   });
 
   await t.test('scan status is completed after draining queue', async () => {
     const db = await makeDb();
     const { ctx } = makeContext(db);
-    const scan = scanMedia.bind(ctx);
 
-    const { scanId } = scan(root);
-    drainQueue(db, scanId, ctx[1]);
+    // Create scan record and queue directly
+    db.run('INSERT INTO scans (dir_path, total, status) VALUES (?, 2, ?)', [root, SCAN_STATUS.IMPORTING]);
+    const scanId = 1;
+    db.run('INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)',
+      [scanId, path.join(root, 'photo.jpg'), IMPORT_STATUS.PENDING]);
+    db.run('INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)',
+      [scanId, path.join(root, 'video.mp4'), IMPORT_STATUS.PENDING]);
+
+    await drainQueue(db, scanId, ctx[1]);
 
     const scanRow = getScan(db, scanId);
     t.assert.strictEqual(scanRow.status, SCAN_STATUS.COMPLETED);
-    t.assert.strictEqual(scanRow.processed, 5);
+    t.assert.strictEqual(scanRow.processed, 2);
   });
 });
 
@@ -333,12 +344,12 @@ test('scanMedia — deduplication', async (t) => {
 
     // First scan + process
     const { scanId: scan1 } = scan(root);
-    drainQueue(db, scan1, ctx[1]);
+    await drainQueue(db, scan1, ctx[1]);
     t.assert.strictEqual(allMedia(db).length, 5);
 
     // Second scan + process
     const { scanId: scan2 } = scan(root);
-    drainQueue(db, scan2, ctx[1]);
+    await drainQueue(db, scan2, ctx[1]);
     t.assert.strictEqual(allMedia(db).length, 5);
   });
 });
@@ -374,15 +385,26 @@ test('scanMedia — resume after interruption', async (t) => {
   await t.test('partially processed scan can be resumed', async () => {
     const db = await makeDb();
     const { ctx } = makeContext(db);
-    const scan = scanMedia.bind(ctx);
 
-    const { scanId } = scan(root);
+    // Create scan and queue directly (no background processing)
+    db.run('INSERT INTO scans (dir_path, total, status) VALUES (?, 4, ?)', [root, SCAN_STATUS.IMPORTING]);
+    const scanId = 1;
+    const files = [
+      path.join(root, 'photo.jpg'),
+      path.join(root, 'video.mp4'),
+      path.join(root, 'subdir', 'nested.png'),
+      path.join(root, 'subdir', 'deep', 'deep_clip.mkv'),
+    ];
+    for (const f of files) {
+      db.run('INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)',
+        [scanId, f, IMPORT_STATUS.PENDING]);
+    }
 
     // Process only 2 items (simulates partial progress before crash)
     const items = allQueueItems(db, scanId);
-    processOneItem(db, items[0].id, items[0].path, ctx[1]);
+    await processOneItem(db, items[0].id, items[0].path, ctx[1]);
     db.run('UPDATE scans SET processed = processed + 1 WHERE id = ?', [scanId]);
-    processOneItem(db, items[1].id, items[1].path, ctx[1]);
+    await processOneItem(db, items[1].id, items[1].path, ctx[1]);
     db.run('UPDATE scans SET processed = processed + 1 WHERE id = ?', [scanId]);
 
     t.assert.strictEqual(getScan(db, scanId).processed, 2);
@@ -390,16 +412,16 @@ test('scanMedia — resume after interruption', async (t) => {
 
     // Remaining items are still pending — resume should pick them up
     const remaining = allQueueItems(db, scanId).filter(i => i.status === IMPORT_STATUS.PENDING);
-    t.assert.strictEqual(remaining.length, 3);
+    t.assert.strictEqual(remaining.length, 2);
 
     // Process remaining items (simulates resume)
     for (const item of remaining) {
-      processOneItem(db, item.id, item.path, ctx[1]);
+      await processOneItem(db, item.id, item.path, ctx[1]);
       db.run('UPDATE scans SET processed = processed + 1 WHERE id = ?', [scanId]);
     }
 
-    t.assert.strictEqual(allMedia(db).length, 5);
-    t.assert.strictEqual(getScan(db, scanId).processed, 5);
+    t.assert.strictEqual(allMedia(db).length, 4);
+    t.assert.strictEqual(getScan(db, scanId).processed, 4);
   });
 });
 
@@ -426,7 +448,7 @@ test('scanMedia — error handling', async (t) => {
     fs.unlinkSync(targetItem.path);
 
     // Process it — should mark as failed
-    processOneItem(db, targetItem.id, targetItem.path, ctx[1]);
+    await processOneItem(db, targetItem.id, targetItem.path, ctx[1]);
 
     const updatedStmt = db.prepare('SELECT status, error FROM import_queue WHERE id = ?');
     updatedStmt.bind([targetItem.id]);
@@ -451,5 +473,107 @@ test('scanMedia — error handling', async (t) => {
     const filePath = path.join(root, 'photo.jpg');
 
     t.assert.throws(() => scan(filePath), { message: /Not a directory/ });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Folder hierarchy tests                                             */
+/* ------------------------------------------------------------------ */
+
+test('scanMedia — folder hierarchy', async (t) => {
+  let root;
+
+  t.beforeEach(() => { root = createFixtureTree(); });
+  t.afterEach(() => { cleanup(root); });
+
+  await t.test('creates folder records for scan root and all intermediate directories', async () => {
+    const db = await makeDb();
+    const scan = bindScanMedia(db);
+    scan(root);
+
+    const stmt = db.prepare('SELECT path FROM folders ORDER BY path');
+    const folders = [];
+    while (stmt.step()) {
+      folders.push(stmt.getAsObject().path);
+    }
+    stmt.free();
+
+    /* Fixture tree:
+     *   root/photo.jpg, root/video.mp4
+     *   root/subdir/nested.png
+     *   root/subdir/deep/deep_clip.mkv
+     *   root/other/family.jpeg
+     *
+     * Expected folders: root, root/subdir, root/subdir/deep, root/other
+     */
+    t.assert.strictEqual(folders.length, 4);
+    t.assert.ok(folders.includes(root));
+    t.assert.ok(folders.includes(path.join(root, 'subdir')));
+    t.assert.ok(folders.includes(path.join(root, 'subdir', 'deep')));
+    t.assert.ok(folders.includes(path.join(root, 'other')));
+  });
+
+  await t.test('scan root folder has no parent in the folders table', async () => {
+    const db = await makeDb();
+    const scan = bindScanMedia(db);
+    scan(root);
+
+    /* The root's dirname is NOT in the folders table,
+     * so when computing parentId it should be null. */
+    const stmt = db.prepare('SELECT id FROM folders WHERE path = ?');
+    stmt.bind([path.dirname(root)]);
+    const hasParent = stmt.step();
+    stmt.free();
+
+    t.assert.strictEqual(hasParent, false);
+  });
+
+  await t.test('subfolder parent can be derived from path', async () => {
+    const db = await makeDb();
+    const scan = bindScanMedia(db);
+    scan(root);
+
+    /* Get the ID of the root folder. */
+    const rootStmt = db.prepare('SELECT id FROM folders WHERE path = ?');
+    rootStmt.bind([root]);
+    rootStmt.step();
+    const rootId = rootStmt.getAsObject().id;
+    rootStmt.free();
+
+    /* Get the subdir folder and check its dirname matches root. */
+    const subStmt = db.prepare('SELECT path FROM folders WHERE path = ?');
+    subStmt.bind([path.join(root, 'subdir')]);
+    subStmt.step();
+    const subPath = subStmt.getAsObject().path;
+    subStmt.free();
+
+    /* dirname of subdir should be root (the parent). */
+    const parentStmt = db.prepare('SELECT id FROM folders WHERE path = ?');
+    parentStmt.bind([path.dirname(subPath)]);
+    parentStmt.step();
+    const parentId = parentStmt.getAsObject().id;
+    parentStmt.free();
+
+    t.assert.strictEqual(parentId, rootId);
+  });
+
+  await t.test('re-scanning does not create duplicate folder records', async () => {
+    const db = await makeDb();
+    const scan = bindScanMedia(db);
+    scan(root);
+
+    const countBefore = db.prepare('SELECT COUNT(*) as c FROM folders');
+    countBefore.step();
+    const before = countBefore.getAsObject().c;
+    countBefore.free();
+
+    scan(root);
+
+    const countAfter = db.prepare('SELECT COUNT(*) as c FROM folders');
+    countAfter.step();
+    const after = countAfter.getAsObject().c;
+    countAfter.free();
+
+    t.assert.strictEqual(after, before);
   });
 });
