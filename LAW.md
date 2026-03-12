@@ -54,6 +54,8 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.24** The server must persistently identify media using a content hash. Same media file should be recognized regardless of path or filename.
 
+**1.25** When displaying a loading spinner, the UI must also show the status of the loading task (e.g., "Loading database…", "Scanning…", etc.).
+
 ---
 
 ## Section 2 — Server
@@ -61,6 +63,16 @@ The governing rules of the photo-quest project. This document is the source of t
 **2.1** The user must be able to download and install the server from GitHub.
 
 **2.2** The server must read and index all media files (images and videos) in all subfolders recursively.
+
+---
+
+## Section 3 — Development
+
+**3.1** Claude must never create zombie processes. When launching background servers or processes, ensure they can be cleanly stopped. Never leave orphaned processes holding ports.
+
+**3.2** If a port is already in use, the server must report the conflict to the user and exit. No auto-killing, no retrying, no switching to another port. The user decides how to free the port.
+
+**3.3** The server must check if its port is free before starting. If occupied, report and exit immediately.
 
 ---
 

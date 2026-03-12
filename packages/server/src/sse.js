@@ -65,3 +65,15 @@ export function broadcastSse(event) {
     client.write(data);
   }
 }
+
+/**
+ * Destroy all open SSE connections.
+ * Called during graceful shutdown so the HTTP server can fully close.
+ */
+export function destroyAllSseClients() {
+  for (const client of clients) {
+    client.end();
+    client.destroy();
+  }
+  clients.clear();
+}

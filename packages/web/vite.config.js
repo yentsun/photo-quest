@@ -5,8 +5,8 @@
  *  - The React plugin enables Fast Refresh during development.
  *  - vite-plugin-pwa generates a service worker and web manifest so the
  *    app is installable as a PWA and auto-updates on new deployments.
- *  - The dev server listens on port 3000 so it does not collide with the
- *    API server on port 4000.
+ *  - The dev server listens on port 5000 so it does not collide with the
+ *    API server on port 3000.
  *  - API requests (/media, /stream, /jobs) are proxied to the back-end.
  */
 
@@ -79,16 +79,16 @@ export default defineConfig({
   ],
 
   server: {
-    port: 3000,
+    port: 5000,
     proxy: {
       '/media': {
-        target: 'http://localhost:4000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
       },
-      '/stream': 'http://localhost:4000',
-      '/image': 'http://localhost:4000',
-      '/jobs': 'http://localhost:4000',
-      '/network': 'http://localhost:4000',
+      '/stream': 'http://localhost:3000',
+      '/image': 'http://localhost:3000',
+      '/jobs': 'http://localhost:3000',
+      '/network': 'http://localhost:3000',
     },
   },
 });

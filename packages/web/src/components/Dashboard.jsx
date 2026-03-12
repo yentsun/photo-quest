@@ -2,25 +2,83 @@
  * @file Dashboard page component - main media library view.
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useMedia } from '../hooks/useMedia.js';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
 import { Button, IconButton, Modal, Spinner } from './ui/index.js';
-import { isFileSystemSupported } from '../services/fileSystem.js';
+
+/**
+ * Debounced path validation against the server.
+ */
+function usePathValidation() {
+  const [pathValid, setPathValid] = useState(null);
+  const [pathError, setPathError] = useState(null);
+  const [pathInfo, setPathInfo] = useState(null); // { files, newEstimate }
+  const [checking, setChecking] = useState(false);
+  const timerRef = useRef(null);
+
+  const validate = useCallback((value) => {
+    clearTimeout(timerRef.current);
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      setPathValid(null);
+      setPathError(null);
+      setPathInfo(null);
+      setChecking(false);
+      return;
+    }
+
+    setChecking(true);
+    timerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch('/media/check-path', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: trimmed }),
+        });
+        const data = await res.json();
+        setPathValid(data.valid);
+        setPathError(data.valid ? null : data.error);
+        setPathInfo(data.valid ? { files: data.files, newEstimate: data.newEstimate } : null);
+      } catch {
+        setPathValid(null);
+        setPathError('Could not reach server');
+      } finally {
+        setChecking(false);
+      }
+    }, 300);
+  }, []);
+
+  const reset = useCallback(() => {
+    clearTimeout(timerRef.current);
+    setPathValid(null);
+    setPathError(null);
+    setPathInfo(null);
+    setChecking(false);
+  }, []);
+
+  return { pathValid, pathError, pathInfo, checking, validate, reset };
+}
 
 /**
  * Main library dashboard showing all media.
  */
 export default function Dashboard() {
-  const { media, loading, folders, likeMedia, pickAndAddFolder, addFolderWithPath, addFolderClientSide, removeFolder, refreshLibrary } = useMedia();
+  const { media, loading, folders, likeMedia, addFolderWithPath, removeFolder, refreshLibrary } = useMedia();
   const { start: startSlideshow, open: openMedia } = useSlideshow();
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(null);
   const [showFolders, setShowFolders] = useState(false);
-  const [pathPrompt, setPathPrompt] = useState(null); // { folderName, folderId, files }
-  const manualPathRef = useRef(null);
+  const [showAddFolder, setShowAddFolder] = useState(false);
+  const pathRef = useRef(null);
+  const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
+
+  useEffect(() => {
+    if (!showAddFolder) reset();
+  }, [showAddFolder, reset]);
 
   const handleRefresh = async () => {
     if (folders.length === 0) {
@@ -46,85 +104,23 @@ export default function Dashboard() {
     }
   };
 
-  const handleAddFolder = async () => {
-    if (!isFileSystemSupported()) {
-      alert('Your browser does not support folder selection. Please use Chrome or Edge.');
-      return;
-    }
-
-    setScanning(true);
-    setScanProgress('Opening folder picker...');
-
-    try {
-      const result = await pickAndAddFolder();
-
-      if (result.source === 'needs-path') {
-        // Server couldn't find folder - prompt for manual path
-        setScanning(false);
-        setScanProgress(null);
-        setPathPrompt({
-          folderName: result.folderName,
-          folderId: result.folderId,
-          files: result.files,
-        });
-        return;
-      }
-
-      const sourceMsg = result.source === 'server'
-        ? 'Server-side scan (accessible from all devices)'
-        : 'Client-side scan (local access only)';
-      setScanProgress(`Added ${result.added} files. ${sourceMsg}`);
-
-      // Clear message after 3 seconds
-      setTimeout(() => setScanProgress(null), 3000);
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Failed to add folder:', err);
-        alert('Failed to add folder: ' + err.message);
-      }
-      setScanProgress(null);
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  const handlePathSubmit = async (e) => {
+  const handleAddFolder = async (e) => {
     e.preventDefault();
-    const manualPath = manualPathRef.current?.value?.trim();
-    if (!manualPath) return;
+    const folderPath = pathRef.current?.value?.trim();
+    if (!folderPath || !pathValid) return;
 
     setScanning(true);
     setScanProgress('Scanning folder...');
 
     try {
-      const result = await addFolderWithPath(manualPath);
-      setScanProgress(`Added ${result.added} files. Server-side scan (accessible from all devices)`);
-      setPathPrompt(null);
+      const result = await addFolderWithPath(folderPath);
+      setScanProgress(`Added ${result.added} files.`);
+      setShowAddFolder(false);
       setTimeout(() => setScanProgress(null), 3000);
     } catch (err) {
       console.error('Failed to scan folder:', err);
-      alert('Failed to scan folder: ' + err.message);
-      setScanProgress(null);
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  const handleUseClientSide = async () => {
-    if (!pathPrompt) return;
-
-    setScanning(true);
-    setScanProgress('Adding folder (local access only)...');
-
-    try {
-      const result = await addFolderClientSide(pathPrompt.folderId, pathPrompt.folderName, pathPrompt.files);
-      setScanProgress(`Added ${result.added} files. Client-side scan (local access only)`);
-      setPathPrompt(null);
-      setTimeout(() => setScanProgress(null), 3000);
-    } catch (err) {
-      console.error('Failed to add folder:', err);
-      alert('Failed to add folder: ' + err.message);
-      setScanProgress(null);
+      setScanProgress('Failed: ' + err.message);
+      setTimeout(() => setScanProgress(null), 5000);
     } finally {
       setScanning(false);
     }
@@ -163,6 +159,13 @@ export default function Dashboard() {
     </svg>
   );
 
+  // Border color for path input
+  const borderColor = pathValid === true
+    ? 'border-green-500'
+    : pathValid === false
+      ? 'border-red-500'
+      : 'border-gray-600';
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       {/* Header */}
@@ -199,7 +202,7 @@ export default function Dashboard() {
               Refresh
             </Button>
           )}
-          <Button onClick={handleAddFolder} disabled={scanning}>
+          <Button onClick={() => setShowAddFolder(true)} disabled={scanning}>
             {scanning ? 'Scanning...' : 'Add Folder'}
           </Button>
         </div>
@@ -242,39 +245,48 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Manual Path Modal */}
+      {/* Add Folder Modal */}
       <Modal
-        open={!!pathPrompt}
-        onClose={() => setPathPrompt(null)}
-        title="Folder Path Required"
+        open={showAddFolder}
+        onClose={() => setShowAddFolder(false)}
+        title="Add Folder"
       >
         <div className="space-y-4">
           <p className="text-gray-300">
-            Could not automatically locate <strong className="text-white">"{pathPrompt?.folderName}"</strong> on the server.
+            Paste the full folder path from File Explorer:
           </p>
-          <p className="text-gray-400 text-sm">
-            To enable cross-device access (viewing on mobile/other computers), paste the full folder path from File Explorer:
-          </p>
-          <form onSubmit={handlePathSubmit} className="space-y-3">
-            <input
-              ref={manualPathRef}
-              type="text"
-              placeholder="e.g. D:\Photos\SFW"
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <Button type="submit" disabled={scanning}>
-                {scanning ? 'Scanning...' : 'Use Server Path'}
-              </Button>
-              <Button variant="secondary" type="button" onClick={handleUseClientSide} disabled={scanning}>
-                Skip (Local Only)
-              </Button>
+          <form onSubmit={handleAddFolder} className="space-y-3">
+            <div>
+              <input
+                ref={pathRef}
+                type="text"
+                placeholder="e.g. C:\Users\work\Pictures\Vacation"
+                className={`w-full px-3 py-2 bg-gray-700 border ${borderColor} rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500`}
+                autoFocus
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/^["']+|["']+$/g, '').trim();
+                  if (cleaned !== e.target.value) e.target.value = cleaned;
+                  validate(cleaned);
+                }}
+              />
+              {checking && (
+                <p className="text-gray-400 text-xs mt-1">Checking path...</p>
+              )}
+              {pathError && (
+                <p className="text-red-400 text-xs mt-1">{pathError}</p>
+              )}
+              {pathValid && pathInfo && (
+                <p className="text-green-400 text-xs mt-1">
+                  {pathInfo.files} media file{pathInfo.files !== 1 ? 's' : ''} found
+                  {pathInfo.newEstimate > 0 && ` (${pathInfo.newEstimate} new)`}
+                  {pathInfo.newEstimate === 0 && pathInfo.files > 0 && ' (all already in library)'}
+                </p>
+              )}
             </div>
+            <Button type="submit" disabled={scanning || !pathValid}>
+              {scanning ? 'Scanning...' : 'Add'}
+            </Button>
           </form>
-          <p className="text-gray-500 text-xs">
-            "Local Only" means media will only be accessible on this device.
-          </p>
         </div>
       </Modal>
 
@@ -290,7 +302,7 @@ export default function Dashboard() {
             description="Add a folder from your device to start building your library."
             action={{
               label: 'Add Folder',
-              onClick: handleAddFolder,
+              onClick: () => setShowAddFolder(true),
             }}
           />
         }

@@ -2,13 +2,13 @@
  * @file Full-screen slideshow overlay component.
  */
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { useMedia } from '../../hooks/useMedia.js';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { MediaPlayer, ImageViewer, LikeButton } from '../media/index.js';
 import SlideshowControls from './SlideshowControls.jsx';
-import { getMediaUrl, isClientMedia, downloadMedia } from '../../utils/api.js';
+import { getMediaUrl, downloadMedia } from '../../utils/api.js';
 import { IconButton } from '../ui/index.js';
 
 /**
@@ -71,37 +71,7 @@ export default function Slideshow() {
     };
   }, [active, handleKeyDown]);
 
-  // Load media URL (handles both server and client-side media)
-  const [mediaUrl, setMediaUrl] = useState(null);
-  const [urlLoading, setUrlLoading] = useState(false);
-
-  useEffect(() => {
-    if (!active || !current) {
-      setMediaUrl(null);
-      return;
-    }
-
-    let mounted = true;
-    setUrlLoading(true);
-
-    getMediaUrl(current).then(url => {
-      if (mounted) {
-        setMediaUrl(url);
-        setUrlLoading(false);
-      }
-    }).catch(err => {
-      console.error('Failed to get media URL:', err);
-      if (mounted) setUrlLoading(false);
-    });
-
-    return () => {
-      mounted = false;
-      // Revoke blob URLs when switching media
-      if (mediaUrl && mediaUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(mediaUrl);
-      }
-    };
-  }, [active, current]);
+  const mediaUrl = current ? getMediaUrl(current) : null;
 
   // Auto-advance for images
   useEffect(() => {
@@ -122,7 +92,7 @@ export default function Slideshow() {
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       {/* Media display area */}
       <div className="flex-1 flex items-center justify-center overflow-hidden">
-        {urlLoading || !mediaUrl ? (
+        {!mediaUrl ? (
           <div className="text-white text-lg">Loading...</div>
         ) : isImage ? (
           <ImageViewer src={mediaUrl} alt={current.title} />

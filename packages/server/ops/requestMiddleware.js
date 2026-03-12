@@ -9,11 +9,13 @@
  */
 
 import http from 'node:http';
+import net from 'node:net';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { json } from '../src/http.js';
+import { destroyAllSseClients } from '../src/sse.js';
 
 /**
  * Get the local network IP address.
@@ -47,10 +49,36 @@ const MIME_TYPES = {
   '.webmanifest': 'application/manifest+json',
 };
 
-export default function () {
+/**
+ * Check if a port is free before attempting to listen.
+ */
+function checkPort(port) {
+  return new Promise((resolve, reject) => {
+    const tester = net.createServer();
+    tester.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') reject(err);
+      else reject(err);
+    });
+    tester.once('listening', () => {
+      tester.close(() => resolve());
+    });
+    tester.listen(port, '0.0.0.0');
+  });
+}
+
+export default async function () {
   const [kojo, logger] = this;
   const PORT = kojo.get('port');
   const routes = kojo.get('routes') || [];
+
+  /* Pre-flight port check */
+  try {
+    await checkPort(PORT);
+    logger.info(`Port ${PORT} is free`);
+  } catch {
+    logger.error(`Port ${PORT} is already in use. Free it and restart.`);
+    process.exit(1);
+  }
 
   const server = http.createServer(async (req, res) => {
     /* CORS headers for dev. */
@@ -97,12 +125,30 @@ export default function () {
     }
   });
 
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.error(`Port ${PORT} is already in use. Free it and restart.`);
+    } else {
+      logger.error(`Server error: ${err.message}`);
+    }
+    process.exit(1);
+  });
+
   server.listen(PORT, '0.0.0.0', () => {
     const localIP = getLocalIP();
     logger.info(`Server listening on:`);
     logger.info(`  Local:   http://localhost:${PORT}`);
     logger.info(`  Network: http://${localIP}:${PORT}`);
   });
+
+  function shutdown() {
+    logger.info('Shutting down server...');
+    destroyAllSseClients();
+    server.close(() => logger.info('Server closed.'));
+  }
+
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 /**

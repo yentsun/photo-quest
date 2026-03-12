@@ -4,24 +4,11 @@
 
 import { useContext, useEffect, useCallback } from 'react';
 import GlobalContext from '../globalContext.js';
-import { actions, IMAGE_EXTENSIONS, MEDIA_TYPE } from '@photo-quest/shared';
-import { fetchMedia, likeMedia as likeMediaApi, scanMedia as scanMediaApi, addMedia as addMediaApi, findFolder, removeFolder as removeFolderApi } from '../utils/api.js';
-import { pickFolder as pickFolderFS, rescanFolder as rescanFolderFS, getStoredFolders } from '../services/fileSystem.js';
+import { actions } from '@photo-quest/shared';
+import { fetchMedia, likeMedia as likeMediaApi, scanMedia as scanMediaApi, removeFolder as removeFolderApi } from '../utils/api.js';
 
 /**
  * Hook for accessing and managing media data.
- *
- * @returns {{
- *   media: Array,
- *   loading: boolean,
- *   folders: Array,
- *   likedMedia: Array,
- *   refresh: Function,
- *   likeMedia: Function,
- *   scanFolder: Function,
- *   addMediaFromFolder: Function,
- *   getMediaByFolder: Function,
- * }}
  */
 export function useMedia() {
   const { state, dispatch } = useContext(GlobalContext);
@@ -36,58 +23,23 @@ export function useMedia() {
   }, [dispatch]);
 
   const likeMedia = useCallback(async (media) => {
-    // Optimistic update
     dispatch({ type: actions.MEDIA_LIKED, mediaId: media.id });
 
     try {
       await likeMediaApi(media.id);
     } catch (err) {
       console.error('Failed to like media:', err);
-      // Could revert optimistic update here
     }
   }, [dispatch]);
 
-  const scanFolder = useCallback(async (path) => {
-    const result = await scanMediaApi(path);
-    // Refresh media list after scan
-    await refresh();
-    return result;
-  }, [refresh]);
-
   /**
-   * Add media from a client-side folder scan (File System Access API).
-   * Stores metadata on server and updates local state.
+   * Add folder using a server path.
    */
-  const addMediaFromFolder = useCallback(async (folderId, folderName, files) => {
-    // Send to server
-    await addMediaApi(folderId, folderName, files);
-
-    // Build local media objects for immediate state update
-    const newMedia = files.map((file, index) => {
-      const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] || '';
-      const isImage = IMAGE_EXTENSIONS.includes(ext);
-      return {
-        id: `local-${folderId}-${index}`, // Temporary ID until refresh
-        path: `${folderId}:${file.path}`,
-        title: file.name.replace(/\.[^.]+$/, ''),
-        type: isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO,
-        folder: folderName,
-        likes: 0,
-        folderId, // Store for blob URL generation
-        relativePath: file.path, // Store for blob URL generation
-      };
-    });
-
-    // Update local state immediately
-    dispatch({ type: actions.MEDIA_ADDED, media: newMedia });
-
-    // Refresh to get proper IDs from server
+  const addFolderWithPath = useCallback(async (folderPath) => {
+    const scanResult = await scanMediaApi(folderPath);
     await refresh();
-  }, [dispatch, refresh]);
-
-  const getMediaByFolder = useCallback((folder) => {
-    return state.media.filter(m => m.folder === folder);
-  }, [state.media]);
+    return { added: scanResult.added };
+  }, [refresh]);
 
   /**
    * Remove a folder from the library.
@@ -99,101 +51,22 @@ export function useMedia() {
     return result;
   }, [refresh]);
 
-  /**
-   * Pick a folder using native file picker and add to library.
-   * Tries server-side scan first (for cross-device access).
-   * Returns needsManualPath: true if server can't find it and user should provide path.
-   *
-   * @returns {Promise<{source: 'server'|'needs-path', added?: number, folderName?: string, files?: Array}>}
-   */
-  const pickAndAddFolder = useCallback(async () => {
-    // Step 1: Pick folder using native file picker
-    const { id, name, files } = await pickFolderFS();
-
-    // Step 2: Try to find folder on server (for cross-device access)
-    try {
-      const result = await findFolder(name);
-      if (result.found && result.path) {
-        // Server has access - use server-side scan
-        console.log(`Server found folder at: ${result.path}`);
-        const scanResult = await scanMediaApi(result.path);
-        await refresh();
-        return { source: 'server', added: scanResult.added };
-      }
-    } catch (err) {
-      console.warn('Server folder lookup failed:', err);
-    }
-
-    // Server couldn't find folder - return data for manual path entry
-    console.log(`Server couldn't find folder "${name}" - manual path needed for cross-device access`);
-    return {
-      source: 'needs-path',
-      folderName: name,
-      folderId: id,
-      files,
-    };
-  }, [refresh]);
-
-  /**
-   * Add folder using manual server path (for cross-device access).
-   */
-  const addFolderWithPath = useCallback(async (manualPath) => {
-    const scanResult = await scanMediaApi(manualPath);
-    await refresh();
-    return { source: 'server', added: scanResult.added };
-  }, [refresh]);
-
-  /**
-   * Add folder using client-side files (local device only, no cross-device access).
-   */
-  const addFolderClientSide = useCallback(async (folderId, folderName, files) => {
-    await addMediaApi(folderId, folderName, files);
-
-    // Build local media objects for immediate state update
-    const newMedia = files.map((file, index) => {
-      const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] || '';
-      const isImage = IMAGE_EXTENSIONS.includes(ext);
-      return {
-        id: `local-${folderId}-${index}`,
-        path: `${folderId}:${file.path}`,
-        title: file.name.replace(/\.[^.]+$/, ''),
-        type: isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO,
-        folder: folderName,
-        likes: 0,
-        folderId,
-        relativePath: file.path,
-      };
-    });
-
-    dispatch({ type: actions.MEDIA_ADDED, media: newMedia });
-    await refresh();
-    return { source: 'client', added: files.length };
-  }, [dispatch, refresh]);
-
   const likedMedia = state.media.filter(m => m.likes > 0);
 
   /**
-   * Refresh library by rescanning all folders for new files.
-   * Server-scanned folders are rescanned via API.
-   * Client-scanned folders are rescanned via stored handles.
-   *
-   * @param {Function} onProgress - Called with progress updates
-   * @returns {Promise<{serverFolders: number, clientFolders: number, newFiles: number}>}
+   * Refresh library by rescanning all known server folders for new files.
    */
   const refreshLibrary = useCallback(async (onProgress) => {
     let serverFolders = 0;
-    let clientFolders = 0;
     let newFiles = 0;
 
-    // Get unique server-scanned folder paths (real filesystem paths, not folder-xxx:)
-    const serverFolderPaths = [...new Set(
+    const folderPaths = [...new Set(
       state.media
-        .filter(m => m.folder && !m.path.startsWith('folder-'))
+        .filter(m => m.folder)
         .map(m => m.folder)
     )];
 
-    // Rescan server folders
-    for (const folderPath of serverFolderPaths) {
+    for (const folderPath of folderPaths) {
       try {
         onProgress?.(`Scanning ${folderPath.split(/[/\\]/).pop()}...`);
         const result = await scanMediaApi(folderPath);
@@ -204,33 +77,11 @@ export function useMedia() {
       }
     }
 
-    // Get client-scanned folders from IndexedDB
-    try {
-      const storedFolders = await getStoredFolders();
-      for (const { id, name, hasPermission } of storedFolders) {
-        if (!hasPermission) continue;
-
-        try {
-          onProgress?.(`Scanning ${name}...`);
-          const { files } = await rescanFolderFS(id);
-          await addMediaApi(id, name, files);
-          newFiles += files.length;
-          clientFolders++;
-        } catch (err) {
-          console.error(`Failed to rescan ${name}:`, err);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to get stored folders:', err);
-    }
-
-    // Refresh media list
     await refresh();
 
-    return { serverFolders, clientFolders, newFiles };
+    return { serverFolders, clientFolders: 0, newFiles };
   }, [state.media, refresh]);
 
-  // Load media on mount
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -243,12 +94,7 @@ export function useMedia() {
     refresh,
     refreshLibrary,
     likeMedia,
-    scanFolder,
-    addMediaFromFolder,
-    getMediaByFolder,
-    pickAndAddFolder,
     addFolderWithPath,
-    addFolderClientSide,
     removeFolder,
   };
 }

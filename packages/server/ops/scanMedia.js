@@ -46,6 +46,8 @@ export default function (dirPath) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
+  dirPath = dirPath.replace(/^["']+|["']+$/g, '').trim();
+
   if (!fs.existsSync(dirPath)) {
     throw new Error(`Directory not found: ${dirPath}`);
   }

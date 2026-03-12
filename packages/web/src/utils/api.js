@@ -3,7 +3,6 @@
  */
 
 import { apiRoutes, MEDIA_TYPE } from '@photo-quest/shared';
-import { getFileUrl } from '../services/fileSystem.js';
 
 /**
  * Fetch all media items from the server.
@@ -53,26 +52,6 @@ export async function scanMedia(path) {
 }
 
 /**
- * Add media items from client-side folder scan.
- *
- * @param {string} folderId - Client-generated folder ID
- * @param {string} folderName - Display name of the folder
- * @param {Array<{name: string, path: string}>} files - Array of file info
- * @returns {Promise<{added: number}>}
- */
-export async function addMedia(folderId, folderName, files) {
-  const response = await fetch(apiRoutes.mediaAdd, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folderId, folderName, files }),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to add media');
-  }
-  return response.json();
-}
-
-/**
  * Get the URL for streaming a video.
  *
  * @param {number} id - Media ID
@@ -93,31 +72,12 @@ export function getImageUrl(id) {
 }
 
 /**
- * Check if media is from client-side folder (File System Access API).
- * Client-scanned media has path format "folderId:relativePath".
- *
- * @param {Object} media - Media object
- * @returns {boolean}
- */
-export function isClientMedia(media) {
-  return media.path && media.path.includes(':') && media.path.startsWith('folder-');
-}
-
-/**
  * Get the URL for displaying media (image or video).
- * Handles both server-scanned and client-scanned media.
  *
  * @param {Object} media - Media object with id, path, type
- * @returns {Promise<string>} URL for the media (blob URL or server URL)
+ * @returns {string} URL for the media
  */
-export async function getMediaUrl(media) {
-  if (isClientMedia(media)) {
-    // Client-scanned media: use File System Access API
-    const [folderId, relativePath] = media.path.split(':');
-    return getFileUrl(folderId, relativePath);
-  }
-
-  // Server-scanned media: use server endpoints
+export function getMediaUrl(media) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
   return isImage ? getImageUrl(media.id) : getStreamUrl(media.id);
 }
@@ -131,25 +91,6 @@ export async function fetchNetworkInfo() {
   const response = await fetch(apiRoutes.network);
   if (!response.ok) {
     throw new Error('Failed to fetch network info');
-  }
-  return response.json();
-}
-
-/**
- * Find a folder by name in server's configured media paths.
- * Used to enable server-side scanning for cross-device access.
- *
- * @param {string} folderName - Name of the folder to find
- * @returns {Promise<{found: boolean, path?: string, message?: string}>}
- */
-export async function findFolder(folderName) {
-  const response = await fetch(apiRoutes.mediaFindFolder, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folderName }),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to find folder');
   }
   return response.json();
 }
@@ -178,26 +119,14 @@ export async function removeFolder(folderName) {
  */
 export async function downloadMedia(media) {
   try {
-    // Get URL (handles both server and client media)
-    const url = await getMediaUrl(media);
+    const url = getMediaUrl(media);
     const response = await fetch(url);
     const blob = await response.blob();
 
-    // Determine file extension from path
     const isImage = media.type === MEDIA_TYPE.IMAGE;
-    let ext = media.path?.match(/\.[^.]+$/)?.[0];
-    if (!ext) {
-      ext = isImage ? '.jpg' : '.mp4';
-    }
-    // For client media paths like "folder-123:path/file.jpg", extract extension
-    if (media.path?.includes(':')) {
-      const relativePath = media.path.split(':')[1];
-      ext = relativePath?.match(/\.[^.]+$/)?.[0] || ext;
-    }
-
+    const ext = media.path?.match(/\.[^.]+$/)?.[0] || (isImage ? '.jpg' : '.mp4');
     const filename = `${media.title}${ext}`;
 
-    // Create download link
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;

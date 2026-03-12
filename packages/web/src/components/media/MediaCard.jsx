@@ -2,9 +2,8 @@
  * @file Card component for displaying a single media item in a grid.
  */
 
-import { useState, useEffect } from 'react';
 import { MEDIA_TYPE } from '@photo-quest/shared';
-import { getMediaUrl, isClientMedia } from '../../utils/api.js';
+import { getMediaUrl } from '../../utils/api.js';
 import LikeButton from './LikeButton.jsx';
 
 /**
@@ -23,33 +22,7 @@ export default function MediaCard({
   showLikes = true,
 }) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
-  const [thumbnailUrl, setThumbnailUrl] = useState(null);
-
-  useEffect(() => {
-    if (!isImage) return;
-
-    let mounted = true;
-
-    // For client-scanned media, get blob URL
-    if (isClientMedia(media)) {
-      getMediaUrl(media).then(url => {
-        if (mounted) setThumbnailUrl(url);
-      }).catch(err => {
-        console.error('Failed to get media URL:', err);
-      });
-    } else {
-      // Server-scanned: use server endpoint
-      setThumbnailUrl(`/image/${media.id}`);
-    }
-
-    return () => {
-      mounted = false;
-      // Revoke blob URLs to prevent memory leaks
-      if (thumbnailUrl && thumbnailUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(thumbnailUrl);
-      }
-    };
-  }, [media, isImage]);
+  const thumbnailUrl = isImage ? getMediaUrl(media) : null;
 
   return (
     <div

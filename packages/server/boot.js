@@ -1,5 +1,5 @@
 /**
- * @file Server bootstrap -- initialises all services and returns a ready
+ * @file Server bootstrap — initialises all services and returns a ready
  * kojo instance.
  *
  * Boot sequence:
@@ -17,7 +17,7 @@ import { initDb } from './src/db.js';
 
 export default async function boot() {
 
-  const PORT = process.env.PORT || 4000;
+  const PORT = process.env.PORT || 3000;
 
   /* Media paths -- directories the server can scan for media files.
    * Set via MEDIA_PATHS env var as semicolon-separated paths.
