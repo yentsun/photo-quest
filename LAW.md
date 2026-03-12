@@ -64,6 +64,8 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **2.2** The server must read and index all media files (images and videos) in all subfolders recursively.
 
+**2.3** Media import must use a database-backed queue. When a scan is initiated, discovered files must be queued as individual import tasks in the database. The server must report current import progress (e.g., "imported 45/200 files"). If the process is interrupted (crash, restart, etc.), it must resume from where it left off — already-imported files must not be re-processed.
+
 ---
 
 ## Section 3 — Development

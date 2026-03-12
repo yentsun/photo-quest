@@ -1,26 +1,28 @@
 /**
- * @file Scan a directory for media files and register them in the database.
+ * @file Scan a directory for media files using a database-backed import queue.
  *
  * Kojo op: accessed as `kojo.ops.scanMedia(dirPath)`.
  *
- * Recursively walks the given directory, finds files with supported media
- * extensions (both video and image), inserts new ones into the `media` table.
- * For videos, creates a `probe` job so the worker will extract metadata.
- * For images, sets status directly to 'ready' (no processing needed).
+ * LAW 2.3: Media import uses a db-based queue. Files are discovered and queued
+ * individually, progress is reported via SSE, and interrupted imports resume
+ * automatically on restart.
  *
- * Uses content hashing to identify media across different paths. If a hidden
- * media item with matching hash is found, it's restored instead of creating
- * a duplicate.
+ * Two-phase approach:
+ *  1. Discovery — walk the directory, insert each file into `import_queue`,
+ *     create a `scans` record with the total count.
+ *  2. Processing — work through queued items one at a time (hash, dedup,
+ *     insert media, create probe job), broadcasting progress via SSE.
  *
  * @param {string} dirPath - Absolute path to the directory to scan.
- * @returns {{ scanned: number, added: number, restored: number }}
+ * @returns {{ scanId: number, total: number }}
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, JOB_TYPE, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
+import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, JOB_TYPE, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
 import { saveDb } from '../src/db.js';
+import { broadcastSse } from '../src/sse.js';
 
 /**
  * Compute a content hash for a file.
@@ -30,16 +32,187 @@ function computeFileHash(filePath) {
   const stat = fs.statSync(filePath);
   const hash = crypto.createHash('sha256');
 
-  // Read first 64KB
   const fd = fs.openSync(filePath, 'r');
   const buffer = Buffer.alloc(Math.min(65536, stat.size));
   fs.readSync(fd, buffer, 0, buffer.length, 0);
   fs.closeSync(fd);
 
   hash.update(buffer);
-  hash.update(String(stat.size)); // Include file size for uniqueness
+  hash.update(String(stat.size));
 
-  return hash.digest('hex').substring(0, 32); // 32 char hash
+  return hash.digest('hex').substring(0, 32);
+}
+
+/**
+ * Process a single import queue item: hash, dedup, insert media record.
+ * Exported for testing.
+ */
+export function processOneItem(db, itemId, filePath, logger) {
+  const ext = path.extname(filePath).toLowerCase();
+  const title = path.basename(filePath, ext);
+  const folder = path.dirname(filePath);
+  const isImage = IMAGE_EXTENSIONS.includes(ext);
+  const mediaType = isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO;
+  const status = isImage ? MEDIA_STATUS.READY : MEDIA_STATUS.PENDING;
+
+  /* Check file still exists (may have been moved/deleted since discovery). */
+  if (!fs.existsSync(filePath)) {
+    db.run(
+      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?',
+      [IMPORT_STATUS.FAILED, 'File not found', itemId]
+    );
+    return;
+  }
+
+  const hash = computeFileHash(filePath);
+
+  /* Check if hidden media with same hash exists (restore case). */
+  const hiddenStmt = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 1');
+  hiddenStmt.bind([hash]);
+  const hasHidden = hiddenStmt.step();
+  let hiddenId = null;
+  if (hasHidden) {
+    hiddenId = hiddenStmt.getAsObject().id;
+  }
+  hiddenStmt.free();
+
+  if (hiddenId) {
+    db.run(
+      'UPDATE media SET path = ?, folder = ?, hidden = 0, updated_at = datetime("now") WHERE id = ?',
+      [filePath, folder, hiddenId]
+    );
+    logger.debug(`Restored media id=${hiddenId} at ${filePath}`);
+  } else {
+    /* Check if path already exists. */
+    const existsStmt = db.prepare('SELECT id FROM media WHERE path = ?');
+    existsStmt.bind([filePath]);
+    const exists = existsStmt.step();
+    existsStmt.free();
+
+    if (exists) {
+      db.run('UPDATE media SET hash = ? WHERE path = ? AND hash IS NULL', [hash, filePath]);
+    } else {
+      /* Insert new media. */
+      db.run(
+        'INSERT INTO media (path, title, type, folder, status, hash) VALUES (?, ?, ?, ?, ?, ?)',
+        [filePath, title, mediaType, folder, status, hash]
+      );
+
+      /* Videos need a probe job. */
+      if (!isImage) {
+        const idStmt = db.prepare('SELECT last_insert_rowid() as id');
+        idStmt.step();
+        const mediaId = idStmt.getAsObject().id;
+        idStmt.free();
+
+        db.run(
+          "INSERT INTO jobs (media_id, type, status) VALUES (?, ?, 'pending')",
+          [mediaId, JOB_TYPE.PROBE]
+        );
+      }
+    }
+  }
+
+  /* Mark queue item as completed. */
+  db.run(
+    'UPDATE import_queue SET status = ? WHERE id = ?',
+    [IMPORT_STATUS.COMPLETED, itemId]
+  );
+}
+
+/**
+ * Process the import queue for a given scan, one item at a time.
+ * Uses setTimeout to avoid blocking the event loop.
+ */
+function processQueue(kojo, scanId, logger) {
+  const db = kojo.get('db');
+
+  /* Claim next pending item for this scan. */
+  const stmt = db.prepare(
+    'SELECT id, path FROM import_queue WHERE scan_id = ? AND status = ? LIMIT 1'
+  );
+  stmt.bind([scanId, IMPORT_STATUS.PENDING]);
+  const hasItem = stmt.step();
+
+  if (!hasItem) {
+    stmt.free();
+    /* All done — mark scan as completed. */
+    db.run(
+      'UPDATE scans SET status = ? WHERE id = ?',
+      [SCAN_STATUS.COMPLETED, scanId]
+    );
+    saveDb();
+
+    /* Get final counts for the broadcast. */
+    const countStmt = db.prepare('SELECT total, processed FROM scans WHERE id = ?');
+    countStmt.bind([scanId]);
+    countStmt.step();
+    const scan = countStmt.getAsObject();
+    countStmt.free();
+
+    broadcastSse({ type: 'import_complete', scanId, total: scan.total, processed: scan.processed });
+    logger.info(`Scan ${scanId} complete: ${scan.processed}/${scan.total} files imported`);
+    return;
+  }
+
+  const item = stmt.getAsObject();
+  stmt.free();
+
+  try {
+    processOneItem(db, item.id, item.path, logger);
+  } catch (err) {
+    logger.warn(`Failed to import ${item.path}: ${err.message}`);
+    db.run(
+      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?',
+      [IMPORT_STATUS.FAILED, err.message, item.id]
+    );
+  }
+
+  /* Increment processed count. */
+  db.run('UPDATE scans SET processed = processed + 1 WHERE id = ?', [scanId]);
+  saveDb();
+
+  /* Broadcast progress. */
+  const progressStmt = db.prepare('SELECT total, processed FROM scans WHERE id = ?');
+  progressStmt.bind([scanId]);
+  progressStmt.step();
+  const progress = progressStmt.getAsObject();
+  progressStmt.free();
+
+  broadcastSse({
+    type: 'import_progress',
+    scanId,
+    total: progress.total,
+    processed: progress.processed
+  });
+
+  /* Schedule next item (yield to event loop). */
+  setTimeout(() => processQueue(kojo, scanId, logger), 0);
+}
+
+/**
+ * Resume any incomplete scans found in the database.
+ * Called at boot time to satisfy LAW 2.3 resume requirement.
+ */
+export function resumeIncompleteScans(kojo, logger) {
+  const db = kojo.get('db');
+  const stmt = db.prepare(
+    'SELECT id FROM scans WHERE status IN (?, ?)'
+  );
+  stmt.bind([SCAN_STATUS.DISCOVERING, SCAN_STATUS.IMPORTING]);
+
+  const scanIds = [];
+  while (stmt.step()) {
+    scanIds.push(stmt.getAsObject().id);
+  }
+  stmt.free();
+
+  for (const scanId of scanIds) {
+    db.run('UPDATE scans SET status = ? WHERE id = ?', [SCAN_STATUS.IMPORTING, scanId]);
+    saveDb();
+    logger.info(`Resuming incomplete scan ${scanId}`);
+    setTimeout(() => processQueue(kojo, scanId, logger), 0);
+  }
 }
 
 export default function (dirPath) {
@@ -57,92 +230,51 @@ export default function (dirPath) {
     throw new Error(`Not a directory: ${dirPath}`);
   }
 
-  /* Find all media files recursively. */
+  /* Phase 1: Discovery — walk directory and populate import queue. */
   const files = findMediaFiles(dirPath);
-  let added = 0;
-  let restored = 0;
 
+  /* Create scan record. */
+  db.run(
+    'INSERT INTO scans (dir_path, total, status) VALUES (?, ?, ?)',
+    [dirPath, files.length, SCAN_STATUS.DISCOVERING]
+  );
+  const idStmt = db.prepare('SELECT last_insert_rowid() as id');
+  idStmt.step();
+  const scanId = idStmt.getAsObject().id;
+  idStmt.free();
+
+  /* Queue each file as an import task. */
+  const insertStmt = db.prepare(
+    'INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)'
+  );
   for (const filePath of files) {
-    const ext = path.extname(filePath).toLowerCase();
-    const title = path.basename(filePath, ext);
-    const folder = path.dirname(filePath);
-    const isImage = IMAGE_EXTENSIONS.includes(ext);
-    const mediaType = isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO;
-    const status = isImage ? MEDIA_STATUS.READY : MEDIA_STATUS.PENDING;
-
-    try {
-      /* Compute content hash for identification. */
-      const hash = computeFileHash(filePath);
-
-      /* Check if hidden media with same hash exists (restore case). */
-      const hiddenStmt = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 1');
-      hiddenStmt.bind([hash]);
-      const hasHidden = hiddenStmt.step();
-      let hiddenId = null;
-      if (hasHidden) {
-        hiddenId = hiddenStmt.getAsObject().id;
-      }
-      hiddenStmt.free();
-
-      if (hiddenId) {
-        /* Restore hidden media with new path. */
-        db.run(
-          'UPDATE media SET path = ?, folder = ?, hidden = 0, updated_at = datetime("now") WHERE id = ?',
-          [filePath, folder, hiddenId]
-        );
-        restored++;
-        logger.debug(`Restored media id=${hiddenId} at ${filePath}`);
-        continue;
-      }
-
-      /* Check if path already exists. */
-      const existsStmt = db.prepare('SELECT id FROM media WHERE path = ?');
-      existsStmt.bind([filePath]);
-      const exists = existsStmt.step();
-      existsStmt.free();
-
-      if (exists) {
-        /* Path exists, just update hash if missing. */
-        db.run('UPDATE media SET hash = ? WHERE path = ? AND hash IS NULL', [hash, filePath]);
-        continue;
-      }
-
-      /* Insert new media. */
-      db.run(
-        'INSERT INTO media (path, title, type, folder, status, hash) VALUES (?, ?, ?, ?, ?, ?)',
-        [filePath, title, mediaType, folder, status, hash]
-      );
-      added++;
-
-      /* Videos need a probe job to extract metadata. */
-      if (!isImage) {
-        const idStmt = db.prepare('SELECT last_insert_rowid() as id');
-        idStmt.step();
-        const mediaId = idStmt.getAsObject().id;
-        idStmt.free();
-
-        db.run(
-          "INSERT INTO jobs (media_id, type, status) VALUES (?, ?, 'pending')",
-          [mediaId, JOB_TYPE.PROBE]
-        );
-      }
-    } catch (err) {
-      logger.warn(`Failed to process ${filePath}: ${err.message}`);
-    }
+    insertStmt.bind([scanId, filePath, IMPORT_STATUS.PENDING]);
+    insertStmt.step();
+    insertStmt.reset();
   }
+  insertStmt.free();
 
-  /* Persist all changes to disk so the worker can see them. */
+  /* Mark scan as ready for importing. */
+  db.run('UPDATE scans SET status = ? WHERE id = ?', [SCAN_STATUS.IMPORTING, scanId]);
   saveDb();
 
-  logger.info(`Scanned ${files.length} files, added ${added} new, restored ${restored}`);
-  return { scanned: files.length, added, restored };
+  logger.info(`Scan ${scanId}: discovered ${files.length} files, starting import`);
+
+  broadcastSse({
+    type: 'import_started',
+    scanId,
+    total: files.length,
+    processed: 0
+  });
+
+  /* Phase 2: Async queue processing. */
+  setTimeout(() => processQueue(kojo, scanId, logger), 0);
+
+  return { scanId, total: files.length };
 }
 
 /**
  * Recursively find all files with a supported media extension.
- *
- * @param {string} dirPath - The directory to search.
- * @returns {string[]} Array of absolute file paths.
  */
 function findMediaFiles(dirPath) {
   const results = [];

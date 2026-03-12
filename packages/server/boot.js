@@ -14,6 +14,20 @@
 
 import Kojo from 'kojo';
 import { initDb } from './src/db.js';
+import { resumeIncompleteScans } from './ops/scanMedia.js';
+
+/* Patch stdout/stderr to prepend timestamps to every line of output. */
+for (const stream of ['stdout', 'stderr']) {
+  const original = process[stream].write.bind(process[stream]);
+  process[stream].write = (chunk, ...args) => {
+    const str = typeof chunk === 'string' ? chunk : chunk.toString();
+    if (str.trim()) {
+      const ts = new Date().toISOString().slice(11, 23); // HH:mm:ss.SSS
+      return original(`${ts} ${str}`, ...args);
+    }
+    return original(chunk, ...args);
+  };
+}
 
 export default async function boot() {
 
@@ -65,6 +79,9 @@ export default async function boot() {
   const routes = kojo.get('routes') || [];
   console.debug(`[boot] ${routes.length} routes registered`);
   requestMiddleware();
+
+  /* Resume any imports that were interrupted by a previous crash/restart. */
+  resumeIncompleteScans(kojo, console);
 
   return kojo;
 }

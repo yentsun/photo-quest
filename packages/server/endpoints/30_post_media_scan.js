@@ -3,8 +3,11 @@
  *
  * Kojo endpoint: registers route via the addHttpRoute op.
  * Expects a JSON body with `{ path: "/absolute/path/to/media" }`.
- * Delegates to `kojo.ops.scanMedia(dirPath)` which walks the directory,
- * inserts new files into the `media` table, and queues probe jobs.
+ * Delegates to `kojo.ops.scanMedia(dirPath)` which discovers files, queues
+ * them in the import_queue table, and begins async processing.
+ *
+ * Returns immediately with { scanId, total } — the client can track
+ * progress via SSE (import_progress / import_complete events).
  */
 
 import { json, parseBody } from '../src/http.js';

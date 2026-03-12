@@ -91,3 +91,42 @@ export const CREATE_JOBS_TABLE = `
     FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
   )
 `;
+
+/**
+ * SQL statement that creates the `scans` table.
+ *
+ * Tracks scan batches so the server can report progress and resume after
+ * interruption.
+ *
+ * @type {string}
+ */
+export const CREATE_SCANS_TABLE = `
+  CREATE TABLE IF NOT EXISTS scans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dir_path TEXT NOT NULL,
+    total INTEGER NOT NULL DEFAULT 0,
+    processed INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'discovering',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`;
+
+/**
+ * SQL statement that creates the `import_queue` table.
+ *
+ * Each row represents a single file discovered during a scan that needs to
+ * be hashed, deduplicated, and inserted into the media table.
+ *
+ * @type {string}
+ */
+export const CREATE_IMPORT_QUEUE_TABLE = `
+  CREATE TABLE IF NOT EXISTS import_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_id INTEGER NOT NULL,
+    path TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
+  )
+`;

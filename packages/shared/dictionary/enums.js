@@ -92,3 +92,40 @@ export const MEDIA_TYPE = {
   VIDEO: 'video',
   IMAGE: 'image'
 };
+
+/**
+ * Lifecycle states for a scan batch.
+ *
+ * Transition diagram:
+ *   DISCOVERING  -->  IMPORTING  -->  COMPLETED
+ *                        |
+ *                        +-------->  FAILED
+ *
+ * @readonly
+ * @enum {string}
+ */
+export const SCAN_STATUS = {
+  /** File discovery is in progress. */
+  DISCOVERING: 'discovering',
+
+  /** Files have been discovered and are being imported one by one. */
+  IMPORTING: 'importing',
+
+  /** All files have been processed. */
+  COMPLETED: 'completed',
+
+  /** Scan encountered an unrecoverable error. */
+  FAILED: 'failed'
+};
+
+/**
+ * Lifecycle states for an individual import queue item.
+ *
+ * @readonly
+ * @enum {string}
+ */
+export const IMPORT_STATUS = {
+  PENDING: 'pending',
+  COMPLETED: 'completed',
+  FAILED: 'failed'
+};

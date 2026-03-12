@@ -15,7 +15,7 @@ import initSqlJs from 'sql.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE } from '@photo-quest/shared';
 
 /* Compute __dirname for ES modules. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -64,6 +64,8 @@ export async function initDb() {
   /* Create tables if they do not exist yet. */
   db.run(CREATE_MEDIA_TABLE);
   db.run(CREATE_JOBS_TABLE);
+  db.run(CREATE_SCANS_TABLE);
+  db.run(CREATE_IMPORT_QUEUE_TABLE);
 
   /* Run migrations for existing databases. */
   migrateDb();

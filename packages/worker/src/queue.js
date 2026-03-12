@@ -19,7 +19,7 @@ import initSqlJs from 'sql.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE } from '@photo-quest/shared';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -92,6 +92,8 @@ export async function initDb() {
   loadFromDisk();
   db.run(CREATE_MEDIA_TABLE);
   db.run(CREATE_JOBS_TABLE);
+  db.run(CREATE_SCANS_TABLE);
+  db.run(CREATE_IMPORT_QUEUE_TABLE);
   saveToDisk();
   console.log('Worker database connected');
 }
