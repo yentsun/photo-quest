@@ -6,21 +6,23 @@
  * LAW 1.30: in slideshow mode, left/right = shuffle nav, up/down = folder nav.
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMedia } from '../../hooks/useMedia.js';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, IconButton, Spinner } from '../ui/index.js';
+import { Button, Icon, IconButton, Modal, Spinner } from '../ui/index.js';
 import { getMediaUrl, downloadMedia } from '../../utils/api.js';
 
 export default function MediaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { media, loading, likeMedia, folders, getMediaByFolder } = useMedia();
+  const { media, loading, likeMedia, deleteMedia, folders, getMediaByFolder } = useMedia();
   const slideshow = useSlideshow();
+  const [showInfo, setShowInfo] = useState(false);
+  const [fileStatus, setFileStatus] = useState(null); // null | { ok, exists, readable, size, error }
 
   const item = media.find(m => m.id === Number(id));
 
@@ -81,10 +83,22 @@ export default function MediaPage() {
       if (e.key === 'ArrowRight') goNext();
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
       if (e.key === 'ArrowDown') { e.preventDefault(); goFolderNext(); }
+      if (e.key === 'Enter' && item) likeMedia(item);
+      if (e.key === 'i') setShowInfo(prev => !prev);
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, item, likeMedia]);
+
+  /* Fetch file status when info modal opens */
+  useEffect(() => {
+    if (!showInfo || !item) return;
+    setFileStatus(null);
+    fetch(`/media/${item.id}/status`)
+      .then(r => r.json())
+      .then(setFileStatus)
+      .catch(() => setFileStatus({ ok: false, error: 'Could not check status' }));
+  }, [showInfo, item]);
 
   if (loading) {
     return (
@@ -197,9 +211,28 @@ export default function MediaPage() {
             </Button>
           )}
           <IconButton
+            icon={<Icon name="info" />}
+            label="Info"
+            onClick={() => setShowInfo(true)}
+          />
+          <IconButton
             icon={<Icon name="download" />}
             label="Download"
             onClick={() => downloadMedia(item)}
+          />
+          <IconButton
+            icon={<Icon name="trash" />}
+            label="Delete"
+            onClick={async () => {
+              if (!confirm(`Delete "${item.title}"?\n\nThis will remove it from the library AND delete the file from disk.`)) return;
+              const nextItem = navItems[currentIndex + 1] || navItems[currentIndex - 1];
+              await deleteMedia(item.id);
+              if (nextItem && nextItem.id !== item.id) {
+                navigate(`/media/${nextItem.id}`, { replace: true });
+              } else {
+                navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
+              }
+            }}
           />
           <LikeButton
             count={item.likes || 0}
@@ -207,6 +240,61 @@ export default function MediaPage() {
           />
         </div>
       </div>
+
+      {/* Media Info Modal (LAW 1.35) */}
+      <Modal open={showInfo} onClose={() => setShowInfo(false)} title="Media Info">
+        <div className="space-y-4">
+          {/* File status check */}
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-700/50">
+            {fileStatus === null ? (
+              <>
+                <Spinner size="sm" />
+                <span className="text-gray-400 text-sm">Checking file...</span>
+              </>
+            ) : fileStatus.ok ? (
+              <>
+                <span className="w-3 h-3 rounded-full bg-green-500 shrink-0" />
+                <span className="text-green-400 text-sm">
+                  File OK — {fileStatus.size ? `${(fileStatus.size / 1024 / 1024).toFixed(1)} MB` : 'readable'}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="w-3 h-3 rounded-full bg-red-500 shrink-0" />
+                <span className="text-red-400 text-sm">
+                  File not accessible{fileStatus.error ? ` — ${fileStatus.error}` : ''}
+                </span>
+              </>
+            )}
+          </div>
+
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-gray-700">
+              {[
+                ['ID', item.id],
+                ['Title', item.title],
+                ['Type', item.type],
+                ['Path', item.path],
+                ['Folder', item.folder],
+                ['Status', item.status],
+                ['Hash', item.hash],
+                ['Width', item.width],
+                ['Height', item.height],
+                ['Likes', item.likes],
+                ['Camera', item.camera],
+                ['Date Taken', item.date_taken],
+                ['Created', item.created_at],
+                ['Updated', item.updated_at],
+              ].filter(([, v]) => v != null && v !== '').map(([label, value]) => (
+                <tr key={label}>
+                  <td className="py-2 pr-4 text-gray-400 whitespace-nowrap">{label}</td>
+                  <td className="py-2 text-white break-all">{String(value)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
     </div>
   );
 }

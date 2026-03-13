@@ -34,6 +34,22 @@ export async function likeMedia(id) {
 }
 
 /**
+ * Delete a media item from library and disk.
+ *
+ * @param {number} id - Media ID
+ * @returns {Promise<Object>}
+ */
+export async function deleteMedia(id) {
+  const response = await fetch(`/media/${id}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to delete media');
+  }
+  return response.json();
+}
+
+/**
  * Scan a directory for media files.
  * Returns immediately with { scanId, total }. Progress is reported via SSE.
  *

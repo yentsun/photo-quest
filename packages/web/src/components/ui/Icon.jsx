@@ -16,6 +16,8 @@ const paths = {
   next: { d: 'M9 5l7 7-7 7', stroke: true },
   up: { d: 'M5 15l7-7 7 7', stroke: true },
   down: { d: 'M19 9l-7 7-7-7', stroke: true },
+  trash: { d: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16', stroke: true },
+  info: { d: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', stroke: true },
   shuffle: { d: 'M4 4h2.5l4 9m0 0l4-9H19m-7.5 9l2.5 5m-2.5-5h-5m5 0l-2.5 5m0 0H4m7 0h6', stroke: true },
   list: { d: 'M4 6h16M4 12h16M4 18h16', stroke: true },
 };

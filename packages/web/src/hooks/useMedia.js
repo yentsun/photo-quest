@@ -5,7 +5,7 @@
 import { useContext, useEffect, useCallback, useMemo } from 'react';
 import GlobalContext from '../globalContext.js';
 import { actions } from '@photo-quest/shared';
-import { fetchMedia, fetchFolders, likeMedia as likeMediaApi, scanMedia as scanMediaApi, removeFolder as removeFolderApi } from '../utils/api.js';
+import { fetchMedia, fetchFolders, likeMedia as likeMediaApi, deleteMedia as deleteMediaApi, scanMedia as scanMediaApi, removeFolder as removeFolderApi } from '../utils/api.js';
 
 /**
  * Hook for accessing and managing media data.
@@ -50,6 +50,12 @@ export function useMedia() {
     const result = await removeFolderApi(folderId);
     await refresh();
     return result;
+  }, [refresh]);
+
+  /** Delete a media item from library and disk (LAW 1.34). */
+  const deleteMedia = useCallback(async (mediaId) => {
+    await deleteMediaApi(mediaId);
+    await refresh();
   }, [refresh]);
 
   const likedMedia = state.media.filter(m => m.likes > 0);
@@ -138,6 +144,7 @@ export function useMedia() {
     refresh,
     refreshLibrary,
     likeMedia,
+    deleteMedia,
     getMediaByFolder,
     getMediaInSubtree,
     getSubfolders,

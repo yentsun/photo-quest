@@ -72,6 +72,10 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.33** Import progress must always be visible to the user. On page load, if an import is in progress, the UI must show the import modal with a progress bar and block interaction until the import completes.
 
+**1.34** The user must be able to delete a media item. Deletion removes the record from the library and deletes the file from disk in one action.
+
+**1.35** The user must be able to view the database record data for a media item (path, type, hash, dimensions, etc.).
+
 ---
 
 ## Section 2 — Server
