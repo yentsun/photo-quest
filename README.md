@@ -21,7 +21,7 @@ A self-hosted media library PWA for browsing, organizing, and enjoying your phot
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/photo-quest.git
+git clone https://github.com/yentsun/photo-quest.git
 cd photo-quest
 
 # Install dependencies

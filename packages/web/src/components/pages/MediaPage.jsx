@@ -273,18 +273,13 @@ export default function MediaPage() {
               {[
                 ['ID', item.id],
                 ['Title', item.title],
-                ['Type', item.type],
                 ['Path', item.path],
-                ['Folder', item.folder],
-                ['Status', item.status],
                 ['Hash', item.hash],
                 ['Width', item.width],
                 ['Height', item.height],
-                ['Likes', item.likes],
                 ['Camera', item.camera],
                 ['Date Taken', item.date_taken],
                 ['Created', item.created_at],
-                ['Updated', item.updated_at],
               ].filter(([, v]) => v != null && v !== '').map(([label, value]) => (
                 <tr key={label}>
                   <td className="py-2 pr-4 text-gray-400 whitespace-nowrap">{label}</td>
