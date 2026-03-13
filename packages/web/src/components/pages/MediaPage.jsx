@@ -6,7 +6,7 @@
  * LAW 1.30: in slideshow mode, left/right = shuffle nav, up/down = folder nav.
  */
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMedia } from '../../hooks/useMedia.js';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
@@ -22,6 +22,7 @@ export default function MediaPage() {
   const { media, loading, likeMedia, deleteMedia, folders, getMediaByFolder } = useMedia();
   const slideshow = useSlideshow();
   const [showInfo, setShowInfo] = useState(false);
+  const playerRef = useRef(null);
   const [fileStatus, setFileStatus] = useState(null); // null | { ok, exists, readable, size, error }
 
   const item = media.find(m => m.id === Number(id));
@@ -83,6 +84,7 @@ export default function MediaPage() {
       if (e.key === 'ArrowRight') goNext();
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
       if (e.key === 'ArrowDown') { e.preventDefault(); goFolderNext(); }
+      if (e.key === ' ') { e.preventDefault(); playerRef.current?.togglePlay(); }
       if (e.key === 'Enter' && item) likeMedia(item);
       if (e.key === 'i') setShowInfo(prev => !prev);
     };
@@ -131,7 +133,7 @@ export default function MediaPage() {
         {isImage ? (
           <ImageViewer src={mediaUrl} alt={item.title} />
         ) : (
-          <MediaPlayer src={mediaUrl} />
+          <MediaPlayer ref={playerRef} src={mediaUrl} />
         )}
 
         {/* Left arrow */}

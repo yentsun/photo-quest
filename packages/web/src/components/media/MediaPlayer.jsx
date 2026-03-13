@@ -2,7 +2,7 @@
  * @file HTML5 video player wrapper.
  */
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 
 /**
  * Video player component with play/pause controls.
@@ -13,13 +13,21 @@ import { useRef, useEffect } from 'react';
  * @param {Function} [props.onEnded] - Called when video finishes
  * @param {string} [props.className] - Additional CSS classes
  */
-export default function MediaPlayer({
+const MediaPlayer = forwardRef(function MediaPlayer({
   src,
   autoPlay = false,
   onEnded,
   className = '',
-}) {
+}, ref) {
   const videoRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    togglePlay() {
+      const v = videoRef.current;
+      if (!v) return;
+      v.paused ? v.play().catch(() => {}) : v.pause();
+    },
+  }));
 
   useEffect(() => {
     if (autoPlay && videoRef.current) {
@@ -39,4 +47,6 @@ export default function MediaPlayer({
       playsInline
     />
   );
-}
+});
+
+export default MediaPlayer;
