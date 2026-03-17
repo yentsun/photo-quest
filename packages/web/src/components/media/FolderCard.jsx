@@ -2,6 +2,7 @@
  * @file Card component for displaying a folder with preview thumbnail and item count.
  */
 
+import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getImageUrl } from '../../utils/api.js';
@@ -10,7 +11,7 @@ import { Icon, IconButton } from '../ui/index.js';
 /**
  * Folder card showing a preview image, folder name, and item count.
  */
-export default function FolderCard({ folder, items, onRemove }) {
+export default memo(function FolderCard({ folder, items, onRemove }) {
   const navigate = useNavigate();
   const folderName = folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
 
@@ -65,4 +66,4 @@ export default function FolderCard({ folder, items, onRemove }) {
       </div>
     </div>
   );
-}
+})

@@ -80,15 +80,16 @@ function insertMedia(db, filePath, title = 'Test') {
 test('listMedia op', async (t) => {
   await ensureSql();
 
-  await t.test('returns empty array when no media exists', (t) => {
+  await t.test('returns empty result when no media exists', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
     const result = callOp(listMedia, ctx);
-    t.assert.deepStrictEqual(result, []);
+    t.assert.deepStrictEqual(result.items, []);
+    t.assert.strictEqual(result.total, 0);
   });
 
-  await t.test('returns all media rows', (t) => {
+  await t.test('returns all media rows with total', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
@@ -96,9 +97,23 @@ test('listMedia op', async (t) => {
     insertMedia(db, '/b.mp4', 'B');
 
     const result = callOp(listMedia, ctx);
-    t.assert.strictEqual(result.length, 2);
-    const titles = result.map(r => r.title).sort();
+    t.assert.strictEqual(result.items.length, 2);
+    t.assert.strictEqual(result.total, 2);
+    const titles = result.items.map(r => r.title).sort();
     t.assert.deepStrictEqual(titles, ['A', 'B']);
+  });
+
+  await t.test('supports limit and offset', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertMedia(db, '/a.mp4', 'A');
+    insertMedia(db, '/b.mp4', 'B');
+    insertMedia(db, '/c.mp4', 'C');
+
+    const result = callOp(listMedia, ctx, { limit: 2, offset: 0 });
+    t.assert.strictEqual(result.items.length, 2);
+    t.assert.strictEqual(result.total, 3);
   });
 });
 

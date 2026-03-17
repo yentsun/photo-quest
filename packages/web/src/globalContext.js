@@ -46,6 +46,9 @@ export const initialState = {
   /** List of all media items from the server. */
   media: [],
 
+  /** Total number of media items on the server (may exceed media.length during pagination). */
+  mediaTotal: 0,
+
   /** Whether media is currently being loaded. */
   mediaLoading: true,
 
@@ -113,6 +116,7 @@ export const reducer = (state, action) => {
       return {
         ...state,
         media: action.media,
+        mediaTotal: action.total ?? action.media.length,
         mediaLoading: false,
       };
 
@@ -126,6 +130,12 @@ export const reducer = (state, action) => {
      * MEDIA_LIKED is dispatched when a media item is liked.
      * Updates the like count for the specific media item.
      */
+    case actions.MEDIA_PAGE_LOADED:
+      return {
+        ...state,
+        media: [...state.media, ...action.media],
+      };
+
     case actions.MEDIA_LIKED:
       return {
         ...state,

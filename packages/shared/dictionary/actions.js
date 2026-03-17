@@ -38,6 +38,9 @@ export const actions = {
   /** Fired when media items are added from a folder scan. */
   MEDIA_ADDED: 'MEDIA_ADDED',
 
+  /** Fired when an additional page of media items is fetched (pagination). */
+  MEDIA_PAGE_LOADED: 'MEDIA_PAGE_LOADED',
+
   /** Fired when folders list is fetched from the server. */
   FOLDERS_LOADED: 'FOLDERS_LOADED'
 };

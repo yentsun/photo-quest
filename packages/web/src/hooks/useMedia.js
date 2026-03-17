@@ -5,7 +5,7 @@
 import { useContext, useEffect, useCallback, useMemo } from 'react';
 import GlobalContext from '../globalContext.js';
 import { actions } from '@photo-quest/shared';
-import { fetchMedia, fetchFolders, likeMedia as likeMediaApi, deleteMedia as deleteMediaApi, scanMedia as scanMediaApi, removeFolder as removeFolderApi } from '../utils/api.js';
+import { fetchMedia, fetchFolders, likeMedia as likeMediaApi, deleteMedia as deleteMediaApi, scanMedia as scanMediaApi, removeFolder as removeFolderApi, MEDIA_PAGE_SIZE } from '../utils/api.js';
 
 /**
  * Hook for accessing and managing media data.
@@ -15,9 +15,21 @@ export function useMedia() {
 
   const refresh = useCallback(async () => {
     try {
-      const [media, folders] = await Promise.all([fetchMedia(), fetchFolders()]);
-      dispatch({ type: actions.MEDIA_LOADED, media });
+      const [firstPage, folders] = await Promise.all([
+        fetchMedia({ limit: MEDIA_PAGE_SIZE, offset: 0 }),
+        fetchFolders(),
+      ]);
+      dispatch({ type: actions.MEDIA_LOADED, media: firstPage.items, total: firstPage.total });
       dispatch({ type: actions.FOLDERS_LOADED, folders });
+
+      // Load remaining pages in the background
+      let offset = MEDIA_PAGE_SIZE;
+      while (offset < firstPage.total) {
+        const page = await fetchMedia({ limit: MEDIA_PAGE_SIZE, offset });
+        if (page.items.length === 0) break;
+        dispatch({ type: actions.MEDIA_PAGE_LOADED, media: page.items });
+        offset += MEDIA_PAGE_SIZE;
+      }
     } catch (err) {
       console.error('Failed to fetch media:', err);
     }
@@ -58,7 +70,7 @@ export function useMedia() {
     await refresh();
   }, [refresh]);
 
-  const likedMedia = state.media.filter(m => m.likes > 0);
+  const likedMedia = useMemo(() => state.media.filter(m => m.likes > 0), [state.media]);
 
   /** Get media directly in a specific folder (exact match). */
   const getMediaByFolder = useCallback((folder) => {

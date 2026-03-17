@@ -12,7 +12,15 @@ export default async (kojo, logger) => {
     method: 'GET',
     pathname: '/media',
   }, (req, res) => {
-    const rows = kojo.ops.listMedia();
-    json(res, 200, rows);
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const limit = url.searchParams.get('limit');
+    const offset = url.searchParams.get('offset');
+
+    const opts = {};
+    if (limit != null) opts.limit = Number(limit);
+    if (offset != null) opts.offset = Number(offset);
+
+    const result = kojo.ops.listMedia(opts);
+    json(res, 200, result);
   });
 };

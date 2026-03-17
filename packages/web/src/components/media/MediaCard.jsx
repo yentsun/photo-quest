@@ -2,6 +2,7 @@
  * @file Card component for displaying a single media item in a grid.
  */
 
+import { memo } from 'react';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getMediaUrl } from '../../utils/api.js';
 import { Icon } from '../ui/index.js';
@@ -10,7 +11,7 @@ import LikeButton from './LikeButton.jsx';
 /**
  * Media card with thumbnail, title overlay, and like button.
  */
-export default function MediaCard({
+export default memo(function MediaCard({
   media,
   onClick,
   onLike,
@@ -67,4 +68,4 @@ export default function MediaCard({
       )}
     </div>
   );
-}
+})

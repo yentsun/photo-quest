@@ -47,11 +47,15 @@ async function setup() {
         routes.push({ ...config, handler });
       },
       listMedia: function() {
+        const countStmt = db.prepare('SELECT COUNT(*) AS total FROM media');
+        countStmt.step();
+        const { total } = countStmt.getAsObject();
+        countStmt.free();
         const stmt = db.prepare('SELECT * FROM media ORDER BY created_at DESC');
-        const results = [];
-        while (stmt.step()) results.push(stmt.getAsObject());
+        const items = [];
+        while (stmt.step()) items.push(stmt.getAsObject());
         stmt.free();
-        return results;
+        return { items, total };
       },
       getMediaById: function(id) {
         const stmt = db.prepare('SELECT * FROM media WHERE id = ?');
@@ -131,6 +135,7 @@ function mockReq(method, path, body = null, params = {}) {
   return {
     method,
     url: path,
+    headers: { host: 'localhost:4000' },
     params,
     on(event, cb) { listeners[event] = cb; },
     emit() {
@@ -151,7 +156,7 @@ function findRoute(method, pathname) {
 test('GET /media', async (t) => {
   await setup();
 
-  await t.test('returns empty array initially', async () => {
+  await t.test('returns empty result initially', async () => {
     const route = findRoute('GET', '/media');
     const req = mockReq('GET', '/media');
     const res = mockRes();
@@ -159,7 +164,8 @@ test('GET /media', async (t) => {
     await route.handler(req, res);
 
     t.assert.strictEqual(res._status, 200);
-    t.assert.deepStrictEqual(res._body, []);
+    t.assert.deepStrictEqual(res._body.items, []);
+    t.assert.strictEqual(res._body.total, 0);
   });
 
   await t.test('returns added items', async () => {
@@ -173,8 +179,9 @@ test('GET /media', async (t) => {
     await route.handler(req, res);
 
     t.assert.strictEqual(res._status, 200);
-    t.assert.strictEqual(res._body.length, 1);
-    t.assert.strictEqual(res._body[0].title, 'Test');
+    t.assert.strictEqual(res._body.items.length, 1);
+    t.assert.strictEqual(res._body.items[0].title, 'Test');
+    t.assert.strictEqual(res._body.total, 1);
   });
 });
 

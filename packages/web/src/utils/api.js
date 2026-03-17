@@ -4,13 +4,21 @@
 
 import { apiRoutes, MEDIA_TYPE } from '@photo-quest/shared';
 
+/** Default page size for paginated media fetches. */
+export const MEDIA_PAGE_SIZE = 200;
+
 /**
- * Fetch all media items from the server.
+ * Fetch media items from the server (supports pagination).
  *
- * @returns {Promise<Array>} Array of media objects
+ * @param {{ limit?: number, offset?: number }} [opts]
+ * @returns {Promise<{ items: Array, total: number }>}
  */
-export async function fetchMedia() {
-  const response = await fetch(apiRoutes.media);
+export async function fetchMedia({ limit, offset } = {}) {
+  const url = new URL(apiRoutes.media, window.location.origin);
+  if (limit != null) url.searchParams.set('limit', limit);
+  if (offset != null) url.searchParams.set('offset', offset);
+
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error('Failed to fetch media');
   }
