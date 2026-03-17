@@ -20,6 +20,8 @@ const paths = {
   info: { d: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', stroke: true },
   shuffle: { d: 'M4 4h2.5l4 9m0 0l4-9H19m-7.5 9l2.5 5m-2.5-5h-5m5 0l-2.5 5m0 0H4m7 0h6', stroke: true },
   list: { d: 'M4 6h16M4 12h16M4 18h16', stroke: true },
+  maximize: { d: 'M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4', stroke: true },
+  minimize: { d: 'M8 4v4H4M16 4v4h4M8 20v-4H4M16 20v-4h4', stroke: true },
 };
 
 /**

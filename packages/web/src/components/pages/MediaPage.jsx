@@ -24,6 +24,8 @@ export default function MediaPage() {
   const [showInfo, setShowInfo] = useState(false);
   const playerRef = useRef(null);
   const [fileStatus, setFileStatus] = useState(null); // null | { ok, exists, readable, size, error }
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const viewerRef = useRef(null);
 
   const item = media.find(m => m.id === Number(id));
 
@@ -77,6 +79,23 @@ export default function MediaPage() {
     navigate(`/media/${folderMedia[folderIndex + 1].id}`);
   }, [hasFolderNext, navigate, folderMedia, folderIndex]);
 
+  /* Fullscreen toggle (LAW 1.37) */
+  const toggleFullscreen = useCallback(() => {
+    if (!viewerRef.current) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      viewerRef.current.requestFullscreen();
+    }
+  }, []);
+
+  /* Sync fullscreen state with browser events */
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
   /* Keyboard navigation */
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -85,12 +104,13 @@ export default function MediaPage() {
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
       if (e.key === 'ArrowDown') { e.preventDefault(); goFolderNext(); }
       if (e.key === ' ') { e.preventDefault(); playerRef.current?.togglePlay(); }
-      if (e.key === 'Enter' && item) likeMedia(item);
+      if (e.key === 'Enter') { e.preventDefault(); if (item) likeMedia(item); }
       if (e.key === 'i') setShowInfo(prev => !prev);
+      if (e.key === 'f') toggleFullscreen();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, item, likeMedia]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, item, likeMedia, toggleFullscreen]);
 
   /* Fetch file status when info modal opens */
   useEffect(() => {
@@ -127,9 +147,9 @@ export default function MediaPage() {
   const folderName = item.folder?.split(/[/\\]/).filter(Boolean).pop();
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div ref={viewerRef} className={`flex flex-col ${isFullscreen ? 'h-screen bg-black' : 'h-[calc(100vh-4rem)]'}`}>
       {/* Media display with nav arrows */}
-      <div className="flex-1 flex items-center justify-center bg-black overflow-hidden relative">
+      <div className="flex-1 flex items-center justify-center bg-black overflow-hidden relative group/viewer">
         {isImage ? (
           <ImageViewer src={mediaUrl} alt={item.title} />
         ) : (
@@ -140,7 +160,7 @@ export default function MediaPage() {
         {hasPrev && (
           <button
             onClick={goPrev}
-            className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all"
+            className={`absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
             title="Previous"
           >
             <Icon name="prev" className="w-8 h-8" />
@@ -151,7 +171,7 @@ export default function MediaPage() {
         {hasNext && (
           <button
             onClick={goNext}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all"
+            className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
             title="Next"
           >
             <Icon name="next" className="w-8 h-8" />
@@ -162,7 +182,7 @@ export default function MediaPage() {
         {hasFolderPrev && (
           <button
             onClick={goFolderPrev}
-            className="absolute top-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all"
+            className={`absolute top-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
             title="Previous in folder"
           >
             <Icon name="up" className="w-8 h-8" />
@@ -171,77 +191,84 @@ export default function MediaPage() {
         {hasFolderNext && (
           <button
             onClick={goFolderNext}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all"
+            className={`absolute bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
             title="Next in folder"
           >
             <Icon name="down" className="w-8 h-8" />
           </button>
         )}
+
+        {/* Fullscreen toggle button */}
+        <button
+          onClick={toggleFullscreen}
+          className={`absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+          title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
+        >
+          <Icon name={isFullscreen ? 'minimize' : 'maximize'} className="w-5 h-5" />
+        </button>
+
+        {/* Minimal info overlay in fullscreen — position counter */}
+        {isFullscreen && navItems.length > 1 && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/60 text-white/80 text-sm opacity-0 group-hover/viewer:opacity-100 transition-opacity">
+            {currentIndex + 1} / {navItems.length}
+          </div>
+        )}
       </div>
 
-      {/* Info bar */}
-      <div className="bg-gray-900 border-t border-gray-800 px-4 py-3 flex items-center justify-between">
-        <div className="min-w-0">
-          <h1 className="text-white font-medium truncate">{item.title}</h1>
-          <div className="flex items-center gap-2 text-sm text-gray-400">
-            {inSlideshow ? (
-              <span className="text-blue-400">Slideshow</span>
-            ) : folder ? (
-              <button
-                onClick={() => navigate(`/folder/${folder.id}`)}
-                className="hover:text-white transition-colors truncate"
-              >
-                {folderName}
-              </button>
-            ) : null}
-            {navItems.length > 1 && (
-              <span>{currentIndex + 1} / {navItems.length}</span>
-            )}
+      {/* Info bar — hidden in fullscreen */}
+      {!isFullscreen && (
+        <div className="bg-gray-900 border-t border-gray-800 px-4 py-3 flex items-center justify-between">
+          <div className="min-w-0">
+            <h1 className="text-white font-medium truncate">{item.title}</h1>
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              {inSlideshow ? (
+                <span className="text-blue-400">Slideshow</span>
+              ) : folder ? (
+                <button
+                  onClick={() => navigate(`/folder/${folder.id}`)}
+                  className="hover:text-white transition-colors truncate"
+                >
+                  {folderName}
+                </button>
+              ) : null}
+              {navItems.length > 1 && (
+                <span>{currentIndex + 1} / {navItems.length}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <IconButton
+              icon={<Icon name="info" />}
+              label="Info"
+              onClick={() => setShowInfo(true)}
+            />
+            <IconButton
+              icon={<Icon name="download" />}
+              label="Download"
+              onClick={() => downloadMedia(item)}
+            />
+            <IconButton
+              icon={<Icon name="trash" />}
+              label="Delete"
+              onClick={async () => {
+                if (!confirm(`Delete "${item.title}"?\n\nThis will remove it from the library AND delete the file from disk.`)) return;
+                const nextItem = navItems[currentIndex + 1] || navItems[currentIndex - 1];
+                await deleteMedia(item.id);
+                if (nextItem && nextItem.id !== item.id) {
+                  navigate(`/media/${nextItem.id}`, { replace: true });
+                } else {
+                  navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
+                }
+              }}
+            />
+            <LikeButton
+              count={item.likes || 0}
+              onLike={() => likeMedia(item)}
+            />
           </div>
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {inSlideshow && (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                slideshow.stop();
-                if (folder) navigate(`/folder/${folder.id}`);
-              }}
-            >
-              Stop
-            </Button>
-          )}
-          <IconButton
-            icon={<Icon name="info" />}
-            label="Info"
-            onClick={() => setShowInfo(true)}
-          />
-          <IconButton
-            icon={<Icon name="download" />}
-            label="Download"
-            onClick={() => downloadMedia(item)}
-          />
-          <IconButton
-            icon={<Icon name="trash" />}
-            label="Delete"
-            onClick={async () => {
-              if (!confirm(`Delete "${item.title}"?\n\nThis will remove it from the library AND delete the file from disk.`)) return;
-              const nextItem = navItems[currentIndex + 1] || navItems[currentIndex - 1];
-              await deleteMedia(item.id);
-              if (nextItem && nextItem.id !== item.id) {
-                navigate(`/media/${nextItem.id}`, { replace: true });
-              } else {
-                navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
-              }
-            }}
-          />
-          <LikeButton
-            count={item.likes || 0}
-            onLike={() => likeMedia(item)}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Media Info Modal (LAW 1.35) */}
       <Modal open={showInfo} onClose={() => setShowInfo(false)} title="Media Info">

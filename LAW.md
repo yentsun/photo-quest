@@ -78,6 +78,8 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.36** The app must handle large media libraries (10k+ items) without excessive memory usage. Media grids must use virtual scrolling so only visible items are rendered to the DOM. The media list API must support pagination (`limit`/`offset`). Media cards must be memoized to prevent unnecessary re-renders.
 
+**1.37** The user must be able to enter fullscreen mode where media occupies all visible space with only minimal controls shown. F key must toggle fullscreen on/off.
+
 ---
 
 ## Section 2 — Server
