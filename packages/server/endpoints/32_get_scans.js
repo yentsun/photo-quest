@@ -11,8 +11,9 @@ export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
     method: 'GET',
     pathname: '/scans',
-  }, async (req, res, params, url) => {
+  }, async (req, res) => {
     const db = kojo.get('db');
+    const url = new URL(req.url, `http://${req.headers.host}`);
     const scanId = url.searchParams.get('id');
 
     if (scanId) {
