@@ -20,43 +20,61 @@ A self-hosted media library PWA for browsing, organizing, and enjoying your phot
 ## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/yentsun/photo-quest.git
 cd photo-quest
-
-# Install dependencies
 pnpm install
-
-# Build the web client
 pnpm build
-
-# Start the server
-pnpm dev
 ```
+
+## Running
+
+```bash
+pnpm start
+```
+
+This starts the server and worker. Open **http://localhost:4000** in Chrome or Edge.
 
 ## Usage
 
-1. Open http://localhost:3000 in Chrome or Edge
-2. Click **Add Folder** to add a media folder from your device
-3. If prompted, paste the full folder path for cross-device access
-4. Browse your media in the Library view
-5. Click a thumbnail to view, or click **Slideshow** to start a slideshow
-6. Like your favorites - they appear in the **Liked** section
+1. Click **Add Folder** and paste the full path to a folder with photos/videos
+2. Wait for the import to finish (progress bar shown at the top)
+3. Browse your media in the Library view
+4. Click a thumbnail to view it, or click **Shuffle** to start a slideshow
+5. Like your favorites — they appear in the **Liked** section
+
+### Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| Left/Right | Previous/next media |
+| Space | Play/pause video |
+| Enter | Like |
+| F | Toggle fullscreen |
+| I | Show media info |
+| Escape | Exit fullscreen |
 
 ### Accessing from other devices
 
-The network URL is displayed in the header (e.g., `http://192.168.0.105:4000`). Open this URL on any device on your local network to access your library.
-
-**Note:** For cross-device access, folders must be scanned server-side. When adding a folder, provide the full path if prompted.
+The network URL is shown in the header (e.g., `http://192.168.0.105:4000`). Open it on any device on your local network.
 
 ### Refreshing the library
 
-Click **Refresh** to rescan all folders for new files.
+Click **Refresh** on the dashboard to rescan all folders for new files.
+
+## Updating
+
+```bash
+git pull
+pnpm install
+pnpm build
+```
+
+Then restart with `pnpm start`. Your database and media library are preserved.
 
 ## Development
 
 ```bash
-# Start all services in development mode
+# Start all services with hot reload
 pnpm dev
 
 # Run server tests
