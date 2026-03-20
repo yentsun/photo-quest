@@ -3,10 +3,12 @@
  * LAW 2.7: maintains folder hierarchy with breadcrumb navigation.
  */
 
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useMedia } from '../../hooks/useMedia.js';
+import { useMediaActions } from '../../hooks/useMedia.js';
+import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
+import { fetchFolders, fetchMedia } from '../../utils/api.js';
 import { FolderCard } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
@@ -15,27 +17,71 @@ import { Button, Icon, Spinner } from '../ui/index.js';
 export default function FolderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const {
-    loading, likeMedia, getFolderById, getSubfolders,
-    getMediaByFolder, getMediaInSubtree, getBreadcrumbs,
-  } = useMedia();
+  const { likeMedia } = useMediaActions();
+  const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
 
-  const folder = getFolderById(Number(id));
-  const subfolders = folder ? getSubfolders(folder.id) : [];
-  const directMedia = folder ? getMediaByFolder(folder.path) : [];
-  const subtreeMedia = folder ? getMediaInSubtree(folder.path) : [];
-  const breadcrumbs = folder ? getBreadcrumbs(folder.id) : [];
+  const [folders, setFolders] = useState([]);
+  const [directMedia, setDirectMedia] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const folderId = Number(id);
+
+  /* Fetch folders + direct media for this folder on mount / signal change. */
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    const load = async () => {
+      try {
+        const allFolders = await fetchFolders();
+        if (cancelled) return;
+        setFolders(allFolders);
+
+        const folder = allFolders.find(f => f.id === folderId);
+        if (folder) {
+          const { items } = await fetchMedia({ folder: folder.path });
+          if (!cancelled) setDirectMedia(items);
+        }
+      } catch (err) {
+        console.error('Failed to load folder data:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [folderId, signal]);
+
+  const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
+  const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId), [folders, folderId]);
+
+  const breadcrumbs = useMemo(() => {
+    const crumbs = [];
+    let current = folders.find(f => f.id === folderId);
+    while (current) {
+      crumbs.unshift(current);
+      current = current.parentId ? folders.find(f => f.id === current.parentId) : null;
+    }
+    return crumbs;
+  }, [folders, folderId]);
 
   const handleMediaClick = (clickedMedia) => {
     navigate(`/media/${clickedMedia.id}`);
   };
 
-  const handleShuffle = () => {
-    if (subtreeMedia.length === 0) return;
-    pendingShuffle.current = true;
-    slideshow.start(subtreeMedia, { order: 'random' });
+  const handleShuffle = async () => {
+    if (!folder) return;
+    try {
+      const { items } = await fetchMedia({ folder: folder.path, subtree: true });
+      if (items.length === 0) return;
+      pendingShuffle.current = true;
+      slideshow.start(items, { order: 'random' });
+    } catch (err) {
+      console.error('Failed to fetch subtree media for shuffle:', err);
+    }
   };
 
   /* Navigate to first shuffled item after slideshow starts. */
@@ -60,6 +106,8 @@ export default function FolderPage() {
   const folderName = folder
     ? folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder'
     : 'Folder';
+
+  const subtreeTotal = folder?.subtreeMediaCount || 0;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -105,7 +153,7 @@ export default function FolderPage() {
             {subfolders.length === 0 && directMedia.length === 0 && '0 items'}
           </p>
         </div>
-        {subtreeMedia.length > 0 && (
+        {subtreeTotal > 0 && (
           <Button variant="secondary" onClick={handleShuffle}>
             Shuffle
           </Button>
@@ -120,7 +168,6 @@ export default function FolderPage() {
               <FolderCard
                 key={sub.id}
                 folder={sub}
-                items={getMediaInSubtree(sub.path)}
               />
             ))}
           </div>

@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Header } from './layout/index.js';
-import { useMedia } from '../hooks/useMedia.js';
+import { useRefresh } from '../contexts/RefreshContext.jsx';
 
 /**
  * Global import progress bar that listens to SSE for any active imports.
@@ -19,7 +19,7 @@ import { useMedia } from '../hooks/useMedia.js';
  */
 function ImportProgressBar() {
   const [progress, setProgress] = useState(null); // { total, processed }
-  const { refresh } = useMedia();
+  const { bump } = useRefresh();
 
   /* Check for active imports on mount. */
   useEffect(() => {
@@ -38,22 +38,22 @@ function ImportProgressBar() {
   useEffect(() => {
     const es = new EventSource('/jobs/events');
 
-    let lastRefresh = 0;
+    let lastBump = 0;
     es.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'import_started' || data.type === 'import_progress') {
           setProgress({ total: data.total, processed: data.processed });
-          /* Refresh data every 50 items so new media appears during import. */
-          if (data.processed - lastRefresh >= 50) {
-            lastRefresh = data.processed;
-            refresh();
+          /* Bump refresh signal every 50 items so pages re-fetch during import. */
+          if (data.processed - lastBump >= 50) {
+            lastBump = data.processed;
+            bump();
           }
         }
         if (data.type === 'import_complete') {
           setProgress(null);
-          /* Small delay to ensure server has saved DB before we fetch. */
-          setTimeout(refresh, 500);
+          /* Small delay to ensure server has saved DB before pages re-fetch. */
+          setTimeout(bump, 500);
         }
       } catch { /* ignore */ }
     };

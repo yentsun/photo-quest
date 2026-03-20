@@ -17,12 +17,6 @@ export const actions = {
    *  the auto-dismiss timeout expires. */
   ERROR_DISMISSED: 'ERROR_DISMISSED',
 
-  /** Fired when media list is fetched from the server. */
-  MEDIA_LOADED: 'MEDIA_LOADED',
-
-  /** Fired when a media item is liked. */
-  MEDIA_LIKED: 'MEDIA_LIKED',
-
   /** Fired when slideshow starts. */
   SLIDESHOW_START: 'SLIDESHOW_START',
 
@@ -34,13 +28,4 @@ export const actions = {
 
   /** Fired when slideshow goes to previous item. */
   SLIDESHOW_PREV: 'SLIDESHOW_PREV',
-
-  /** Fired when media items are added from a folder scan. */
-  MEDIA_ADDED: 'MEDIA_ADDED',
-
-  /** Fired when an additional page of media items is fetched (pagination). */
-  MEDIA_PAGE_LOADED: 'MEDIA_PAGE_LOADED',
-
-  /** Fired when folders list is fetched from the server. */
-  FOLDERS_LOADED: 'FOLDERS_LOADED'
 };

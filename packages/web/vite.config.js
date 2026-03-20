@@ -131,8 +131,12 @@ export default defineConfig({
       '/media': {
         target: API_TARGET,
         bypass(req) {
-          /* Only bypass GET /media/:id (client route). Let other methods through to API. */
-          if (req.method === 'GET' && /^\/media\/\d+$/.test(req.url)) return req.url;
+          /* Bypass GET /media/:id for browser navigation (client route).
+           * Fetch/XHR requests (Accept: application/json) go to the API. */
+          if (req.method === 'GET' && /^\/media\/\d+$/.test(req.url)
+              && !req.headers.accept?.includes('application/json')) {
+            return req.url;
+          }
         },
       },
       '/stream': API_TARGET,

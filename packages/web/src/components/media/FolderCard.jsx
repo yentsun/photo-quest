@@ -4,22 +4,21 @@
 
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getImageUrl } from '../../utils/api.js';
 import { Icon, IconButton } from '../ui/index.js';
 
 /**
  * Folder card showing a preview image, folder name, and item count.
+ * Counts and preview come from the /folders endpoint metadata.
  */
-export default memo(function FolderCard({ folder, items, onRemove }) {
+export default memo(function FolderCard({ folder, onRemove }) {
   const navigate = useNavigate();
   const folderName = folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
 
-  const previewItem = items.find(m => m.type === MEDIA_TYPE.IMAGE);
-  const thumbnailUrl = previewItem ? getImageUrl(previewItem.id) : null;
+  const thumbnailUrl = folder.previewMediaId ? getImageUrl(folder.previewMediaId) : null;
 
-  const imageCount = items.filter(m => m.type === MEDIA_TYPE.IMAGE).length;
-  const videoCount = items.filter(m => m.type === MEDIA_TYPE.VIDEO).length;
+  const imageCount = folder.subtreeImageCount ?? folder.imageCount ?? 0;
+  const videoCount = folder.subtreeVideoCount ?? folder.videoCount ?? 0;
 
   return (
     <div

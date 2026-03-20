@@ -2,10 +2,12 @@
  * @file Liked media page - shows items with likes > 0.
  */
 
-import { useMemo, useRef, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMedia } from '../../hooks/useMedia.js';
+import { useMediaActions } from '../../hooks/useMedia.js';
+import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
+import { fetchMedia } from '../../utils/api.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, Spinner } from '../ui/index.js';
@@ -15,23 +17,31 @@ import { Button, Icon, Spinner } from '../ui/index.js';
  */
 export default function LikedPage() {
   const navigate = useNavigate();
-  const { loading, likedMedia, likeMedia } = useMedia();
+  const { likeMedia } = useMediaActions();
+  const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
 
-  // Sort by like count descending
-  const sortedLikedMedia = useMemo(() => {
-    return [...likedMedia].sort((a, b) => (b.likes || 0) - (a.likes || 0));
-  }, [likedMedia]);
+  const [likedMedia, setLikedMedia] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  /* Fetch liked media on mount and when refresh signal changes. */
+  useEffect(() => {
+    let cancelled = false;
+    fetchMedia({ liked: true })
+      .then(({ items }) => { if (!cancelled) { setLikedMedia(items); setLoading(false); } })
+      .catch(err => { console.error('Failed to fetch liked media:', err); if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [signal]);
 
   const handleMediaClick = (clickedMedia) => {
     navigate(`/media/${clickedMedia.id}`);
   };
 
   const handleShuffle = () => {
-    if (sortedLikedMedia.length === 0) return;
+    if (likedMedia.length === 0) return;
     pendingShuffle.current = true;
-    slideshow.start(sortedLikedMedia, { order: 'random' });
+    slideshow.start(likedMedia, { order: 'random' });
   };
 
   useEffect(() => {
@@ -58,9 +68,9 @@ export default function LikedPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Liked</h1>
-          <p className="text-gray-400 text-sm">{sortedLikedMedia.length} items</p>
+          <p className="text-gray-400 text-sm">{likedMedia.length} items</p>
         </div>
-        {sortedLikedMedia.length > 0 && (
+        {likedMedia.length > 0 && (
           <Button variant="secondary" onClick={handleShuffle}>
             Shuffle
           </Button>
@@ -69,7 +79,7 @@ export default function LikedPage() {
 
       {/* Media Grid or Empty State */}
       <MediaGrid
-        items={sortedLikedMedia}
+        items={likedMedia}
         onItemClick={handleMediaClick}
         onItemLike={likeMedia}
         emptyState={

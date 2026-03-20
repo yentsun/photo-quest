@@ -8,32 +8,66 @@
 
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useMedia } from '../../hooks/useMedia.js';
+import { useMediaActions } from '../../hooks/useMedia.js';
+import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, Spinner } from '../ui/index.js';
-import { getMediaUrl, downloadMedia } from '../../utils/api.js';
+import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders } from '../../utils/api.js';
 
 export default function MediaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { media, loading, likeMedia, deleteMedia, folders, getMediaByFolder } = useMedia();
+  const { likeMedia, deleteMedia } = useMediaActions();
+  const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const [showInfo, setShowInfo] = useState(false);
   const playerRef = useRef(null);
-  const [fileStatus, setFileStatus] = useState(null); // null | { ok, exists, readable, size, error }
+  const [fileStatus, setFileStatus] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const viewerRef = useRef(null);
 
-  const item = media.find(m => m.id === Number(id));
+  const [item, setItem] = useState(null);
+  const [folderMedia, setFolderMedia] = useState([]);
+  const [folder, setFolder] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  /* Fetch the media item and its folder siblings. */
+  useEffect(() => {
+    let cancelled = false;
+    const mediaId = Number(id);
+
+    const load = async () => {
+      try {
+        const mediaItem = await fetchMediaById(mediaId);
+        if (cancelled) return;
+        setItem(mediaItem);
+
+        /* Fetch folder media for navigation + folder record for link back. */
+        const [folderResult, allFolders] = await Promise.all([
+          mediaItem.folder ? fetchMedia({ folder: mediaItem.folder }) : { items: [] },
+          fetchFolders(),
+        ]);
+        if (cancelled) return;
+        setFolderMedia(folderResult.items);
+        setFolder(allFolders.find(f => f.path === mediaItem.folder) || null);
+      } catch (err) {
+        console.error('Failed to load media:', err);
+        if (!cancelled) setItem(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    setLoading(true);
+    load();
+    return () => { cancelled = true; };
+  }, [id, signal]);
 
   /* Determine navigation list: slideshow items or folder media */
   const inSlideshow = slideshow.active;
-
-  const folder = item ? folders.find(f => f.path === item.folder) : null;
-  const folderMedia = item ? getMediaByFolder(item.folder) : [];
 
   const navItems = inSlideshow ? slideshow.items : folderMedia;
   const currentIndex = navItems.findIndex(m => m.id === Number(id));

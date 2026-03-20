@@ -4,23 +4,39 @@
 
 import { apiRoutes, MEDIA_TYPE } from '@photo-quest/shared';
 
-/** Default page size for paginated media fetches. */
-export const MEDIA_PAGE_SIZE = 200;
-
 /**
- * Fetch media items from the server (supports pagination).
+ * Fetch media items from the server (supports filtering and pagination).
  *
- * @param {{ limit?: number, offset?: number }} [opts]
+ * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean, liked?: boolean }} [opts]
  * @returns {Promise<{ items: Array, total: number }>}
  */
-export async function fetchMedia({ limit, offset } = {}) {
+export async function fetchMedia({ limit, offset, folder, subtree, liked } = {}) {
   const url = new URL(apiRoutes.media, window.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
+  if (folder != null) url.searchParams.set('folder', folder);
+  if (subtree) url.searchParams.set('subtree', '1');
+  if (liked) url.searchParams.set('liked', '1');
 
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error('Failed to fetch media');
+  }
+  return response.json();
+}
+
+/**
+ * Fetch a single media item by ID.
+ *
+ * @param {number} id
+ * @returns {Promise<Object>}
+ */
+export async function fetchMediaById(id) {
+  const response = await fetch(`${apiRoutes.media}/${id}`, {
+    headers: { 'Accept': 'application/json' },
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch media item');
   }
   return response.json();
 }

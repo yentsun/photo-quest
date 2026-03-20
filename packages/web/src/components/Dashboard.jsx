@@ -2,10 +2,12 @@
  * @file Dashboard page component - main media library view.
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMedia } from '../hooks/useMedia.js';
+import { useMediaActions } from '../hooks/useMedia.js';
+import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
+import { fetchFolders, fetchMedia } from '../utils/api.js';
 import { FolderCard } from './media/index.js';
 import { EmptyState } from './layout/index.js';
 import { Button, Icon, Input, Modal, Spinner } from './ui/index.js';
@@ -69,24 +71,50 @@ function usePathValidation() {
  */
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { media, loading, rootFolders, getMediaInSubtree, addFolderWithPath, removeFolder, refreshLibrary, refresh } = useMedia();
+  const { addFolderWithPath, removeFolder, refreshLibrary } = useMediaActions();
+  const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(null);
-  const [importProgress, setImportProgress] = useState(null); // { total, processed }
+  const [importProgress, setImportProgress] = useState(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
   const pathRef = useRef(null);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
+
+  /* Fetch folders on mount and when refresh signal changes. */
+  const [folders, setFolders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFolders()
+      .then(data => { if (!cancelled) { setFolders(data); setLoading(false); } })
+      .catch(err => { console.error('Failed to fetch folders:', err); if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [signal]);
+
+  const rootFolders = useMemo(() => folders.filter(f => f.parentId === null), [folders]);
+
+  const totalMedia = useMemo(
+    () => rootFolders.reduce((sum, f) => sum + (f.subtreeMediaCount || 0), 0),
+    [rootFolders],
+  );
 
   useEffect(() => {
     if (!showAddFolder) reset();
   }, [showAddFolder, reset]);
 
-  const handleShuffle = () => {
-    if (media.length === 0) return;
-    pendingShuffle.current = true;
-    slideshow.start(media, { order: 'random' });
+  const handleShuffle = async () => {
+    if (totalMedia === 0) return;
+    try {
+      const { items } = await fetchMedia();
+      if (items.length === 0) return;
+      pendingShuffle.current = true;
+      slideshow.start(items, { order: 'random' });
+    } catch (err) {
+      console.error('Failed to fetch media for shuffle:', err);
+    }
   };
 
   useEffect(() => {
@@ -107,7 +135,7 @@ export default function Dashboard() {
     setScanProgress('Refreshing library...');
 
     try {
-      const result = await refreshLibrary((progress) => setScanProgress(progress));
+      const result = await refreshLibrary(folders, (progress) => setScanProgress(progress));
       const totalFolders = result.serverFolders + result.clientFolders;
       setScanProgress(`Refreshed ${totalFolders} folder${totalFolders !== 1 ? 's' : ''}. Found ${result.newFiles} file${result.newFiles !== 1 ? 's' : ''}.`);
       setTimeout(() => setScanProgress(null), 3000);
@@ -153,7 +181,7 @@ export default function Dashboard() {
         es.onerror = () => { es.close(); reject(new Error('Lost connection')); };
       });
 
-      await refresh();
+      bump();
       setScanProgress(`Imported ${total} files.`);
       setShowAddFolder(false);
       setImportProgress(null);
@@ -202,10 +230,10 @@ export default function Dashboard() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Library</h1>
-          <p className="text-gray-400 text-sm">{media.length} items</p>
+          <p className="text-gray-400 text-sm">{totalMedia} items</p>
         </div>
         <div className="flex gap-2">
-          {media.length > 0 && (
+          {totalMedia > 0 && (
             <Button variant="secondary" onClick={handleShuffle}>
               Shuffle
             </Button>
@@ -302,7 +330,6 @@ export default function Dashboard() {
             <FolderCard
               key={folder.id}
               folder={folder}
-              items={getMediaInSubtree(folder.path)}
               onRemove={() => handleRemoveFolder(folder)}
             />
           ))}
