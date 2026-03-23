@@ -123,6 +123,27 @@ export default function MediaPage() {
     }
   }, []);
 
+  /* Delete current media and navigate to the next item (issue #4) */
+  const { removeItem: removeSlideshowItem } = slideshow;
+  const handleDelete = useCallback(async () => {
+    if (!item) return;
+    if (!confirm(`Delete "${item.title}"?\n\nThis will remove it from the library AND delete the file from disk.`)) return;
+    const nextItem = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
+    const deletedId = item.id;
+    /* Navigate first to avoid re-fetch of deleted item */
+    if (nextItem) {
+      navigate(`/media/${nextItem.id}`, { replace: true });
+    } else {
+      navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
+    }
+    if (inSlideshow) removeSlideshowItem(deletedId);
+    try {
+      await deleteMedia(deletedId);
+    } catch (err) {
+      console.error('Failed to delete media:', err);
+    }
+  }, [item, navItems, currentIndex, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia]);
+
   /* Sync fullscreen state with browser events */
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -141,10 +162,11 @@ export default function MediaPage() {
       if (e.key === 'Enter') { e.preventDefault(); if (item) likeMedia(item); }
       if (e.key === 'i') setShowInfo(prev => !prev);
       if (e.key === 'f') toggleFullscreen();
+      if (e.key === 'Delete') handleDelete();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, item, likeMedia, toggleFullscreen]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, item, likeMedia, toggleFullscreen, handleDelete]);
 
   /* Fetch file status when info modal opens */
   useEffect(() => {
@@ -285,16 +307,7 @@ export default function MediaPage() {
             <IconButton
               icon={<Icon name="trash" />}
               label="Delete"
-              onClick={async () => {
-                if (!confirm(`Delete "${item.title}"?\n\nThis will remove it from the library AND delete the file from disk.`)) return;
-                const nextItem = navItems[currentIndex + 1] || navItems[currentIndex - 1];
-                await deleteMedia(item.id);
-                if (nextItem && nextItem.id !== item.id) {
-                  navigate(`/media/${nextItem.id}`, { replace: true });
-                } else {
-                  navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
-                }
-              }}
+              onClick={handleDelete}
             />
             <LikeButton
               count={item.likes || 0}

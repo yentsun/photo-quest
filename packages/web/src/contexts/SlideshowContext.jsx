@@ -46,6 +46,16 @@ function reducer(state, action) {
     case 'SET_INDEX':
       return { ...state, currentIndex: action.index };
 
+    case 'REMOVE_ITEM': {
+      const newItems = state.items.filter(m => m.id !== action.id);
+      if (newItems.length === 0) return { ...initialState };
+      return {
+        ...state,
+        items: newItems,
+        currentIndex: Math.min(state.currentIndex, newItems.length - 1),
+      };
+    }
+
     case 'SET_ORDER': {
       const newItems = action.order === 'random'
         ? shuffle(state.items)
@@ -101,6 +111,10 @@ export function useSlideshow() {
     dispatch({ type: 'SET_INDEX', index });
   }, [dispatch]);
 
+  const removeItem = useCallback((id) => {
+    dispatch({ type: 'REMOVE_ITEM', id });
+  }, [dispatch]);
+
   const setOrder = useCallback((order) => {
     dispatch({ type: 'SET_ORDER', order });
   }, [dispatch]);
@@ -119,6 +133,7 @@ export function useSlideshow() {
     prev,
     setIndex,
     setOrder,
+    removeItem,
   };
 }
 
