@@ -15,12 +15,12 @@ import { MEDIA_TYPE } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, Spinner } from '../ui/index.js';
-import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders } from '../../utils/api.js';
+import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi } from '../../utils/api.js';
 
 export default function MediaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { likeMedia, deleteMedia } = useMediaActions();
+  const { deleteMedia } = useMediaActions();
   const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const [showInfo, setShowInfo] = useState(false);
@@ -159,14 +159,20 @@ export default function MediaPage() {
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
       if (e.key === 'ArrowDown') { e.preventDefault(); goFolderNext(); }
       if (e.key === ' ') { e.preventDefault(); playerRef.current?.togglePlay(); }
-      if (e.key === 'Enter') { e.preventDefault(); if (item) likeMedia(item); }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (item) {
+          setItem(prev => ({ ...prev, likes: (prev.likes || 0) + 1 }));
+          likeMediaApi(item.id).catch(() => setItem(prev => ({ ...prev, likes: (prev.likes || 1) - 1 })));
+        }
+      }
       if (e.key === 'i') setShowInfo(prev => !prev);
       if (e.key === 'f') toggleFullscreen();
       if (e.key === 'Delete') handleDelete();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, item, likeMedia, toggleFullscreen, handleDelete]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, item, toggleFullscreen, handleDelete]);
 
   /* Fetch file status when info modal opens */
   useEffect(() => {
@@ -311,7 +317,15 @@ export default function MediaPage() {
             />
             <LikeButton
               count={item.likes || 0}
-              onLike={() => likeMedia(item)}
+              onLike={async () => {
+                setItem(prev => ({ ...prev, likes: (prev.likes || 0) + 1 }));
+                try {
+                  await likeMediaApi(item.id);
+                } catch (err) {
+                  console.error('Failed to like media:', err);
+                  setItem(prev => ({ ...prev, likes: (prev.likes || 1) - 1 }));
+                }
+              }}
             />
           </div>
         </div>
