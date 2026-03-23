@@ -72,15 +72,15 @@ export default function MediaPage() {
   const navItems = inSlideshow ? slideshow.items : folderMedia;
   const currentIndex = navItems.findIndex(m => m.id === Number(id));
 
-  /* Slideshow wraps around; folder mode doesn't */
-  const hasPrev = inSlideshow ? navItems.length > 1 : currentIndex > 0;
+  /* Slideshow: prev requires history; next wraps around. Folder mode is sequential. */
+  const hasPrev = inSlideshow ? slideshow.history.length > 0 : currentIndex > 0;
   const hasNext = inSlideshow ? navItems.length > 1 : currentIndex < navItems.length - 1;
 
   const goPrev = useCallback(() => {
     if (!hasPrev) return;
     if (inSlideshow) {
+      const prevIndex = slideshow.history[slideshow.history.length - 1];
       slideshow.prev();
-      const prevIndex = currentIndex === 0 ? navItems.length - 1 : currentIndex - 1;
       navigate(`/media/${navItems[prevIndex].id}`);
     } else {
       navigate(`/media/${navItems[currentIndex - 1].id}`);

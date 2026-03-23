@@ -13,6 +13,7 @@ const initialState = {
   items: [],
   currentIndex: 0,
   order: 'random',
+  history: [],
 };
 
 function reducer(state, action) {
@@ -24,6 +25,7 @@ function reducer(state, action) {
         items: action.order === 'random' ? shuffle(action.items) : action.items,
         currentIndex: action.startIndex || 0,
         order: action.order || 'random',
+        history: [],
       };
 
     case 'STOP':
@@ -32,27 +34,37 @@ function reducer(state, action) {
     case 'NEXT':
       return {
         ...state,
+        history: [...state.history, state.currentIndex],
         currentIndex: (state.currentIndex + 1) % state.items.length,
       };
 
-    case 'PREV':
+    case 'PREV': {
+      if (state.history.length === 0) return state;
+      const newHistory = state.history.slice(0, -1);
       return {
         ...state,
-        currentIndex: state.currentIndex === 0
-          ? state.items.length - 1
-          : state.currentIndex - 1,
+        history: newHistory,
+        currentIndex: state.history[state.history.length - 1],
       };
+    }
 
     case 'SET_INDEX':
       return { ...state, currentIndex: action.index };
 
     case 'REMOVE_ITEM': {
+      const removedIdx = state.items.findIndex(m => m.id === action.id);
       const newItems = state.items.filter(m => m.id !== action.id);
       if (newItems.length === 0) return { ...initialState };
+      /* Remap history indices: drop entries pointing at the removed item,
+         shift down entries that pointed after it. */
+      const newHistory = state.history
+        .filter(i => i !== removedIdx)
+        .map(i => i > removedIdx ? i - 1 : i);
       return {
         ...state,
         items: newItems,
         currentIndex: Math.min(state.currentIndex, newItems.length - 1),
+        history: newHistory,
       };
     }
 
@@ -65,6 +77,7 @@ function reducer(state, action) {
         order: action.order,
         items: newItems,
         currentIndex: 0,
+        history: [],
       };
     }
 
@@ -126,6 +139,7 @@ export function useSlideshow() {
     items: state.items,
     currentIndex: state.currentIndex,
     order: state.order,
+    history: state.history,
     current,
     start,
     stop,
