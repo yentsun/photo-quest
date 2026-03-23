@@ -99,7 +99,7 @@ export function getDb() {
 export function saveDb() {
   if (!db) return;
   const data = db.export();
-  fs.writeFileSync(DB_PATH, Buffer.from(data));
+  fs.writeFileSync(DB_PATH, data);
 }
 
 /**

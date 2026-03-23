@@ -156,6 +156,18 @@ export async function processOneItem(db, itemId, filePath, logger) {
 async function processQueue(kojo, scanId, logger) {
   const db = kojo.get('db');
 
+  /* Check if scan was cancelled before processing next item. */
+  const statusStmt = db.prepare('SELECT status FROM scans WHERE id = ?');
+  statusStmt.bind([scanId]);
+  statusStmt.step();
+  const scanStatus = statusStmt.getAsObject().status;
+  statusStmt.free();
+
+  if (scanStatus === SCAN_STATUS.CANCELLED) {
+    logger.info(`Scan ${scanId} was cancelled, stopping`);
+    return;
+  }
+
   /* Claim next pending item for this scan. */
   const stmt = db.prepare(
     'SELECT id, path FROM import_queue WHERE scan_id = ? AND status = ? LIMIT 1'
@@ -220,8 +232,8 @@ async function processQueue(kojo, scanId, logger) {
     processed: progress.processed
   });
 
-  /* Schedule next item (yield to event loop). */
-  setTimeout(() => processQueue(kojo, scanId, logger), 0);
+  /* Schedule next item — small delay keeps the API responsive during large imports. */
+  setTimeout(() => processQueue(kojo, scanId, logger), 5);
 }
 
 /**

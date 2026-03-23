@@ -93,6 +93,22 @@ export async function scanMedia(path) {
 }
 
 /**
+ * Cancel an in-progress scan/import.
+ *
+ * @param {number} scanId - Scan ID to cancel
+ * @returns {Promise<{scanId: number, status: string}>}
+ */
+export async function cancelScan(scanId) {
+  const response = await fetch(`/scans/${scanId}/cancel`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to cancel scan');
+  }
+  return response.json();
+}
+
+/**
  * Get the URL for streaming a video.
  *
  * @param {number} id - Media ID

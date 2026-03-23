@@ -114,6 +114,9 @@ export const SCAN_STATUS = {
   /** All files have been processed. */
   COMPLETED: 'completed',
 
+  /** Scan was cancelled by the user. */
+  CANCELLED: 'cancelled',
+
   /** Scan encountered an unrecoverable error. */
   FAILED: 'failed'
 };

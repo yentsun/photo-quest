@@ -70,7 +70,7 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.32** Media content hash must always be computed from the actual file content, not from metadata like filename or timestamps.
 
-**1.33** Import progress must always be visible to the user. On page load, if an import is in progress, the UI must show the import modal with a progress bar and block interaction until the import completes.
+**1.33** Import progress must be visible to the user but must not block the UI. The user must be able to cancel an in-progress scan/import and browse the app normally at any time.
 
 **1.34** The user must be able to delete a media item. Deletion removes the record from the library and deletes the file from disk in one action.
 
