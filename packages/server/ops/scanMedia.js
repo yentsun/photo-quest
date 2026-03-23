@@ -96,7 +96,7 @@ export async function processOneItem(db, itemId, filePath, logger) {
   if (hidden) {
     db.prepare(
       `UPDATE media SET path = ?, folder = ?, hidden = 0,
-       updated_at = datetime("now") WHERE id = ?`
+       updated_at = datetime('now') WHERE id = ?`
     ).run(filePath, folder, hidden.id);
     logger.debug(`Restored media id=${hidden.id} at ${filePath}`);
   } else {

@@ -27,7 +27,7 @@ export default async (kojo, logger) => {
 
     /* Hide all media from this folder. */
     const result = db.prepare(
-      'UPDATE media SET hidden = 1, updated_at = datetime("now") WHERE folder = ?'
+      "UPDATE media SET hidden = 1, updated_at = datetime('now') WHERE folder = ?"
     ).run(folder.path);
 
     logger.info(`Removed folder "${folder.path}" (${result.changes} items hidden)`);

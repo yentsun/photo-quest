@@ -15,7 +15,7 @@ export default function (id) {
   const db = kojo.get('db');
 
   const result = db.prepare(
-    'UPDATE media SET likes = likes + 1, updated_at = datetime("now") WHERE id = ?'
+    "UPDATE media SET likes = likes + 1, updated_at = datetime('now') WHERE id = ?"
   ).run(Number(id));
 
   if (result.changes === 0) {
