@@ -15,7 +15,6 @@
 
 import path from 'node:path';
 import { IMAGE_EXTENSIONS, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
-import { saveDb } from '../src/db.js';
 
 export default function (folderId, folderName, files) {
   const [kojo, logger] = this;
@@ -34,17 +33,11 @@ export default function (folderId, folderName, files) {
     const mediaPath = `${folderId}:${file.path}`;
 
     try {
-      db.run(
-        'INSERT OR IGNORE INTO media (path, title, type, folder, status) VALUES (?, ?, ?, ?, ?)',
-        [mediaPath, title, mediaType, folderName, MEDIA_STATUS.READY]
-      );
+      const result = db.prepare(
+        'INSERT OR IGNORE INTO media (path, title, type, folder, status) VALUES (?, ?, ?, ?, ?)'
+      ).run(mediaPath, title, mediaType, folderName, MEDIA_STATUS.READY);
 
-      const changesStmt = db.prepare('SELECT changes() as c');
-      changesStmt.step();
-      const changes = changesStmt.getAsObject().c;
-      changesStmt.free();
-
-      if (changes > 0) {
+      if (result.changes > 0) {
         added++;
       }
     } catch (err) {
@@ -52,7 +45,6 @@ export default function (folderId, folderName, files) {
     }
   }
 
-  saveDb();
   logger.info(`Added ${added} media items from folder "${folderName}"`);
   return { added };
 }

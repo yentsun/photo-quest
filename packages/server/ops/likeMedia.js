@@ -10,33 +10,17 @@
  * @returns {Object|null} The updated media row, or null if not found.
  */
 
-import { saveDb } from '../src/db.js';
-
 export default function (id) {
   const [kojo] = this;
   const db = kojo.get('db');
 
-  db.run(
-    'UPDATE media SET likes = likes + 1, updated_at = datetime("now") WHERE id = ?',
-    [Number(id)]
-  );
+  const result = db.prepare(
+    'UPDATE media SET likes = likes + 1, updated_at = datetime("now") WHERE id = ?'
+  ).run(Number(id));
 
-  const changes = db.getRowsModified();
-  if (changes === 0) {
+  if (result.changes === 0) {
     return null;
   }
 
-  saveDb(db);
-
-  // Return the updated record
-  const stmt = db.prepare('SELECT * FROM media WHERE id = ?');
-  stmt.bind([Number(id)]);
-
-  let result = null;
-  if (stmt.step()) {
-    result = stmt.getAsObject();
-  }
-  stmt.free();
-
-  return result;
+  return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id));
 }

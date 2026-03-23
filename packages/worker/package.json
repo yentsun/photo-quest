@@ -4,11 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node index.js",
-    "start": "node index.js"
+    "dev": "node --experimental-sqlite index.js",
+    "start": "node --experimental-sqlite index.js"
   },
   "dependencies": {
-    "@photo-quest/shared": "workspace:*",
-    "sql.js": "^1.11.0"
+    "@photo-quest/shared": "workspace:*"
   }
 }

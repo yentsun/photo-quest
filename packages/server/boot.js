@@ -4,7 +4,7 @@
  *
  * Boot sequence:
  *  1. Create the kojo instance with custom directory names.
- *  2. Initialise the SQLite database (sql.js WASM) and store it in state.
+ *  2. Initialise the SQLite database (better-sqlite3) and store it in state.
  *  3. Store config values (port, routes table).
  *  4. Call kojo.ready() to auto-discover ops/ and endpoints/.
  *     Endpoints register their routes via the addHttpRoute op.
@@ -62,10 +62,10 @@ export default async function boot() {
     console.debug(`[boot] Media paths configured: ${MEDIA_PATHS.join(', ')}`);
   }
 
-  /* SQLite database (sql.js WASM, no native compilation needed).
+  /* SQLite database (better-sqlite3, native binding with WAL mode).
    * Stored in kojo state so all ops can access it via kojo.get('db'). */
   console.debug('[boot] Initialising database...');
-  const db = await initDb();
+  const db = initDb();
   kojo.set('db', db);
 
   /* Auto-discover ops/ and endpoints/. During this phase every

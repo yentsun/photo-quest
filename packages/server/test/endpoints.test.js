@@ -5,8 +5,9 @@
  */
 
 import test from 'node:test';
-import initSqlJs from 'sql.js';
+import { DatabaseSync as Database } from 'node:sqlite';
 import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE } from '@photo-quest/shared';
+import config from '@photo-quest/shared/config.js';
 
 // Import endpoint handlers
 import endpoint_get_media from '../endpoints/10_get_media.js';
@@ -17,7 +18,6 @@ import endpoint_post_add from '../endpoints/35_post_media_add.js';
 import endpoint_delete from '../endpoints/40_delete_media_id.js';
 import endpoint_get_jobs from '../endpoints/60_get_jobs.js';
 
-let SQL;
 let db;
 let kojo;
 let routes;
@@ -27,12 +27,10 @@ let routes;
 /* ------------------------------------------------------------------ */
 
 async function setup() {
-  if (!SQL) SQL = await initSqlJs();
-
-  db = new SQL.Database();
-  db.run('PRAGMA foreign_keys = ON');
-  db.run(CREATE_MEDIA_TABLE);
-  db.run(CREATE_JOBS_TABLE);
+  db = new Database(':memory:');
+  db.exec('PRAGMA foreign_keys = ON');
+  db.exec(CREATE_MEDIA_TABLE);
+  db.exec(CREATE_JOBS_TABLE);
 
   routes = [];
 
@@ -47,32 +45,21 @@ async function setup() {
         routes.push({ ...config, handler });
       },
       listMedia: function() {
-        const countStmt = db.prepare('SELECT COUNT(*) AS total FROM media');
-        countStmt.step();
-        const { total } = countStmt.getAsObject();
-        countStmt.free();
-        const stmt = db.prepare('SELECT * FROM media ORDER BY created_at DESC');
-        const items = [];
-        while (stmt.step()) items.push(stmt.getAsObject());
-        stmt.free();
+        const { total } = db.prepare('SELECT COUNT(*) AS total FROM media').get();
+        const items = db.prepare('SELECT * FROM media ORDER BY created_at DESC').all();
         return { items, total };
       },
       getMediaById: function(id) {
-        const stmt = db.prepare('SELECT * FROM media WHERE id = ?');
-        stmt.bind([Number(id)]);
-        let result = null;
-        if (stmt.step()) result = stmt.getAsObject();
-        stmt.free();
-        return result;
+        return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)) || null;
       },
       likeMedia: function(id) {
-        db.run('UPDATE media SET likes = likes + 1 WHERE id = ?', [Number(id)]);
-        if (db.getRowsModified() === 0) return null;
+        const result = db.prepare('UPDATE media SET likes = likes + 1 WHERE id = ?').run(Number(id));
+        if (result.changes === 0) return null;
         return this.getMediaById(id);
       },
       removeMedia: function(id) {
-        db.run('DELETE FROM media WHERE id = ?', [Number(id)]);
-        return { deleted: db.getRowsModified() > 0 };
+        const result = db.prepare('DELETE FROM media WHERE id = ?').run(Number(id));
+        return { deleted: result.changes > 0 };
       },
       addMedia: function(folderId, folderName, files) {
         let added = 0;
@@ -82,20 +69,15 @@ async function setup() {
           const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
           const mediaPath = `${folderId}:${file.path}`;
 
-          db.run(
-            'INSERT OR IGNORE INTO media (path, title, type, folder, status) VALUES (?, ?, ?, ?, ?)',
-            [mediaPath, title, isImage ? 'image' : 'video', folderName, 'ready']
-          );
-          if (db.getRowsModified() > 0) added++;
+          const result = db.prepare(
+            'INSERT OR IGNORE INTO media (path, title, type, folder, status) VALUES (?, ?, ?, ?, ?)'
+          ).run(mediaPath, title, isImage ? 'image' : 'video', folderName, 'ready');
+          if (result.changes > 0) added++;
         }
         return { added };
       },
       listJobs: function() {
-        const stmt = db.prepare('SELECT * FROM jobs ORDER BY created_at DESC');
-        const results = [];
-        while (stmt.step()) results.push(stmt.getAsObject());
-        stmt.free();
-        return results;
+        return db.prepare('SELECT * FROM jobs ORDER BY created_at DESC').all();
       },
     },
   };
@@ -135,7 +117,7 @@ function mockReq(method, path, body = null, params = {}) {
   return {
     method,
     url: path,
-    headers: { host: 'localhost:4000' },
+    headers: { host: `localhost:${config.serverPort}` },
     params,
     on(event, cb) { listeners[event] = cb; },
     emit() {
@@ -170,7 +152,7 @@ test('GET /media', async (t) => {
 
   await t.test('returns added items', async () => {
     // Add items directly
-    db.run("INSERT INTO media (path, title, type, status) VALUES ('test.jpg', 'Test', 'image', 'ready')");
+    db.exec("INSERT INTO media (path, title, type, status) VALUES ('test.jpg', 'Test', 'image', 'ready')");
 
     const route = findRoute('GET', '/media');
     const req = mockReq('GET', '/media');
@@ -199,8 +181,7 @@ test('GET /media/:id', async (t) => {
   });
 
   await t.test('returns specific item', async () => {
-    db.run("INSERT INTO media (path, title, type, status) VALUES ('x.jpg', 'X', 'image', 'ready')");
-    const id = db.exec('SELECT last_insert_rowid() as id')[0].values[0][0];
+    const { lastInsertRowid: id } = db.prepare("INSERT INTO media (path, title, type, status) VALUES ('x.jpg', 'X', 'image', 'ready')").run();
 
     const route = findRoute('GET', '/media/:id');
     const req = mockReq('GET', `/media/${id}`);
@@ -217,8 +198,7 @@ test('PATCH /media/:id/like', async (t) => {
   await setup();
 
   await t.test('increments like count', async () => {
-    db.run("INSERT INTO media (path, title, type, status, likes) VALUES ('like.jpg', 'Like', 'image', 'ready', 0)");
-    const id = db.exec('SELECT last_insert_rowid() as id')[0].values[0][0];
+    const { lastInsertRowid: id } = db.prepare("INSERT INTO media (path, title, type, status, likes) VALUES ('like.jpg', 'Like', 'image', 'ready', 0)").run();
 
     const route = findRoute('PATCH', '/media/:id/like');
     const req = mockReq('PATCH', `/media/${id}/like`);
@@ -286,8 +266,7 @@ test('DELETE /media/:id', async (t) => {
   await setup();
 
   await t.test('removes item', async () => {
-    db.run("INSERT INTO media (path, title, type, status) VALUES ('del.jpg', 'Del', 'image', 'ready')");
-    const id = db.exec('SELECT last_insert_rowid() as id')[0].values[0][0];
+    const { lastInsertRowid: id } = db.prepare("INSERT INTO media (path, title, type, status) VALUES ('del.jpg', 'Del', 'image', 'ready')").run();
 
     const route = findRoute('DELETE', '/media/:id');
     const req = mockReq('DELETE', `/media/${id}`);

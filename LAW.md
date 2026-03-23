@@ -110,6 +110,8 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **3.4** Never use Node.js `--watch` mode. It creates unkillable child processes on Windows that hold ports and cannot be terminated even with admin privileges.
 
+**3.5** Port numbers must never be hardcoded. Always read from `@photo-quest/shared/config.js` (`config.serverPort`, `config.webappPort`). This includes code, comments, and documentation.
+
 ---
 
 ## Glossary

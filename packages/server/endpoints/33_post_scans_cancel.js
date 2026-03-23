@@ -6,7 +6,6 @@
  */
 
 import { SCAN_STATUS } from '@photo-quest/shared';
-import { saveDb } from '../src/db.js';
 import { broadcastSse } from '../src/sse.js';
 import { json } from '../src/http.js';
 
@@ -19,11 +18,7 @@ export default async (kojo, logger) => {
     const scanId = Number(params.id);
 
     /* Verify scan exists and is active. */
-    const stmt = db.prepare('SELECT id, status FROM scans WHERE id = ?');
-    stmt.bind([scanId]);
-    const hasScan = stmt.step();
-    const scan = hasScan ? stmt.getAsObject() : null;
-    stmt.free();
+    const scan = db.prepare('SELECT id, status FROM scans WHERE id = ?').get(scanId);
 
     if (!scan) {
       return json(res, 404, { error: 'Scan not found' });
@@ -33,11 +28,9 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: `Scan is already ${scan.status}` });
     }
 
-    db.run(
-      'UPDATE scans SET status = ? WHERE id = ?',
-      [SCAN_STATUS.CANCELLED, scanId]
-    );
-    saveDb();
+    db.prepare(
+      'UPDATE scans SET status = ? WHERE id = ?'
+    ).run(SCAN_STATUS.CANCELLED, scanId);
 
     broadcastSse({ type: 'import_cancelled', scanId });
     logger.info(`Scan ${scanId} cancelled by user`);

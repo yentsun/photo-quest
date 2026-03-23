@@ -21,7 +21,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, JOB_TYPE, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
-import { saveDb } from '../src/db.js';
 import { broadcastSse } from '../src/sse.js';
 
 /**
@@ -66,10 +65,9 @@ export async function processOneItem(db, itemId, filePath, logger) {
 
   /* Skip files with unsupported extensions (LAW 1.31). */
   if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-    db.run(
-      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?',
-      [IMPORT_STATUS.FAILED, 'Unsupported file type', itemId]
-    );
+    db.prepare(
+      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
+    ).run(IMPORT_STATUS.FAILED, 'Unsupported file type', itemId);
     return;
   }
 
@@ -81,72 +79,52 @@ export async function processOneItem(db, itemId, filePath, logger) {
 
   /* Check file still exists (may have been moved/deleted since discovery). */
   if (!fs.existsSync(filePath)) {
-    db.run(
-      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?',
-      [IMPORT_STATUS.FAILED, 'File not found', itemId]
-    );
+    db.prepare(
+      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
+    ).run(IMPORT_STATUS.FAILED, 'File not found', itemId);
     return;
   }
 
   const hash = await computeFileHash(filePath);
 
   /* Ensure folder has a record in the folders table. */
-  db.run('INSERT OR IGNORE INTO folders (path) VALUES (?)', [folder]);
+  db.prepare('INSERT OR IGNORE INTO folders (path) VALUES (?)').run(folder);
 
   /* Check if hidden media with same hash exists (restore case). */
-  const hiddenStmt = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 1');
-  hiddenStmt.bind([hash]);
-  const hasHidden = hiddenStmt.step();
-  let hiddenId = null;
-  if (hasHidden) {
-    hiddenId = hiddenStmt.getAsObject().id;
-  }
-  hiddenStmt.free();
+  const hidden = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 1').get(hash);
 
-  if (hiddenId) {
-    db.run(
+  if (hidden) {
+    db.prepare(
       `UPDATE media SET path = ?, folder = ?, hidden = 0,
-       updated_at = datetime("now") WHERE id = ?`,
-      [filePath, folder, hiddenId]
-    );
-    logger.debug(`Restored media id=${hiddenId} at ${filePath}`);
+       updated_at = datetime("now") WHERE id = ?`
+    ).run(filePath, folder, hidden.id);
+    logger.debug(`Restored media id=${hidden.id} at ${filePath}`);
   } else {
     /* Check if path already exists. */
-    const existsStmt = db.prepare('SELECT id FROM media WHERE path = ?');
-    existsStmt.bind([filePath]);
-    const exists = existsStmt.step();
-    existsStmt.free();
+    const exists = db.prepare('SELECT id FROM media WHERE path = ?').get(filePath);
 
     if (exists) {
-      db.run('UPDATE media SET hash = ? WHERE path = ? AND hash IS NULL', [hash, filePath]);
+      db.prepare('UPDATE media SET hash = ? WHERE path = ? AND hash IS NULL').run(hash, filePath);
     } else {
       /* Insert new media. */
-      db.run(
+      const result = db.prepare(
         `INSERT INTO media (path, title, type, folder, status, hash)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [filePath, title, mediaType, folder, status, hash]
-      );
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(filePath, title, mediaType, folder, status, hash);
 
       /* Videos need a probe job. */
       if (!isImage) {
-        const idStmt = db.prepare('SELECT last_insert_rowid() as id');
-        idStmt.step();
-        const mediaId = idStmt.getAsObject().id;
-        idStmt.free();
-
-        db.run(
-          "INSERT INTO jobs (media_id, type, status) VALUES (?, ?, 'pending')",
-          [mediaId, JOB_TYPE.PROBE]
-        );
+        db.prepare(
+          "INSERT INTO jobs (media_id, type, status) VALUES (?, ?, 'pending')"
+        ).run(result.lastInsertRowid, JOB_TYPE.PROBE);
       }
     }
   }
 
   /* Mark queue item as completed. */
-  db.run(
-    'UPDATE import_queue SET status = ? WHERE id = ?',
-    [IMPORT_STATUS.COMPLETED, itemId]
-  );
+  db.prepare(
+    'UPDATE import_queue SET status = ? WHERE id = ?'
+  ).run(IMPORT_STATUS.COMPLETED, itemId);
 }
 
 /**
@@ -157,73 +135,47 @@ async function processQueue(kojo, scanId, logger) {
   const db = kojo.get('db');
 
   /* Check if scan was cancelled before processing next item. */
-  const statusStmt = db.prepare('SELECT status FROM scans WHERE id = ?');
-  statusStmt.bind([scanId]);
-  statusStmt.step();
-  const scanStatus = statusStmt.getAsObject().status;
-  statusStmt.free();
+  const scanRow = db.prepare('SELECT status FROM scans WHERE id = ?').get(scanId);
 
-  if (scanStatus === SCAN_STATUS.CANCELLED) {
+  if (scanRow.status === SCAN_STATUS.CANCELLED) {
     logger.info(`Scan ${scanId} was cancelled, stopping`);
     return;
   }
 
   /* Claim next pending item for this scan. */
-  const stmt = db.prepare(
+  const item = db.prepare(
     'SELECT id, path FROM import_queue WHERE scan_id = ? AND status = ? LIMIT 1'
-  );
-  stmt.bind([scanId, IMPORT_STATUS.PENDING]);
-  const hasItem = stmt.step();
+  ).get(scanId, IMPORT_STATUS.PENDING);
 
-  if (!hasItem) {
-    stmt.free();
+  if (!item) {
     /* All done — mark scan as completed. */
-    db.run(
-      'UPDATE scans SET status = ? WHERE id = ?',
-      [SCAN_STATUS.COMPLETED, scanId]
-    );
-    saveDb();
+    db.prepare(
+      'UPDATE scans SET status = ? WHERE id = ?'
+    ).run(SCAN_STATUS.COMPLETED, scanId);
 
     /* Get final counts for the broadcast. */
-    const countStmt = db.prepare('SELECT total, processed FROM scans WHERE id = ?');
-    countStmt.bind([scanId]);
-    countStmt.step();
-    const scan = countStmt.getAsObject();
-    countStmt.free();
+    const scan = db.prepare('SELECT total, processed FROM scans WHERE id = ?').get(scanId);
 
     broadcastSse({ type: 'import_complete', scanId, total: scan.total, processed: scan.processed });
     logger.info(`Scan ${scanId} complete: ${scan.processed}/${scan.total} files imported`);
     return;
   }
 
-  const item = stmt.getAsObject();
-  stmt.free();
-
   try {
     await processOneItem(db, item.id, item.path, logger);
   } catch (err) {
     logger.warn(`Failed to import ${item.path}: ${err.message}`);
-    db.run(
-      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?',
-      [IMPORT_STATUS.FAILED, err.message, item.id]
-    );
+    db.prepare(
+      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
+    ).run(IMPORT_STATUS.FAILED, err.message, item.id);
   }
 
   /* Increment processed count. */
-  db.run('UPDATE scans SET processed = processed + 1 WHERE id = ?', [scanId]);
+  db.prepare('UPDATE scans SET processed = processed + 1 WHERE id = ?').run(scanId);
 
-  const progressStmt = db.prepare('SELECT total, processed FROM scans WHERE id = ?');
-  progressStmt.bind([scanId]);
-  progressStmt.step();
-  const progress = progressStmt.getAsObject();
-  progressStmt.free();
+  const progress = db.prepare('SELECT total, processed FROM scans WHERE id = ?').get(scanId);
 
   logger.debug(`[scan ${scanId}] ${progress.processed}/${progress.total} ${item.path}`);
-
-  /* Save to disk and broadcast every 50 items (or on last item). */
-  if (progress.processed % 50 === 0 || progress.processed === progress.total) {
-    saveDb();
-  }
 
   broadcastSse({
     type: 'import_progress',
@@ -242,22 +194,14 @@ async function processQueue(kojo, scanId, logger) {
  */
 export function resumeIncompleteScans(kojo, logger) {
   const db = kojo.get('db');
-  const stmt = db.prepare(
+  const scans = db.prepare(
     'SELECT id FROM scans WHERE status IN (?, ?)'
-  );
-  stmt.bind([SCAN_STATUS.DISCOVERING, SCAN_STATUS.IMPORTING]);
+  ).all(SCAN_STATUS.DISCOVERING, SCAN_STATUS.IMPORTING);
 
-  const scanIds = [];
-  while (stmt.step()) {
-    scanIds.push(stmt.getAsObject().id);
-  }
-  stmt.free();
-
-  for (const scanId of scanIds) {
-    db.run('UPDATE scans SET status = ? WHERE id = ?', [SCAN_STATUS.IMPORTING, scanId]);
-    saveDb();
-    logger.info(`Resuming incomplete scan ${scanId}`);
-    setTimeout(() => processQueue(kojo, scanId, logger), 0);
+  for (const scan of scans) {
+    db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.IMPORTING, scan.id);
+    logger.info(`Resuming incomplete scan ${scan.id}`);
+    setTimeout(() => processQueue(kojo, scan.id, logger), 0);
   }
 }
 
@@ -278,8 +222,9 @@ function createFolderHierarchy(db, scanRoot, files) {
     }
   }
 
+  const insertFolder = db.prepare('INSERT OR IGNORE INTO folders (path) VALUES (?)');
   for (const dir of dirs) {
-    db.run('INSERT OR IGNORE INTO folders (path) VALUES (?)', [dir]);
+    insertFolder.run(dir);
   }
 }
 
@@ -305,29 +250,23 @@ export default function (dirPath) {
   createFolderHierarchy(db, dirPath, files);
 
   /* Create scan record. */
-  db.run(
-    'INSERT INTO scans (dir_path, total, status) VALUES (?, ?, ?)',
-    [dirPath, files.length, SCAN_STATUS.DISCOVERING]
-  );
-  const idStmt = db.prepare('SELECT last_insert_rowid() as id');
-  idStmt.step();
-  const scanId = idStmt.getAsObject().id;
-  idStmt.free();
+  const scanResult = db.prepare(
+    'INSERT INTO scans (dir_path, total, status) VALUES (?, ?, ?)'
+  ).run(dirPath, files.length, SCAN_STATUS.DISCOVERING);
+  const scanId = scanResult.lastInsertRowid;
 
-  /* Queue each file as an import task. */
+  /* Queue each file as an import task — wrapped in a transaction for speed. */
   const insertStmt = db.prepare(
     'INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)'
   );
+  db.exec('BEGIN');
   for (const filePath of files) {
-    insertStmt.bind([scanId, filePath, IMPORT_STATUS.PENDING]);
-    insertStmt.step();
-    insertStmt.reset();
+    insertStmt.run(scanId, filePath, IMPORT_STATUS.PENDING);
   }
-  insertStmt.free();
+  db.exec('COMMIT');
 
   /* Mark scan as ready for importing. */
-  db.run('UPDATE scans SET status = ? WHERE id = ?', [SCAN_STATUS.IMPORTING, scanId]);
-  saveDb();
+  db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.IMPORTING, scanId);
 
   logger.info(`Scan ${scanId}: discovered ${files.length} files, starting import`);
 

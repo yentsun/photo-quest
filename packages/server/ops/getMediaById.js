@@ -11,14 +11,5 @@ export default function (id) {
   const [kojo] = this;
   const db = kojo.get('db');
 
-  const stmt = db.prepare('SELECT * FROM media WHERE id = ?');
-  stmt.bind([Number(id)]);
-
-  let result = null;
-  if (stmt.step()) {
-    result = stmt.getAsObject();
-  }
-  stmt.free();
-
-  return result;
+  return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)) || null;
 }

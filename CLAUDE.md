@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Never use `cd`** in shell commands. Run everything from the working directory.
 - **Never use absolute paths** in shell commands.
 - Use `npx kill-port <port>` to free occupied ports (not netstat/lsof).
-- When killing ports before launch: `npx kill-port 3000 4000`.
+- When killing ports before launch: kill the ports defined in `packages/shared/config.js` (`serverPort` and `webappPort`).
 - Tests use `test()` / `t.test()` / `t.assert` pattern (node:test). No `describe`/`it`, no standalone `assert` module.
 - Kojo requires **v9+** (`functionsDir` was added in v9, v8 only has `serviceDir`).
 - Reference `F:\Projects\SimpleCrew\mono\packages\backend\` for correct kojo setup patterns.
@@ -19,8 +19,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `pnpm install` — Install all workspace dependencies
 - `pnpm dev` — Run all packages (web + server + worker) in parallel
-- `pnpm dev:web` — Vite dev server on port 3000
-- `pnpm dev:server` — Node HTTP server on port 4000
+- `pnpm dev:web` — Vite dev server (port from `config.webappPort`)
+- `pnpm dev:server` — Node HTTP server (port from `config.serverPort`)
 - `pnpm dev:worker` — Worker process
 - `pnpm build` — Production build of web package
 - `pnpm --filter @photo-quest/server test` — Run server tests
@@ -33,22 +33,22 @@ Plex-like media library app. pnpm workspace monorepo with 4 packages.
 Shared constants, SQLite schema definitions, route maps. No runtime dependencies. Imported by all other packages.
 
 ### packages/web
-React 18 PWA built with Vite + Tailwind CSS. Uses React Router v6 for client routing. State management via React Context + `useReducer` in `globalContext.js`. Vite proxies `/media`, `/stream`, `/jobs` requests to the server (port 4000).
+React 18 PWA built with Vite + Tailwind CSS. Uses React Router v6 for client routing. State management via React Context + `useReducer` in `globalContext.js`. Vite proxies `/media`, `/stream`, `/jobs`, `/scans` requests to the API server.
 
 ### packages/server
-Uses [kojo v9](https://github.com/yentsun/kojo) (event-driven microservice framework) with Node.js `http` module. Database via `sql.js` (WASM-based SQLite, no native compilation).
+Uses [kojo v9](https://github.com/yentsun/kojo) (event-driven microservice framework) with Node.js `http` module. Database via Node.js built-in `node:sqlite` (DatabaseSync) with WAL mode for concurrent access.
 
 Kojo structure:
 - `ops/` — Flat business logic functions loaded via `functionsDir: 'ops'`. Accessed as `kojo.ops.functionName()`. Use `function()` syntax (not arrow) to receive `[kojo, logger]` via `this`.
 - `endpoints/` — Subscribers loaded via `subsDir: 'endpoints'`. Each file is named `XX_method_path.js` (e.g. `10_get_media.js`). Endpoints register routes via `kojo.ops.addHttpRoute(config, handler)`.
 - `ops/requestMiddleware.js` — HTTP server creation, CORS, URLPattern-based route dispatch, request logging.
 - `ops/addHttpRoute.js` — Route registration op that compiles URLPattern and pushes to routes table.
-- `src/db.js` — sql.js database init, persistence helpers (`saveDb`, `reloadDb`)
+- `src/db.js` — SQLite database init (node:sqlite DatabaseSync, WAL mode)
 - `src/sse.js` — SSE client management and broadcast
 - `boot.js` — Entry point. Initialises kojo, db, loads ops/endpoints, starts HTTP server.
 
 ### packages/worker
-Independent Node.js process that polls the SQLite job queue. Uses `sql.js` for database access. Pipeline: `ffprobe` (probe metadata) → `ffmpeg` (transcode to MP4 H.264/AAC). Communicates with server only via shared SQLite database file (`packages/server/photo-quest.db`). Worker reloads DB from disk before reads and saves after writes.
+Independent Node.js process that polls the SQLite job queue. Uses Node.js built-in `node:sqlite` for database access. Pipeline: `ffprobe` (probe metadata) → `ffmpeg` (transcode to MP4 H.264/AAC). Communicates with server via shared SQLite database file (`packages/server/photo-quest.db`) with WAL mode for concurrent access.
 
 ### API Endpoints
 - `GET /media` — List all media

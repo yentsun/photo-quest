@@ -32,10 +32,9 @@ import { processNextJob } from './src/pipeline.js';
  */
 const POLL_INTERVAL = process.env.POLL_INTERVAL || 3000;
 
-/* Ensure the database tables exist.  initDb() is async because sql.js
- * needs to load its WASM binary before we can use the database. */
+/* Ensure the database tables exist. */
 console.debug('[worker] Initialising database...');
-await initDb();
+initDb();
 
 console.log('[worker] Started, polling for jobs...');
 

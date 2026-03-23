@@ -1,13 +1,9 @@
 /**
  * @file Database access layer for the worker -- job queue operations.
  *
- * Uses sql.js (WASM-based SQLite) instead of better-sqlite3 to avoid
- * native compilation requirements.  The worker and server share the same
- * physical database file.
- *
- * Because sql.js operates in-memory, we must:
- *  - Reload from disk before reading (to see server's writes)
- *  - Save to disk after writing (so the server can see our writes)
+ * Uses Node.js built-in `node:sqlite` (DatabaseSync) that writes directly
+ * to disk.  WAL mode is enabled so the worker can read while the server
+ * writes, and vice versa — no manual load/save cycles needed.
  *
  * Job queue state transitions:
  *   pending  --(claim)--->  running  --(complete)-->  completed
@@ -15,8 +11,7 @@
  *                              +--(fail)----------->  failed
  */
 
-import initSqlJs from 'sql.js';
-import fs from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE } from '@photo-quest/shared';
@@ -30,72 +25,26 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  */
 const DB_PATH = path.join(__dirname, '..', '..', 'server', 'photo-quest.db');
 
-/** @type {import('sql.js').SqlJsStatic | undefined} */
-let SQL;
-
-/** @type {import('sql.js').Database | undefined} */
+/** @type {import('node:sqlite').DatabaseSync | undefined} */
 let db;
 
 /**
- * Load the database from disk into memory.
- * Called before every read/write cycle to get the latest state.
+ * Open the database and ensure tables exist.
  */
-function loadFromDisk() {
-  if (fs.existsSync(DB_PATH)) {
-    const data = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(data);
-  } else {
-    db = new SQL.Database();
-  }
-  db.run('PRAGMA foreign_keys = ON');
-}
+export function initDb() {
+  db = new DatabaseSync(DB_PATH);
 
-/**
- * Persist the in-memory database back to disk.
- * Called after every write operation.
- */
-function saveToDisk() {
-  if (!db) return;
-  const data = db.export();
-  fs.writeFileSync(DB_PATH, data);
-}
+  /* WAL mode for concurrent access with the server process. */
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA busy_timeout = 5000');
+  db.exec('PRAGMA foreign_keys = ON');
 
-/**
- * Helper: run a SELECT and return the first row as an object, or null.
- */
-function getOne(sql, params = []) {
-  const stmt = db.prepare(sql);
-  if (params.length) stmt.bind(params);
-  let result = null;
-  if (stmt.step()) result = stmt.getAsObject();
-  stmt.free();
-  return result;
-}
+  db.exec(CREATE_MEDIA_TABLE);
+  db.exec(CREATE_JOBS_TABLE);
+  db.exec(CREATE_SCANS_TABLE);
+  db.exec(CREATE_IMPORT_QUEUE_TABLE);
+  db.exec(CREATE_FOLDERS_TABLE);
 
-/**
- * Helper: run a SELECT and return all rows as an array of objects.
- */
-function getAll(sql, params = []) {
-  const stmt = db.prepare(sql);
-  if (params.length) stmt.bind(params);
-  const results = [];
-  while (stmt.step()) results.push(stmt.getAsObject());
-  stmt.free();
-  return results;
-}
-
-/**
- * Initialise the sql.js WASM engine and ensure tables exist.
- */
-export async function initDb() {
-  SQL = await initSqlJs();
-  loadFromDisk();
-  db.run(CREATE_MEDIA_TABLE);
-  db.run(CREATE_JOBS_TABLE);
-  db.run(CREATE_SCANS_TABLE);
-  db.run(CREATE_IMPORT_QUEUE_TABLE);
-  db.run(CREATE_FOLDERS_TABLE);
-  saveToDisk();
   console.log('Worker database connected');
 }
 
@@ -113,32 +62,25 @@ export function getDb() {
 /**
  * Atomically find the oldest pending job and claim it.
  *
- * Reloads from disk first to see any new jobs the server has queued.
- *
  * @returns {Object|null} The claimed job (with media_path and media_title),
  *   or null if the queue is empty.
  */
 export function claimNextJob() {
-  /* Reload to see latest state from server. */
-  loadFromDisk();
-
-  const job = getOne(`
+  const job = db.prepare(`
     SELECT j.*, m.path as media_path, m.title as media_title
     FROM jobs j
     JOIN media m ON m.id = j.media_id
     WHERE j.status = 'pending'
     ORDER BY j.created_at ASC
     LIMIT 1
-  `);
+  `).get();
 
   if (!job) return null;
 
   /* Mark as running. */
-  db.run(
-    "UPDATE jobs SET status = 'running', updated_at = datetime('now') WHERE id = ?",
-    [job.id]
-  );
-  saveToDisk();
+  db.prepare(
+    "UPDATE jobs SET status = 'running', updated_at = datetime('now') WHERE id = ?"
+  ).run(job.id);
 
   return job;
 }
@@ -150,24 +92,18 @@ export function claimNextJob() {
  * @param {Object} [updates={}] - Optional media updates.
  */
 export function completeJob(jobId, updates = {}) {
-  loadFromDisk();
-
-  db.run(
-    "UPDATE jobs SET status = 'completed', progress = 100, updated_at = datetime('now') WHERE id = ?",
-    [jobId]
-  );
+  db.prepare(
+    "UPDATE jobs SET status = 'completed', progress = 100, updated_at = datetime('now') WHERE id = ?"
+  ).run(jobId);
 
   if (updates.mediaUpdate) {
     const { mediaId, ...fields } = updates.mediaUpdate;
     const setClauses = Object.keys(fields).map(k => `${k} = ?`).join(', ');
     const values = Object.values(fields);
-    db.run(
-      `UPDATE media SET ${setClauses}, updated_at = datetime('now') WHERE id = ?`,
-      [...values, mediaId]
-    );
+    db.prepare(
+      `UPDATE media SET ${setClauses}, updated_at = datetime('now') WHERE id = ?`
+    ).run(...values, mediaId);
   }
-
-  saveToDisk();
 }
 
 /**
@@ -177,12 +113,9 @@ export function completeJob(jobId, updates = {}) {
  * @param {string} error - Error description.
  */
 export function failJob(jobId, error) {
-  loadFromDisk();
-  db.run(
-    "UPDATE jobs SET status = 'failed', error = ?, updated_at = datetime('now') WHERE id = ?",
-    [error, jobId]
-  );
-  saveToDisk();
+  db.prepare(
+    "UPDATE jobs SET status = 'failed', error = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(error, jobId);
 }
 
 /**
@@ -192,11 +125,9 @@ export function failJob(jobId, error) {
  * @param {string} type - Job type (probe or transcode).
  */
 export function createJob(mediaId, type) {
-  db.run(
-    "INSERT INTO jobs (media_id, type, status) VALUES (?, ?, 'pending')",
-    [mediaId, type]
-  );
-  saveToDisk();
+  db.prepare(
+    "INSERT INTO jobs (media_id, type, status) VALUES (?, ?, 'pending')"
+  ).run(mediaId, type);
 }
 
 /**
@@ -206,11 +137,9 @@ export function createJob(mediaId, type) {
  * @param {number} progress - Progress value (0-100).
  */
 export function updateJobProgress(jobId, progress) {
-  db.run(
-    "UPDATE jobs SET progress = ?, updated_at = datetime('now') WHERE id = ?",
-    [progress, jobId]
-  );
-  saveToDisk();
+  db.prepare(
+    "UPDATE jobs SET progress = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(progress, jobId);
 }
 
 /**
@@ -220,9 +149,7 @@ export function updateJobProgress(jobId, progress) {
  * @param {string} status - New status value.
  */
 export function updateMediaStatus(mediaId, status) {
-  db.run(
-    "UPDATE media SET status = ?, updated_at = datetime('now') WHERE id = ?",
-    [status, mediaId]
-  );
-  saveToDisk();
+  db.prepare(
+    "UPDATE media SET status = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(status, mediaId);
 }

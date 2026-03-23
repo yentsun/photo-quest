@@ -29,11 +29,7 @@ export default function ({ limit, offset, folder, subtree, liked } = {}) {
   const where = conditions.join(' AND ');
 
   // Get total count for pagination metadata
-  const countStmt = db.prepare(`SELECT COUNT(*) AS total FROM media WHERE ${where}`);
-  if (params.length) countStmt.bind(params);
-  countStmt.step();
-  const { total } = countStmt.getAsObject();
-  countStmt.free();
+  const { total } = db.prepare(`SELECT COUNT(*) AS total FROM media WHERE ${where}`).get(...params);
 
   const orderBy = liked ? 'likes DESC' : 'created_at DESC';
   let sql = `SELECT * FROM media WHERE ${where} ORDER BY ${orderBy}`;
@@ -48,14 +44,7 @@ export default function ({ limit, offset, folder, subtree, liked } = {}) {
     }
   }
 
-  const stmt = db.prepare(sql);
-  if (queryParams.length) stmt.bind(queryParams);
-  const items = [];
-
-  while (stmt.step()) {
-    items.push(stmt.getAsObject());
-  }
-  stmt.free();
+  const items = db.prepare(sql).all(...queryParams);
 
   return { items, total };
 }

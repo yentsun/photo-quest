@@ -5,8 +5,8 @@
  *  - The React plugin enables Fast Refresh during development.
  *  - vite-plugin-pwa generates a service worker and web manifest so the
  *    app is installable as a PWA and auto-updates on new deployments.
- *  - The dev server listens on port 5000 so it does not collide with the
- *    API server (PORT env var, defaults to 3000).
+ *  - The dev server listens on config.webappPort so it does not collide
+ *    with the API server (config.serverPort).
  *  - API requests (/media, /stream, /jobs, /scans) are proxied to the back-end.
  */
 
@@ -15,7 +15,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import config from '@photo-quest/shared/config.js';
 
-const API_TARGET = `http://localhost:${config.serverPort}`;
+const API_TARGET = `http://127.0.0.1:${config.serverPort}`;
 
 export default defineConfig({
   plugins: [

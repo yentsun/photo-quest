@@ -9,7 +9,6 @@
  */
 
 import { json } from '../src/http.js';
-import { saveDb } from '../src/db.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -20,36 +19,22 @@ export default async (kojo, logger) => {
     const db = kojo.get('db');
 
     /* Look up the folder path. */
-    const folderStmt = db.prepare('SELECT path FROM folders WHERE id = ?');
-    folderStmt.bind([folderId]);
-    const hasFolder = folderStmt.step();
+    const folder = db.prepare('SELECT path FROM folders WHERE id = ?').get(folderId);
 
-    if (!hasFolder) {
-      folderStmt.free();
+    if (!folder) {
       return json(res, 404, { error: 'Folder not found' });
     }
 
-    const folderPath = folderStmt.getAsObject().path;
-    folderStmt.free();
-
     /* Hide all media from this folder. */
-    db.run(
-      'UPDATE media SET hidden = 1, updated_at = datetime("now") WHERE folder = ?',
-      [folderPath]
-    );
+    const result = db.prepare(
+      'UPDATE media SET hidden = 1, updated_at = datetime("now") WHERE folder = ?'
+    ).run(folder.path);
 
-    const stmt = db.prepare('SELECT changes() as count');
-    stmt.step();
-    const { count } = stmt.getAsObject();
-    stmt.free();
-
-    saveDb();
-
-    logger.info(`Removed folder "${folderPath}" (${count} items hidden)`);
+    logger.info(`Removed folder "${folder.path}" (${result.changes} items hidden)`);
 
     return json(res, 200, {
-      folder: folderPath,
-      hidden: count,
+      folder: folder.path,
+      hidden: result.changes,
     });
   });
 };

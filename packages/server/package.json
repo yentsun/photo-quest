@@ -4,14 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node boot.js",
-    "start": "node boot.js",
-    "test": "node --test test/*.test.js"
+    "dev": "node --experimental-sqlite boot.js",
+    "start": "node --experimental-sqlite boot.js",
+    "test": "node --experimental-sqlite --test test/*.test.js"
   },
   "dependencies": {
     "@photo-quest/shared": "workspace:*",
     "kojo": "^9.0.4",
-    "sharp": "^0.34.5",
-    "sql.js": "^1.11.0"
+    "sharp": "^0.34.5"
   }
 }

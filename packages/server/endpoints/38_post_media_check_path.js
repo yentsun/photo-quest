@@ -55,11 +55,7 @@ export default async (kojo, logger) => {
     const totalFiles = countMediaFiles(p);
 
     // Count how many are already in the db
-    const stmt = db.prepare('SELECT COUNT(*) as c FROM media WHERE folder = ? AND hidden = 0');
-    stmt.bind([p]);
-    stmt.step();
-    const existing = stmt.getAsObject().c;
-    stmt.free();
+    const { c: existing } = db.prepare('SELECT COUNT(*) as c FROM media WHERE folder = ? AND hidden = 0').get(p);
 
     return json(res, 200, { valid: true, files: totalFiles, newEstimate: Math.max(0, totalFiles - existing) });
   });

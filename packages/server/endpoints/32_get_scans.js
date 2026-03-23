@@ -17,30 +17,21 @@ export default async (kojo, logger) => {
     const scanId = url.searchParams.get('id');
 
     if (scanId) {
-      const stmt = db.prepare('SELECT * FROM scans WHERE id = ?');
-      stmt.bind([Number(scanId)]);
-      if (stmt.step()) {
-        const scan = stmt.getAsObject();
-        stmt.free();
+      const scan = db.prepare('SELECT * FROM scans WHERE id = ?').get(Number(scanId));
+      if (scan) {
         return json(res, 200, scan);
       }
-      stmt.free();
       return json(res, 404, { error: 'Scan not found' });
     }
 
     /* Return all active (non-completed) scans, plus the 5 most recent. */
-    const results = [];
-    const stmt = db.prepare(
+    const results = db.prepare(
       `SELECT * FROM scans
        WHERE status != 'completed'
        UNION
        SELECT * FROM scans
        ORDER BY id DESC LIMIT 5`
-    );
-    while (stmt.step()) {
-      results.push(stmt.getAsObject());
-    }
-    stmt.free();
+    ).all();
 
     json(res, 200, results);
   });

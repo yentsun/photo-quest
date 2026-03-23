@@ -1,5 +1,5 @@
 /**
- * @file Tests for kojo ops -- uses an in-memory sql.js database.
+ * @file Tests for kojo ops -- uses an in-memory better-sqlite3 database.
  *
  * Each test creates a fresh database so they are fully isolated.
  * Ops receive `[kojo, logger]` via `this`, so we build a minimal
@@ -7,36 +7,24 @@
  */
 
 import test from 'node:test';
-import initSqlJs from 'sql.js';
+import { DatabaseSync as Database } from 'node:sqlite';
 import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE } from '@photo-quest/shared';
 
 /* Import the raw op functions. */
 import listMedia from '../ops/listMedia.js';
 import getMediaById from '../ops/getMediaById.js';
 import removeMedia from '../ops/removeMedia.js';
-/*
- * listJobs is not imported here because it calls reloadDb() which depends
- * on the module-level sql.js singleton from src/db.js. Instead we test
- * the jobs query logic directly below.
- */
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
-let SQL;
-
-/** Initialise sql.js WASM once for the entire test file. */
-async function ensureSql() {
-  if (!SQL) SQL = await initSqlJs();
-}
-
 /** Create a fresh in-memory database with the schema applied. */
 function freshDb() {
-  const db = new SQL.Database();
-  db.run('PRAGMA foreign_keys = ON');
-  db.run(CREATE_MEDIA_TABLE);
-  db.run(CREATE_JOBS_TABLE);
+  const db = new Database(':memory:');
+  db.exec('PRAGMA foreign_keys = ON');
+  db.exec(CREATE_MEDIA_TABLE);
+  db.exec(CREATE_JOBS_TABLE);
   return db;
 }
 
@@ -65,11 +53,7 @@ function callOp(op, ctx, ...args) {
 
 /** Insert a media row directly and return its id. */
 function insertMedia(db, filePath, title = 'Test') {
-  db.run("INSERT INTO media (path, title, status) VALUES (?, ?, 'pending')", [filePath, title]);
-  const stmt = db.prepare('SELECT last_insert_rowid() as id');
-  stmt.step();
-  const id = stmt.getAsObject().id;
-  stmt.free();
+  const { lastInsertRowid: id } = db.prepare("INSERT INTO media (path, title, status) VALUES (?, ?, 'pending')").run(filePath, title);
   return id;
 }
 
@@ -78,8 +62,6 @@ function insertMedia(db, filePath, title = 'Test') {
 /* ------------------------------------------------------------------ */
 
 test('listMedia op', async (t) => {
-  await ensureSql();
-
   await t.test('returns empty result when no media exists', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
@@ -118,8 +100,6 @@ test('listMedia op', async (t) => {
 });
 
 test('getMediaById op', async (t) => {
-  await ensureSql();
-
   await t.test('returns the matching row', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
@@ -142,8 +122,6 @@ test('getMediaById op', async (t) => {
 });
 
 test('removeMedia op', async (t) => {
-  await ensureSql();
-
   await t.test('deletes an existing row and returns deleted: true', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
@@ -169,31 +147,21 @@ test('removeMedia op', async (t) => {
     const ctx = makeContext(db);
 
     const id = insertMedia(db, '/cascade.mp4');
-    db.run("INSERT INTO jobs (media_id, type, status) VALUES (?, 'probe', 'pending')", [id]);
+    db.prepare("INSERT INTO jobs (media_id, type, status) VALUES (?, 'probe', 'pending')").run(id);
 
     callOp(removeMedia, ctx, id);
 
     /* Jobs should be gone too (ON DELETE CASCADE). */
-    const stmt = db.prepare('SELECT COUNT(*) as c FROM jobs WHERE media_id = ?');
-    stmt.bind([id]);
-    stmt.step();
-    const count = stmt.getAsObject().c;
-    stmt.free();
+    const { c: count } = db.prepare('SELECT COUNT(*) as c FROM jobs WHERE media_id = ?').get(id);
 
     t.assert.strictEqual(count, 0);
   });
 });
 
 test('jobs query logic', async (t) => {
-  await ensureSql();
-
   /** Run the same query that listJobs op uses internally. */
   function queryJobs(db) {
-    const stmt = db.prepare('SELECT * FROM jobs ORDER BY created_at DESC');
-    const results = [];
-    while (stmt.step()) results.push(stmt.getAsObject());
-    stmt.free();
-    return results;
+    return db.prepare('SELECT * FROM jobs ORDER BY created_at DESC').all();
   }
 
   await t.test('returns empty array when no jobs exist', (t) => {
@@ -204,8 +172,8 @@ test('jobs query logic', async (t) => {
   await t.test('returns all jobs for a media record', (t) => {
     const db = freshDb();
     const mediaId = insertMedia(db, '/j.mp4');
-    db.run("INSERT INTO jobs (media_id, type, status) VALUES (?, 'probe', 'pending')", [mediaId]);
-    db.run("INSERT INTO jobs (media_id, type, status) VALUES (?, 'transcode', 'pending')", [mediaId]);
+    db.prepare("INSERT INTO jobs (media_id, type, status) VALUES (?, 'probe', 'pending')").run(mediaId);
+    db.prepare("INSERT INTO jobs (media_id, type, status) VALUES (?, 'transcode', 'pending')").run(mediaId);
 
     const result = queryJobs(db);
     t.assert.strictEqual(result.length, 2);

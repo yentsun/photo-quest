@@ -9,32 +9,19 @@
  */
 
 import fs from 'node:fs';
-import { saveDb } from '../src/db.js';
 
 export default function (id) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
   /* Get the file path before deleting the record. */
-  const pathStmt = db.prepare('SELECT path FROM media WHERE id = ?');
-  pathStmt.bind([Number(id)]);
-  let filePath = null;
-  if (pathStmt.step()) {
-    filePath = pathStmt.getAsObject().path;
-  }
-  pathStmt.free();
+  const row = db.prepare('SELECT path FROM media WHERE id = ?').get(Number(id));
+  const filePath = row ? row.path : null;
 
-  db.run('DELETE FROM media WHERE id = ?', [Number(id)]);
-
-  const stmt = db.prepare('SELECT changes() as c');
-  stmt.step();
-  const changes = stmt.getAsObject().c;
-  stmt.free();
-
-  saveDb();
+  const result = db.prepare('DELETE FROM media WHERE id = ?').run(Number(id));
 
   /* Delete the file from disk. */
-  if (changes > 0 && filePath) {
+  if (result.changes > 0 && filePath) {
     try {
       fs.unlinkSync(filePath);
       logger.info(`Deleted file from disk: ${filePath}`);
@@ -43,5 +30,5 @@ export default function (id) {
     }
   }
 
-  return { deleted: changes > 0, path: filePath };
+  return { deleted: result.changes > 0, path: filePath };
 }

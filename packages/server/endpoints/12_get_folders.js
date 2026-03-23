@@ -18,45 +18,36 @@ export default async (kojo, logger) => {
     const db = kojo.get('db');
 
     /* Fetch all folders. */
-    const stmt = db.prepare('SELECT id, path FROM folders ORDER BY path');
-    const folders = [];
-    while (stmt.step()) {
-      folders.push(stmt.getAsObject());
-    }
-    stmt.free();
+    const folders = db.prepare('SELECT id, path FROM folders ORDER BY path').all();
 
     /* Build path→id map for parent lookup. */
     const pathToId = new Map(folders.map(f => [f.path, f.id]));
 
     /* Count direct media per folder, split by type. */
-    const countStmt = db.prepare(
+    const typeCounts = db.prepare(
       'SELECT folder, type, COUNT(*) as count FROM media WHERE hidden = 0 GROUP BY folder, type'
-    );
+    ).all();
     const imageCounts = new Map();
     const videoCounts = new Map();
-    while (countStmt.step()) {
-      const row = countStmt.getAsObject();
+    for (const row of typeCounts) {
       if (row.type === 'image') {
         imageCounts.set(row.folder, (imageCounts.get(row.folder) || 0) + row.count);
       } else {
         videoCounts.set(row.folder, (videoCounts.get(row.folder) || 0) + row.count);
       }
     }
-    countStmt.free();
 
     /* Get one preview media ID per folder (first image, or first video if no images). */
-    const previewStmt = db.prepare(
+    const previews = db.prepare(
       `SELECT folder, id FROM media WHERE hidden = 0
        ORDER BY CASE WHEN type = 'image' THEN 0 ELSE 1 END, created_at DESC`
-    );
+    ).all();
     const previewIds = new Map();
-    while (previewStmt.step()) {
-      const row = previewStmt.getAsObject();
+    for (const row of previews) {
       if (!previewIds.has(row.folder)) {
         previewIds.set(row.folder, row.id);
       }
     }
-    previewStmt.free();
 
     /* Compute parentId and counts for each folder. */
     const result = folders.map(f => ({
