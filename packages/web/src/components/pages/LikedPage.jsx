@@ -22,6 +22,9 @@ export default function LikedPage() {
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
 
+  /* Clear slideshow when entering liked browse mode. */
+  useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
   const [likedMedia, setLikedMedia] = useState([]);
   const [loading, setLoading] = useState(true);
 

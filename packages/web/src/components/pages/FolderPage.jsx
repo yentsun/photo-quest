@@ -22,6 +22,9 @@ export default function FolderPage() {
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
 
+  /* Clear slideshow when entering folder browse mode. */
+  useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
   const [folders, setFolders] = useState([]);
   const [directMedia, setDirectMedia] = useState([]);
   const [loading, setLoading] = useState(true);

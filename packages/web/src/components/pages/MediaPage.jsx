@@ -123,6 +123,19 @@ export default function MediaPage() {
     }
   }, []);
 
+  /* Optimistic like — instant UI update, rollback on failure. */
+  const handleLike = useCallback(async () => {
+    if (!item) return;
+    const originalLikes = item.likes || 0;
+    setItem(prev => ({ ...prev, likes: originalLikes + 1 }));
+    try {
+      await likeMediaApi(item.id);
+    } catch (err) {
+      console.error('Failed to like media:', err);
+      setItem(prev => ({ ...prev, likes: originalLikes }));
+    }
+  }, [item]);
+
   /* Delete current media and navigate to the next item (issue #4) */
   const { removeItem: removeSlideshowItem } = slideshow;
   const handleDelete = useCallback(async () => {
@@ -159,20 +172,14 @@ export default function MediaPage() {
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
       if (e.key === 'ArrowDown') { e.preventDefault(); goFolderNext(); }
       if (e.key === ' ') { e.preventDefault(); playerRef.current?.togglePlay(); }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (item) {
-          setItem(prev => ({ ...prev, likes: (prev.likes || 0) + 1 }));
-          likeMediaApi(item.id).catch(() => setItem(prev => ({ ...prev, likes: (prev.likes || 1) - 1 })));
-        }
-      }
+      if (e.key === 'Enter') { e.preventDefault(); handleLike(); }
       if (e.key === 'i') setShowInfo(prev => !prev);
       if (e.key === 'f') toggleFullscreen();
       if (e.key === 'Delete') handleDelete();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, item, toggleFullscreen, handleDelete]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, handleDelete]);
 
   /* Fetch file status when info modal opens */
   useEffect(() => {
@@ -317,15 +324,7 @@ export default function MediaPage() {
             />
             <LikeButton
               count={item.likes || 0}
-              onLike={async () => {
-                setItem(prev => ({ ...prev, likes: (prev.likes || 0) + 1 }));
-                try {
-                  await likeMediaApi(item.id);
-                } catch (err) {
-                  console.error('Failed to like media:', err);
-                  setItem(prev => ({ ...prev, likes: (prev.likes || 1) - 1 }));
-                }
-              }}
+              onLike={handleLike}
             />
           </div>
         </div>

@@ -29,7 +29,7 @@ function reducer(state, action) {
       };
 
     case 'STOP':
-      return { ...initialState };
+      return state.active ? { ...initialState } : state;
 
     case 'NEXT':
       return {

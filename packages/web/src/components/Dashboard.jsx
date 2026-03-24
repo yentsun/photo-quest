@@ -75,6 +75,10 @@ export default function Dashboard() {
   const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
+
+  /* Clear slideshow when returning to dashboard. */
+  useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(null);
   const [importProgress, setImportProgress] = useState(null);
