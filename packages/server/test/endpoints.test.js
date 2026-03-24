@@ -6,7 +6,7 @@
 
 import test from 'node:test';
 import { DatabaseSync as Database } from 'node:sqlite';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE } from '@photo-quest/shared';
 import config from '@photo-quest/shared/config.js';
 
 // Import endpoint handlers
@@ -16,6 +16,7 @@ import endpoint_patch_like from '../endpoints/25_patch_media_id_like.js';
 import endpoint_post_scan from '../endpoints/30_post_media_scan.js';
 import endpoint_post_add from '../endpoints/35_post_media_add.js';
 import endpoint_delete from '../endpoints/40_delete_media_id.js';
+import endpoint_delete_folder from '../endpoints/45_delete_media_folder.js';
 import endpoint_get_jobs from '../endpoints/60_get_jobs.js';
 
 let db;
@@ -31,6 +32,7 @@ async function setup() {
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(CREATE_MEDIA_TABLE);
   db.exec(CREATE_JOBS_TABLE);
+  db.exec(CREATE_FOLDERS_TABLE);
 
   routes = [];
 
@@ -90,6 +92,7 @@ async function setup() {
   await endpoint_patch_like(kojo, logger);
   await endpoint_post_add(kojo, logger);
   await endpoint_delete(kojo, logger);
+  await endpoint_delete_folder(kojo, logger);
   await endpoint_get_jobs(kojo, logger);
 }
 
@@ -286,6 +289,85 @@ test('DELETE /media/:id', async (t) => {
     await route.handler(req, res, { id: '99999' });
 
     t.assert.strictEqual(res._status, 404);
+  });
+});
+
+test('DELETE /media/folder/:id', async (t) => {
+  await setup();
+
+  await t.test('returns 404 for non-existent folder', async () => {
+    const route = findRoute('DELETE', '/media/folder/:id');
+    const req = mockReq('DELETE', '/media/folder/999');
+    const res = mockRes();
+
+    await route.handler(req, res, { id: '999' });
+
+    t.assert.strictEqual(res._status, 404);
+  });
+
+  await t.test('hides media in the folder', async () => {
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\photos');
+    const folderId = db.prepare("SELECT id FROM folders WHERE path = ?").get('D:\\photos').id;
+    db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\photos\\a.jpg', 'A', 'image', 'ready', 'D:\\photos');
+    db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\photos\\b.jpg', 'B', 'image', 'ready', 'D:\\photos');
+
+    const route = findRoute('DELETE', '/media/folder/:id');
+    const req = mockReq('DELETE', `/media/folder/${folderId}`);
+    const res = mockRes();
+
+    await route.handler(req, res, { id: String(folderId) });
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.hidden, 2);
+
+    /* Verify media is hidden. */
+    const visible = db.prepare("SELECT COUNT(*) as c FROM media WHERE folder = ? AND hidden = 0").get('D:\\photos');
+    t.assert.strictEqual(visible.c, 0);
+  });
+
+  await t.test('hides media in subfolders too', async () => {
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\root');
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\root\\sub');
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\root\\sub\\deep');
+    const folderId = db.prepare("SELECT id FROM folders WHERE path = ?").get('D:\\root').id;
+
+    db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\root\\a.jpg', 'A', 'image', 'ready', 'D:\\root');
+    db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\root\\sub\\b.jpg', 'B', 'image', 'ready', 'D:\\root\\sub');
+    db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\root\\sub\\deep\\c.jpg', 'C', 'image', 'ready', 'D:\\root\\sub\\deep');
+
+    const route = findRoute('DELETE', '/media/folder/:id');
+    const req = mockReq('DELETE', `/media/folder/${folderId}`);
+    const res = mockRes();
+
+    await route.handler(req, res, { id: String(folderId) });
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.hidden, 3);
+
+    /* All three should be hidden. */
+    const visible = db.prepare("SELECT COUNT(*) as c FROM media WHERE (folder = ? OR folder LIKE ?) AND hidden = 0").get('D:\\root', 'D:\\root\\%');
+    t.assert.strictEqual(visible.c, 0);
+  });
+
+  await t.test('does not hide media in unrelated folders', async () => {
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\target');
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\other');
+    const targetId = db.prepare("SELECT id FROM folders WHERE path = ?").get('D:\\target').id;
+
+    db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\target\\a.jpg', 'A', 'image', 'ready', 'D:\\target');
+    db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\other\\b.jpg', 'B', 'image', 'ready', 'D:\\other');
+
+    const route = findRoute('DELETE', '/media/folder/:id');
+    const req = mockReq('DELETE', `/media/folder/${targetId}`);
+    const res = mockRes();
+
+    await route.handler(req, res, { id: String(targetId) });
+
+    t.assert.strictEqual(res._body.hidden, 1);
+
+    /* Other folder's media should still be visible. */
+    const other = db.prepare("SELECT hidden FROM media WHERE folder = ?").get('D:\\other');
+    t.assert.strictEqual(other.hidden, 0);
   });
 });
 

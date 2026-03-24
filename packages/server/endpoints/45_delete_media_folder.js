@@ -25,10 +25,10 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Folder not found' });
     }
 
-    /* Hide all media from this folder. */
+    /* Hide all media from this folder and all subfolders. */
     const result = db.prepare(
-      "UPDATE media SET hidden = 1, updated_at = datetime('now') WHERE folder = ?"
-    ).run(folder.path);
+      "UPDATE media SET hidden = 1, updated_at = datetime('now') WHERE folder = ? OR folder LIKE ?"
+    ).run(folder.path, folder.path + '\\%');
 
     logger.info(`Removed folder "${folder.path}" (${result.changes} items hidden)`);
 
