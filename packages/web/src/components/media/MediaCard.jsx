@@ -18,7 +18,7 @@ export default memo(function MediaCard({
   showLikes = true,
 }) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
-  const thumbnailUrl = isImage ? getMediaUrl(media) : null;
+  const mediaUrl = getMediaUrl(media);
 
   return (
     <div
@@ -26,17 +26,20 @@ export default memo(function MediaCard({
       onClick={() => onClick?.(media)}
     >
       {/* Thumbnail */}
-      {thumbnailUrl ? (
+      {isImage ? (
         <img
-          src={thumbnailUrl}
+          src={mediaUrl}
           alt={media.title}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center bg-gray-700">
-          <Icon name={isImage ? 'image' : 'video'} className="w-16 h-16 text-gray-500" />
-        </div>
+        <video
+          src={mediaUrl}
+          preload="metadata"
+          muted
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
       )}
 
       {/* Gradient overlay */}
