@@ -55,6 +55,9 @@ export default function Header() {
             <NavLink to={clientRoutes.liked} className={linkClass}>
               Liked
             </NavLink>
+            <NavLink to={clientRoutes.memoryGame} className={linkClass}>
+              Memory
+            </NavLink>
           </nav>
 
           {/* Network URL for other devices */}

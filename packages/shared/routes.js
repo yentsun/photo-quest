@@ -37,7 +37,10 @@ export const clientRoutes = {
   folder: '/folder/:id',
 
   /** Single media item view. */
-  media: '/media/:id'
+  media: '/media/:id',
+
+  /** Memory card game. */
+  memoryGame: '/memory'
 };
 
 // ---------------------------------------------------------------------------
