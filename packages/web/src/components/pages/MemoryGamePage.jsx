@@ -5,34 +5,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MEDIA_TYPE } from '@photo-quest/shared';
-import { fetchMedia, getImageUrl, getStreamUrl } from '../../utils/api.js';
+import { fetchMedia, getImageUrl } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Spinner } from '../ui/index.js';
 
-const GRID_SIZE = 9; // 3x3
-const PAIR_COUNT = 4; // 4 pairs + 1 solo = 9 cards
+const PAIR_COUNT = 8;
 
-/**
- * Pick random images, build card deck with pairs.
- * Returns 9 cards: 4 pairs + 1 solo, shuffled.
- */
 function buildDeck(mediaItems) {
   const images = mediaItems.filter(m => m.type === MEDIA_TYPE.IMAGE);
-  if (images.length < PAIR_COUNT + 1) return null;
+  if (images.length < PAIR_COUNT) return null;
 
-  const picked = shuffle(images).slice(0, PAIR_COUNT + 1);
+  const picked = shuffle(images).slice(0, PAIR_COUNT);
   const cards = [];
 
-  // First 4 images get duplicated (pairs)
-  for (let i = 0; i < PAIR_COUNT; i++) {
-    const media = picked[i];
+  for (const media of picked) {
     cards.push({ id: `${media.id}-a`, mediaId: media.id, pairKey: media.id });
     cards.push({ id: `${media.id}-b`, mediaId: media.id, pairKey: media.id });
   }
-
-  // 5th image is the solo (free) card — matches itself
-  const solo = picked[PAIR_COUNT];
-  cards.push({ id: `${solo.id}-solo`, mediaId: solo.id, pairKey: `solo-${solo.id}` });
 
   return shuffle(cards);
 }
@@ -82,26 +71,28 @@ export default function MemoryGamePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cards, setCards] = useState([]);
-  const [flipped, setFlipped] = useState([]); // card ids currently face-up
-  const [matched, setMatched] = useState(new Set()); // matched pair keys
+  const [flipped, setFlipped] = useState([]);
+  const [matched, setMatched] = useState(new Set());
   const [moves, setMoves] = useState(0);
-  const [won, setWon] = useState(false);
   const lockRef = useRef(false);
+  const flipTimeoutRef = useRef(null);
+
+  const won = cards.length > 0 && matched.size === PAIR_COUNT;
 
   const startGame = async () => {
+    clearTimeout(flipTimeoutRef.current);
     setLoading(true);
     setError(null);
     setFlipped([]);
     setMatched(new Set());
     setMoves(0);
-    setWon(false);
     lockRef.current = false;
 
     try {
       const { items } = await fetchMedia();
       const deck = buildDeck(items);
       if (!deck) {
-        setError('Need at least 5 images in your library to play.');
+        setError('Need at least 8 images in your library to play.');
         setLoading(false);
         return;
       }
@@ -123,18 +114,6 @@ export default function MemoryGamePage() {
     const newFlipped = [...flipped, card.id];
     setFlipped(newFlipped);
 
-    // Solo card — auto-match on first click
-    if (String(card.pairKey).startsWith('solo-')) {
-      setMatched(prev => {
-        const next = new Set(prev);
-        next.add(card.pairKey);
-        return next;
-      });
-      setMoves(m => m + 1);
-      setFlipped([]);
-      return;
-    }
-
     if (newFlipped.length === 2) {
       setMoves(m => m + 1);
       lockRef.current = true;
@@ -152,8 +131,7 @@ export default function MemoryGamePage() {
         setFlipped([]);
         lockRef.current = false;
       } else {
-        // No match — flip back after delay
-        setTimeout(() => {
+        flipTimeoutRef.current = setTimeout(() => {
           setFlipped([]);
           lockRef.current = false;
         }, 800);
@@ -161,12 +139,7 @@ export default function MemoryGamePage() {
     }
   };
 
-  // Check win condition
-  useEffect(() => {
-    if (cards.length > 0 && matched.size === PAIR_COUNT + 1) {
-      setWon(true);
-    }
-  }, [matched, cards.length]);
+  useEffect(() => () => clearTimeout(flipTimeoutRef.current), []);
 
   if (loading) {
     return (
@@ -190,7 +163,6 @@ export default function MemoryGamePage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-lg mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Memory Game</h1>
@@ -201,7 +173,6 @@ export default function MemoryGamePage() {
         </Button>
       </div>
 
-      {/* Win message */}
       {won && (
         <div className="mb-6 p-4 bg-green-900/30 border border-green-700/50 rounded-lg text-center">
           <p className="text-green-300 text-lg font-semibold">
@@ -210,8 +181,7 @@ export default function MemoryGamePage() {
         </div>
       )}
 
-      {/* 3x3 Grid */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         {cards.map(card => (
           <Card
             key={card.id}
