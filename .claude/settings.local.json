@@ -23,7 +23,16 @@
       "Bash(taskkill:*)",
       "WebSearch",
       "Bash(gh issue:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(pnpm build:*)",
+      "Bash(find:*)",
+      "Bash(pnpm:*)",
+      "Bash(ls:*)",
+      "Bash(head:*)",
+      "Bash(grep:*)",
+      "Bash(tail:*)",
+      "Bash(timeout:*)",
+      "Bash(git pull:*)"
     ]
   }
 }
