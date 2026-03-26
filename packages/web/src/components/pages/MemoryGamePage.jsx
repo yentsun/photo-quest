@@ -50,7 +50,7 @@ function CardBack() {
   );
 }
 
-function CardFace({ mediaId }) {
+function CardFace({ mediaId, onLoad }) {
   return (
     <div className="absolute inset-0 rounded-lg overflow-hidden">
       <img
@@ -58,12 +58,13 @@ function CardFace({ mediaId }) {
         alt=""
         className="w-full h-full object-cover"
         draggable={false}
+        onLoad={onLoad}
       />
     </div>
   );
 }
 
-function Card({ card, flipped, matched, onClick }) {
+function Card({ card, flipped, matched, onClick, onImageLoad }) {
   const isRevealed = flipped || matched;
 
   return (
@@ -77,7 +78,7 @@ function Card({ card, flipped, matched, onClick }) {
       onClick={onClick}
       disabled={matched}
     >
-      {isRevealed ? <CardFace mediaId={card.mediaId} /> : <CardBack />}
+      {isRevealed ? <CardFace mediaId={card.mediaId} onLoad={onImageLoad} /> : <CardBack />}
     </button>
   );
 }
@@ -93,6 +94,7 @@ export default function MemoryGamePage() {
   const [reward, setReward] = useState(null);
   const lockRef = useRef(false);
   const flipTimeoutRef = useRef(null);
+  const pendingMismatchRef = useRef(false);
   const videoRef = useRef(null);
 
   const won = cards.length > 0 && matched.size === PAIR_COUNT;
@@ -107,6 +109,7 @@ export default function MemoryGamePage() {
     setMoves(0);
     setReward(null);
     lockRef.current = false;
+    pendingMismatchRef.current = false;
 
     try {
       const { items } = await fetchMedia();
@@ -151,12 +154,19 @@ export default function MemoryGamePage() {
         setFlipped([]);
         lockRef.current = false;
       } else {
-        flipTimeoutRef.current = setTimeout(() => {
-          setFlipped([]);
-          lockRef.current = false;
-        }, 800);
+        // Wait for the second card's image to load before starting the timer
+        pendingMismatchRef.current = true;
       }
     }
+  };
+
+  const handleImageLoad = () => {
+    if (!pendingMismatchRef.current) return;
+    pendingMismatchRef.current = false;
+    flipTimeoutRef.current = setTimeout(() => {
+      setFlipped([]);
+      lockRef.current = false;
+    }, 800);
   };
 
   useEffect(() => {
@@ -166,9 +176,12 @@ export default function MemoryGamePage() {
       const liked = items.filter(m => m.likes > 0);
       if (liked.length === 0) return;
       const sorted = liked.toSorted((a, b) => b.likes - a.likes);
-      const tier = s === 3 ? 0 : s === 2 ? 0.5 : 1;
-      const index = Math.min(Math.floor(tier * (sorted.length - 1)), sorted.length - 1);
-      setReward(sorted[index]);
+      const third = Math.ceil(sorted.length / 3);
+      const tierStart = s === 3 ? 0 : s === 2 ? third : third * 2;
+      const tierEnd = s === 3 ? third : s === 2 ? third * 2 : sorted.length;
+      const pool = sorted.slice(tierStart, tierEnd);
+      if (pool.length === 0) pool.push(sorted[sorted.length - 1]);
+      setReward(pool[Math.floor(Math.random() * pool.length)]);
     }).catch(() => {});
   }, [won, moves]);
 
@@ -267,6 +280,7 @@ export default function MemoryGamePage() {
             flipped={flipped.includes(card.id)}
             matched={matched.has(card.pairKey)}
             onClick={() => handleClick(card)}
+            onImageLoad={handleImageLoad}
           />
         ))}
       </div>
