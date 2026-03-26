@@ -14,6 +14,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import config from '@photo-quest/shared/config.js';
 import { json } from '../src/http.js';
 import { destroyAllSseClients } from '../src/sse.js';
 
@@ -136,9 +137,9 @@ export default async function () {
 
   server.listen(PORT, '0.0.0.0', () => {
     const localIP = getLocalIP();
-    logger.info(`Server listening on:`);
-    logger.info(`  Local:   http://localhost:${PORT}`);
-    logger.info(`  Network: http://${localIP}:${PORT}`);
+    const webPort = config.webappPort;
+    logger.info(`Open app → http://localhost:${webPort}`);
+    logger.info(`Network  → http://${localIP}:${webPort}`);
   });
 
   function shutdown() {

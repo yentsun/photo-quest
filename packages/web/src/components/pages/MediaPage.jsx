@@ -76,12 +76,17 @@ export default function MediaPage() {
   const hasPrev = inSlideshow ? slideshow.history.length > 0 : currentIndex > 0;
   const hasNext = inSlideshow ? navItems.length > 1 : currentIndex < navItems.length - 1;
 
+  /* Sync URL from slideshow state — avoids stale-closure bugs with rapid key presses.
+     Only triggers when slideshow.currentIndex changes (not on folder up/down nav). */
+  useEffect(() => {
+    if (!inSlideshow || !slideshow.current) return;
+    navigate(`/media/${slideshow.current.id}`, { replace: true });
+  }, [inSlideshow, slideshow.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const goPrev = useCallback(() => {
     if (!hasPrev) return;
     if (inSlideshow) {
-      const prevIndex = slideshow.history[slideshow.history.length - 1];
       slideshow.prev();
-      navigate(`/media/${navItems[prevIndex].id}`);
     } else {
       navigate(`/media/${navItems[currentIndex - 1].id}`);
     }
@@ -91,8 +96,6 @@ export default function MediaPage() {
     if (!hasNext) return;
     if (inSlideshow) {
       slideshow.next();
-      const nextIndex = (currentIndex + 1) % navItems.length;
-      navigate(`/media/${navItems[nextIndex].id}`);
     } else {
       navigate(`/media/${navItems[currentIndex + 1].id}`);
     }
