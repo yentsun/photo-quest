@@ -5,11 +5,27 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MEDIA_TYPE } from '@photo-quest/shared';
-import { fetchMedia, getImageUrl } from '../../utils/api.js';
+import { fetchMedia, getImageUrl, getMediaUrl } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Spinner } from '../ui/index.js';
 
 const PAIR_COUNT = 8;
+const STAR_THRESHOLDS = [15, 11, 8];
+
+function getStars(moves) {
+  return STAR_THRESHOLDS.reduce((s, t) => (moves <= t ? s + 1 : s), 0);
+}
+
+function Stars({ count, glow }) {
+  return Array.from({ length: 3 }, (_, i) => (
+    <span
+      key={i}
+      className={i < count
+        ? `text-yellow-400${glow ? ' drop-shadow-[0_0_8px_rgba(250,204,21,0.7)]' : ''}`
+        : 'text-gray-600'}
+    >&#9733;</span>
+  ));
+}
 
 function buildDeck(mediaItems) {
   const images = mediaItems.filter(m => m.type === MEDIA_TYPE.IMAGE);
@@ -74,10 +90,13 @@ export default function MemoryGamePage() {
   const [flipped, setFlipped] = useState([]);
   const [matched, setMatched] = useState(new Set());
   const [moves, setMoves] = useState(0);
+  const [reward, setReward] = useState(null);
   const lockRef = useRef(false);
   const flipTimeoutRef = useRef(null);
+  const videoRef = useRef(null);
 
   const won = cards.length > 0 && matched.size === PAIR_COUNT;
+  const stars = won ? getStars(moves) : 0;
 
   const startGame = async () => {
     clearTimeout(flipTimeoutRef.current);
@@ -86,6 +105,7 @@ export default function MemoryGamePage() {
     setFlipped([]);
     setMatched(new Set());
     setMoves(0);
+    setReward(null);
     lockRef.current = false;
 
     try {
@@ -139,7 +159,29 @@ export default function MemoryGamePage() {
     }
   };
 
-  useEffect(() => () => clearTimeout(flipTimeoutRef.current), []);
+  useEffect(() => {
+    if (!won) return;
+    const s = getStars(moves);
+    fetchMedia({ liked: true }).then(({ items }) => {
+      const liked = items.filter(m => m.likes > 0);
+      if (liked.length === 0) return;
+      const sorted = liked.toSorted((a, b) => b.likes - a.likes);
+      const tier = s === 3 ? 0 : s === 2 ? 0.5 : 1;
+      const index = Math.min(Math.floor(tier * (sorted.length - 1)), sorted.length - 1);
+      setReward(sorted[index]);
+    }).catch(() => {});
+  }, [won, moves]);
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(flipTimeoutRef.current);
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.removeAttribute('src');
+        videoRef.current.load();
+      }
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -173,8 +215,44 @@ export default function MemoryGamePage() {
         </Button>
       </div>
 
-      {won && (
-        <div className="mb-6 p-4 bg-green-900/30 border border-green-700/50 rounded-lg text-center">
+      {reward && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 animate-fade-in cursor-pointer"
+          onClick={() => setReward(null)}
+        >
+          <div className="text-4xl tracking-widest mb-4 animate-bounce-in">
+            <Stars count={stars} glow />
+          </div>
+          <p className="text-green-300 text-xl font-semibold mb-6 animate-fade-in-delayed">
+            You won in {moves} moves!
+          </p>
+          {reward.type === MEDIA_TYPE.IMAGE ? (
+            <img
+              src={getMediaUrl(reward)}
+              alt={reward.title}
+              className="max-w-[90vw] max-h-[70vh] rounded-xl object-contain shadow-2xl shadow-blue-500/20 animate-scale-in"
+            />
+          ) : (
+            <video
+              ref={videoRef}
+              src={getMediaUrl(reward)}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="max-w-[90vw] max-h-[70vh] rounded-xl object-contain shadow-2xl shadow-blue-500/20 animate-scale-in"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          <p className="text-gray-500 text-sm mt-6 animate-fade-in-delayed">Click anywhere to continue</p>
+        </div>
+      )}
+
+      {won && !reward && (
+        <div className="mb-6 p-4 bg-green-900/30 border border-green-700/50 rounded-lg text-center space-y-2">
+          <p className="text-2xl tracking-widest">
+            <Stars count={stars} />
+          </p>
           <p className="text-green-300 text-lg font-semibold">
             You won in {moves} moves!
           </p>
