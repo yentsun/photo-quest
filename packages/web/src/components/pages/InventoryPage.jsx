@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
-import { fetchInventory, destroyInventoryItem, getMediaUrl, getImageUrl } from '../../utils/api.js';
+import { fetchInventory, destroyInventoryItem, infuseMedia, getMediaUrl, getImageUrl } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, IconButton, Icon, Spinner } from '../ui/index.js';
 
@@ -57,8 +57,33 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy }) 
 });
 
 function CardOverlay({ item, onClose }) {
+  const [fullMedia, setFullMedia] = useState(false);
+  const [infusion, setInfusion] = useState(item?.infusion || 0);
+  const fullMediaRef = useRef(false);
+
+  useEffect(() => { setInfusion(item?.infusion || 0); }, [item?.id]);
+  useEffect(() => { fullMediaRef.current = fullMedia; }, [fullMedia]);
+
+  /* Auto-infuse: 1 dust per 10s in card view, 2 per 10s in full view */
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    if (!item) return;
+    const interval = setInterval(() => {
+      const amount = fullMediaRef.current ? 2 : 1;
+      infuseMedia(item.id, amount)
+        .then(({ media }) => {
+          setInfusion(media.infusion);
+          window.dispatchEvent(new Event('dust-changed'));
+        })
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [item?.id]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') { fullMediaRef.current ? setFullMedia(false) : onClose(); }
+      if (e.key === 'f' || e.key === 'F') setFullMedia(prev => !prev);
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
@@ -66,7 +91,21 @@ function CardOverlay({ item, onClose }) {
   if (!item) return null;
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(item);
-  const infusion = item.infusion || 0;
+
+  if (fullMedia) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black cursor-pointer"
+        onClick={() => setFullMedia(false)}
+      >
+        {isImage ? (
+          <img src={mediaUrl} alt={item.title} className="max-w-full max-h-full object-contain" />
+        ) : (
+          <video src={mediaUrl} controls autoPlay muted playsInline className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -82,12 +121,20 @@ function CardOverlay({ item, onClose }) {
           <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
         </div>
         <div className="p-3 pb-0">
-          <div className="relative rounded-lg overflow-hidden bg-black">
+          <div className="relative aspect-square rounded-lg overflow-hidden bg-black group/art">
             {isImage ? (
-              <img src={mediaUrl} alt={item.title} className="w-full max-h-[80vh] object-cover" />
+              <img src={mediaUrl} alt={item.title} className="w-full h-full object-cover" />
             ) : (
-              <video src={mediaUrl} controls muted playsInline className="w-full max-h-[80vh] object-cover" onClick={(e) => e.stopPropagation()} />
+              <video src={mediaUrl} controls muted playsInline className="w-full h-full object-cover" onClick={(e) => e.stopPropagation()} />
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setFullMedia(true)}
+              className="absolute bottom-2 right-2 opacity-0 group-hover/art:opacity-100 transition-opacity bg-black/60 hover:bg-black/80 text-white"
+            >
+              F
+            </Button>
           </div>
         </div>
         <div className="px-4 py-3">
@@ -108,7 +155,7 @@ export default function InventoryPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
-  const closeOverlay = useCallback(() => setSelectedItem(null), []);
+  const closeOverlay = useCallback(() => { setSelectedItem(null); loadInventory(); }, []);
 
   const loadInventory = () => {
     fetchInventory()

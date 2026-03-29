@@ -41,14 +41,17 @@ export async function fetchMediaById(id) {
 }
 
 /**
- * Infuse a media item with 1 magic dust.
+ * Infuse a media item with magic dust.
  *
  * @param {number} id - Media ID
+ * @param {number} [amount=1] - Dust to spend
  * @returns {Promise<{ media: Object, dust: number }>}
  */
-export async function infuseMedia(id) {
+export async function infuseMedia(id, amount = 1) {
   const response = await fetch(`/media/${id}/infuse`, {
     method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount }),
   });
   if (!response.ok) {
     throw new Error('Failed to infuse media');

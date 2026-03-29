@@ -1,30 +1,29 @@
 /**
- * @file Infuse a media item with 1 magic dust.
+ * @file Infuse a media item with magic dust.
  *
- * Kojo op: accessed as `kojo.ops.infuseMedia(id)`.
+ * Kojo op: accessed as `kojo.ops.infuseMedia(id, amount)`.
  * Must use `function()` syntax (not arrow) to receive kojo context via `this`.
  *
- * Deducts 1 dust from the player and increments the media's infusion value.
- *
  * @param {number|string} id - The media record's primary key.
- * @returns {{ media: object, dust: number }|null} Updated media + dust, or null if not found/insufficient dust.
+ * @param {number} [amount=1] - Dust to spend / infusion to add.
+ * @returns {{ media: object, dust: number }|null} null if not found/insufficient dust.
  */
 
-export default function (id) {
+export default function (id, amount = 1) {
   const [kojo] = this;
   const db = kojo.get('db');
   const mediaId = Number(id);
+  const n = Math.max(1, Math.floor(amount));
 
-  const dustResult = kojo.ops.updateDust(-1);
+  const dustResult = kojo.ops.updateDust(-n);
   if (!dustResult) return null;
 
   const { changes } = db.prepare(
-    "UPDATE media SET infusion = infusion + 1, updated_at = datetime('now') WHERE id = ?"
-  ).run(mediaId);
+    "UPDATE media SET infusion = infusion + ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(n, mediaId);
 
   if (changes === 0) {
-    // Media not found — refund dust
-    kojo.ops.updateDust(1);
+    kojo.ops.updateDust(n);
     return null;
   }
 
