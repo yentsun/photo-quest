@@ -14,7 +14,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_PLAYER_STATS_TABLE, CREATE_INVENTORY_TABLE, CREATE_QUEST_DECKS_TABLE, CREATE_QUEST_CARDS_TABLE } from '@photo-quest/shared';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -44,6 +44,10 @@ export function initDb() {
   db.exec(CREATE_SCANS_TABLE);
   db.exec(CREATE_IMPORT_QUEUE_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
+  db.exec(CREATE_PLAYER_STATS_TABLE);
+  db.exec(CREATE_INVENTORY_TABLE);
+  db.exec(CREATE_QUEST_DECKS_TABLE);
+  db.exec(CREATE_QUEST_CARDS_TABLE);
 
   console.log('Worker database connected');
 }

@@ -183,6 +183,96 @@ export async function removeFolder(folderId) {
 }
 
 /**
+ * Fetch the player's inventory items (supports pagination).
+ *
+ * @param {{ limit?: number, offset?: number }} [opts]
+ * @returns {Promise<{ items: Array, total: number }>}
+ */
+export async function fetchInventory({ limit, offset } = {}) {
+  const url = new URL(apiRoutes.inventory, window.location.origin);
+  if (limit != null) url.searchParams.set('limit', limit);
+  if (offset != null) url.searchParams.set('offset', offset);
+
+  const response = await fetch(url, {
+    headers: { 'Accept': 'application/json' },
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch inventory');
+  }
+  return response.json();
+}
+
+/**
+ * Fetch player stats (dust balance).
+ *
+ * @returns {Promise<{ dust: number }>}
+ */
+export async function fetchPlayerStats() {
+  const response = await fetch(apiRoutes.player);
+  if (!response.ok) throw new Error('Failed to fetch player stats');
+  return response.json();
+}
+
+/**
+ * Fetch today's quest decks.
+ *
+ * @returns {Promise<{ decks: Array, dust: number }>}
+ */
+export async function fetchQuestDecks() {
+  const response = await fetch(apiRoutes.questDecks, {
+    headers: { 'Accept': 'application/json' },
+  });
+  if (!response.ok) throw new Error('Failed to fetch quest decks');
+  return response.json();
+}
+
+/**
+ * Fetch a specific quest deck with its current card.
+ *
+ * @param {number} deckId
+ * @returns {Promise<object>}
+ */
+export async function fetchQuestDeck(deckId) {
+  const response = await fetch(`/quest/decks/${deckId}`, {
+    headers: { 'Accept': 'application/json' },
+  });
+  if (!response.ok) throw new Error('Failed to fetch quest deck');
+  return response.json();
+}
+
+/**
+ * Advance to the next card in a quest deck.
+ *
+ * @param {number} deckId
+ * @returns {Promise<object>}
+ */
+export async function advanceQuestDeck(deckId) {
+  const response = await fetch(`/quest/decks/${deckId}/next`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to advance deck');
+  return response.json();
+}
+
+/**
+ * Spend dust to take the current card into inventory.
+ *
+ * @param {number} deckId
+ * @returns {Promise<object>}
+ */
+export async function takeQuestCard(deckId) {
+  const response = await fetch(`/quest/decks/${deckId}/take`, {
+    method: 'POST',
+  });
+  if (response.status === 400) {
+    const data = await response.json();
+    throw new Error(data.error);
+  }
+  if (!response.ok) throw new Error('Failed to take card');
+  return response.json();
+}
+
+/**
  * Download a media file to the user's device.
  *
  * @param {Object} media - Media object with id, title, type

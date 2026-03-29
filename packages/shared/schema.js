@@ -143,6 +143,78 @@ export const CREATE_FOLDERS_TABLE = `
   )
 `;
 
+/**
+ * SQL statement that creates the `player_stats` table.
+ *
+ * Singleton row (enforced by CHECK constraint) storing the player's
+ * magic dust balance. Seeded with id=1 at startup via INSERT OR IGNORE.
+ *
+ * @type {string}
+ */
+export const CREATE_PLAYER_STATS_TABLE = `
+  CREATE TABLE IF NOT EXISTS player_stats (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    dust INTEGER NOT NULL DEFAULT 0
+  )
+`;
+
+/**
+ * SQL statement that creates the `inventory` table.
+ *
+ * Tracks which media items the player has acquired through gameplay.
+ * Each media item can only appear once (UNIQUE on media_id).
+ * Cascade-deletes when the underlying media record is removed.
+ *
+ * @type {string}
+ */
+export const CREATE_INVENTORY_TABLE = `
+  CREATE TABLE IF NOT EXISTS inventory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_id INTEGER NOT NULL UNIQUE,
+    acquired_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
+  )
+`;
+
+/**
+ * SQL statement that creates the `quest_decks` table.
+ *
+ * Each row is one deck for a given day. 10 decks per day, 10 cards each.
+ * `current_position` tracks how far the player has browsed (0 = not started).
+ * `exhausted` flips to 1 once all cards have been viewed.
+ *
+ * @type {string}
+ */
+export const CREATE_QUEST_DECKS_TABLE = `
+  CREATE TABLE IF NOT EXISTS quest_decks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    deck_index INTEGER NOT NULL,
+    current_position INTEGER NOT NULL DEFAULT 0,
+    exhausted INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(date, deck_index)
+  )
+`;
+
+/**
+ * SQL statement that creates the `quest_cards` table.
+ *
+ * Each row is one card in a quest deck, linking to a media record.
+ * Position is 0-based within the deck.
+ *
+ * @type {string}
+ */
+export const CREATE_QUEST_CARDS_TABLE = `
+  CREATE TABLE IF NOT EXISTS quest_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deck_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    media_id INTEGER NOT NULL,
+    FOREIGN KEY (deck_id) REFERENCES quest_decks(id) ON DELETE CASCADE,
+    FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
+  )
+`;
+
 export const CREATE_IMPORT_QUEUE_TABLE = `
   CREATE TABLE IF NOT EXISTS import_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

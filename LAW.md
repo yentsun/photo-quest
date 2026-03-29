@@ -124,6 +124,12 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.4** The inventory must support shuffle/slideshow browsing, reusing the existing viewer and navigation controls.
 
+**4.5** The app must have a **Quest** view. Each day, 10 decks of 10 cards are generated from random media in the library. Decks are displayed as a grid of face-down card stacks. The player picks a deck and browses through it one card at a time. Once all cards in a deck have been viewed, the deck disappears. While browsing, the player can spend magic dust to take the current card into their inventory.
+
+**4.6** The player's magic dust balance must be visible at the top of the Quest view.
+
+**4.7** The player's starting magic dust balance is **50**.
+
 ---
 
 ## Glossary

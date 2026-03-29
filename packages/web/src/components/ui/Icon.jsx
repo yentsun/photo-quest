@@ -22,6 +22,7 @@ const paths = {
   list: { d: 'M4 6h16M4 12h16M4 18h16', stroke: true },
   maximize: { d: 'M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4', stroke: true },
   minimize: { d: 'M8 4v4H4M16 4v4h4M8 20v-4H4M16 20v-4h4', stroke: true },
+  backpack: { d: 'M5 10V20a2 2 0 002 2h10a2 2 0 002-2V10M9 22V12h6v10M12 2a3 3 0 00-3 3v5h6V5a3 3 0 00-3-3z', stroke: true },
 };
 
 /**

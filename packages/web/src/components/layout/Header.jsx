@@ -55,6 +55,12 @@ export default function Header() {
             <NavLink to={clientRoutes.liked} className={linkClass}>
               Liked
             </NavLink>
+            <NavLink to={clientRoutes.quest} className={linkClass}>
+              Quest
+            </NavLink>
+            <NavLink to={clientRoutes.inventory} className={linkClass}>
+              Inventory
+            </NavLink>
             <NavLink to={clientRoutes.memoryGame} className={linkClass}>
               Memory
             </NavLink>

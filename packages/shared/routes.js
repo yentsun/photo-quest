@@ -40,7 +40,13 @@ export const clientRoutes = {
   media: '/media/:id',
 
   /** Memory card game. */
-  memoryGame: '/memory'
+  memoryGame: '/memory',
+
+  /** Player inventory — owned media items. */
+  inventory: '/inventory',
+
+  /** Daily quest — browse card decks and collect media. */
+  quest: '/quest'
 };
 
 // ---------------------------------------------------------------------------
@@ -105,5 +111,30 @@ export const apiRoutes = {
   jobEvents: '/jobs/events',
 
   /** GET  -- Server network info for connecting from other devices. */
-  network: '/network'
+  network: '/network',
+
+  /** GET  -- Player stats (dust balance). */
+  player: '/player',
+
+  /** PATCH -- Add or spend magic dust.  Body: { delta: number }. */
+  playerDust: '/player/dust',
+
+  /** GET / POST -- List inventory or add an item.  Body (POST): { mediaId }. */
+  inventory: '/inventory',
+
+  /** DELETE -- Remove an item from the player's inventory by inventory ID. */
+  inventoryById: '/inventory/:id',
+
+  /** GET  -- List today's quest decks. */
+  questDecks: '/quest/decks',
+
+  /** GET  -- Get a specific deck with current card.
+   *  POST -- Advance to next card (subpath /next) or take card (subpath /take). */
+  questDeckById: '/quest/decks/:id',
+
+  /** POST -- Advance to the next card in a deck. */
+  questDeckNext: '/quest/decks/:id/next',
+
+  /** POST -- Spend dust to take the current card into inventory. */
+  questDeckTake: '/quest/decks/:id/take'
 };

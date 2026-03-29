@@ -132,3 +132,19 @@ export const IMPORT_STATUS = {
   COMPLETED: 'completed',
   FAILED: 'failed'
 };
+
+/**
+ * Magic dust awarded per star rating in the memory game.
+ *
+ * @readonly
+ * @type {{ 3: number, 2: number, 1: number }}
+ */
+export const DUST_REWARDS = { 3: 50, 2: 30, 1: 10 };
+
+/**
+ * Magic dust cost to take a quest card into inventory.
+ *
+ * @readonly
+ * @type {number}
+ */
+export const QUEST_CARD_COST = 10;
