@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
-import { fetchQuestDecks, fetchQuestDeck, advanceQuestDeck, takeQuestCard, infuseMedia, freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
+import { fetchQuestDecks, fetchQuestDeck, advanceQuestDeck, takeQuestCard, freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
 import { Button, Spinner } from '../ui/index.js';
 import { EmptyState } from '../layout/index.js';
 
@@ -28,7 +28,7 @@ function DeckGrid({ decks, onPickDeck }) {
   );
 }
 
-function CardViewer({ deck, onNext, onTake, onInfuse, onInfusionUpdate, taking, infusing }) {
+function CardViewer({ deck, onNext, onTake, onInfusionUpdate, taking }) {
   const card = deck.currentCard;
   const [localInfusion, setLocalInfusion] = useState(card?.infusion || 0);
 
@@ -46,7 +46,7 @@ function CardViewer({ deck, onNext, onTake, onInfuse, onInfusionUpdate, taking, 
           if (onInfusionUpdate) onInfusionUpdate();
         })
         .catch(() => {});
-    }, 10000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [card?.id]);
 
@@ -112,14 +112,6 @@ function CardViewer({ deck, onNext, onTake, onInfuse, onInfusionUpdate, taking, 
 
       {/* Actions */}
       <div className="flex gap-3 flex-wrap justify-center">
-        <Button
-          variant="ghost"
-          onClick={onInfuse}
-          disabled={infusing || deck.dust < 1}
-          title={deck.dust < 1 ? words.notEnoughDust : `${words.infuse} (1 ${words.dustSymbol})`}
-        >
-          {infusing ? '...' : `${words.infuse} (1 ${words.dustSymbol})`}
-        </Button>
         {!deck.inInventory && (
           <Button
             onClick={onTake}
@@ -146,7 +138,6 @@ export default function QuestPage() {
   const [activeDeckId, setActiveDeckId] = useState(null);
   const [activeDeck, setActiveDeck] = useState(null);
   const [taking, setTaking] = useState(false);
-  const [infusing, setInfusing] = useState(false);
   const [error, setError] = useState(null);
 
   // Load decks
@@ -206,21 +197,6 @@ export default function QuestPage() {
     if (data && !data.exhausted) setActiveDeck(data);
   }, [activeDeckId]);
 
-  const handleInfuse = async () => {
-    if (!activeDeck?.currentCard) return;
-    setInfusing(true);
-    try {
-      await infuseMedia(activeDeck.currentCard.id);
-      const data = await fetchQuestDeck(activeDeckId);
-      applyDeckResult(data);
-      window.dispatchEvent(new Event('dust-changed'));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setInfusing(false);
-    }
-  };
-
   useEffect(() => {
     if (!activeDeck) return;
     const onKeyDown = (e) => {
@@ -272,10 +248,8 @@ export default function QuestPage() {
           deck={activeDeck}
           onNext={handleNext}
           onTake={handleTake}
-          onInfuse={handleInfuse}
           onInfusionUpdate={handlePassiveInfusionUpdate}
           taking={taking}
-          infusing={infusing}
         />
       ) : decks.length > 0 ? (
         <DeckGrid decks={decks} onPickDeck={setActiveDeckId} />

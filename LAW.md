@@ -136,7 +136,7 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.11** Viewing an inventory card passively infuses it **for free** (no dust cost): **1 infusion per 5 seconds** in card view, **2 infusion per 5 seconds** in full media view (F key). The infusion counter updates live. Passive infusion stops after **2 minutes** of viewing.
 
-**4.13** Viewing a quest deck card passively infuses it **for free**: **1 infusion per 10 seconds**, capped at **2 minutes**. This is a lower rate than inventory viewing.
+**4.13** Viewing a quest deck card passively infuses it **for free**: **1 infusion per 5 seconds**, capped at **2 minutes**. Same rate as inventory card view.
 
 **4.12** The app must have a **Market** page. The player can buy extra quest decks (**5 Đ** each) and memory game tickets (**1 Đ** each). The 10 free daily quest decks still generate; market decks are added on top. Memory game requires a ticket to play (consumed on first card flip).
 
