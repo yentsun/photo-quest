@@ -154,5 +154,17 @@ export const apiRoutes = {
   marketTickets: '/market/tickets',
 
   /** POST -- Use a memory game ticket. */
-  marketUseTicket: '/market/use-ticket'
+  marketUseTicket: '/market/use-ticket',
+
+  /** GET / POST -- List piles or create a new pile. */
+  piles: '/piles',
+
+  /** PATCH / DELETE -- Rename or delete a pile. */
+  pileById: '/piles/:id',
+
+  /** POST -- Add cards to a pile.  Body: { inventoryIds: [] }. */
+  pileCards: '/piles/:id/cards',
+
+  /** DELETE -- Remove a card from a pile. */
+  pileCardById: '/piles/:id/cards/:inventoryId'
 };

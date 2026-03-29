@@ -226,6 +226,39 @@ export const CREATE_QUEST_CARDS_TABLE = `
  *
  * @type {string}
  */
+/**
+ * SQL statement that creates the `piles` table.
+ *
+ * Named groups of inventory cards (like playlists).
+ *
+ * @type {string}
+ */
+export const CREATE_PILES_TABLE = `
+  CREATE TABLE IF NOT EXISTS piles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL DEFAULT 'New Pile',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`;
+
+/**
+ * SQL statement that creates the `pile_cards` join table.
+ *
+ * Many-to-many: a card can belong to multiple piles.
+ *
+ * @type {string}
+ */
+export const CREATE_PILE_CARDS_TABLE = `
+  CREATE TABLE IF NOT EXISTS pile_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pile_id INTEGER NOT NULL,
+    inventory_id INTEGER NOT NULL,
+    FOREIGN KEY (pile_id) REFERENCES piles(id) ON DELETE CASCADE,
+    FOREIGN KEY (inventory_id) REFERENCES inventory(id) ON DELETE CASCADE,
+    UNIQUE(pile_id, inventory_id)
+  )
+`;
+
 export const CREATE_MEMORY_TICKETS_TABLE = `
   CREATE TABLE IF NOT EXISTS memory_tickets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

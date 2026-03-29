@@ -348,6 +348,80 @@ export async function useMemoryTicket() {
 }
 
 /**
+ * Fetch all piles with card counts.
+ * @returns {Promise<Array<{ id: number, name: string, cardCount: number }>>}
+ */
+export async function fetchPiles() {
+  const response = await fetch(apiRoutes.piles);
+  if (!response.ok) throw new Error('Failed to fetch piles');
+  return response.json();
+}
+
+/**
+ * Create a new pile.
+ * @param {string} name
+ * @param {number[]} inventoryIds
+ */
+export async function createPile(name, inventoryIds) {
+  const response = await fetch(apiRoutes.piles, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, inventoryIds }),
+  });
+  if (!response.ok) throw new Error('Failed to create pile');
+  return response.json();
+}
+
+/**
+ * Rename a pile.
+ * @param {number} pileId
+ * @param {string} name
+ */
+export async function renamePile(pileId, name) {
+  const response = await fetch(`/piles/${pileId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) throw new Error('Failed to rename pile');
+  return response.json();
+}
+
+/**
+ * Delete a pile.
+ * @param {number} pileId
+ */
+export async function deletePile(pileId) {
+  const response = await fetch(`/piles/${pileId}`, { method: 'DELETE' });
+  if (!response.ok) throw new Error('Failed to delete pile');
+}
+
+/**
+ * Add cards to a pile.
+ * @param {number} pileId
+ * @param {number[]} inventoryIds
+ */
+export async function addToPile(pileId, inventoryIds) {
+  const response = await fetch(`/piles/${pileId}/cards`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inventoryIds }),
+  });
+  if (!response.ok) throw new Error('Failed to add to pile');
+  return response.json();
+}
+
+/**
+ * Remove a card from a pile.
+ * @param {number} pileId
+ * @param {number} inventoryId
+ */
+export async function removeFromPile(pileId, inventoryId) {
+  const response = await fetch(`/piles/${pileId}/cards/${inventoryId}`, { method: 'DELETE' });
+  if (!response.ok) throw new Error('Failed to remove from pile');
+}
+
+/**
  * Download a media file to the user's device.
  *
  * @param {Object} media - Media object with id, title, type

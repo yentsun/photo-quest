@@ -14,7 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_PLAYER_STATS_TABLE, CREATE_INVENTORY_TABLE, CREATE_QUEST_DECKS_TABLE, CREATE_QUEST_CARDS_TABLE, CREATE_MEMORY_TICKETS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_PLAYER_STATS_TABLE, CREATE_INVENTORY_TABLE, CREATE_QUEST_DECKS_TABLE, CREATE_QUEST_CARDS_TABLE, CREATE_MEMORY_TICKETS_TABLE, CREATE_PILES_TABLE, CREATE_PILE_CARDS_TABLE } from '@photo-quest/shared';
 
 /* Compute __dirname for ES modules. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -61,6 +61,8 @@ export function initDb() {
   db.exec(CREATE_QUEST_DECKS_TABLE);
   db.exec(CREATE_QUEST_CARDS_TABLE);
   db.exec(CREATE_MEMORY_TICKETS_TABLE);
+  db.exec(CREATE_PILES_TABLE);
+  db.exec(CREATE_PILE_CARDS_TABLE);
 
   /* Seed the singleton player_stats row. */
   db.exec('INSERT OR IGNORE INTO player_stats (id, dust) VALUES (1, 50)');

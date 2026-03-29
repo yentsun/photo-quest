@@ -1,45 +1,51 @@
 /**
- * @file Inventory page - shows media items the player has acquired as cards.
+ * @file Inventory page - cards with drag & drop piles.
  */
 
 import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
-import { fetchInventory, destroyInventoryItem, freeInfuseMedia, getMediaUrl, getImageUrl } from '../../utils/api.js';
+import {
+  fetchInventory, destroyInventoryItem, freeInfuseMedia, getMediaUrl, getImageUrl,
+  fetchPiles, createPile, renamePile as renamePileApi, deletePile as deletePileApi, addToPile,
+} from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, IconButton, Icon, Spinner } from '../ui/index.js';
+import { Button, IconButton, Icon, Input, Spinner } from '../ui/index.js';
 
-const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy }) {
+/* ── Card component ── */
+
+const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, onDragStart, onDragOver, onDrop }) {
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const thumbUrl = isImage ? getImageUrl(item.id) : getMediaUrl(item);
   const infusion = item.infusion || 0;
   const dustReward = infusion > 0 ? infusion * 2 : 1;
+  const [dragOver, setDragOver] = useState(false);
 
   return (
     <div
-      className="group cursor-pointer"
+      className={`group cursor-pointer ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
+      draggable
+      onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(item.inventory_id)); onDragStart?.(item); }}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); onDragOver?.(e); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop?.(e, item); }}
       onClick={() => onClick?.(item)}
     >
       <div className="relative rounded-2xl bg-gray-900 border border-gray-700 shadow-[0_4px_16px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.6)] hover:border-gray-500 transition-all overflow-hidden">
-        {/* Top strip */}
         <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800/80 border-b border-gray-700">
           <span className="text-gray-400 text-[10px] uppercase tracking-wide">{isImage ? 'Image' : 'Video'}</span>
           <span className="text-purple-300 text-[10px] font-medium">{words.dustSymbol} {infusion}</span>
         </div>
-
-        {/* Art area */}
         <div className="p-2 pb-0">
           <div className="relative aspect-square rounded-lg overflow-hidden bg-black">
             {isImage ? (
-              <img src={thumbUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+              <img src={thumbUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" draggable={false} />
             ) : (
               <video src={thumbUrl} preload="metadata" muted className="w-full h-full object-cover" />
             )}
           </div>
         </div>
-
-        {/* Bottom — title */}
         <div className="px-3 py-2 flex items-center justify-between gap-1">
           <p className="text-white text-xs font-medium truncate flex-1">{item.title}</p>
           <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -56,6 +62,63 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy }) 
   );
 });
 
+/* ── Pile header (collapsed) ── */
+
+function PileHeader({ pile, expanded, onToggle, onRename, onDelete, onDrop }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(pile.name);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleSave = () => {
+    setEditing(false);
+    if (name.trim() && name !== pile.name) onRename(pile.id, name.trim());
+  };
+
+  return (
+    <div
+      className={`flex items-center gap-3 p-3 rounded-xl bg-gray-800/60 border transition-all cursor-pointer
+        ${dragOver ? 'border-blue-400 bg-blue-900/20' : 'border-gray-700 hover:border-gray-500'}`}
+      onClick={() => !editing && onToggle(pile.id)}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(e, pile.id); }}
+    >
+      <span className="text-2xl">{expanded ? '📂' : '📁'}</span>
+      <div className="flex-1 min-w-0">
+        {editing ? (
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+            className="text-sm"
+          />
+        ) : (
+          <p className="text-white font-medium text-sm truncate">{pile.name}</p>
+        )}
+        <p className="text-gray-500 text-xs">{pile.cardCount} card{pile.cardCount !== 1 ? 's' : ''}</p>
+      </div>
+      <div className="flex gap-1 shrink-0">
+        <IconButton
+          icon={<Icon name="info" className="w-3.5 h-3.5" />}
+          label="Rename"
+          onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+        />
+        <IconButton
+          icon={<Icon name="trash" className="w-3.5 h-3.5" />}
+          label="Delete pile"
+          onClick={(e) => { e.stopPropagation(); onDelete(pile.id); }}
+          className="text-red-400 hover:text-red-300"
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ── Card detail overlay ── */
+
 function CardOverlay({ item, onClose }) {
   const [fullMedia, setFullMedia] = useState(false);
   const [infusion, setInfusion] = useState(item?.infusion || 0);
@@ -64,7 +127,6 @@ function CardOverlay({ item, onClose }) {
   useEffect(() => { setInfusion(item?.infusion || 0); }, [item?.id]);
   useEffect(() => { fullMediaRef.current = fullMedia; }, [fullMedia]);
 
-  /* Auto-infuse: 1 per 10s card view, 2 per 10s full view, max 2 minutes */
   useEffect(() => {
     if (!item) return;
     const startTime = Date.now();
@@ -93,10 +155,7 @@ function CardOverlay({ item, onClose }) {
 
   if (fullMedia) {
     return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black cursor-pointer"
-        onClick={() => setFullMedia(false)}
-      >
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black cursor-pointer" onClick={() => setFullMedia(false)}>
         {isImage ? (
           <img src={mediaUrl} alt={item.title} className="max-w-full max-h-full object-contain" />
         ) : (
@@ -107,14 +166,8 @@ function CardOverlay({ item, onClose }) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 cursor-pointer"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-2xl mx-4 rounded-2xl bg-gray-900 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 cursor-pointer" onClick={onClose}>
+      <div className="w-full max-w-2xl mx-4 rounded-2xl bg-gray-900 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-2 bg-gray-800/80 border-b border-gray-700">
           <span className="text-gray-400 text-xs uppercase tracking-wide">{isImage ? 'Image' : 'Video'}</span>
           <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
@@ -126,12 +179,7 @@ function CardOverlay({ item, onClose }) {
             ) : (
               <video src={mediaUrl} controls muted playsInline className="w-full h-full object-cover" onClick={(e) => e.stopPropagation()} />
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setFullMedia(true)}
-              className="absolute bottom-2 right-2 opacity-0 group-hover/art:opacity-100 transition-opacity bg-black/60 hover:bg-black/80 text-white"
-            >
+            <Button variant="ghost" size="sm" onClick={() => setFullMedia(true)} className="absolute bottom-2 right-2 opacity-0 group-hover/art:opacity-100 transition-opacity bg-black/60 hover:bg-black/80 text-white">
               F
             </Button>
           </div>
@@ -144,6 +192,8 @@ function CardOverlay({ item, onClose }) {
   );
 }
 
+/* ── Main page ── */
+
 export default function InventoryPage() {
   const navigate = useNavigate();
   const slideshow = useSlideshow();
@@ -152,21 +202,37 @@ export default function InventoryPage() {
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const [items, setItems] = useState([]);
+  const [piles, setPiles] = useState([]);
+  const [expandedPiles, setExpandedPiles] = useState(new Set());
+  const [pileCards, setPileCards] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
-  const closeOverlay = useCallback(() => { setSelectedItem(null); loadInventory(); }, []);
+  const closeOverlay = useCallback(() => { setSelectedItem(null); reload(); }, []);
 
-  const loadInventory = () => {
-    fetchInventory()
-      .then(({ items }) => { setItems(items); setLoading(false); })
-      .catch(err => { console.error('Failed to fetch inventory:', err); setLoading(false); });
+  const reload = () => {
+    Promise.all([fetchInventory(), fetchPiles()])
+      .then(([{ items }, pilesData]) => { setItems(items); setPiles(pilesData); setLoading(false); })
+      .catch(err => { console.error('Failed to load inventory:', err); setLoading(false); });
   };
 
-  useEffect(() => { loadInventory(); }, []);
+  useEffect(() => { reload(); }, []);
 
-  const handleCardClick = (item) => {
-    setSelectedItem(item);
+  const togglePile = async (pileId) => {
+    const next = new Set(expandedPiles);
+    if (next.has(pileId)) {
+      next.delete(pileId);
+    } else {
+      next.add(pileId);
+      if (!pileCards[pileId]) {
+        const res = await fetch(`/piles/${pileId}/cards`);
+        const cards = await res.json();
+        setPileCards(prev => ({ ...prev, [pileId]: cards }));
+      }
+    }
+    setExpandedPiles(next);
   };
+
+  const handleCardClick = (item) => setSelectedItem(item);
 
   const handleDestroy = async (item) => {
     const infusion = item.infusion || 0;
@@ -174,9 +240,9 @@ export default function InventoryPage() {
     if (!confirm(`${words.destroyConfirm}\n\n+${dustReward} ${words.dustSymbol}`)) return;
     try {
       await destroyInventoryItem(item.inventory_id);
-      setItems(prev => prev.filter(i => i.inventory_id !== item.inventory_id));
       setSelectedItem(null);
       window.dispatchEvent(new Event('dust-changed'));
+      reload();
     } catch (err) {
       console.error('Failed to destroy card:', err);
     }
@@ -194,6 +260,48 @@ export default function InventoryPage() {
       navigate(`/media/${slideshow.current.id}`);
     }
   }, [slideshow.active, slideshow.current, navigate]);
+
+  /* Drag & drop: card onto card = new pile, card onto pile = add */
+  const handleCardDrop = async (e, targetItem) => {
+    const draggedId = Number(e.dataTransfer.getData('text/plain'));
+    if (draggedId === targetItem.inventory_id) return;
+    try {
+      await createPile('New Pile', [draggedId, targetItem.inventory_id]);
+      reload();
+    } catch (err) {
+      console.error('Failed to create pile:', err);
+    }
+  };
+
+  const handlePileDrop = async (e, pileId) => {
+    const draggedId = Number(e.dataTransfer.getData('text/plain'));
+    try {
+      await addToPile(pileId, [draggedId]);
+      setPileCards(prev => ({ ...prev, [pileId]: null }));
+      reload();
+    } catch (err) {
+      console.error('Failed to add to pile:', err);
+    }
+  };
+
+  const handleRenamePile = async (pileId, name) => {
+    try {
+      await renamePileApi(pileId, name);
+      setPiles(prev => prev.map(p => p.id === pileId ? { ...p, name } : p));
+    } catch (err) {
+      console.error('Failed to rename pile:', err);
+    }
+  };
+
+  const handleDeletePile = async (pileId) => {
+    if (!confirm('Delete this pile? Cards will stay in your inventory.')) return;
+    try {
+      await deletePileApi(pileId);
+      reload();
+    } catch (err) {
+      console.error('Failed to delete pile:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -220,6 +328,37 @@ export default function InventoryPage() {
         )}
       </div>
 
+      {/* Piles */}
+      {piles.length > 0 && (
+        <div className="mb-6 space-y-2">
+          {piles.map(pile => (
+            <div key={pile.id}>
+              <PileHeader
+                pile={pile}
+                expanded={expandedPiles.has(pile.id)}
+                onToggle={togglePile}
+                onRename={handleRenamePile}
+                onDelete={handleDeletePile}
+                onDrop={handlePileDrop}
+              />
+              {expandedPiles.has(pile.id) && pileCards[pile.id] && (
+                <div className="mt-2 ml-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {pileCards[pile.id].map(item => (
+                    <InventoryCard
+                      key={item.inventory_id}
+                      item={item}
+                      onClick={handleCardClick}
+                      onDestroy={handleDestroy}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Ungrouped cards */}
       {items.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {items.map(item => (
@@ -228,6 +367,7 @@ export default function InventoryPage() {
               item={item}
               onClick={handleCardClick}
               onDestroy={handleDestroy}
+              onDrop={handleCardDrop}
             />
           ))}
         </div>
@@ -240,10 +380,7 @@ export default function InventoryPage() {
       )}
 
       {selectedItem && (
-        <CardOverlay
-          item={selectedItem}
-          onClose={closeOverlay}
-        />
+        <CardOverlay item={selectedItem} onClose={closeOverlay} />
       )}
     </div>
   );
