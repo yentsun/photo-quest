@@ -60,6 +60,25 @@ export async function infuseMedia(id, amount = 1) {
 }
 
 /**
+ * Free-infuse a media item (no dust cost, passive viewing reward).
+ *
+ * @param {number} id - Media ID
+ * @param {number} [amount=1] - Infusion to add
+ * @returns {Promise<{ media: Object }>}
+ */
+export async function freeInfuseMedia(id, amount = 1) {
+  const response = await fetch(`/media/${id}/free-infuse`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to infuse media');
+  }
+  return response.json();
+}
+
+/**
  * Delete a media item from library and disk.
  *
  * @param {number} id - Media ID

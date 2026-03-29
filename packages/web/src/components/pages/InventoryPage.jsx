@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
-import { fetchInventory, destroyInventoryItem, infuseMedia, getMediaUrl, getImageUrl } from '../../utils/api.js';
+import { fetchInventory, destroyInventoryItem, freeInfuseMedia, getMediaUrl, getImageUrl } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, IconButton, Icon, Spinner } from '../ui/index.js';
 
@@ -69,11 +69,8 @@ function CardOverlay({ item, onClose }) {
     if (!item) return;
     const interval = setInterval(() => {
       const amount = fullMediaRef.current ? 2 : 1;
-      infuseMedia(item.id, amount)
-        .then(({ media }) => {
-          setInfusion(media.infusion);
-          window.dispatchEvent(new Event('dust-changed'));
-        })
+      freeInfuseMedia(item.id, amount)
+        .then(({ media }) => setInfusion(media.infusion))
         .catch(() => {});
     }, 10000);
     return () => clearInterval(interval);
