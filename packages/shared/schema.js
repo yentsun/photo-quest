@@ -195,6 +195,7 @@ export const CREATE_QUEST_DECKS_TABLE = `
     deck_index INTEGER NOT NULL,
     current_position INTEGER NOT NULL DEFAULT 0,
     exhausted INTEGER NOT NULL DEFAULT 0,
+    free_take_used INTEGER NOT NULL DEFAULT 0,
     UNIQUE(date, deck_index)
   )
 `;

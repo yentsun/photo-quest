@@ -37,7 +37,18 @@ export default function (deckId) {
 
   const { dust } = db.prepare('SELECT dust FROM player_stats WHERE id = 1').get();
 
-  const takeCost = currentCard ? currentCard.infusion * 2 : 0;
+  const freeTakeUsed = !!deck.free_take_used;
+  let takeCost = 0;
+  if (currentCard) {
+    const infusion = currentCard.infusion || 0;
+    if (infusion === 0 && !freeTakeUsed) {
+      takeCost = 0;
+    } else if (infusion === 0) {
+      takeCost = 1;
+    } else {
+      takeCost = infusion * 2;
+    }
+  }
 
   return {
     id: deck.id,
@@ -48,6 +59,7 @@ export default function (deckId) {
     currentCard: currentCard || null,
     inInventory,
     takeCost,
+    freeTakeUsed,
     dust,
   };
 }
