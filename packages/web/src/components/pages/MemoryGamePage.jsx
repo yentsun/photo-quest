@@ -4,14 +4,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MEDIA_TYPE, words } from '@photo-quest/shared';
+import { MEDIA_TYPE } from '@photo-quest/shared';
 import { fetchMedia, getImageUrl } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Spinner } from '../ui/index.js';
 
 const PAIR_COUNT = 8;
 const STAR_THRESHOLDS = [15, 11, 8];
-const CARDS_PER_STAR = { 1: 1, 2: 2, 3: PAIR_COUNT };
+const PICKS_PER_STAR = { 1: 1, 2: 2, 3: PAIR_COUNT };
 
 function getStars(moves) {
   return STAR_THRESHOLDS.reduce((s, t) => (moves <= t ? s + 1 : s), 0);
@@ -40,7 +40,7 @@ function buildDeck(mediaItems) {
     cards.push({ id: `${media.id}-b`, mediaId: media.id, pairKey: media.id });
   }
 
-  return { cards: shuffle(cards), mediaIds: picked.map(m => m.id) };
+  return shuffle(cards);
 }
 
 function CardBack() {
@@ -65,38 +65,34 @@ function CardFace({ mediaId, onLoad }) {
   );
 }
 
-function Card({ card, flipped, matched, onClick, onImageLoad }) {
+function Card({ card, flipped, matched, picked, picking, onClick, onImageLoad }) {
   const isRevealed = flipped || matched;
 
   return (
     <button
       className={`
-        relative aspect-square rounded-lg cursor-pointer transition-transform duration-200
+        relative aspect-square rounded-lg cursor-pointer transition-all duration-200
         ${matched ? 'ring-2 ring-green-400 opacity-80' : ''}
-        ${!matched && !flipped ? 'hover:scale-105' : ''}
+        ${picked ? 'ring-3 ring-yellow-400 scale-95 opacity-100' : ''}
+        ${picking && !picked ? 'hover:ring-2 hover:ring-yellow-400/50 hover:scale-105' : ''}
+        ${!matched && !flipped && !picking ? 'hover:scale-105' : ''}
         focus:outline-none focus:ring-2 focus:ring-blue-400
       `}
       onClick={onClick}
-      disabled={matched}
+      disabled={matched && !picking}
     >
       {isRevealed ? <CardFace mediaId={card.mediaId} onLoad={onImageLoad} /> : <CardBack />}
     </button>
   );
 }
 
-async function addCardsToInventory(mediaIds) {
-  let added = 0;
-  for (const mediaId of mediaIds) {
-    try {
-      const res = await fetch('/inventory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mediaId }),
-      });
-      if (res.status === 201) added++;
-    } catch { /* skip failures */ }
-  }
-  return added;
+async function addCardToInventory(mediaId) {
+  const res = await fetch('/inventory', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mediaId }),
+  });
+  return res.status === 201;
 }
 
 export default function MemoryGamePage() {
@@ -104,14 +100,19 @@ export default function MemoryGamePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cards, setCards] = useState([]);
-  const [gameMediaIds, setGameMediaIds] = useState([]);
   const [flipped, setFlipped] = useState([]);
   const [matched, setMatched] = useState(new Set());
   const [moves, setMoves] = useState(0);
-  const [winResult, setWinResult] = useState(null);
   const lockRef = useRef(false);
   const flipTimeoutRef = useRef(null);
   const pendingMismatchRef = useRef(false);
+
+  /* Picking phase state */
+  const [picking, setPicking] = useState(false);
+  const [picksAllowed, setPicksAllowed] = useState(0);
+  const [pickedIds, setPickedIds] = useState(new Set());
+  const [picksDone, setPicksDone] = useState(false);
+  const [picksAdded, setPicksAdded] = useState(0);
 
   const won = cards.length > 0 && matched.size === PAIR_COUNT;
   const stars = won ? getStars(moves) : 0;
@@ -123,20 +124,23 @@ export default function MemoryGamePage() {
     setFlipped([]);
     setMatched(new Set());
     setMoves(0);
-    setWinResult(null);
+    setPicking(false);
+    setPicksAllowed(0);
+    setPickedIds(new Set());
+    setPicksDone(false);
+    setPicksAdded(0);
     lockRef.current = false;
     pendingMismatchRef.current = false;
 
     try {
       const { items } = await fetchMedia();
-      const result = buildDeck(items);
-      if (!result) {
+      const deck = buildDeck(items);
+      if (!deck) {
         setError('Need at least 8 images in your library to play.');
         setLoading(false);
         return;
       }
-      setCards(result.cards);
-      setGameMediaIds(result.mediaIds);
+      setCards(deck);
     } catch (err) {
       setError('Failed to load media: ' + err.message);
     } finally {
@@ -146,7 +150,37 @@ export default function MemoryGamePage() {
 
   useEffect(() => { startGame(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Enter picking phase when won */
+  useEffect(() => {
+    if (!won || picking || picksDone) return;
+    const s = getStars(moves);
+    const allowed = PICKS_PER_STAR[s] || 1;
+    setPicking(true);
+    setPicksAllowed(allowed);
+  }, [won]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleClick = (card) => {
+    /* Picking phase — player selects reward cards */
+    if (picking) {
+      if (!matched.has(card.pairKey)) return;
+      if (pickedIds.has(card.mediaId)) return;
+      if (pickedIds.size >= picksAllowed) return;
+
+      const next = new Set(pickedIds);
+      next.add(card.mediaId);
+      setPickedIds(next);
+
+      addCardToInventory(card.mediaId).then(added => {
+        if (added) setPicksAdded(prev => prev + 1);
+      });
+
+      if (next.size >= picksAllowed) {
+        finishPicking();
+      }
+      return;
+    }
+
+    /* Normal game phase */
     if (lockRef.current) return;
     if (matched.has(card.pairKey)) return;
     if (flipped.includes(card.id)) return;
@@ -183,6 +217,12 @@ export default function MemoryGamePage() {
     }
   };
 
+  const finishPicking = () => {
+    setPicking(false);
+    setPicksDone(true);
+    window.dispatchEvent(new Event('dust-changed'));
+  };
+
   const handleImageLoad = () => {
     if (!pendingMismatchRef.current) return;
     pendingMismatchRef.current = false;
@@ -191,17 +231,6 @@ export default function MemoryGamePage() {
       lockRef.current = false;
     }, 800);
   };
-
-  useEffect(() => {
-    if (!won) return;
-    const s = getStars(moves);
-    const count = CARDS_PER_STAR[s] || 1;
-    const toAdd = shuffle(gameMediaIds).slice(0, count);
-    addCardsToInventory(toAdd).then(added => {
-      setWinResult({ stars: s, added });
-      window.dispatchEvent(new Event('dust-changed'));
-    });
-  }, [won]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return () => clearTimeout(flipTimeoutRef.current);
@@ -227,6 +256,8 @@ export default function MemoryGamePage() {
     );
   }
 
+  const picksRemaining = picksAllowed - pickedIds.size;
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-lg mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -239,17 +270,30 @@ export default function MemoryGamePage() {
         </Button>
       </div>
 
-      {winResult && (
+      {/* Picking phase banner */}
+      {picking && (
+        <div className="mb-6 p-4 bg-yellow-900/30 border border-yellow-600/50 rounded-lg text-center space-y-2">
+          <p className="text-2xl tracking-widest">
+            <Stars count={stars} glow />
+          </p>
+          <p className="text-yellow-200 text-lg font-semibold">
+            Pick {picksRemaining} card{picksRemaining !== 1 ? 's' : ''} for your inventory
+          </p>
+        </div>
+      )}
+
+      {/* Done banner */}
+      {picksDone && (
         <div className="mb-6 p-4 bg-green-900/30 border border-green-700/50 rounded-lg text-center space-y-2">
           <p className="text-2xl tracking-widest">
-            <Stars count={winResult.stars} glow />
+            <Stars count={stars} glow />
           </p>
           <p className="text-green-300 text-lg font-semibold">
             You won in {moves} moves!
           </p>
           <p className="text-gray-300 text-sm">
-            {winResult.added > 0
-              ? `${winResult.added} card${winResult.added !== 1 ? 's' : ''} added to inventory`
+            {picksAdded > 0
+              ? `${picksAdded} card${picksAdded !== 1 ? 's' : ''} added to inventory`
               : 'Cards already in inventory'}
           </p>
         </div>
@@ -262,6 +306,8 @@ export default function MemoryGamePage() {
             card={card}
             flipped={flipped.includes(card.id)}
             matched={matched.has(card.pairKey)}
+            picked={pickedIds.has(card.mediaId)}
+            picking={picking}
             onClick={() => handleClick(card)}
             onImageLoad={handleImageLoad}
           />
