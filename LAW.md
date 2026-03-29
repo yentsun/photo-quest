@@ -114,7 +114,21 @@ The governing rules of the photo-quest project. This document is the source of t
 
 ---
 
+## Section 4 — Gamification
+
+**4.1** The app must have an in-game currency called **magic dust**. Magic dust is earned through gameplay (e.g., completing the memory game). The player's magic dust balance must be visible in the UI and persist across sessions.
+
+**4.2** The player must have an **inventory** — a personal collection of media items, separate from the media library. Items are added to the inventory through gameplay rewards, not by browsing.
+
+**4.3** The user must **not** be able to freely browse the full media library. Instead, the user can only browse and shuffle through items in their inventory.
+
+**4.4** The inventory must support shuffle/slideshow browsing, reusing the existing viewer and navigation controls.
+
+---
+
 ## Glossary
 
-- **media** — A media file (video) in the library. Has path, title, duration, resolution, codec, status, transcoded_path, size.
+- **media** — A media file (video or image) in the library. Has path, title, duration, resolution, codec, status, transcoded_path, size.
 - **job** — A processing task tied to a media record (probe or transcode). Has type, status, progress, error. Belongs to media via `media_id` (cascade delete).
+- **magic dust** — In-game currency earned through gameplay. Persisted in the database.
+- **inventory** — The player's personal collection of media items, acquired through gameplay. Separate from the full media library.
