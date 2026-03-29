@@ -64,10 +64,12 @@ function CardOverlay({ item, onClose }) {
   useEffect(() => { setInfusion(item?.infusion || 0); }, [item?.id]);
   useEffect(() => { fullMediaRef.current = fullMedia; }, [fullMedia]);
 
-  /* Auto-infuse: 1 dust per 10s in card view, 2 per 10s in full view */
+  /* Auto-infuse: 1 per 10s card view, 2 per 10s full view, max 2 minutes */
   useEffect(() => {
     if (!item) return;
+    const startTime = Date.now();
     const interval = setInterval(() => {
+      if (Date.now() - startTime >= 120000) { clearInterval(interval); return; }
       const amount = fullMediaRef.current ? 2 : 1;
       freeInfuseMedia(item.id, amount)
         .then(({ media }) => setInfusion(media.infusion))
