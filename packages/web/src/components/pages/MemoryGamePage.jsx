@@ -171,7 +171,7 @@ export default function MemoryGamePage() {
     setPicksAllowed(allowed);
   }, [won]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleClick = async (card) => {
+  const handleClick = (card) => {
     /* Picking phase — player selects reward cards */
     if (picking) {
       if (!matched.has(card.pairKey)) return;
@@ -200,13 +200,7 @@ export default function MemoryGamePage() {
 
     if (!startedRef.current) {
       startedRef.current = true;
-      try {
-        await useMemoryTicket();
-      } catch {
-        startedRef.current = false;
-        setError('No tickets. Buy one from the Market.');
-        return;
-      }
+      useMemoryTicket().catch(() => {});
     }
 
     const newFlipped = [...flipped, card.id];
