@@ -11,11 +11,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { MEDIA_TYPE } from '@photo-quest/shared';
+import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, Spinner } from '../ui/index.js';
-import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders } from '../../utils/api.js';
+import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, freeInfuseMedia } from '../../utils/api.js';
 
 export default function MediaPage() {
   const { id } = useParams();
@@ -30,6 +30,7 @@ export default function MediaPage() {
   const viewerRef = useRef(null);
 
   const [item, setItem] = useState(null);
+  const [infusion, setInfusion] = useState(0);
   const [folderMedia, setFolderMedia] = useState([]);
   const [folder, setFolder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -82,6 +83,20 @@ export default function MediaPage() {
     if (!inSlideshow || !slideshow.current) return;
     navigate(`/media/${slideshow.current.id}`, { replace: true });
   }, [inSlideshow, slideshow.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Passive infusion in slideshow mode: 1 per 5s, max 2 min */
+  useEffect(() => {
+    if (!item || !inSlideshow) { setInfusion(item?.infusion || 0); return; }
+    setInfusion(item.infusion || 0);
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      if (Date.now() - startTime >= 120000) { clearInterval(interval); return; }
+      freeInfuseMedia(item.id, 1)
+        .then(({ media }) => setInfusion(media.infusion))
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [item?.id, inSlideshow]);
 
   const goPrev = useCallback(() => {
     if (!hasPrev) return;
@@ -259,6 +274,7 @@ export default function MediaPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
             <IconButton
               icon={<Icon name="info" />}
               label="Info"
