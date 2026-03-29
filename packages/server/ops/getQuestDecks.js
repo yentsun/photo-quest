@@ -24,25 +24,17 @@ export default function () {
     generateDecks(db, today);
   }
 
-  const decks = db.prepare(
-    'SELECT * FROM quest_decks WHERE date = ? AND exhausted = 0 ORDER BY deck_index'
+  const result = db.prepare(
+    `SELECT d.id, d.deck_index AS deckIndex, d.current_position AS currentPosition,
+            COUNT(qc.id) AS totalCards
+     FROM quest_decks d
+     LEFT JOIN quest_cards qc ON qc.deck_id = d.id
+     WHERE d.date = ? AND d.exhausted = 0
+     GROUP BY d.id
+     ORDER BY d.deck_index`
   ).all(today);
 
-  // Attach card count and current card info to each deck
-  const result = decks.map(deck => {
-    const totalCards = db.prepare(
-      'SELECT COUNT(*) AS count FROM quest_cards WHERE deck_id = ?'
-    ).get(deck.id).count;
-
-    return {
-      id: deck.id,
-      deckIndex: deck.deck_index,
-      currentPosition: deck.current_position,
-      totalCards,
-    };
-  });
-
-  const { dust } = db.prepare('SELECT dust FROM player_stats WHERE id = 1').get();
+  const { dust } = kojo.ops.getPlayerStats();
 
   return { decks: result, dust };
 }
@@ -57,6 +49,8 @@ function generateDecks(db, date) {
   const DECK_COUNT = 10;
   const CARDS_PER_DECK = 10;
 
+  db.exec('BEGIN');
+  try {
   for (let d = 0; d < DECK_COUNT; d++) {
     const result = db.prepare(
       'INSERT INTO quest_decks (date, deck_index) VALUES (?, ?)'
@@ -70,6 +64,11 @@ function generateDecks(db, date) {
         'INSERT INTO quest_cards (deck_id, position, media_id) VALUES (?, ?, ?)'
       ).run(deckId, p, picked[p].id);
     }
+  }
+  db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
   }
 }
 

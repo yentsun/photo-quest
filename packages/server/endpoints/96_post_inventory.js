@@ -8,8 +8,7 @@
  * Returns 201 if newly added, 200 if already in inventory, 404 if media not found.
  */
 
-import { json } from '../src/http.js';
-import { parseBody } from '../src/http.js';
+import { json, parseBody } from '../src/http.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({

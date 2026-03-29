@@ -24,15 +24,10 @@ export default function (deckId) {
 
   const nextPosition = deck.current_position + 1;
 
-  if (nextPosition >= totalCards) {
-    db.prepare(
-      'UPDATE quest_decks SET current_position = ?, exhausted = 1 WHERE id = ?'
-    ).run(nextPosition, deck.id);
-  } else {
-    db.prepare(
-      'UPDATE quest_decks SET current_position = ? WHERE id = ?'
-    ).run(nextPosition, deck.id);
-  }
+  const exhausted = nextPosition >= totalCards ? 1 : 0;
+  db.prepare(
+    'UPDATE quest_decks SET current_position = ?, exhausted = ? WHERE id = ?'
+  ).run(nextPosition, exhausted, deck.id);
 
   return kojo.ops.getQuestDeck(deck.id);
 }

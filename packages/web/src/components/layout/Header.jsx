@@ -4,9 +4,9 @@
 
 import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { clientRoutes, words } from '@photo-quest/shared';
+import { clientRoutes } from '@photo-quest/shared';
 import { fetchNetworkInfo, fetchPlayerStats } from '../../utils/api.js';
-import { Button, Icon } from '../ui/index.js';
+import { Button, DustBadge, Icon } from '../ui/index.js';
 
 /**
  * Navigation header component.
@@ -77,12 +77,7 @@ export default function Header() {
 
           {/* Dust balance + Network URL */}
           <div className="flex items-center gap-3">
-          {dust != null && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-900/50 border border-purple-600/50 rounded-full text-purple-200 font-semibold text-sm">
-              <span className="text-yellow-400">{words.dustSymbol}</span>
-              {dust}
-            </span>
-          )}
+          {dust != null && <DustBadge dust={dust} />}
           {networkUrl && (
               <Button
                 variant="secondary"

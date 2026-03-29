@@ -32,10 +32,7 @@ export default function (inventoryId) {
   // Delete media from DB and disk
   kojo.ops.removeMedia(inv.media_id);
 
-  // Award dust
-  kojo.ops.updateDust(dustAwarded);
-
-  const { dust } = db.prepare('SELECT dust FROM player_stats WHERE id = 1').get();
+  const { dust } = kojo.ops.updateDust(dustAwarded);
 
   return { dustAwarded, dust };
 }

@@ -13,19 +13,20 @@
 export default function (mediaId) {
   const [kojo] = this;
   const db = kojo.get('db');
-
-  const media = db.prepare('SELECT * FROM media WHERE id = ?').get(Number(mediaId));
-  if (!media) return null;
+  const id = Number(mediaId);
 
   const result = db.prepare(
     'INSERT OR IGNORE INTO inventory (media_id) VALUES (?)'
-  ).run(Number(mediaId));
+  ).run(id);
 
   const item = db.prepare(
     `SELECT i.id AS inventory_id, i.acquired_at, m.*
      FROM inventory i JOIN media m ON m.id = i.media_id
      WHERE i.media_id = ?`
-  ).get(Number(mediaId));
+  ).get(id);
+
+  /* FK constraint means INSERT fails silently if media doesn't exist */
+  if (!item) return null;
 
   return { added: result.changes > 0, item };
 }

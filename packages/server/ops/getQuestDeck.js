@@ -35,7 +35,7 @@ export default function (deckId) {
     inInventory = !!inv;
   }
 
-  const { dust } = db.prepare('SELECT dust FROM player_stats WHERE id = 1').get();
+  const { dust } = kojo.ops.getPlayerStats();
 
   const freeTakeUsed = !!deck.free_take_used;
   let takeCost = 0;

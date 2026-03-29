@@ -8,8 +8,7 @@
  * Returns updated { dust } or 400 if insufficient balance.
  */
 
-import { json } from '../src/http.js';
-import { parseBody } from '../src/http.js';
+import { json, parseBody } from '../src/http.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({

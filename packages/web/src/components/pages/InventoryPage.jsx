@@ -8,7 +8,7 @@ import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import { fetchInventory, destroyInventoryItem, getMediaUrl } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, Spinner } from '../ui/index.js';
+import { Button, IconButton, Icon, Spinner } from '../ui/index.js';
 
 const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy }) {
   const isImage = item.type === MEDIA_TYPE.IMAGE;
@@ -40,13 +40,14 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy }) 
       </div>
 
       {/* Destroy button */}
-      <button
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full bg-red-900/70 hover:bg-red-700 text-red-200 hover:text-white"
-        title={`${words.destroy} (+${dustReward} ${words.dustSymbol})`}
-        onClick={(e) => { e.stopPropagation(); onDestroy?.(item); }}
-      >
-        <Icon name="trash" className="w-4 h-4" />
-      </button>
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <IconButton
+          icon={<Icon name="trash" className="w-4 h-4" />}
+          label={`${words.destroy} (+${dustReward} ${words.dustSymbol})`}
+          onClick={(e) => { e.stopPropagation(); onDestroy?.(item); }}
+          className="bg-red-900/70 hover:bg-red-700 text-red-200 hover:text-white"
+        />
+      </div>
     </div>
   );
 });

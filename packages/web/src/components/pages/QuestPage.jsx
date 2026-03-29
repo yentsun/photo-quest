@@ -2,20 +2,11 @@
  * @file Quest page — browse daily card decks and collect media.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import { fetchQuestDecks, fetchQuestDeck, advanceQuestDeck, takeQuestCard, infuseMedia, getMediaUrl } from '../../utils/api.js';
-import { Button, Spinner } from '../ui/index.js';
+import { Button, DustBadge, Spinner } from '../ui/index.js';
 import { EmptyState } from '../layout/index.js';
-
-function DustBadge({ dust }) {
-  return (
-    <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-900/50 border border-purple-600/50 rounded-full text-purple-200 font-semibold text-sm">
-      <span className="text-yellow-400">{words.dustSymbol}</span>
-      {dust}
-    </span>
-  );
-}
 
 function DeckGrid({ decks, onPickDeck }) {
   return (
@@ -136,15 +127,7 @@ export default function QuestPage() {
   useEffect(() => {
     if (!activeDeckId) { setActiveDeck(null); return; }
     fetchQuestDeck(activeDeckId)
-      .then(data => {
-        if (data.exhausted) {
-          setActiveDeckId(null);
-          refreshDecks();
-          return;
-        }
-        setActiveDeck(data);
-        setDust(data.dust);
-      })
+      .then(applyDeckResult)
       .catch(err => setError(err.message));
   }, [activeDeckId]);
 
@@ -154,43 +137,28 @@ export default function QuestPage() {
       .catch(err => setError(err.message));
   };
 
-  const reloadDeck = async () => {
-    const data = await fetchQuestDeck(activeDeckId);
-    if (data.exhausted) {
+  const applyDeckResult = (result) => {
+    if (result.exhausted) {
       setActiveDeckId(null);
       refreshDecks();
     } else {
-      setActiveDeck(data);
-      setDust(data.dust);
+      setActiveDeck(result);
+      setDust(result.dust);
     }
   };
 
-  const handleNext = async () => {
+  const handleNext = useCallback(async () => {
     try {
-      const result = await advanceQuestDeck(activeDeckId);
-      if (result.exhausted) {
-        setActiveDeckId(null);
-        refreshDecks();
-      } else {
-        setActiveDeck(result);
-        setDust(result.dust);
-      }
+      applyDeckResult(await advanceQuestDeck(activeDeckId));
     } catch (err) {
       setError(err.message);
     }
-  };
+  }, [activeDeckId]);
 
   const handleTake = async () => {
     setTaking(true);
     try {
-      const result = await takeQuestCard(activeDeckId);
-      if (result.exhausted) {
-        setActiveDeckId(null);
-        refreshDecks();
-      } else {
-        setActiveDeck(result);
-        setDust(result.dust);
-      }
+      applyDeckResult(await takeQuestCard(activeDeckId));
       window.dispatchEvent(new Event('dust-changed'));
     } catch (err) {
       setError(err.message);
@@ -203,9 +171,9 @@ export default function QuestPage() {
     if (!activeDeck?.currentCard) return;
     setInfusing(true);
     try {
-      const { dust: newDust } = await infuseMedia(activeDeck.currentCard.id);
-      setDust(newDust);
-      await reloadDeck();
+      await infuseMedia(activeDeck.currentCard.id);
+      const data = await fetchQuestDeck(activeDeckId);
+      applyDeckResult(data);
       window.dispatchEvent(new Event('dust-changed'));
     } catch (err) {
       setError(err.message);
@@ -213,6 +181,15 @@ export default function QuestPage() {
       setInfusing(false);
     }
   };
+
+  useEffect(() => {
+    if (!activeDeck) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'ArrowRight') handleNext();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [activeDeck, handleNext]);
 
   if (loading) {
     return (
@@ -247,7 +224,7 @@ export default function QuestPage() {
       {error && (
         <div className="mb-4 p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-sm">
           {error}
-          <button className="ml-2 underline" onClick={() => setError(null)}>dismiss</button>
+          <Button variant="ghost" size="sm" onClick={() => setError(null)}>dismiss</Button>
         </div>
       )}
 
