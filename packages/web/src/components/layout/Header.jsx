@@ -4,8 +4,8 @@
 
 import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo } from '../../utils/api.js';
+import { clientRoutes, words } from '@photo-quest/shared';
+import { fetchNetworkInfo, fetchPlayerStats } from '../../utils/api.js';
 import { Button, Icon } from '../ui/index.js';
 
 /**
@@ -14,11 +14,15 @@ import { Button, Icon } from '../ui/index.js';
 export default function Header() {
   const [networkUrl, setNetworkUrl] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [dust, setDust] = useState(null);
 
   useEffect(() => {
     fetchNetworkInfo()
       .then(info => setNetworkUrl(info.network))
       .catch(err => console.error('Failed to fetch network info:', err));
+    fetchPlayerStats()
+      .then(stats => setDust(stats.dust))
+      .catch(() => {});
   }, []);
 
   const handleCopyUrl = () => {
@@ -52,9 +56,6 @@ export default function Header() {
             <NavLink to={clientRoutes.dashboard} className={linkClass}>
               Library
             </NavLink>
-            <NavLink to={clientRoutes.liked} className={linkClass}>
-              Liked
-            </NavLink>
             <NavLink to={clientRoutes.quest} className={linkClass}>
               Quest
             </NavLink>
@@ -66,9 +67,15 @@ export default function Header() {
             </NavLink>
           </nav>
 
-          {/* Network URL for other devices */}
+          {/* Dust balance + Network URL */}
+          <div className="flex items-center gap-3">
+          {dust != null && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-900/50 border border-purple-600/50 rounded-full text-purple-200 font-semibold text-sm">
+              <span className="text-yellow-400">{words.dustSymbol}</span>
+              {dust}
+            </span>
+          )}
           {networkUrl && (
-            <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
                 size="sm"
@@ -80,8 +87,8 @@ export default function Header() {
                 <span className="sm:hidden">Network</span>
                 {copied && <span className="text-green-400 text-xs ml-1">Copied!</span>}
               </Button>
-            </div>
           )}
+          </div>
         </div>
       </div>
     </header>

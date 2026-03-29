@@ -141,10 +141,3 @@ export const IMPORT_STATUS = {
  */
 export const DUST_REWARDS = { 3: 50, 2: 30, 1: 10 };
 
-/**
- * Magic dust cost to take a quest card into inventory.
- *
- * @readonly
- * @type {number}
- */
-export const QUEST_CARD_COST = 10;

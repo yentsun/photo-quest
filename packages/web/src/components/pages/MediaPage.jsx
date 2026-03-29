@@ -12,10 +12,10 @@ import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE } from '@photo-quest/shared';
-import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
+import { ImageViewer, MediaPlayer } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, Spinner } from '../ui/index.js';
-import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi } from '../../utils/api.js';
+import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders } from '../../utils/api.js';
 
 export default function MediaPage() {
   const { id } = useParams();
@@ -126,19 +126,6 @@ export default function MediaPage() {
     }
   }, []);
 
-  /* Optimistic like — instant UI update, rollback on failure. */
-  const handleLike = useCallback(async () => {
-    if (!item) return;
-    const originalLikes = item.likes || 0;
-    setItem(prev => ({ ...prev, likes: originalLikes + 1 }));
-    try {
-      await likeMediaApi(item.id);
-    } catch (err) {
-      console.error('Failed to like media:', err);
-      setItem(prev => ({ ...prev, likes: originalLikes }));
-    }
-  }, [item]);
-
   /* Delete current media and navigate to the next item (issue #4) */
   const { removeItem: removeSlideshowItem } = slideshow;
   const handleDelete = useCallback(async () => {
@@ -175,14 +162,13 @@ export default function MediaPage() {
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
       if (e.key === 'ArrowDown') { e.preventDefault(); goFolderNext(); }
       if (e.key === ' ') { e.preventDefault(); playerRef.current?.togglePlay(); }
-      if (e.key === 'Enter') { e.preventDefault(); handleLike(); }
       if (e.key === 'i') setShowInfo(prev => !prev);
       if (e.key === 'f') toggleFullscreen();
       if (e.key === 'Delete') handleDelete();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, handleDelete]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, toggleFullscreen, handleDelete]);
 
   /* Fetch file status when info modal opens */
   useEffect(() => {
@@ -324,10 +310,6 @@ export default function MediaPage() {
               icon={<Icon name="trash" />}
               label="Delete"
               onClick={handleDelete}
-            />
-            <LikeButton
-              count={item.likes || 0}
-              onLike={handleLike}
             />
           </div>
         </div>

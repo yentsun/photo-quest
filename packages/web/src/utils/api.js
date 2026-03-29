@@ -7,16 +7,15 @@ import { apiRoutes, MEDIA_TYPE } from '@photo-quest/shared';
 /**
  * Fetch media items from the server (supports filtering and pagination).
  *
- * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean, liked?: boolean }} [opts]
+ * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean }} [opts]
  * @returns {Promise<{ items: Array, total: number }>}
  */
-export async function fetchMedia({ limit, offset, folder, subtree, liked } = {}) {
+export async function fetchMedia({ limit, offset, folder, subtree } = {}) {
   const url = new URL(apiRoutes.media, window.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
   if (folder != null) url.searchParams.set('folder', folder);
   if (subtree) url.searchParams.set('subtree', '1');
-  if (liked) url.searchParams.set('liked', '1');
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -42,17 +41,17 @@ export async function fetchMediaById(id) {
 }
 
 /**
- * Like a media item (increment like count).
+ * Infuse a media item with 1 magic dust.
  *
  * @param {number} id - Media ID
- * @returns {Promise<Object>} Updated media object
+ * @returns {Promise<{ media: Object, dust: number }>}
  */
-export async function likeMedia(id) {
-  const response = await fetch(`/media/${id}/like`, {
+export async function infuseMedia(id) {
+  const response = await fetch(`/media/${id}/infuse`, {
     method: 'PATCH',
   });
   if (!response.ok) {
-    throw new Error('Failed to like media');
+    throw new Error('Failed to infuse media');
   }
   return response.json();
 }

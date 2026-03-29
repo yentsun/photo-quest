@@ -28,7 +28,7 @@ function getColumnCount(width) {
  * Cell component for the virtualised Grid (react-window v2 API).
  * Receives columnIndex, rowIndex, style from Grid plus custom cellProps.
  */
-function Cell({ columnIndex, rowIndex, style, items, columnCount, onItemClick, onItemLike }) {
+function Cell({ columnIndex, rowIndex, style, items, columnCount, onItemClick }) {
   const index = rowIndex * columnCount + columnIndex;
   if (index >= items.length) return null;
   const media = items[index];
@@ -44,7 +44,6 @@ function Cell({ columnIndex, rowIndex, style, items, columnCount, onItemClick, o
       <MediaCard
         media={media}
         onClick={onItemClick}
-        onLike={onItemLike}
       />
     </div>
   );
@@ -57,13 +56,11 @@ function Cell({ columnIndex, rowIndex, style, items, columnCount, onItemClick, o
  * @param {Object} props
  * @param {Array} props.items - Array of media objects
  * @param {Function} [props.onItemClick] - Called when a card is clicked
- * @param {Function} [props.onItemLike] - Called when like button is clicked
  * @param {React.ReactNode} [props.emptyState] - Content to show when items is empty
  */
 export default function MediaGrid({
   items = [],
   onItemClick,
-  onItemLike,
   emptyState,
 }) {
   const containerRef = useRef(null);
@@ -95,7 +92,6 @@ export default function MediaGrid({
             key={media.id}
             media={media}
             onClick={onItemClick}
-            onLike={onItemLike}
           />
         ))}
       </div>
@@ -113,7 +109,7 @@ export default function MediaGrid({
       {width > 0 && (
         <Grid
           cellComponent={Cell}
-          cellProps={{ items, columnCount, onItemClick, onItemLike }}
+          cellProps={{ items, columnCount, onItemClick }}
           width={width}
           height={height}
           columnCount={columnCount}

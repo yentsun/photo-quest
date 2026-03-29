@@ -30,8 +30,8 @@ export const clientRoutes = {
   /** Main media library dashboard -- the default landing page. */
   dashboard: '/dashboard',
 
-  /** Liked media section -- shows items with likes > 0. */
-  liked: '/liked',
+  /** (removed — replaced by inventory) */
+  // liked: '/liked',
 
   /** Folder view -- shows media filtered by folder ID. */
   folder: '/folder/:id',
@@ -77,8 +77,8 @@ export const apiRoutes = {
   /** GET / DELETE -- fetch or remove a single media item by its numeric ID. */
   mediaById: '/media/:id',
 
-  /** PATCH -- increment the like count for a media item. */
-  mediaLike: '/media/:id/like',
+  /** PATCH -- infuse a media item with 1 magic dust. */
+  mediaInfuse: '/media/:id/infuse',
 
   /** POST -- trigger a directory scan.  Body: { path: "/absolute/dir" }. */
   mediaScan: '/media/scan',

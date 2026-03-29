@@ -14,7 +14,7 @@
 
 /* Action types, label dictionaries, toaster timing, and every enum-like
  * constant used across the app. */
-export { actions, words, toasterTimeout, slideshowInterval, JOB_TYPE, JOB_STATUS, MEDIA_STATUS, MEDIA_TYPE, SCAN_STATUS, IMPORT_STATUS, DUST_REWARDS, QUEST_CARD_COST, SUPPORTED_EXTENSIONS, VIDEO_EXTENSIONS, IMAGE_EXTENSIONS } from './constants.js';
+export { actions, words, toasterTimeout, slideshowInterval, JOB_TYPE, JOB_STATUS, MEDIA_STATUS, MEDIA_TYPE, SCAN_STATUS, IMPORT_STATUS, DUST_REWARDS, SUPPORTED_EXTENSIONS, VIDEO_EXTENSIONS, IMAGE_EXTENSIONS } from './constants.js';
 
 /* SQL CREATE TABLE statements consumed by both the server and the worker so
  * that either process can safely initialise the database on its own. */

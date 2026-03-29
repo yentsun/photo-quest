@@ -17,7 +17,7 @@ import { Button, Icon, Spinner } from '../ui/index.js';
 export default function FolderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { likeMedia } = useMediaActions();
+  useMediaActions();
   const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
@@ -182,7 +182,6 @@ export default function FolderPage() {
         <MediaGrid
           items={directMedia}
           onItemClick={handleMediaClick}
-          onItemLike={likeMedia}
         />
       ) : subfolders.length === 0 ? (
         <EmptyState

@@ -30,7 +30,9 @@
  *  - `transcoded_path` Absolute path to the transcoded MP4, or NULL if the
  *                      original is already in the target format.
  *  - `size`            File size in bytes.
- *  - `likes`           Cumulative like count (unlimited, each click adds 1).
+ *  - `likes`           (deprecated — replaced by infusion) Legacy like count.
+ *  - `infusion`        Dust invested into this media. Higher values increase
+ *                      the chance of appearing in quest decks.
  *  - `hidden`          1 if folder was removed (preserves likes/metadata for
  *                      re-adding later), 0 otherwise.
  *  - `hash`            Content hash (first 64KB + size) for identifying same
@@ -60,6 +62,7 @@ export const CREATE_MEDIA_TABLE = `
     transcoded_path TEXT,
     size INTEGER,
     likes INTEGER NOT NULL DEFAULT 0,
+    infusion INTEGER NOT NULL DEFAULT 0,
     hidden INTEGER NOT NULL DEFAULT 0,
     hash TEXT,
     orientation INTEGER,

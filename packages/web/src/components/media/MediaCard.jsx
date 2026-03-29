@@ -6,16 +6,13 @@ import { memo } from 'react';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getMediaUrl } from '../../utils/api.js';
 import { Icon } from '../ui/index.js';
-import LikeButton from './LikeButton.jsx';
 
 /**
- * Media card with thumbnail, title overlay, and like button.
+ * Media card with thumbnail and title overlay.
  */
 export default memo(function MediaCard({
   media,
   onClick,
-  onLike,
-  showLikes = true,
 }) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(media);
@@ -58,17 +55,6 @@ export default memo(function MediaCard({
           {isImage ? 'IMG' : 'VID'}
         </span>
       </div>
-
-      {/* Like button */}
-      {showLikes && (
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <LikeButton
-            count={media.likes || 0}
-            onLike={() => onLike?.(media)}
-            size="sm"
-          />
-        </div>
-      )}
     </div>
   );
 })

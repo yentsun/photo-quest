@@ -64,6 +64,9 @@ export function initDb() {
   /* Seed the singleton player_stats row. */
   db.exec('INSERT OR IGNORE INTO player_stats (id, dust) VALUES (1, 50)');
 
+  /* Migrate: ensure starting balance for players seeded before 4.7. */
+  db.exec('UPDATE player_stats SET dust = 50 WHERE id = 1 AND dust = 0');
+
   /* Run migrations for existing databases. */
   migrateDb();
 
@@ -102,6 +105,7 @@ function migrateDb() {
     'ALTER TABLE media ADD COLUMN orientation INTEGER',
     'ALTER TABLE media ADD COLUMN camera TEXT',
     'ALTER TABLE media ADD COLUMN date_taken TEXT',
+    'ALTER TABLE media ADD COLUMN infusion INTEGER NOT NULL DEFAULT 0',
   ];
 
   for (const sql of migrations) {

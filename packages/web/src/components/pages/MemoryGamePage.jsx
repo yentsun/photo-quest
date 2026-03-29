@@ -179,10 +179,10 @@ export default function MemoryGamePage() {
   useEffect(() => {
     if (!won) return;
     const s = getStars(moves);
-    fetchMedia({ liked: true }).then(({ items }) => {
-      const liked = items.filter(m => m.likes > 0);
-      if (liked.length === 0) return;
-      const sorted = liked.toSorted((a, b) => b.likes - a.likes);
+    fetchMedia().then(({ items }) => {
+      if (items.length === 0) return;
+      // Higher stars = pick from more-infused media
+      const sorted = items.toSorted((a, b) => (b.infusion || 0) - (a.infusion || 0));
       const third = Math.ceil(sorted.length / 3);
       const tierStart = s === 3 ? 0 : s === 2 ? third : third * 2;
       const tierEnd = s === 3 ? third : s === 2 ? third * 2 : sorted.length;

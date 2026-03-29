@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
+import { words } from '@photo-quest/shared';
 import { fetchInventory } from '../../utils/api.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
@@ -83,7 +84,7 @@ export default function InventoryPage() {
           <EmptyState
             icon={bagIcon}
             title="Inventory empty"
-            description="Play games to earn magic dust and collect media for your inventory."
+            description={words.inventoryEmpty}
           />
         }
       />

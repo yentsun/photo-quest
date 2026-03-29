@@ -3,15 +3,15 @@
  */
 
 import { useState, useEffect } from 'react';
-import { QUEST_CARD_COST, MEDIA_TYPE } from '@photo-quest/shared';
-import { fetchQuestDecks, fetchQuestDeck, advanceQuestDeck, takeQuestCard, getMediaUrl } from '../../utils/api.js';
+import { MEDIA_TYPE, words } from '@photo-quest/shared';
+import { fetchQuestDecks, fetchQuestDeck, advanceQuestDeck, takeQuestCard, infuseMedia, getMediaUrl } from '../../utils/api.js';
 import { Button, Spinner } from '../ui/index.js';
 import { EmptyState } from '../layout/index.js';
 
 function DustBadge({ dust }) {
   return (
     <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-900/50 border border-purple-600/50 rounded-full text-purple-200 font-semibold text-sm">
-      <span className="text-yellow-400">&#10022;</span>
+      <span className="text-yellow-400">{words.dustSymbol}</span>
       {dust}
     </span>
   );
@@ -37,18 +37,26 @@ function DeckGrid({ decks, onPickDeck }) {
   );
 }
 
-function CardViewer({ deck, onNext, onTake, taking }) {
+function CardViewer({ deck, onNext, onTake, onInfuse, taking, infusing }) {
   const card = deck.currentCard;
   if (!card) return null;
 
   const isImage = card.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(card);
+  const takeCost = deck.takeCost || 0;
+  const takeLabel = takeCost === 0
+    ? words.takeFree
+    : `${words.takeCard} (${takeCost} ${words.dustSymbol})`;
+  const canAffordTake = takeCost === 0 || deck.dust >= takeCost;
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Progress */}
+      {/* Progress + infusion */}
       <div className="flex items-center gap-3 text-gray-400 text-sm">
         <span>Card {deck.currentPosition + 1} of {deck.totalCards}</span>
+        {(card.infusion || 0) > 0 && (
+          <span className="text-purple-300">{words.dustSymbol} {card.infusion} infused</span>
+        )}
         <DustBadge dust={deck.dust} />
       </div>
 
@@ -76,21 +84,29 @@ function CardViewer({ deck, onNext, onTake, taking }) {
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap justify-center">
+        <Button
+          variant="ghost"
+          onClick={onInfuse}
+          disabled={infusing || deck.dust < 1}
+          title={deck.dust < 1 ? words.notEnoughDust : `${words.infuse} (1 ${words.dustSymbol})`}
+        >
+          {infusing ? '...' : `${words.infuse} (1 ${words.dustSymbol})`}
+        </Button>
         {!deck.inInventory && (
           <Button
             onClick={onTake}
-            disabled={taking || deck.dust < QUEST_CARD_COST}
-            title={deck.dust < QUEST_CARD_COST ? 'Not enough magic dust' : `Take card (${QUEST_CARD_COST} dust)`}
+            disabled={taking || !canAffordTake}
+            title={!canAffordTake ? words.notEnoughDust : takeLabel}
           >
-            {taking ? 'Taking...' : `Take (${QUEST_CARD_COST} ✦)`}
+            {taking ? words.takingCard : takeLabel}
           </Button>
         )}
         {deck.inInventory && (
-          <span className="px-4 py-2 text-green-400 text-sm font-medium">In inventory</span>
+          <span className="px-4 py-2 text-green-400 text-sm font-medium">{words.inInventory}</span>
         )}
         <Button variant="secondary" onClick={onNext}>
-          Skip
+          {words.skipCard}
         </Button>
       </div>
     </div>
@@ -104,6 +120,7 @@ export default function QuestPage() {
   const [activeDeckId, setActiveDeckId] = useState(null);
   const [activeDeck, setActiveDeck] = useState(null);
   const [taking, setTaking] = useState(false);
+  const [infusing, setInfusing] = useState(false);
   const [error, setError] = useState(null);
 
   // Load decks
@@ -120,7 +137,6 @@ export default function QuestPage() {
     fetchQuestDeck(activeDeckId)
       .then(data => {
         if (data.exhausted) {
-          // Deck is done, go back to list
           setActiveDeckId(null);
           refreshDecks();
           return;
@@ -135,6 +151,17 @@ export default function QuestPage() {
     fetchQuestDecks()
       .then(({ decks, dust }) => { setDecks(decks); setDust(dust); })
       .catch(err => setError(err.message));
+  };
+
+  const reloadDeck = async () => {
+    const data = await fetchQuestDeck(activeDeckId);
+    if (data.exhausted) {
+      setActiveDeckId(null);
+      refreshDecks();
+    } else {
+      setActiveDeck(data);
+      setDust(data.dust);
+    }
   };
 
   const handleNext = async () => {
@@ -167,6 +194,20 @@ export default function QuestPage() {
       setError(err.message);
     } finally {
       setTaking(false);
+    }
+  };
+
+  const handleInfuse = async () => {
+    if (!activeDeck?.currentCard) return;
+    setInfusing(true);
+    try {
+      const { dust: newDust } = await infuseMedia(activeDeck.currentCard.id);
+      setDust(newDust);
+      await reloadDeck();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setInfusing(false);
     }
   };
 
@@ -213,7 +254,9 @@ export default function QuestPage() {
           deck={activeDeck}
           onNext={handleNext}
           onTake={handleTake}
+          onInfuse={handleInfuse}
           taking={taking}
+          infusing={infusing}
         />
       ) : decks.length > 0 ? (
         <DeckGrid decks={decks} onPickDeck={setActiveDeckId} />

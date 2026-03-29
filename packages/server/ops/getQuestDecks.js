@@ -49,7 +49,7 @@ export default function () {
 
 function generateDecks(db, date) {
   const allMedia = db.prepare(
-    'SELECT id FROM media WHERE hidden = 0'
+    'SELECT id, infusion FROM media WHERE hidden = 0'
   ).all();
 
   if (allMedia.length === 0) return;
@@ -63,9 +63,7 @@ function generateDecks(db, date) {
     ).run(date, d);
     const deckId = Number(result.lastInsertRowid);
 
-    // Shuffle and pick cards (with replacement across decks, without within a deck)
-    const shuffled = shuffleArray(allMedia);
-    const picked = shuffled.slice(0, Math.min(CARDS_PER_DECK, shuffled.length));
+    const picked = weightedSample(allMedia, Math.min(CARDS_PER_DECK, allMedia.length));
 
     for (let p = 0; p < picked.length; p++) {
       db.prepare(
@@ -75,11 +73,25 @@ function generateDecks(db, date) {
   }
 }
 
-function shuffleArray(array) {
-  const result = [...array];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
+/**
+ * Pick `count` unique items weighted by infusion.
+ * Weight = infusion + 1 (so 0-infusion items still appear).
+ */
+function weightedSample(items, count) {
+  const pool = items.map(m => ({ ...m, weight: m.infusion + 1 }));
+  const picked = [];
+
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const totalWeight = pool.reduce((sum, m) => sum + m.weight, 0);
+    let r = Math.random() * totalWeight;
+    let idx = 0;
+    for (; idx < pool.length - 1; idx++) {
+      r -= pool[idx].weight;
+      if (r <= 0) break;
+    }
+    picked.push(pool[idx]);
+    pool.splice(idx, 1);
   }
-  return result;
+
+  return picked;
 }

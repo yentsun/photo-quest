@@ -11,7 +11,7 @@ import { clientRoutes as r } from '@photo-quest/shared';
 import ErrorBoundary from './ErrorBoundary';
 import Root from './Root';
 import Dashboard from './Dashboard';
-import { LikedPage, FolderPage, MediaPage, MemoryGamePage, InventoryPage, QuestPage } from './pages/index.js';
+import { FolderPage, MediaPage, MemoryGamePage, InventoryPage, QuestPage } from './pages/index.js';
 import ToasterMessage from './ToasterMessage';
 
 export default function Router() {
@@ -29,7 +29,6 @@ export default function Router() {
                 <Route path={r.root} element={<Root />}>
                   <Route index element={<Navigate replace to={r.dashboard} />} />
                   <Route path={r.dashboard} element={<Dashboard />} />
-                  <Route path={r.liked} element={<LikedPage />} />
                   <Route path={r.folder} element={<FolderPage />} />
                   <Route path={r.media} element={<MediaPage />} />
                   <Route path={r.memoryGame} element={<MemoryGamePage />} />

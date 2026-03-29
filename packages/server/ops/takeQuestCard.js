@@ -1,17 +1,15 @@
 /**
- * @file Spend dust to take the current quest card into inventory.
+ * @file Take the current quest card into inventory.
  *
  * Kojo op: accessed as `kojo.ops.takeQuestCard(deckId)`.
  * Must use `function()` syntax (not arrow) to receive kojo context via `this`.
  *
- * Deducts QUEST_CARD_COST dust, adds the current card's media to inventory,
- * then advances to the next card.
+ * Cost: free if infusion is 0, otherwise infusion × 2.
+ * Adds the current card's media to inventory, then advances to the next card.
  *
  * @param {number} deckId
  * @returns {{ error?: string, deck?: object }|null} null if deck not found.
  */
-
-import { QUEST_CARD_COST } from '@photo-quest/shared';
 
 export default function (deckId) {
   const [kojo] = this;
@@ -21,7 +19,9 @@ export default function (deckId) {
   if (!deck || deck.exhausted) return null;
 
   const currentCard = db.prepare(
-    'SELECT * FROM quest_cards WHERE deck_id = ? AND position = ?'
+    `SELECT qc.*, m.infusion FROM quest_cards qc
+     JOIN media m ON m.id = qc.media_id
+     WHERE qc.deck_id = ? AND qc.position = ?`
   ).get(deck.id, deck.current_position);
 
   if (!currentCard) return null;
@@ -34,10 +34,13 @@ export default function (deckId) {
     return { error: 'Already in inventory' };
   }
 
-  // Deduct dust
-  const dustResult = kojo.ops.updateDust(-QUEST_CARD_COST);
-  if (!dustResult) {
-    return { error: 'Insufficient magic dust' };
+  // Cost: free if 0 infusion, otherwise infusion × 2
+  const cost = currentCard.infusion * 2;
+  if (cost > 0) {
+    const dustResult = kojo.ops.updateDust(-cost);
+    if (!dustResult) {
+      return { error: 'Insufficient magic dust' };
+    }
   }
 
   // Add to inventory

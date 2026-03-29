@@ -37,6 +37,8 @@ export default function (deckId) {
 
   const { dust } = db.prepare('SELECT dust FROM player_stats WHERE id = 1').get();
 
+  const takeCost = currentCard ? currentCard.infusion * 2 : 0;
+
   return {
     id: deck.id,
     deckIndex: deck.deck_index,
@@ -45,6 +47,7 @@ export default function (deckId) {
     exhausted: !!deck.exhausted,
     currentCard: currentCard || null,
     inInventory,
+    takeCost,
     dust,
   };
 }
