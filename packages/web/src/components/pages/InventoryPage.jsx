@@ -309,7 +309,6 @@ export default function InventoryPage() {
     const draggedId = Number(e.dataTransfer.getData('text/plain'));
     try {
       await addToPile(pileId, [draggedId]);
-      setPileCards(prev => ({ ...prev, [pileId]: null }));
       reload();
     } catch (err) {
       console.error('Failed to add to pile:', err);
