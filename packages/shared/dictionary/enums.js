@@ -132,3 +132,18 @@ export const IMPORT_STATUS = {
   COMPLETED: 'completed',
   FAILED: 'failed'
 };
+
+/**
+ * Magic dust awarded per star rating in the memory game.
+ *
+ * @readonly
+ * @type {{ 3: number, 2: number, 1: number }}
+ */
+export const DUST_REWARDS = { 3: 50, 2: 30, 1: 10 };
+
+/**
+ * Market prices in magic dust.
+ * @readonly
+ */
+export const MARKET_PRICES = { questDeck: 5, memoryTicket: 1 };
+

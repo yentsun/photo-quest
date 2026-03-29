@@ -4,6 +4,7 @@
 
 export { default as Badge } from './Badge.jsx';
 export { default as Button } from './Button.jsx';
+export { default as DustBadge } from './DustBadge.jsx';
 export { default as Icon } from './Icon.jsx';
 export { default as IconButton } from './IconButton.jsx';
 export { default as Input } from './Input.jsx';

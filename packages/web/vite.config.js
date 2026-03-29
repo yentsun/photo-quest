@@ -145,6 +145,39 @@ export default defineConfig({
           }
         },
       },
+      '/inventory': {
+        target: API_TARGET,
+        bypass(req) {
+          /* Bypass GET /inventory (no subpath) for browser navigation.
+           * Fetch/XHR requests (Accept: application/json) go to the API. */
+          if (req.method === 'GET' && req.url === '/inventory'
+              && !req.headers.accept?.includes('application/json')) {
+            return req.url;
+          }
+        },
+      },
+      '/quest': {
+        target: API_TARGET,
+        bypass(req) {
+          /* Bypass GET /quest (no subpath) for browser navigation.
+           * Fetch/XHR and API subpaths (/quest/decks/*) go to the API. */
+          if (req.method === 'GET' && req.url === '/quest'
+              && !req.headers.accept?.includes('application/json')) {
+            return req.url;
+          }
+        },
+      },
+      '/market': {
+        target: API_TARGET,
+        bypass(req) {
+          if (req.method === 'GET' && req.url === '/market'
+              && !req.headers.accept?.includes('application/json')) {
+            return req.url;
+          }
+        },
+      },
+      '/piles': API_TARGET,
+      '/player': API_TARGET,
       '/stream': API_TARGET,
       '/image': API_TARGET,
       '/jobs': API_TARGET,

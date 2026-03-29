@@ -202,7 +202,7 @@ export default function Dashboard() {
 
   const handleRemoveFolder = async (folder) => {
     const folderName = folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
-    if (!confirm(`Remove "${folderName}" from library?\n\nYour likes will be preserved if you re-add this folder later.`)) {
+    if (!confirm(`Remove "${folderName}" from library?\n\nYour data will be preserved if you re-add this folder later.`)) {
       return;
     }
     try {

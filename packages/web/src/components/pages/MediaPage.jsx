@@ -12,10 +12,10 @@ import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE } from '@photo-quest/shared';
-import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
+import { ImageViewer, MediaPlayer } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, Spinner } from '../ui/index.js';
-import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi } from '../../utils/api.js';
+import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders } from '../../utils/api.js';
 
 export default function MediaPage() {
   const { id } = useParams();
@@ -101,21 +101,6 @@ export default function MediaPage() {
     }
   }, [hasNext, inSlideshow, slideshow, navigate, navItems, currentIndex]);
 
-  /* In slideshow mode, up/down navigate within the current folder (LAW 1.30) */
-  const folderIndex = folderMedia.findIndex(m => m.id === Number(id));
-  const hasFolderPrev = inSlideshow && folderIndex > 0;
-  const hasFolderNext = inSlideshow && folderIndex < folderMedia.length - 1;
-
-  const goFolderPrev = useCallback(() => {
-    if (!hasFolderPrev) return;
-    navigate(`/media/${folderMedia[folderIndex - 1].id}`);
-  }, [hasFolderPrev, navigate, folderMedia, folderIndex]);
-
-  const goFolderNext = useCallback(() => {
-    if (!hasFolderNext) return;
-    navigate(`/media/${folderMedia[folderIndex + 1].id}`);
-  }, [hasFolderNext, navigate, folderMedia, folderIndex]);
-
   /* Fullscreen toggle (LAW 1.37) */
   const toggleFullscreen = useCallback(() => {
     if (!viewerRef.current) return;
@@ -125,19 +110,6 @@ export default function MediaPage() {
       viewerRef.current.requestFullscreen();
     }
   }, []);
-
-  /* Optimistic like — instant UI update, rollback on failure. */
-  const handleLike = useCallback(async () => {
-    if (!item) return;
-    const originalLikes = item.likes || 0;
-    setItem(prev => ({ ...prev, likes: originalLikes + 1 }));
-    try {
-      await likeMediaApi(item.id);
-    } catch (err) {
-      console.error('Failed to like media:', err);
-      setItem(prev => ({ ...prev, likes: originalLikes }));
-    }
-  }, [item]);
 
   /* Delete current media and navigate to the next item (issue #4) */
   const { removeItem: removeSlideshowItem } = slideshow;
@@ -150,7 +122,7 @@ export default function MediaPage() {
     if (nextItem) {
       navigate(`/media/${nextItem.id}`, { replace: true });
     } else {
-      navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
+      navigate(folder ? `/folder/${folder.id}` : '/quest', { replace: true });
     }
     if (inSlideshow) removeSlideshowItem(deletedId);
     try {
@@ -172,17 +144,14 @@ export default function MediaPage() {
     const handleKeyDown = (e) => {
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
-      if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
-      if (e.key === 'ArrowDown') { e.preventDefault(); goFolderNext(); }
       if (e.key === ' ') { e.preventDefault(); playerRef.current?.togglePlay(); }
-      if (e.key === 'Enter') { e.preventDefault(); handleLike(); }
       if (e.key === 'i') setShowInfo(prev => !prev);
       if (e.key === 'f') toggleFullscreen();
       if (e.key === 'Delete') handleDelete();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, handleDelete]);
+  }, [goPrev, goNext, toggleFullscreen, handleDelete]);
 
   /* Fetch file status when info modal opens */
   useEffect(() => {
@@ -209,7 +178,7 @@ export default function MediaPage() {
         icon={<Icon name="image" className="w-16 h-16" />}
         title="Media not found"
         description="This media item doesn't exist."
-        action={{ label: 'Go to Library', onClick: () => navigate('/dashboard') }}
+        action={{ label: 'Go to Quest', onClick: () => navigate('/quest') }}
       />
     );
   }
@@ -247,26 +216,6 @@ export default function MediaPage() {
             title="Next"
           >
             <Icon name="next" className="w-8 h-8" />
-          </button>
-        )}
-
-        {/* Up/down arrows for in-folder navigation during slideshow (LAW 1.30) */}
-        {hasFolderPrev && (
-          <button
-            onClick={goFolderPrev}
-            className={`absolute top-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
-            title="Previous in folder"
-          >
-            <Icon name="up" className="w-8 h-8" />
-          </button>
-        )}
-        {hasFolderNext && (
-          <button
-            onClick={goFolderNext}
-            className={`absolute bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
-            title="Next in folder"
-          >
-            <Icon name="down" className="w-8 h-8" />
           </button>
         )}
 
@@ -324,10 +273,6 @@ export default function MediaPage() {
               icon={<Icon name="trash" />}
               label="Delete"
               onClick={handleDelete}
-            />
-            <LikeButton
-              count={item.likes || 0}
-              onLike={handleLike}
             />
           </div>
         </div>

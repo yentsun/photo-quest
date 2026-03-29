@@ -17,7 +17,7 @@ import { Button, Icon, Spinner } from '../ui/index.js';
 export default function FolderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { likeMedia } = useMediaActions();
+  useMediaActions();
   const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
@@ -118,10 +118,10 @@ export default function FolderPage() {
       {breadcrumbs.length > 0 && (
         <nav className="flex items-center gap-1 text-sm text-gray-400 mb-4 overflow-x-auto">
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/quest')}
             className="hover:text-white transition-colors shrink-0"
           >
-            Library
+            Quest
           </button>
           {breadcrumbs.map((crumb, i) => {
             const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
@@ -182,7 +182,6 @@ export default function FolderPage() {
         <MediaGrid
           items={directMedia}
           onItemClick={handleMediaClick}
-          onItemLike={likeMedia}
         />
       ) : subfolders.length === 0 ? (
         <EmptyState

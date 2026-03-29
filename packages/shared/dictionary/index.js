@@ -7,5 +7,5 @@
 
 export { actions } from './actions.js';
 export { words } from './words.js';
-export { JOB_TYPE, JOB_STATUS, MEDIA_STATUS, MEDIA_TYPE, SCAN_STATUS, IMPORT_STATUS } from './enums.js';
+export { JOB_TYPE, JOB_STATUS, MEDIA_STATUS, MEDIA_TYPE, SCAN_STATUS, IMPORT_STATUS, DUST_REWARDS, MARKET_PRICES } from './enums.js';
 export { VIDEO_EXTENSIONS, IMAGE_EXTENSIONS, SUPPORTED_EXTENSIONS } from './extensions.js';

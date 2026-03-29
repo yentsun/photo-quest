@@ -18,9 +18,9 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.6** _(removed)_
 
-**1.7** The user must be able to like a media item. Likes are unlimited — each click adds to the total count. The like count must update immediately in the UI.
+**1.7** _(removed — replaced by dust infusion, see 4.8)_
 
-**1.8** The user must be able to view liked items in a separate section and launch a slideshow from it. Items must be sorted by like count descending by default.
+**1.8** _(removed — replaced by dust infusion, see 4.8)_
 
 **1.9** The user must be able to launch a slideshow from the folder containing a media item, in either random or sequential order.
 
@@ -114,7 +114,44 @@ The governing rules of the photo-quest project. This document is the source of t
 
 ---
 
+## Section 4 — Gamification
+
+**4.1** The app must have an in-game currency called **magic dust**. Magic dust is earned through gameplay (e.g., completing the memory game). The player's magic dust balance must be visible in the UI and persist across sessions.
+
+**4.2** The player must have an **inventory** — a personal collection of media items, separate from the media library. Items are added to the inventory through gameplay rewards, not by browsing.
+
+**4.3** The user must **not** be able to freely browse the full media library. Instead, the user can only browse and shuffle through items in their inventory.
+
+**4.4** The inventory must support shuffle/slideshow browsing, reusing the existing viewer and navigation controls.
+
+**4.5** The app must have a **Quest** view. Each day, 10 decks of 10 cards are generated from media in the library. Media with higher dust infusion has a greater chance of appearing in decks (weighted random). Decks are displayed as a grid of face-down card stacks. The player picks a deck and browses through it one card at a time. Once all cards in a deck have been viewed, the deck disappears.
+
+**4.6** The player's magic dust balance must be visible in the app header at all times.
+
+**4.7** The player's starting magic dust balance is **50**.
+
+**4.8** Each media item has a **dust infusion** value (starts at 0). While browsing quest decks, the player can **infuse** the current card by spending 1 magic dust per click — this replaces the old "like" mechanic. Infusion is cumulative and persists. Higher infusion increases the chance of appearing in future quest decks.
+
+**4.9** While browsing quest decks, the player can **take** the current card into their inventory. Each deck allows **one free take** of a 0-infusion card. After that, 0-infusion cards cannot be taken. Infused cards cost **infusion × 2** magic dust to take.
+
+**4.11** Viewing an inventory card passively infuses it **for free** (no dust cost): **1 infusion per 5 seconds** in card view, **2 infusion per 5 seconds** in full media view (F key). The infusion counter updates live. Passive infusion stops after **2 minutes** of viewing.
+
+**4.13** Viewing a quest deck card passively infuses it **for free**: **1 infusion per 5 seconds**, capped at **2 minutes**. Same rate as inventory card view.
+
+**4.12** The app must have a **Market** page. The player can buy extra quest decks (**5 Đ** each) and memory game tickets (**1 Đ** each). The 10 free daily quest decks still generate; market decks are added on top. Memory game requires a ticket to play (consumed on first card flip).
+
+**4.14** The player must be able to organize inventory cards into **piles** (like playlists). A card can belong to multiple piles. Piles are created by dragging a card onto another card. Piles can be named. Inventory view shows piles as stacked card groups and ungrouped cards.
+
+**4.15** The player can **sell** an inventory card back to the media library. The card is removed from inventory but the media file stays on disk. The player receives **infusion × 1 Đ**. Selling a 0-infusion card returns 0 Đ.
+
+**4.10** The player can **destroy** a media card from their inventory. This permanently removes the media from the database and deletes the file from disk. The player receives **1 Đ** for a non-infused card, or **infusion × 2 Đ** for an infused card.
+
+---
+
 ## Glossary
 
-- **media** — A media file (video) in the library. Has path, title, duration, resolution, codec, status, transcoded_path, size.
+- **media** — A media file (video or image) in the library. Has path, title, duration, resolution, codec, status, transcoded_path, size.
 - **job** — A processing task tied to a media record (probe or transcode). Has type, status, progress, error. Belongs to media via `media_id` (cascade delete).
+- **magic dust** — In-game currency earned through gameplay. Persisted in the database. Symbol: Đ.
+- **inventory** — The player's personal collection of media items, acquired through gameplay. Separate from the full media library.
+- **infusion** — Dust invested into a media item. Increases the card's chance of appearing in quest decks. Replaces the old "likes" system.
