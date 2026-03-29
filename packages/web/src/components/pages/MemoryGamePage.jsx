@@ -4,13 +4,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MEDIA_TYPE } from '@photo-quest/shared';
-import { fetchMedia, getImageUrl, getMediaUrl } from '../../utils/api.js';
+import { MEDIA_TYPE, words } from '@photo-quest/shared';
+import { fetchMedia, getImageUrl } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Spinner } from '../ui/index.js';
 
 const PAIR_COUNT = 8;
 const STAR_THRESHOLDS = [15, 11, 8];
+const CARDS_PER_STAR = { 1: 1, 2: 2, 3: PAIR_COUNT };
 
 function getStars(moves) {
   return STAR_THRESHOLDS.reduce((s, t) => (moves <= t ? s + 1 : s), 0);
@@ -39,7 +40,7 @@ function buildDeck(mediaItems) {
     cards.push({ id: `${media.id}-b`, mediaId: media.id, pairKey: media.id });
   }
 
-  return shuffle(cards);
+  return { cards: shuffle(cards), mediaIds: picked.map(m => m.id) };
 }
 
 function CardBack() {
@@ -83,19 +84,34 @@ function Card({ card, flipped, matched, onClick, onImageLoad }) {
   );
 }
 
+async function addCardsToInventory(mediaIds) {
+  let added = 0;
+  for (const mediaId of mediaIds) {
+    try {
+      const res = await fetch('/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaId }),
+      });
+      if (res.status === 201) added++;
+    } catch { /* skip failures */ }
+  }
+  return added;
+}
+
 export default function MemoryGamePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cards, setCards] = useState([]);
+  const [gameMediaIds, setGameMediaIds] = useState([]);
   const [flipped, setFlipped] = useState([]);
   const [matched, setMatched] = useState(new Set());
   const [moves, setMoves] = useState(0);
-  const [reward, setReward] = useState(null);
+  const [winResult, setWinResult] = useState(null);
   const lockRef = useRef(false);
   const flipTimeoutRef = useRef(null);
   const pendingMismatchRef = useRef(false);
-  const videoRef = useRef(null);
 
   const won = cards.length > 0 && matched.size === PAIR_COUNT;
   const stars = won ? getStars(moves) : 0;
@@ -107,19 +123,20 @@ export default function MemoryGamePage() {
     setFlipped([]);
     setMatched(new Set());
     setMoves(0);
-    setReward(null);
+    setWinResult(null);
     lockRef.current = false;
     pendingMismatchRef.current = false;
 
     try {
       const { items } = await fetchMedia();
-      const deck = buildDeck(items);
-      if (!deck) {
+      const result = buildDeck(items);
+      if (!result) {
         setError('Need at least 8 images in your library to play.');
         setLoading(false);
         return;
       }
-      setCards(deck);
+      setCards(result.cards);
+      setGameMediaIds(result.mediaIds);
     } catch (err) {
       setError('Failed to load media: ' + err.message);
     } finally {
@@ -161,7 +178,6 @@ export default function MemoryGamePage() {
         setFlipped([]);
         lockRef.current = false;
       } else {
-        // Wait for the second card's image to load before starting the timer
         pendingMismatchRef.current = true;
       }
     }
@@ -179,28 +195,16 @@ export default function MemoryGamePage() {
   useEffect(() => {
     if (!won) return;
     const s = getStars(moves);
-    fetchMedia().then(({ items }) => {
-      if (items.length === 0) return;
-      // Higher stars = pick from more-infused media
-      const sorted = items.toSorted((a, b) => (b.infusion || 0) - (a.infusion || 0));
-      const third = Math.ceil(sorted.length / 3);
-      const tierStart = s === 3 ? 0 : s === 2 ? third : third * 2;
-      const tierEnd = s === 3 ? third : s === 2 ? third * 2 : sorted.length;
-      const pool = sorted.slice(tierStart, tierEnd);
-      if (pool.length === 0) pool.push(sorted[sorted.length - 1]);
-      setReward(pool[Math.floor(Math.random() * pool.length)]);
-    }).catch(() => {});
-  }, [won, moves]);
+    const count = CARDS_PER_STAR[s] || 1;
+    const toAdd = shuffle(gameMediaIds).slice(0, count);
+    addCardsToInventory(toAdd).then(added => {
+      setWinResult({ stars: s, added });
+      window.dispatchEvent(new Event('dust-changed'));
+    });
+  }, [won]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    return () => {
-      clearTimeout(flipTimeoutRef.current);
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.removeAttribute('src');
-        videoRef.current.load();
-      }
-    };
+    return () => clearTimeout(flipTimeoutRef.current);
   }, []);
 
   if (loading) {
@@ -235,46 +239,18 @@ export default function MemoryGamePage() {
         </Button>
       </div>
 
-      {reward && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 animate-fade-in cursor-pointer"
-          onClick={() => setReward(null)}
-        >
-          <div className="text-4xl tracking-widest mb-4 animate-bounce-in">
-            <Stars count={stars} glow />
-          </div>
-          <p className="text-green-300 text-xl font-semibold mb-6 animate-fade-in-delayed">
-            You won in {moves} moves!
-          </p>
-          {reward.type === MEDIA_TYPE.IMAGE ? (
-            <img
-              src={getMediaUrl(reward)}
-              alt={reward.title}
-              className="max-w-[90vw] max-h-[70vh] rounded-xl object-contain shadow-2xl shadow-blue-500/20 animate-scale-in"
-            />
-          ) : (
-            <video
-              ref={videoRef}
-              src={getMediaUrl(reward)}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="max-w-[90vw] max-h-[70vh] rounded-xl object-contain shadow-2xl shadow-blue-500/20 animate-scale-in"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
-          <p className="text-gray-500 text-sm mt-6 animate-fade-in-delayed">Click anywhere to continue</p>
-        </div>
-      )}
-
-      {won && !reward && (
+      {winResult && (
         <div className="mb-6 p-4 bg-green-900/30 border border-green-700/50 rounded-lg text-center space-y-2">
           <p className="text-2xl tracking-widest">
-            <Stars count={stars} />
+            <Stars count={winResult.stars} glow />
           </p>
           <p className="text-green-300 text-lg font-semibold">
             You won in {moves} moves!
+          </p>
+          <p className="text-gray-300 text-sm">
+            {winResult.added > 0
+              ? `${winResult.added} card${winResult.added !== 1 ? 's' : ''} added to inventory`
+              : 'Cards already in inventory'}
           </p>
         </div>
       )}
