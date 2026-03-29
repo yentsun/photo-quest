@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import {
-  fetchInventory, destroyInventoryItem, freeInfuseMedia, getMediaUrl, getImageUrl,
+  fetchInventory, destroyInventoryItem, sellInventoryItem, freeInfuseMedia, getMediaUrl, getImageUrl,
   fetchPiles, fetchPileCards, createPile, renamePile as renamePileApi, deletePile as deletePileApi, addToPile,
 } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
@@ -15,11 +15,12 @@ import { Button, IconButton, Icon, Input, Spinner } from '../ui/index.js';
 
 /* ── Card component ── */
 
-const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, onDrop }) {
+const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, onSell, onDrop }) {
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const thumbUrl = isImage ? getImageUrl(item.id) : getMediaUrl(item);
   const infusion = item.infusion || 0;
-  const dustReward = infusion > 0 ? infusion * 2 : 1;
+  const destroyReward = infusion > 0 ? infusion * 2 : 1;
+  const sellReward = infusion * 2;
   const [dragOver, setDragOver] = useState(false);
 
   return (
@@ -48,10 +49,18 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, on
         </div>
         <div className="px-3 py-2 flex items-center justify-between gap-1">
           <p className="text-white text-xs font-medium truncate flex-1">{item.title}</p>
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex gap-0.5">
+            {onSell && (
+              <IconButton
+                icon={<Icon name="prev" className="w-3.5 h-3.5" />}
+                label={`${words.sell} (+${sellReward} ${words.dustSymbol})`}
+                onClick={(e) => { e.stopPropagation(); onSell(item); }}
+                className="bg-blue-900/70 hover:bg-blue-700 text-blue-200 hover:text-white"
+              />
+            )}
             <IconButton
               icon={<Icon name="trash" className="w-3.5 h-3.5" />}
-              label={`${words.destroy} (+${dustReward} ${words.dustSymbol})`}
+              label={`${words.destroy} (+${destroyReward} ${words.dustSymbol})`}
               onClick={(e) => { e.stopPropagation(); onDestroy?.(item); }}
               className="bg-red-900/70 hover:bg-red-700 text-red-200 hover:text-white"
             />
@@ -268,6 +277,23 @@ export default function InventoryPage() {
 
   const handleCardClick = (item) => setSelectedItem(item);
 
+  const handleSell = async (item) => {
+    const infusion = item.infusion || 0;
+    const sellReward = infusion * 2;
+    const msg = sellReward > 0
+      ? `Sell this card back to library?\n\n+${sellReward} ${words.dustSymbol}`
+      : 'Return this card to library for free?';
+    if (!confirm(msg)) return;
+    try {
+      await sellInventoryItem(item.inventory_id);
+      setSelectedItem(null);
+      window.dispatchEvent(new Event('dust-changed'));
+      reload();
+    } catch (err) {
+      console.error('Failed to sell card:', err);
+    }
+  };
+
   const handleDestroy = async (item) => {
     const infusion = item.infusion || 0;
     const dustReward = infusion > 0 ? infusion * 2 : 1;
@@ -369,6 +395,7 @@ export default function InventoryPage() {
               item={item}
               onClick={handleCardClick}
               onDestroy={handleDestroy}
+              onSell={handleSell}
             />
           ))}
         </div>
@@ -411,6 +438,7 @@ export default function InventoryPage() {
               item={item}
               onClick={handleCardClick}
               onDestroy={handleDestroy}
+              onSell={handleSell}
               onDrop={handleCardDrop}
             />
           ))}

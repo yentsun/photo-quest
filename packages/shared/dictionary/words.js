@@ -36,6 +36,9 @@ export const words = {
   /** Quest — already in inventory label. */
   inInventory: 'In inventory',
 
+  /** Inventory — sell button label. */
+  sell: 'Sell',
+
   /** Inventory — destroy button label. */
   destroy: 'Destroy',
 

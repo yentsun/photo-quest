@@ -238,6 +238,18 @@ export async function destroyInventoryItem(inventoryId) {
 }
 
 /**
+ * Sell an inventory card back to the library (keeps file, awards dust).
+ *
+ * @param {number} inventoryId
+ * @returns {Promise<{ dustAwarded: number, dust: number }>}
+ */
+export async function sellInventoryItem(inventoryId) {
+  const response = await fetch(`/inventory/${inventoryId}/sell`, { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to sell card');
+  return response.json();
+}
+
+/**
  * Fetch player stats (dust balance).
  *
  * @returns {Promise<{ dust: number }>}
