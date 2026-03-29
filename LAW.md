@@ -140,6 +140,8 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.12** The app must have a **Market** page. The player can buy extra quest decks (**5 Đ** each) and memory game tickets (**1 Đ** each). The 10 free daily quest decks still generate; market decks are added on top. Memory game requires a ticket to play (consumed on first card flip).
 
+**4.14** The player must be able to organize inventory cards into **piles** (like playlists). A card can belong to multiple piles. Piles are created by dragging a card onto another card. Piles can be named. Inventory view shows piles as stacked card groups and ungrouped cards.
+
 **4.10** The player can **destroy** a media card from their inventory. This permanently removes the media from the database and deletes the file from disk. The player receives **1 Đ** for a non-infused card, or **infusion × 2 Đ** for an infused card.
 
 ---
