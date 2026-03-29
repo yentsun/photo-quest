@@ -19,9 +19,5 @@ export default function () {
 
   db.prepare('UPDATE memory_tickets SET used = 1 WHERE id = ?').run(ticket.id);
 
-  const { tickets } = db.prepare(
-    'SELECT COUNT(*) AS tickets FROM memory_tickets WHERE used = 0'
-  ).get();
-
-  return { tickets };
+  return kojo.ops.getMemoryTickets();
 }

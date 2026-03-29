@@ -10,6 +10,8 @@
  * @returns {{ decks: object[], dust: number }}
  */
 
+import { weightedSample } from '../src/weightedSample.js';
+
 export default function () {
   const [kojo] = this;
   const db = kojo.get('db');
@@ -70,27 +72,4 @@ function generateDecks(db, date) {
     db.exec('ROLLBACK');
     throw err;
   }
-}
-
-/**
- * Pick `count` unique items weighted by infusion.
- * Weight = infusion + 1 (so 0-infusion items still appear).
- */
-function weightedSample(items, count) {
-  const pool = items.map(m => ({ ...m, weight: m.infusion + 1 }));
-  const picked = [];
-
-  for (let i = 0; i < count && pool.length > 0; i++) {
-    const totalWeight = pool.reduce((sum, m) => sum + m.weight, 0);
-    let r = Math.random() * totalWeight;
-    let idx = 0;
-    for (; idx < pool.length - 1; idx++) {
-      r -= pool[idx].weight;
-      if (r <= 0) break;
-    }
-    picked.push(pool[idx]);
-    pool.splice(idx, 1);
-  }
-
-  return picked;
 }

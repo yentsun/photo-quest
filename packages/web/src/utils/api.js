@@ -312,7 +312,7 @@ export async function takeQuestCard(deckId) {
  * @returns {Promise<{ deck: object, dust: number }>}
  */
 export async function buyQuestDeck() {
-  const response = await fetch('/market/buy-deck', { method: 'POST' });
+  const response = await fetch(apiRoutes.marketBuyDeck, { method: 'POST' });
   if (!response.ok) throw new Error('Failed to buy quest deck');
   return response.json();
 }
@@ -322,7 +322,7 @@ export async function buyQuestDeck() {
  * @returns {Promise<{ tickets: number, dust: number }>}
  */
 export async function buyMemoryTicket() {
-  const response = await fetch('/market/buy-ticket', { method: 'POST' });
+  const response = await fetch(apiRoutes.marketBuyTicket, { method: 'POST' });
   if (!response.ok) throw new Error('Failed to buy memory ticket');
   return response.json();
 }
@@ -332,7 +332,7 @@ export async function buyMemoryTicket() {
  * @returns {Promise<{ tickets: number }>}
  */
 export async function getMemoryTickets() {
-  const response = await fetch('/market/tickets');
+  const response = await fetch(apiRoutes.marketTickets);
   if (!response.ok) throw new Error('Failed to get tickets');
   return response.json();
 }
@@ -342,7 +342,7 @@ export async function getMemoryTickets() {
  * @returns {Promise<{ tickets: number }>}
  */
 export async function useMemoryTicket() {
-  const response = await fetch('/market/use-ticket', { method: 'POST' });
+  const response = await fetch(apiRoutes.marketUseTicket, { method: 'POST' });
   if (!response.ok) throw new Error('No tickets available');
   return response.json();
 }

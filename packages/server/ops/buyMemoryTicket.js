@@ -18,9 +18,7 @@ export default function () {
 
   db.prepare('INSERT INTO memory_tickets (used) VALUES (0)').run();
 
-  const { tickets } = db.prepare(
-    'SELECT COUNT(*) AS tickets FROM memory_tickets WHERE used = 0'
-  ).get();
+  const { tickets } = kojo.ops.getMemoryTickets();
 
   return { tickets, dust: dustResult.dust };
 }

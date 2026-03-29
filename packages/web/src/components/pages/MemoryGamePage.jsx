@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
-import { fetchMedia, getImageUrl, useMemoryTicket } from '../../utils/api.js';
+import { fetchMedia, getImageUrl, useMemoryTicket, getMemoryTickets } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Spinner } from '../ui/index.js';
 
@@ -108,6 +108,7 @@ export default function MemoryGamePage() {
   const pendingMismatchRef = useRef(false);
 
   const startedRef = useRef(false);
+  const [hasTicket, setHasTicket] = useState(null);
 
   /* Picking phase state */
   const [picking, setPicking] = useState(false);
@@ -136,6 +137,14 @@ export default function MemoryGamePage() {
     pendingMismatchRef.current = false;
 
     try {
+      const { tickets } = await getMemoryTickets();
+      setHasTicket(tickets > 0);
+      if (tickets === 0) {
+        setError('No tickets. Buy one from the Market.');
+        setLoading(false);
+        return;
+      }
+
       const { items } = await fetchMedia();
       const deck = buildDeck(items);
       if (!deck) {
@@ -162,7 +171,7 @@ export default function MemoryGamePage() {
     setPicksAllowed(allowed);
   }, [won]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleClick = (card) => {
+  const handleClick = async (card) => {
     /* Picking phase — player selects reward cards */
     if (picking) {
       if (!matched.has(card.pairKey)) return;
@@ -191,12 +200,13 @@ export default function MemoryGamePage() {
 
     if (!startedRef.current) {
       startedRef.current = true;
-      useMemoryTicket().catch(() => {
+      try {
+        await useMemoryTicket();
+      } catch {
         startedRef.current = false;
-        setFlipped([]);
         setError('No tickets. Buy one from the Market.');
         return;
-      });
+      }
     }
 
     const newFlipped = [...flipped, card.id];
