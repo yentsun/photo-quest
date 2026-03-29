@@ -28,11 +28,28 @@ function Stars({ count, glow }) {
   ));
 }
 
+function weightedPick(items, count) {
+  const pool = items.map(m => ({ ...m, weight: (m.infusion || 0) + 1 }));
+  const picked = [];
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const total = pool.reduce((s, m) => s + m.weight, 0);
+    let r = Math.random() * total;
+    let idx = 0;
+    for (; idx < pool.length - 1; idx++) {
+      r -= pool[idx].weight;
+      if (r <= 0) break;
+    }
+    picked.push(pool[idx]);
+    pool.splice(idx, 1);
+  }
+  return picked;
+}
+
 function buildDeck(mediaItems) {
   const images = mediaItems.filter(m => m.type === MEDIA_TYPE.IMAGE);
   if (images.length < PAIR_COUNT) return null;
 
-  const picked = shuffle(images).slice(0, PAIR_COUNT);
+  const picked = weightedPick(images, PAIR_COUNT);
   const cards = [];
 
   for (const media of picked) {

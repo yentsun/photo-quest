@@ -142,7 +142,7 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.14** The player must be able to organize inventory cards into **piles** (like playlists). A card can belong to multiple piles. Piles are created by dragging a card onto another card. Piles can be named. Inventory view shows piles as stacked card groups and ungrouped cards.
 
-**4.15** The player can **sell** an inventory card back to the media library. The card is removed from inventory but the media file stays on disk. The player receives **infusion × 2 Đ** (the card's take cost). Selling a 0-infusion card returns 0 Đ.
+**4.15** The player can **sell** an inventory card back to the media library. The card is removed from inventory but the media file stays on disk. The player receives **infusion × 1 Đ**. Selling a 0-infusion card returns 0 Đ.
 
 **4.10** The player can **destroy** a media card from their inventory. This permanently removes the media from the database and deletes the file from disk. The player receives **1 Đ** for a non-infused card, or **infusion × 2 Đ** for an infused card.
 

@@ -22,7 +22,7 @@ export default function (inventoryId) {
 
   if (!inv) return null;
 
-  const dustAwarded = (inv.infusion || 0) * 2;
+  const dustAwarded = inv.infusion || 0;
 
   db.prepare('DELETE FROM inventory WHERE id = ?').run(inv.id);
 

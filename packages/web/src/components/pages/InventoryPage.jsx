@@ -20,7 +20,7 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, on
   const thumbUrl = isImage ? getImageUrl(item.id) : getMediaUrl(item);
   const infusion = item.infusion || 0;
   const destroyReward = infusion > 0 ? infusion * 2 : 1;
-  const sellReward = infusion * 2;
+  const sellReward = infusion;
   const [dragOver, setDragOver] = useState(false);
 
   return (
@@ -279,7 +279,7 @@ export default function InventoryPage() {
 
   const handleSell = async (item) => {
     const infusion = item.infusion || 0;
-    const sellReward = infusion * 2;
+    const sellReward = infusion;
     const msg = sellReward > 0
       ? `Sell this card back to library?\n\n+${sellReward} ${words.dustSymbol}`
       : 'Return this card to library for free?';
