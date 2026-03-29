@@ -11,9 +11,8 @@ export default function (name, inventoryIds = []) {
   const result = db.prepare('INSERT INTO piles (name) VALUES (?)').run(name || 'New Pile');
   const pileId = Number(result.lastInsertRowid);
 
-  const stmt = db.prepare('INSERT OR IGNORE INTO pile_cards (pile_id, inventory_id) VALUES (?, ?)');
-  for (const invId of inventoryIds) {
-    stmt.run(pileId, Number(invId));
+  if (inventoryIds.length > 0) {
+    kojo.ops.addToPile(pileId, inventoryIds);
   }
 
   return { id: pileId, name: name || 'New Pile', cardCount: inventoryIds.length };

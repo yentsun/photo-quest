@@ -8,14 +8,14 @@ import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import {
   fetchInventory, destroyInventoryItem, freeInfuseMedia, getMediaUrl, getImageUrl,
-  fetchPiles, createPile, renamePile as renamePileApi, deletePile as deletePileApi, addToPile,
+  fetchPiles, fetchPileCards, createPile, renamePile as renamePileApi, deletePile as deletePileApi, addToPile,
 } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, IconButton, Icon, Input, Spinner } from '../ui/index.js';
 
 /* ── Card component ── */
 
-const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, onDragStart, onDragOver, onDrop }) {
+const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, onDrop }) {
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const thumbUrl = isImage ? getImageUrl(item.id) : getMediaUrl(item);
   const infusion = item.infusion || 0;
@@ -26,8 +26,8 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, on
     <div
       className={`group cursor-pointer ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
       draggable
-      onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(item.inventory_id)); onDragStart?.(item); }}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); onDragOver?.(e); }}
+      onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(item.inventory_id)); }}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop?.(e, item); }}
       onClick={() => onClick?.(item)}
@@ -64,7 +64,7 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, on
 
 /* ── Pile card (stacked card look) ── */
 
-function PileCard({ pile, onToggle, onRename, onDelete, onDrop }) {
+function PileCard({ pile, onOpen, onRename, onDelete, onDrop }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(pile.name);
   const [dragOver, setDragOver] = useState(false);
@@ -81,7 +81,7 @@ function PileCard({ pile, onToggle, onRename, onDelete, onDrop }) {
   return (
     <div
       className={`group cursor-pointer ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
-      onClick={() => !editing && onToggle(pile.id)}
+      onClick={() => !editing && onOpen(pile.id)}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(e, pile.id); }}
@@ -251,17 +251,19 @@ export default function InventoryPage() {
   useEffect(() => { reload(); }, []);
 
   const openPile = async (pileId) => {
-    const pile = piles.find(p => p.id === pileId);
-    const res = await fetch(`/piles/${pileId}/cards`);
-    const cards = await res.json();
-    setViewingPile(pile);
-    setViewingPileCards(cards);
+    try {
+      const pile = piles.find(p => p.id === pileId);
+      const cards = await fetchPileCards(pileId);
+      setViewingPile(pile);
+      setViewingPileCards(cards);
+    } catch (err) {
+      console.error('Failed to open pile:', err);
+    }
   };
 
   const closePile = () => {
     setViewingPile(null);
     setViewingPileCards([]);
-    reload();
   };
 
   const handleCardClick = (item) => setSelectedItem(item);
@@ -296,7 +298,7 @@ export default function InventoryPage() {
   /* Drag & drop: card onto card = new pile, card onto pile = add */
   const handleCardDrop = async (e, targetItem) => {
     const draggedId = Number(e.dataTransfer.getData('text/plain'));
-    if (draggedId === targetItem.inventory_id) return;
+    if (!draggedId || draggedId === targetItem.inventory_id) return;
     try {
       await createPile('New Pile', [draggedId, targetItem.inventory_id]);
       reload();
@@ -307,6 +309,7 @@ export default function InventoryPage() {
 
   const handlePileDrop = async (e, pileId) => {
     const draggedId = Number(e.dataTransfer.getData('text/plain'));
+    if (!draggedId) return;
     try {
       await addToPile(pileId, [draggedId]);
       reload();
@@ -396,7 +399,7 @@ export default function InventoryPage() {
             <PileCard
               key={`pile-${pile.id}`}
               pile={pile}
-              onToggle={openPile}
+              onOpen={openPile}
               onRename={handleRenamePile}
               onDelete={handleDeletePile}
               onDrop={handlePileDrop}

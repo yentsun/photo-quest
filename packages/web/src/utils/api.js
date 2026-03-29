@@ -422,6 +422,17 @@ export async function removeFromPile(pileId, inventoryId) {
 }
 
 /**
+ * Fetch cards in a pile.
+ * @param {number} pileId
+ * @returns {Promise<Array>}
+ */
+export async function fetchPileCards(pileId) {
+  const response = await fetch(`/piles/${pileId}/cards`);
+  if (!response.ok) throw new Error('Failed to fetch pile cards');
+  return response.json();
+}
+
+/**
  * Download a media file to the user's device.
  *
  * @param {Object} media - Media object with id, title, type
