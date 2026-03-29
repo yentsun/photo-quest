@@ -74,7 +74,7 @@ function CardOverlay({ item, onClose }) {
       freeInfuseMedia(item.id, amount)
         .then(({ media }) => setInfusion(media.infusion))
         .catch(() => {});
-    }, 10000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [item?.id]);
 
