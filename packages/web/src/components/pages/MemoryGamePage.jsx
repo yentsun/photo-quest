@@ -107,6 +107,8 @@ export default function MemoryGamePage() {
   const flipTimeoutRef = useRef(null);
   const pendingMismatchRef = useRef(false);
 
+  const startedRef = useRef(false);
+
   /* Picking phase state */
   const [picking, setPicking] = useState(false);
   const [picksAllowed, setPicksAllowed] = useState(0);
@@ -129,6 +131,7 @@ export default function MemoryGamePage() {
     setPickedIds(new Set());
     setPicksDone(false);
     setPicksAdded(0);
+    startedRef.current = false;
     lockRef.current = false;
     pendingMismatchRef.current = false;
 
@@ -172,7 +175,7 @@ export default function MemoryGamePage() {
 
       addCardToInventory(card.mediaId).then(added => {
         if (added) setPicksAdded(prev => prev + 1);
-      });
+      }).catch(() => {});
 
       if (next.size >= picksAllowed) {
         finishPicking();
@@ -185,6 +188,17 @@ export default function MemoryGamePage() {
     if (matched.has(card.pairKey)) return;
     if (flipped.includes(card.id)) return;
     if (flipped.length >= 2) return;
+
+    if (!startedRef.current) {
+      startedRef.current = true;
+      fetch('/player/dust', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delta: -1 }),
+      }).then(res => {
+        if (res.ok) window.dispatchEvent(new Event('dust-changed'));
+      }).catch(() => {});
+    }
 
     const newFlipped = [...flipped, card.id];
     setFlipped(newFlipped);

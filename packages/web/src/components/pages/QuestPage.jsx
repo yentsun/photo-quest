@@ -61,7 +61,7 @@ function CardViewer({ deck, onNext, onTake, onInfuse, taking, infusing }) {
                 <img
                   src={mediaUrl}
                   alt={card.title}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-cover"
                 />
               ) : (
                 <video
@@ -69,7 +69,7 @@ function CardViewer({ deck, onNext, onTake, onInfuse, taking, infusing }) {
                   controls
                   muted
                   playsInline
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-cover"
                 />
               )}
             </div>

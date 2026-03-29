@@ -2,13 +2,13 @@
  * @file Inventory page - shows media items the player has acquired as cards.
  */
 
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import { fetchInventory, destroyInventoryItem, getMediaUrl, getImageUrl } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, IconButton, Icon, Modal, Spinner } from '../ui/index.js';
+import { Button, IconButton, Icon, Spinner } from '../ui/index.js';
 
 const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy }) {
   const isImage = item.type === MEDIA_TYPE.IMAGE;
@@ -32,9 +32,9 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy }) 
         <div className="p-2 pb-0">
           <div className="relative aspect-square rounded-lg overflow-hidden bg-black">
             {isImage ? (
-              <img src={thumbUrl} alt={item.title} className="w-full h-full object-contain" loading="lazy" />
+              <img src={thumbUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
             ) : (
-              <video src={thumbUrl} preload="metadata" muted className="w-full h-full object-contain" />
+              <video src={thumbUrl} preload="metadata" muted className="w-full h-full object-cover" />
             )}
           </div>
         </div>
@@ -56,36 +56,45 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy }) 
   );
 });
 
-function CardDetailModal({ item, open, onClose }) {
+function CardOverlay({ item, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   if (!item) return null;
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(item);
   const infusion = item.infusion || 0;
 
   return (
-    <Modal open={open} onClose={onClose} title={item.title}>
-      <div className="space-y-4">
-        {/* Card frame */}
-        <div className="rounded-2xl bg-gray-900 border border-gray-700 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 bg-gray-800/80 border-b border-gray-700">
-            <span className="text-gray-400 text-xs uppercase tracking-wide">{isImage ? 'Image' : 'Video'}</span>
-            <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
-          </div>
-          <div className="p-3">
-            <div className="relative rounded-lg overflow-hidden bg-black">
-              {isImage ? (
-                <img src={mediaUrl} alt={item.title} className="w-full max-h-[60vh] object-contain mx-auto" />
-              ) : (
-                <video src={mediaUrl} controls muted playsInline className="w-full max-h-[60vh] object-contain mx-auto" />
-              )}
-            </div>
-          </div>
-          <div className="px-4 py-3 border-t border-gray-700">
-            <p className="text-white font-semibold">{item.title}</p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 cursor-pointer"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl mx-4 rounded-2xl bg-gray-900 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-2 bg-gray-800/80 border-b border-gray-700">
+          <span className="text-gray-400 text-xs uppercase tracking-wide">{isImage ? 'Image' : 'Video'}</span>
+          <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
+        </div>
+        <div className="p-3 pb-0">
+          <div className="relative rounded-lg overflow-hidden bg-black">
+            {isImage ? (
+              <img src={mediaUrl} alt={item.title} className="w-full max-h-[80vh] object-cover" />
+            ) : (
+              <video src={mediaUrl} controls muted playsInline className="w-full max-h-[80vh] object-cover" onClick={(e) => e.stopPropagation()} />
+            )}
           </div>
         </div>
+        <div className="px-4 py-3">
+          <p className="text-white font-semibold">{item.title}</p>
+        </div>
       </div>
-    </Modal>
+    </div>
   );
 }
 
@@ -99,6 +108,7 @@ export default function InventoryPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
+  const closeOverlay = useCallback(() => setSelectedItem(null), []);
 
   const loadInventory = () => {
     fetchInventory()
@@ -183,11 +193,12 @@ export default function InventoryPage() {
         />
       )}
 
-      <CardDetailModal
-        item={selectedItem}
-        open={!!selectedItem}
-        onClose={() => setSelectedItem(null)}
-      />
+      {selectedItem && (
+        <CardOverlay
+          item={selectedItem}
+          onClose={closeOverlay}
+        />
+      )}
     </div>
   );
 }
