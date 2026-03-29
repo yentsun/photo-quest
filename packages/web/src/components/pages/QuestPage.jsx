@@ -44,10 +44,11 @@ function CardViewer({ deck, onNext, onTake, onInfuse, taking, infusing }) {
   const isImage = card.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(card);
   const takeCost = deck.takeCost || 0;
+  const canTake = deck.canTake !== false;
   const takeLabel = takeCost === 0
     ? words.takeFree
     : `${words.takeCard} (${takeCost} ${words.dustSymbol})`;
-  const canAffordTake = takeCost === 0 || deck.dust >= takeCost;
+  const canAffordTake = canTake && (takeCost === 0 || deck.dust >= takeCost);
 
   return (
     <div className="flex flex-col items-center gap-4">

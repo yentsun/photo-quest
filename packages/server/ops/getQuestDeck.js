@@ -39,14 +39,13 @@ export default function (deckId) {
 
   const freeTakeUsed = !!deck.free_take_used;
   let takeCost = 0;
+  let canTake = true;
   if (currentCard) {
     const infusion = currentCard.infusion || 0;
-    if (infusion === 0 && !freeTakeUsed) {
-      takeCost = 0;
-    } else if (infusion === 0) {
-      takeCost = 1;
+    if (infusion === 0 && freeTakeUsed) {
+      canTake = false; // no more free takes, can't buy 0-infusion cards
     } else {
-      takeCost = infusion * 2;
+      takeCost = infusion * 2; // 0 for uninfused (free), infusion×2 for infused
     }
   }
 
@@ -59,6 +58,7 @@ export default function (deckId) {
     currentCard: currentCard || null,
     inInventory,
     takeCost,
+    canTake,
     freeTakeUsed,
     dust,
   };

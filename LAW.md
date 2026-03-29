@@ -132,7 +132,7 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.8** Each media item has a **dust infusion** value (starts at 0). While browsing quest decks, the player can **infuse** the current card by spending 1 magic dust per click — this replaces the old "like" mechanic. Infusion is cumulative and persists. Higher infusion increases the chance of appearing in future quest decks.
 
-**4.9** While browsing quest decks, the player can **take** the current card into their inventory. If the card has 0 infusion, taking it is free. If infused, the cost is **infusion × 2** magic dust.
+**4.9** While browsing quest decks, the player can **take** the current card into their inventory. Each deck allows **one free take** of a 0-infusion card. After that, 0-infusion cards cannot be taken. Infused cards cost **infusion × 2** magic dust to take.
 
 **4.10** The player can **destroy** a media card from their inventory. This permanently removes the media from the database and deletes the file from disk. The player receives **1 Đ** for a non-infused card, or **infusion × 2 Đ** for an infused card.
 

@@ -34,17 +34,13 @@ export default function (deckId) {
     return { error: 'Already in inventory' };
   }
 
-  // Cost: one free take per deck if 0 infusion, otherwise infusion × 2
+  // Cost: one free take per deck for 0-infusion cards, otherwise infusion × 2
   const infusion = currentCard.infusion || 0;
-  let cost;
-  if (infusion === 0 && !deck.free_take_used) {
-    cost = 0;
-  } else if (infusion === 0) {
-    cost = 1; // free take already used, costs 1 for subsequent 0-infusion cards
-  } else {
-    cost = infusion * 2;
+  if (infusion === 0 && deck.free_take_used) {
+    return { error: 'Free take already used for this deck' };
   }
 
+  const cost = infusion * 2;
   if (cost > 0) {
     const dustResult = kojo.ops.updateDust(-cost);
     if (!dustResult) {
@@ -53,7 +49,7 @@ export default function (deckId) {
   }
 
   // Mark free take as used
-  if (infusion === 0 && !deck.free_take_used) {
+  if (infusion === 0) {
     db.prepare('UPDATE quest_decks SET free_take_used = 1 WHERE id = ?').run(deck.id);
   }
 
