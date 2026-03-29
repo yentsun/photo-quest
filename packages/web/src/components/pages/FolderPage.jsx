@@ -118,10 +118,10 @@ export default function FolderPage() {
       {breadcrumbs.length > 0 && (
         <nav className="flex items-center gap-1 text-sm text-gray-400 mb-4 overflow-x-auto">
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/quest')}
             className="hover:text-white transition-colors shrink-0"
           >
-            Library
+            Quest
           </button>
           {breadcrumbs.map((crumb, i) => {
             const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();

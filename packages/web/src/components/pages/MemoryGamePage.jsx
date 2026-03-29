@@ -216,8 +216,8 @@ export default function MemoryGamePage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
         <p className="text-red-400">{error}</p>
-        <Button variant="secondary" onClick={() => navigate('/dashboard')}>
-          Back to Library
+        <Button variant="secondary" onClick={() => navigate('/quest')}>
+          Back to Quest
         </Button>
       </div>
     );

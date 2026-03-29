@@ -10,7 +10,6 @@ import { RefreshProvider } from '../contexts/RefreshContext.jsx';
 import { clientRoutes as r } from '@photo-quest/shared';
 import ErrorBoundary from './ErrorBoundary';
 import Root from './Root';
-import Dashboard from './Dashboard';
 import { FolderPage, MediaPage, MemoryGamePage, InventoryPage, QuestPage } from './pages/index.js';
 import ToasterMessage from './ToasterMessage';
 
@@ -27,8 +26,8 @@ export default function Router() {
             <BrowserRouter>
               <Routes>
                 <Route path={r.root} element={<Root />}>
-                  <Route index element={<Navigate replace to={r.dashboard} />} />
-                  <Route path={r.dashboard} element={<Dashboard />} />
+                  <Route index element={<Navigate replace to={r.quest} />} />
+                  <Route path={r.dashboard} element={<Navigate replace to={r.quest} />} />
                   <Route path={r.folder} element={<FolderPage />} />
                   <Route path={r.media} element={<MediaPage />} />
                   <Route path={r.memoryGame} element={<MemoryGamePage />} />

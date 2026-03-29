@@ -137,7 +137,7 @@ export default function MediaPage() {
     if (nextItem) {
       navigate(`/media/${nextItem.id}`, { replace: true });
     } else {
-      navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
+      navigate(folder ? `/folder/${folder.id}` : '/quest', { replace: true });
     }
     if (inSlideshow) removeSlideshowItem(deletedId);
     try {
@@ -195,7 +195,7 @@ export default function MediaPage() {
         icon={<Icon name="image" className="w-16 h-16" />}
         title="Media not found"
         description="This media item doesn't exist."
-        action={{ label: 'Go to Library', onClick: () => navigate('/dashboard') }}
+        action={{ label: 'Go to Quest', onClick: () => navigate('/quest') }}
       />
     );
   }

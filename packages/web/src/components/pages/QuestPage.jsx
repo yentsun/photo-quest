@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import { fetchQuestDecks, fetchQuestDeck, advanceQuestDeck, takeQuestCard, infuseMedia, getMediaUrl } from '../../utils/api.js';
-import { Button, DustBadge, Spinner } from '../ui/index.js';
+import { Button, Spinner } from '../ui/index.js';
 import { EmptyState } from '../layout/index.js';
 
 function DeckGrid({ decks, onPickDeck }) {
@@ -41,37 +41,52 @@ function CardViewer({ deck, onNext, onTake, onInfuse, taking, infusing }) {
     : `${words.takeCard} (${takeCost} ${words.dustSymbol})`;
   const canAffordTake = canTake && (takeCost === 0 || deck.dust >= takeCost);
 
+  const infusion = card.infusion || 0;
+
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Progress + infusion */}
-      <div className="flex items-center gap-3 text-gray-400 text-sm">
-        <span>Card {deck.currentPosition + 1} of {deck.totalCards}</span>
-        {(card.infusion || 0) > 0 && (
-          <span className="text-purple-300">{words.dustSymbol} {card.infusion} infused</span>
-        )}
-        <DustBadge dust={deck.dust} />
-      </div>
-
       {/* Card */}
-      <div className="relative w-full max-w-md aspect-[3/4] rounded-xl overflow-hidden bg-gray-800 shadow-2xl">
-        {isImage ? (
-          <img
-            src={mediaUrl}
-            alt={card.title}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <video
-            src={mediaUrl}
-            controls
-            muted
-            playsInline
-            className="w-full h-full object-cover"
-          />
-        )}
-        {/* Title overlay */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-          <p className="text-white font-medium truncate">{card.title}</p>
+      <div className="w-full max-w-sm">
+        <div className="relative rounded-2xl bg-gray-900 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden">
+          {/* Card top — info strip */}
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-800/80 border-b border-gray-700">
+            <span className="text-gray-400 text-xs">{deck.currentPosition + 1} / {deck.totalCards}</span>
+            <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
+          </div>
+
+          {/* Card art — media fitted inside with padding */}
+          <div className="p-3 pb-0">
+            <div className="relative aspect-square rounded-lg overflow-hidden bg-black">
+              {isImage ? (
+                <img
+                  src={mediaUrl}
+                  alt={card.title}
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <video
+                  src={mediaUrl}
+                  controls
+                  muted
+                  playsInline
+                  className="w-full h-full object-contain"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Card bottom — title and stats */}
+          <div className="px-4 py-3">
+            <p className="text-white font-semibold text-sm truncate">{card.title}</p>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-gray-500 text-xs uppercase tracking-wide">
+                {isImage ? 'Image' : 'Video'}
+              </span>
+              {takeCost > 0 && (
+                <span className="text-yellow-400/70 text-xs">{takeCost} {words.dustSymbol}</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -108,7 +123,6 @@ function CardViewer({ deck, onNext, onTake, onInfuse, taking, infusing }) {
 export default function QuestPage() {
   const [loading, setLoading] = useState(true);
   const [decks, setDecks] = useState([]);
-  const [dust, setDust] = useState(0);
   const [activeDeckId, setActiveDeckId] = useState(null);
   const [activeDeck, setActiveDeck] = useState(null);
   const [taking, setTaking] = useState(false);
@@ -118,7 +132,7 @@ export default function QuestPage() {
   // Load decks
   useEffect(() => {
     fetchQuestDecks()
-      .then(({ decks, dust }) => { setDecks(decks); setDust(dust); })
+      .then(({ decks }) => setDecks(decks))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
@@ -133,7 +147,7 @@ export default function QuestPage() {
 
   const refreshDecks = () => {
     fetchQuestDecks()
-      .then(({ decks, dust }) => { setDecks(decks); setDust(dust); })
+      .then(({ decks }) => setDecks(decks))
       .catch(err => setError(err.message));
   };
 
@@ -143,7 +157,6 @@ export default function QuestPage() {
       refreshDecks();
     } else {
       setActiveDeck(result);
-      setDust(result.dust);
     }
   };
 
@@ -211,7 +224,6 @@ export default function QuestPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <DustBadge dust={dust} />
           {activeDeck && (
             <Button variant="ghost" onClick={() => { setActiveDeckId(null); refreshDecks(); }}>
               Back
