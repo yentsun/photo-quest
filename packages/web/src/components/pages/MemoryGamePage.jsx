@@ -133,6 +133,7 @@ export default function MemoryGamePage() {
     if (lockRef.current) return;
     if (matched.has(card.pairKey)) return;
     if (flipped.includes(card.id)) return;
+    if (flipped.length >= 2) return;
 
     const newFlipped = [...flipped, card.id];
     setFlipped(newFlipped);
@@ -144,6 +145,12 @@ export default function MemoryGamePage() {
       const [firstId, secondId] = newFlipped;
       const first = cards.find(c => c.id === firstId);
       const second = cards.find(c => c.id === secondId);
+
+      if (!first || !second) {
+        setFlipped([]);
+        lockRef.current = false;
+        return;
+      }
 
       if (first.pairKey === second.pairKey) {
         setMatched(prev => {
