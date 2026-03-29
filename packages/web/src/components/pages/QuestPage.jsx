@@ -190,6 +190,7 @@ export default function QuestPage() {
         setActiveDeck(result);
         setDust(result.dust);
       }
+      window.dispatchEvent(new Event('dust-changed'));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -204,6 +205,7 @@ export default function QuestPage() {
       const { dust: newDust } = await infuseMedia(activeDeck.currentCard.id);
       setDust(newDust);
       await reloadDeck();
+      window.dispatchEvent(new Event('dust-changed'));
     } catch (err) {
       setError(err.message);
     } finally {

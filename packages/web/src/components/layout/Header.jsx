@@ -16,13 +16,21 @@ export default function Header() {
   const [copied, setCopied] = useState(false);
   const [dust, setDust] = useState(null);
 
+  const refreshDust = () => {
+    fetchPlayerStats()
+      .then(stats => setDust(stats.dust))
+      .catch(() => {});
+  };
+
   useEffect(() => {
     fetchNetworkInfo()
       .then(info => setNetworkUrl(info.network))
       .catch(err => console.error('Failed to fetch network info:', err));
-    fetchPlayerStats()
-      .then(stats => setDust(stats.dust))
-      .catch(() => {});
+    refreshDust();
+
+    const onDustChanged = () => refreshDust();
+    window.addEventListener('dust-changed', onDustChanged);
+    return () => window.removeEventListener('dust-changed', onDustChanged);
   }, []);
 
   const handleCopyUrl = () => {

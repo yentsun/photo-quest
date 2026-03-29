@@ -80,6 +80,7 @@ export default function InventoryPage() {
     try {
       await destroyInventoryItem(item.inventory_id);
       setItems(prev => prev.filter(i => i.inventory_id !== item.inventory_id));
+      window.dispatchEvent(new Event('dust-changed'));
     } catch (err) {
       console.error('Failed to destroy card:', err);
     }
