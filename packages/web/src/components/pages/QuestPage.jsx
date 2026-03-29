@@ -2,9 +2,9 @@
  * @file Quest page — browse daily card decks and collect media.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
-import { fetchQuestDecks, fetchQuestDeck, advanceQuestDeck, takeQuestCard, infuseMedia, getMediaUrl } from '../../utils/api.js';
+import { fetchQuestDecks, fetchQuestDeck, advanceQuestDeck, takeQuestCard, infuseMedia, freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
 import { Button, Spinner } from '../ui/index.js';
 import { EmptyState } from '../layout/index.js';
 
@@ -28,8 +28,28 @@ function DeckGrid({ decks, onPickDeck }) {
   );
 }
 
-function CardViewer({ deck, onNext, onTake, onInfuse, taking, infusing }) {
+function CardViewer({ deck, onNext, onTake, onInfuse, onInfusionUpdate, taking, infusing }) {
   const card = deck.currentCard;
+  const [localInfusion, setLocalInfusion] = useState(card?.infusion || 0);
+
+  useEffect(() => { setLocalInfusion(card?.infusion || 0); }, [card?.id]);
+
+  /* Passive free infusion: 1 per 10s, max 2 minutes */
+  useEffect(() => {
+    if (!card) return;
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      if (Date.now() - startTime >= 120000) { clearInterval(interval); return; }
+      freeInfuseMedia(card.id, 1)
+        .then(({ media }) => {
+          setLocalInfusion(media.infusion);
+          if (onInfusionUpdate) onInfusionUpdate();
+        })
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [card?.id]);
+
   if (!card) return null;
 
   const isImage = card.type === MEDIA_TYPE.IMAGE;
@@ -41,7 +61,7 @@ function CardViewer({ deck, onNext, onTake, onInfuse, taking, infusing }) {
     : `${words.takeCard} (${takeCost} ${words.dustSymbol})`;
   const canAffordTake = canTake && (takeCost === 0 || deck.dust >= takeCost);
 
-  const infusion = card.infusion || 0;
+  const infusion = localInfusion;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -180,6 +200,12 @@ export default function QuestPage() {
     }
   };
 
+  const handlePassiveInfusionUpdate = useCallback(async () => {
+    if (!activeDeckId) return;
+    const data = await fetchQuestDeck(activeDeckId).catch(() => null);
+    if (data && !data.exhausted) setActiveDeck(data);
+  }, [activeDeckId]);
+
   const handleInfuse = async () => {
     if (!activeDeck?.currentCard) return;
     setInfusing(true);
@@ -247,6 +273,7 @@ export default function QuestPage() {
           onNext={handleNext}
           onTake={handleTake}
           onInfuse={handleInfuse}
+          onInfusionUpdate={handlePassiveInfusionUpdate}
           taking={taking}
           infusing={infusing}
         />
