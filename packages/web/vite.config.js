@@ -167,6 +167,15 @@ export default defineConfig({
           }
         },
       },
+      '/market': {
+        target: API_TARGET,
+        bypass(req) {
+          if (req.method === 'GET' && req.url === '/market'
+              && !req.headers.accept?.includes('application/json')) {
+            return req.url;
+          }
+        },
+      },
       '/player': API_TARGET,
       '/stream': API_TARGET,
       '/image': API_TARGET,

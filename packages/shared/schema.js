@@ -219,6 +219,21 @@ export const CREATE_QUEST_CARDS_TABLE = `
   )
 `;
 
+/**
+ * SQL statement that creates the `memory_tickets` table.
+ *
+ * Tracks purchased memory game tickets. Each ticket can be used once.
+ *
+ * @type {string}
+ */
+export const CREATE_MEMORY_TICKETS_TABLE = `
+  CREATE TABLE IF NOT EXISTS memory_tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    used INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`;
+
 export const CREATE_IMPORT_QUEUE_TABLE = `
   CREATE TABLE IF NOT EXISTS import_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

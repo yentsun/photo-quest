@@ -141,3 +141,9 @@ export const IMPORT_STATUS = {
  */
 export const DUST_REWARDS = { 3: 50, 2: 30, 1: 10 };
 
+/**
+ * Market prices in magic dust.
+ * @readonly
+ */
+export const MARKET_PRICES = { questDeck: 5, memoryTicket: 1 };
+

@@ -46,7 +46,10 @@ export const clientRoutes = {
   inventory: '/inventory',
 
   /** Daily quest — browse card decks and collect media. */
-  quest: '/quest'
+  quest: '/quest',
+
+  /** Market — buy decks and tickets. */
+  market: '/market'
 };
 
 // ---------------------------------------------------------------------------
@@ -139,5 +142,17 @@ export const apiRoutes = {
   questDeckNext: '/quest/decks/:id/next',
 
   /** POST -- Spend dust to take the current card into inventory. */
-  questDeckTake: '/quest/decks/:id/take'
+  questDeckTake: '/quest/decks/:id/take',
+
+  /** POST -- Buy an extra quest deck. */
+  marketBuyDeck: '/market/buy-deck',
+
+  /** POST -- Buy a memory game ticket. */
+  marketBuyTicket: '/market/buy-ticket',
+
+  /** GET -- Get unused memory ticket count. */
+  marketTickets: '/market/tickets',
+
+  /** POST -- Use a memory game ticket. */
+  marketUseTicket: '/market/use-ticket'
 };

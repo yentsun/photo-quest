@@ -308,6 +308,46 @@ export async function takeQuestCard(deckId) {
 }
 
 /**
+ * Buy an extra quest deck from the market.
+ * @returns {Promise<{ deck: object, dust: number }>}
+ */
+export async function buyQuestDeck() {
+  const response = await fetch('/market/buy-deck', { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to buy quest deck');
+  return response.json();
+}
+
+/**
+ * Buy a memory game ticket from the market.
+ * @returns {Promise<{ tickets: number, dust: number }>}
+ */
+export async function buyMemoryTicket() {
+  const response = await fetch('/market/buy-ticket', { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to buy memory ticket');
+  return response.json();
+}
+
+/**
+ * Get unused memory ticket count.
+ * @returns {Promise<{ tickets: number }>}
+ */
+export async function getMemoryTickets() {
+  const response = await fetch('/market/tickets');
+  if (!response.ok) throw new Error('Failed to get tickets');
+  return response.json();
+}
+
+/**
+ * Use a memory game ticket.
+ * @returns {Promise<{ tickets: number }>}
+ */
+export async function useMemoryTicket() {
+  const response = await fetch('/market/use-ticket', { method: 'POST' });
+  if (!response.ok) throw new Error('No tickets available');
+  return response.json();
+}
+
+/**
  * Download a media file to the user's device.
  *
  * @param {Object} media - Media object with id, title, type

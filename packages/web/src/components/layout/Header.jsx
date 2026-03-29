@@ -70,6 +70,9 @@ export default function Header() {
             <NavLink to={clientRoutes.memoryGame} className={linkClass}>
               Memory
             </NavLink>
+            <NavLink to={clientRoutes.market} className={linkClass}>
+              Market
+            </NavLink>
           </nav>
 
           {/* Dust balance + Network URL */}

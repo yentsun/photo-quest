@@ -4,8 +4,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MEDIA_TYPE } from '@photo-quest/shared';
-import { fetchMedia, getImageUrl } from '../../utils/api.js';
+import { MEDIA_TYPE, words } from '@photo-quest/shared';
+import { fetchMedia, getImageUrl, useMemoryTicket } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Spinner } from '../ui/index.js';
 
@@ -191,13 +191,12 @@ export default function MemoryGamePage() {
 
     if (!startedRef.current) {
       startedRef.current = true;
-      fetch('/player/dust', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ delta: -1 }),
-      }).then(res => {
-        if (res.ok) window.dispatchEvent(new Event('dust-changed'));
-      }).catch(() => {});
+      useMemoryTicket().catch(() => {
+        startedRef.current = false;
+        setFlipped([]);
+        setError('No tickets. Buy one from the Market.');
+        return;
+      });
     }
 
     const newFlipped = [...flipped, card.id];
