@@ -62,9 +62,9 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, on
   );
 });
 
-/* ── Pile header (collapsed) ── */
+/* ── Pile card (stacked card look) ── */
 
-function PileHeader({ pile, expanded, onToggle, onRename, onDelete, onDrop }) {
+function PileCard({ pile, expanded, onToggle, onRename, onDelete, onDrop }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(pile.name);
   const [dragOver, setDragOver] = useState(false);
@@ -74,44 +74,71 @@ function PileHeader({ pile, expanded, onToggle, onRename, onDelete, onDrop }) {
     if (name.trim() && name !== pile.name) onRename(pile.id, name.trim());
   };
 
+  const previewUrl = pile.preview
+    ? (pile.preview.type === MEDIA_TYPE.IMAGE ? getImageUrl(pile.preview.id) : getMediaUrl(pile.preview))
+    : null;
+
   return (
     <div
-      className={`flex items-center gap-3 p-3 rounded-xl bg-gray-800/60 border transition-all cursor-pointer
-        ${dragOver ? 'border-blue-400 bg-blue-900/20' : 'border-gray-700 hover:border-gray-500'}`}
+      className={`group cursor-pointer ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
       onClick={() => !editing && onToggle(pile.id)}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(e, pile.id); }}
     >
-      <span className="text-2xl">{expanded ? '📂' : '📁'}</span>
-      <div className="flex-1 min-w-0">
-        {editing ? (
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-            autoFocus
-            onClick={(e) => e.stopPropagation()}
-            className="text-sm"
-          />
-        ) : (
-          <p className="text-white font-medium text-sm truncate">{pile.name}</p>
+      {/* Stacked shadow layers */}
+      <div className="relative">
+        {pile.cardCount >= 3 && (
+          <div className="absolute inset-0 rounded-2xl bg-gray-700 border border-gray-600 translate-x-2 translate-y-2" />
         )}
-        <p className="text-gray-500 text-xs">{pile.cardCount} card{pile.cardCount !== 1 ? 's' : ''}</p>
-      </div>
-      <div className="flex gap-1 shrink-0">
-        <IconButton
-          icon={<Icon name="info" className="w-3.5 h-3.5" />}
-          label="Rename"
-          onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-        />
-        <IconButton
-          icon={<Icon name="trash" className="w-3.5 h-3.5" />}
-          label="Delete pile"
-          onClick={(e) => { e.stopPropagation(); onDelete(pile.id); }}
-          className="text-red-400 hover:text-red-300"
-        />
+        {pile.cardCount >= 2 && (
+          <div className="absolute inset-0 rounded-2xl bg-gray-800 border border-gray-600 translate-x-1 translate-y-1" />
+        )}
+        <div className={`relative rounded-2xl bg-gray-900 border shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden transition-all
+          ${expanded ? 'border-blue-500' : 'border-gray-700 hover:border-gray-500'}`}>
+          {/* Art area with preview */}
+          <div className="p-2 pb-0">
+            <div className="relative aspect-square rounded-lg overflow-hidden bg-black">
+              {previewUrl ? (
+                <img src={previewUrl} alt={pile.name} className="w-full h-full object-cover" loading="lazy" draggable={false} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-600 text-3xl">?</div>
+              )}
+            </div>
+          </div>
+          {/* Bottom — name + count + actions */}
+          <div className="px-3 py-2">
+            {editing ? (
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={handleSave}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+                className="text-xs"
+              />
+            ) : (
+              <p className="text-white text-xs font-medium truncate">{pile.name}</p>
+            )}
+            <div className="flex items-center justify-between mt-0.5">
+              <span className="text-gray-500 text-[10px]">{pile.cardCount} card{pile.cardCount !== 1 ? 's' : ''}</span>
+              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <IconButton
+                  icon={<Icon name="info" className="w-3 h-3" />}
+                  label="Rename"
+                  onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+                />
+                <IconButton
+                  icon={<Icon name="trash" className="w-3 h-3" />}
+                  label="Delete pile"
+                  onClick={(e) => { e.stopPropagation(); onDelete(pile.id); }}
+                  className="text-red-400 hover:text-red-300"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -328,12 +355,13 @@ export default function InventoryPage() {
         )}
       </div>
 
-      {/* Piles */}
-      {piles.length > 0 && (
-        <div className="mb-6 space-y-2">
-          {piles.map(pile => (
-            <div key={pile.id}>
-              <PileHeader
+      {items.length > 0 || piles.length > 0 ? (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {/* Piles as stacked cards */}
+            {piles.map(pile => (
+              <PileCard
+                key={`pile-${pile.id}`}
                 pile={pile}
                 expanded={expandedPiles.has(pile.id)}
                 onToggle={togglePile}
@@ -341,36 +369,36 @@ export default function InventoryPage() {
                 onDelete={handleDeletePile}
                 onDrop={handlePileDrop}
               />
-              {expandedPiles.has(pile.id) && pileCards[pile.id] && (
-                <div className="mt-2 ml-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                  {pileCards[pile.id].map(item => (
-                    <InventoryCard
-                      key={item.inventory_id}
-                      item={item}
-                      onClick={handleCardClick}
-                      onDestroy={handleDestroy}
-                    />
-                  ))}
-                </div>
-              )}
+            ))}
+            {/* Ungrouped cards */}
+            {items.map(item => (
+              <InventoryCard
+                key={item.inventory_id}
+                item={item}
+                onClick={handleCardClick}
+                onDestroy={handleDestroy}
+                onDrop={handleCardDrop}
+              />
+            ))}
+          </div>
+
+          {/* Expanded pile cards */}
+          {piles.filter(p => expandedPiles.has(p.id) && pileCards[p.id]).map(pile => (
+            <div key={`expanded-${pile.id}`} className="mt-6">
+              <h3 className="text-white font-semibold text-sm mb-3">{pile.name}</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {pileCards[pile.id].map(item => (
+                  <InventoryCard
+                    key={item.inventory_id}
+                    item={item}
+                    onClick={handleCardClick}
+                    onDestroy={handleDestroy}
+                  />
+                ))}
+              </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Ungrouped cards */}
-      {items.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {items.map(item => (
-            <InventoryCard
-              key={item.inventory_id}
-              item={item}
-              onClick={handleCardClick}
-              onDestroy={handleDestroy}
-              onDrop={handleCardDrop}
-            />
-          ))}
-        </div>
+        </>
       ) : (
         <EmptyState
           icon={bagIcon}
