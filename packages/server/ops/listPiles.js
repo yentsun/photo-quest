@@ -21,11 +21,15 @@ export default function () {
     `SELECT m.id, m.type, m.title FROM pile_cards pc
      JOIN inventory i ON i.id = pc.inventory_id
      JOIN media m ON m.id = i.media_id
-     WHERE pc.pile_id = ? ORDER BY pc.id LIMIT 1`
+     WHERE pc.pile_id = ? ORDER BY pc.id DESC LIMIT 1`
   );
   for (const pile of piles) {
     pile.preview = previewStmt.get(pile.id) || null;
   }
 
-  return piles;
+  /* Collect all inventory IDs that belong to at least one pile */
+  const grouped = db.prepare('SELECT DISTINCT inventory_id FROM pile_cards').all();
+  const groupedIds = grouped.map(r => r.inventory_id);
+
+  return { piles, groupedIds };
 }

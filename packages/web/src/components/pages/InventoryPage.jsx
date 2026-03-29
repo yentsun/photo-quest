@@ -64,7 +64,7 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, on
 
 /* ── Pile card (stacked card look) ── */
 
-function PileCard({ pile, expanded, onToggle, onRename, onDelete, onDrop }) {
+function PileCard({ pile, onToggle, onRename, onDelete, onDrop }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(pile.name);
   const [dragOver, setDragOver] = useState(false);
@@ -95,7 +95,7 @@ function PileCard({ pile, expanded, onToggle, onRename, onDelete, onDrop }) {
           <div className="absolute inset-0 rounded-2xl bg-gray-800 border border-gray-600 translate-x-1 translate-y-1" />
         )}
         <div className={`relative rounded-2xl bg-gray-900 border shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden transition-all
-          ${expanded ? 'border-blue-500' : 'border-gray-700 hover:border-gray-500'}`}>
+          border-gray-700 hover:border-gray-500`}>
           {/* Art area with preview */}
           <div className="p-2 pb-0">
             <div className="relative aspect-square rounded-lg overflow-hidden bg-black">
@@ -230,33 +230,38 @@ export default function InventoryPage() {
 
   const [items, setItems] = useState([]);
   const [piles, setPiles] = useState([]);
-  const [expandedPiles, setExpandedPiles] = useState(new Set());
-  const [pileCards, setPileCards] = useState({});
+  const [groupedIds, setGroupedIds] = useState(new Set());
+  const [viewingPile, setViewingPile] = useState(null);
+  const [viewingPileCards, setViewingPileCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const closeOverlay = useCallback(() => { setSelectedItem(null); reload(); }, []);
 
   const reload = () => {
     Promise.all([fetchInventory(), fetchPiles()])
-      .then(([{ items }, pilesData]) => { setItems(items); setPiles(pilesData); setLoading(false); })
+      .then(([{ items }, { piles: pilesData, groupedIds: gIds }]) => {
+        setItems(items);
+        setPiles(pilesData);
+        setGroupedIds(new Set(gIds));
+        setLoading(false);
+      })
       .catch(err => { console.error('Failed to load inventory:', err); setLoading(false); });
   };
 
   useEffect(() => { reload(); }, []);
 
-  const togglePile = async (pileId) => {
-    const next = new Set(expandedPiles);
-    if (next.has(pileId)) {
-      next.delete(pileId);
-    } else {
-      next.add(pileId);
-      if (!pileCards[pileId]) {
-        const res = await fetch(`/piles/${pileId}/cards`);
-        const cards = await res.json();
-        setPileCards(prev => ({ ...prev, [pileId]: cards }));
-      }
-    }
-    setExpandedPiles(next);
+  const openPile = async (pileId) => {
+    const pile = piles.find(p => p.id === pileId);
+    const res = await fetch(`/piles/${pileId}/cards`);
+    const cards = await res.json();
+    setViewingPile(pile);
+    setViewingPileCards(cards);
+  };
+
+  const closePile = () => {
+    setViewingPile(null);
+    setViewingPileCards([]);
+    reload();
   };
 
   const handleCardClick = (item) => setSelectedItem(item);
@@ -340,6 +345,37 @@ export default function InventoryPage() {
   }
 
   const bagIcon = <Icon name="backpack" className="w-16 h-16" />;
+  const ungrouped = items.filter(i => !groupedIds.has(i.inventory_id));
+
+  /* Pile view */
+  if (viewingPile) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-white">{viewingPile.name}</h1>
+            <p className="text-gray-400 text-sm">{viewingPileCards.length} cards</p>
+          </div>
+          <Button variant="ghost" onClick={closePile}>
+            Back
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {viewingPileCards.map(item => (
+            <InventoryCard
+              key={item.inventory_id}
+              item={item}
+              onClick={handleCardClick}
+              onDestroy={handleDestroy}
+            />
+          ))}
+        </div>
+        {selectedItem && (
+          <CardOverlay item={selectedItem} onClose={closeOverlay} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -355,50 +391,28 @@ export default function InventoryPage() {
         )}
       </div>
 
-      {items.length > 0 || piles.length > 0 ? (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {/* Piles as stacked cards */}
-            {piles.map(pile => (
-              <PileCard
-                key={`pile-${pile.id}`}
-                pile={pile}
-                expanded={expandedPiles.has(pile.id)}
-                onToggle={togglePile}
-                onRename={handleRenamePile}
-                onDelete={handleDeletePile}
-                onDrop={handlePileDrop}
-              />
-            ))}
-            {/* Ungrouped cards */}
-            {items.map(item => (
-              <InventoryCard
-                key={item.inventory_id}
-                item={item}
-                onClick={handleCardClick}
-                onDestroy={handleDestroy}
-                onDrop={handleCardDrop}
-              />
-            ))}
-          </div>
-
-          {/* Expanded pile cards */}
-          {piles.filter(p => expandedPiles.has(p.id) && pileCards[p.id]).map(pile => (
-            <div key={`expanded-${pile.id}`} className="mt-6">
-              <h3 className="text-white font-semibold text-sm mb-3">{pile.name}</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {pileCards[pile.id].map(item => (
-                  <InventoryCard
-                    key={item.inventory_id}
-                    item={item}
-                    onClick={handleCardClick}
-                    onDestroy={handleDestroy}
-                  />
-                ))}
-              </div>
-            </div>
+      {ungrouped.length > 0 || piles.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {piles.map(pile => (
+            <PileCard
+              key={`pile-${pile.id}`}
+              pile={pile}
+              onToggle={openPile}
+              onRename={handleRenamePile}
+              onDelete={handleDeletePile}
+              onDrop={handlePileDrop}
+            />
           ))}
-        </>
+          {ungrouped.map(item => (
+            <InventoryCard
+              key={item.inventory_id}
+              item={item}
+              onClick={handleCardClick}
+              onDestroy={handleDestroy}
+              onDrop={handleCardDrop}
+            />
+          ))}
+        </div>
       ) : (
         <EmptyState
           icon={bagIcon}
