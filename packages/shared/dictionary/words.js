@@ -36,6 +36,12 @@ export const words = {
   /** Quest — already in inventory label. */
   inInventory: 'In inventory',
 
-  /** Inventory page — empty state description. */
+  /** Inventory — destroy button label. */
+  destroy: 'Destroy',
+
+  /** Inventory — destroy confirmation. */
+  destroyConfirm: 'Destroy this card? The file will be permanently deleted.',
+
+  /** Inventory — empty state description. */
   inventoryEmpty: 'Play games to earn magic dust and collect media for your inventory.',
 };

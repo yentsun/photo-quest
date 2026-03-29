@@ -125,6 +125,9 @@ export const apiRoutes = {
   /** DELETE -- Remove an item from the player's inventory by inventory ID. */
   inventoryById: '/inventory/:id',
 
+  /** DELETE -- Destroy an inventory card (delete media from DB/disk, award dust). */
+  inventoryDestroy: '/inventory/:id/destroy',
+
   /** GET  -- List today's quest decks. */
   questDecks: '/quest/decks',
 

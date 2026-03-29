@@ -202,6 +202,20 @@ export async function fetchInventory({ limit, offset } = {}) {
 }
 
 /**
+ * Destroy an inventory card — deletes media from DB/disk, awards dust.
+ *
+ * @param {number} inventoryId
+ * @returns {Promise<{ dustAwarded: number, dust: number }>}
+ */
+export async function destroyInventoryItem(inventoryId) {
+  const response = await fetch(`/inventory/${inventoryId}/destroy`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error('Failed to destroy card');
+  return response.json();
+}
+
+/**
  * Fetch player stats (dust balance).
  *
  * @returns {Promise<{ dust: number }>}
