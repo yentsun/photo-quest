@@ -30,8 +30,8 @@ export const clientRoutes = {
   /** Main media library dashboard -- the default landing page. */
   dashboard: '/dashboard',
 
-  /** Liked media section -- shows items with likes > 0. */
-  liked: '/liked',
+  /** (removed — replaced by inventory) */
+  // liked: '/liked',
 
   /** Folder view -- shows media filtered by folder ID. */
   folder: '/folder/:id',
@@ -40,7 +40,16 @@ export const clientRoutes = {
   media: '/media/:id',
 
   /** Memory card game. */
-  memoryGame: '/memory'
+  memoryGame: '/memory',
+
+  /** Player inventory — owned media items. */
+  inventory: '/inventory',
+
+  /** Daily quest — browse card decks and collect media. */
+  quest: '/quest',
+
+  /** Market — buy decks and tickets. */
+  market: '/market'
 };
 
 // ---------------------------------------------------------------------------
@@ -71,8 +80,8 @@ export const apiRoutes = {
   /** GET / DELETE -- fetch or remove a single media item by its numeric ID. */
   mediaById: '/media/:id',
 
-  /** PATCH -- increment the like count for a media item. */
-  mediaLike: '/media/:id/like',
+  /** PATCH -- infuse a media item with 1 magic dust. */
+  mediaInfuse: '/media/:id/infuse',
 
   /** POST -- trigger a directory scan.  Body: { path: "/absolute/dir" }. */
   mediaScan: '/media/scan',
@@ -105,5 +114,57 @@ export const apiRoutes = {
   jobEvents: '/jobs/events',
 
   /** GET  -- Server network info for connecting from other devices. */
-  network: '/network'
+  network: '/network',
+
+  /** GET  -- Player stats (dust balance). */
+  player: '/player',
+
+  /** PATCH -- Add or spend magic dust.  Body: { delta: number }. */
+  playerDust: '/player/dust',
+
+  /** GET / POST -- List inventory or add an item.  Body (POST): { mediaId }. */
+  inventory: '/inventory',
+
+  /** DELETE -- Remove an item from the player's inventory by inventory ID. */
+  inventoryById: '/inventory/:id',
+
+  /** DELETE -- Destroy an inventory card (delete media from DB/disk, award dust). */
+  inventoryDestroy: '/inventory/:id/destroy',
+
+  /** GET  -- List today's quest decks. */
+  questDecks: '/quest/decks',
+
+  /** GET  -- Get a specific deck with current card.
+   *  POST -- Advance to next card (subpath /next) or take card (subpath /take). */
+  questDeckById: '/quest/decks/:id',
+
+  /** POST -- Advance to the next card in a deck. */
+  questDeckNext: '/quest/decks/:id/next',
+
+  /** POST -- Spend dust to take the current card into inventory. */
+  questDeckTake: '/quest/decks/:id/take',
+
+  /** POST -- Buy an extra quest deck. */
+  marketBuyDeck: '/market/buy-deck',
+
+  /** POST -- Buy a memory game ticket. */
+  marketBuyTicket: '/market/buy-ticket',
+
+  /** GET -- Get unused memory ticket count. */
+  marketTickets: '/market/tickets',
+
+  /** POST -- Use a memory game ticket. */
+  marketUseTicket: '/market/use-ticket',
+
+  /** GET / POST -- List piles or create a new pile. */
+  piles: '/piles',
+
+  /** PATCH / DELETE -- Rename or delete a pile. */
+  pileById: '/piles/:id',
+
+  /** POST -- Add cards to a pile.  Body: { inventoryIds: [] }. */
+  pileCards: '/piles/:id/cards',
+
+  /** DELETE -- Remove a card from a pile. */
+  pileCardById: '/piles/:id/cards/:inventoryId'
 };

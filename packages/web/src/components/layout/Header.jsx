@@ -5,8 +5,8 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo } from '../../utils/api.js';
-import { Button, Icon } from '../ui/index.js';
+import { fetchNetworkInfo, fetchPlayerStats } from '../../utils/api.js';
+import { Button, DustBadge, Icon } from '../ui/index.js';
 
 /**
  * Navigation header component.
@@ -14,11 +14,23 @@ import { Button, Icon } from '../ui/index.js';
 export default function Header() {
   const [networkUrl, setNetworkUrl] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [dust, setDust] = useState(null);
+
+  const refreshDust = () => {
+    fetchPlayerStats()
+      .then(stats => setDust(stats.dust))
+      .catch(() => {});
+  };
 
   useEffect(() => {
     fetchNetworkInfo()
       .then(info => setNetworkUrl(info.network))
       .catch(err => console.error('Failed to fetch network info:', err));
+    refreshDust();
+
+    const onDustChanged = () => refreshDust();
+    window.addEventListener('dust-changed', onDustChanged);
+    return () => window.removeEventListener('dust-changed', onDustChanged);
   }, []);
 
   const handleCopyUrl = () => {
@@ -42,27 +54,31 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex items-center">
-            <Link to={clientRoutes.dashboard} className="text-xl font-bold text-white hover:text-gray-200 transition-colors">
+            <Link to={clientRoutes.quest} className="text-xl font-bold text-white hover:text-gray-200 transition-colors">
               Photo Quest
             </Link>
           </div>
 
           {/* Navigation */}
           <nav className="flex items-center gap-2">
-            <NavLink to={clientRoutes.dashboard} className={linkClass}>
-              Library
+            <NavLink to={clientRoutes.quest} className={linkClass}>
+              Quest
             </NavLink>
-            <NavLink to={clientRoutes.liked} className={linkClass}>
-              Liked
+            <NavLink to={clientRoutes.inventory} className={linkClass}>
+              Inventory
             </NavLink>
             <NavLink to={clientRoutes.memoryGame} className={linkClass}>
               Memory
             </NavLink>
+            <NavLink to={clientRoutes.market} className={linkClass}>
+              Market
+            </NavLink>
           </nav>
 
-          {/* Network URL for other devices */}
+          {/* Dust balance + Network URL */}
+          <div className="flex items-center gap-3">
+          {dust != null && <DustBadge dust={dust} />}
           {networkUrl && (
-            <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
                 size="sm"
@@ -74,8 +90,8 @@ export default function Header() {
                 <span className="sm:hidden">Network</span>
                 {copied && <span className="text-green-400 text-xs ml-1">Copied!</span>}
               </Button>
-            </div>
           )}
+          </div>
         </div>
       </div>
     </header>

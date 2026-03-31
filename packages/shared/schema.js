@@ -30,7 +30,9 @@
  *  - `transcoded_path` Absolute path to the transcoded MP4, or NULL if the
  *                      original is already in the target format.
  *  - `size`            File size in bytes.
- *  - `likes`           Cumulative like count (unlimited, each click adds 1).
+ *  - `likes`           (deprecated — replaced by infusion) Legacy like count.
+ *  - `infusion`        Dust invested into this media. Higher values increase
+ *                      the chance of appearing in quest decks.
  *  - `hidden`          1 if folder was removed (preserves likes/metadata for
  *                      re-adding later), 0 otherwise.
  *  - `hash`            Content hash (first 64KB + size) for identifying same
@@ -60,6 +62,7 @@ export const CREATE_MEDIA_TABLE = `
     transcoded_path TEXT,
     size INTEGER,
     likes INTEGER NOT NULL DEFAULT 0,
+    infusion INTEGER NOT NULL DEFAULT 0,
     hidden INTEGER NOT NULL DEFAULT 0,
     hash TEXT,
     orientation INTEGER,
@@ -140,6 +143,127 @@ export const CREATE_FOLDERS_TABLE = `
   CREATE TABLE IF NOT EXISTS folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     path TEXT NOT NULL UNIQUE
+  )
+`;
+
+/**
+ * SQL statement that creates the `player_stats` table.
+ *
+ * Singleton row (enforced by CHECK constraint) storing the player's
+ * magic dust balance. Seeded with id=1 at startup via INSERT OR IGNORE.
+ *
+ * @type {string}
+ */
+export const CREATE_PLAYER_STATS_TABLE = `
+  CREATE TABLE IF NOT EXISTS player_stats (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    dust INTEGER NOT NULL DEFAULT 0
+  )
+`;
+
+/**
+ * SQL statement that creates the `inventory` table.
+ *
+ * Tracks which media items the player has acquired through gameplay.
+ * Each media item can only appear once (UNIQUE on media_id).
+ * Cascade-deletes when the underlying media record is removed.
+ *
+ * @type {string}
+ */
+export const CREATE_INVENTORY_TABLE = `
+  CREATE TABLE IF NOT EXISTS inventory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_id INTEGER NOT NULL UNIQUE,
+    acquired_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
+  )
+`;
+
+/**
+ * SQL statement that creates the `quest_decks` table.
+ *
+ * Each row is one deck for a given day. 10 decks per day, 10 cards each.
+ * `current_position` tracks how far the player has browsed (0 = not started).
+ * `exhausted` flips to 1 once all cards have been viewed.
+ *
+ * @type {string}
+ */
+export const CREATE_QUEST_DECKS_TABLE = `
+  CREATE TABLE IF NOT EXISTS quest_decks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    deck_index INTEGER NOT NULL,
+    current_position INTEGER NOT NULL DEFAULT 0,
+    exhausted INTEGER NOT NULL DEFAULT 0,
+    free_take_used INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(date, deck_index)
+  )
+`;
+
+/**
+ * SQL statement that creates the `quest_cards` table.
+ *
+ * Each row is one card in a quest deck, linking to a media record.
+ * Position is 0-based within the deck.
+ *
+ * @type {string}
+ */
+export const CREATE_QUEST_CARDS_TABLE = `
+  CREATE TABLE IF NOT EXISTS quest_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deck_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    media_id INTEGER NOT NULL,
+    FOREIGN KEY (deck_id) REFERENCES quest_decks(id) ON DELETE CASCADE,
+    FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
+  )
+`;
+
+/**
+ * SQL statement that creates the `memory_tickets` table.
+ *
+ * Tracks purchased memory game tickets. Each ticket can be used once.
+ *
+ * @type {string}
+ */
+/**
+ * SQL statement that creates the `piles` table.
+ *
+ * Named groups of inventory cards (like playlists).
+ *
+ * @type {string}
+ */
+export const CREATE_PILES_TABLE = `
+  CREATE TABLE IF NOT EXISTS piles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL DEFAULT 'New Pile',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`;
+
+/**
+ * SQL statement that creates the `pile_cards` join table.
+ *
+ * Many-to-many: a card can belong to multiple piles.
+ *
+ * @type {string}
+ */
+export const CREATE_PILE_CARDS_TABLE = `
+  CREATE TABLE IF NOT EXISTS pile_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pile_id INTEGER NOT NULL,
+    inventory_id INTEGER NOT NULL,
+    FOREIGN KEY (pile_id) REFERENCES piles(id) ON DELETE CASCADE,
+    FOREIGN KEY (inventory_id) REFERENCES inventory(id) ON DELETE CASCADE,
+    UNIQUE(pile_id, inventory_id)
+  )
+`;
+
+export const CREATE_MEMORY_TICKETS_TABLE = `
+  CREATE TABLE IF NOT EXISTS memory_tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    used INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `;
 

@@ -1,5 +1,5 @@
 /**
- * @file Shared media action hooks (like, delete, scan, remove folder).
+ * @file Shared media action hooks (delete, scan, remove folder).
  *
  * No auto-fetching — each page fetches its own data via the refresh signal.
  */
@@ -7,7 +7,6 @@
 import { useCallback } from 'react';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import {
-  likeMedia as likeMediaApi,
   deleteMedia as deleteMediaApi,
   scanMedia as scanMediaApi,
   removeFolder as removeFolderApi,
@@ -19,15 +18,6 @@ import {
  */
 export function useMediaActions() {
   const { bump } = useRefresh();
-
-  const likeMedia = useCallback(async (media) => {
-    try {
-      await likeMediaApi(media.id);
-      bump();
-    } catch (err) {
-      console.error('Failed to like media:', err);
-    }
-  }, [bump]);
 
   const deleteMedia = useCallback(async (mediaId) => {
     await deleteMediaApi(mediaId);
@@ -65,5 +55,5 @@ export function useMediaActions() {
     return { serverFolders: scannedFolders, clientFolders: 0, newFiles };
   }, [bump]);
 
-  return { likeMedia, deleteMedia, addFolderWithPath, removeFolder, refreshLibrary };
+  return { deleteMedia, addFolderWithPath, removeFolder, refreshLibrary };
 }

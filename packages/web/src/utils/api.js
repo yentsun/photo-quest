@@ -7,16 +7,15 @@ import { apiRoutes, MEDIA_TYPE } from '@photo-quest/shared';
 /**
  * Fetch media items from the server (supports filtering and pagination).
  *
- * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean, liked?: boolean }} [opts]
+ * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean }} [opts]
  * @returns {Promise<{ items: Array, total: number }>}
  */
-export async function fetchMedia({ limit, offset, folder, subtree, liked } = {}) {
+export async function fetchMedia({ limit, offset, folder, subtree } = {}) {
   const url = new URL(apiRoutes.media, window.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
   if (folder != null) url.searchParams.set('folder', folder);
   if (subtree) url.searchParams.set('subtree', '1');
-  if (liked) url.searchParams.set('liked', '1');
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -42,17 +41,39 @@ export async function fetchMediaById(id) {
 }
 
 /**
- * Like a media item (increment like count).
+ * Infuse a media item with magic dust.
  *
  * @param {number} id - Media ID
- * @returns {Promise<Object>} Updated media object
+ * @param {number} [amount=1] - Dust to spend
+ * @returns {Promise<{ media: Object, dust: number }>}
  */
-export async function likeMedia(id) {
-  const response = await fetch(`/media/${id}/like`, {
+export async function infuseMedia(id, amount = 1) {
+  const response = await fetch(`/media/${id}/infuse`, {
     method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount }),
   });
   if (!response.ok) {
-    throw new Error('Failed to like media');
+    throw new Error('Failed to infuse media');
+  }
+  return response.json();
+}
+
+/**
+ * Free-infuse a media item (no dust cost, passive viewing reward).
+ *
+ * @param {number} id - Media ID
+ * @param {number} [amount=1] - Infusion to add
+ * @returns {Promise<{ media: Object }>}
+ */
+export async function freeInfuseMedia(id, amount = 1) {
+  const response = await fetch(`/media/${id}/free-infuse`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to infuse media');
   }
   return response.json();
 }
@@ -179,6 +200,247 @@ export async function removeFolder(folderId) {
   if (!response.ok) {
     throw new Error('Failed to remove folder');
   }
+  return response.json();
+}
+
+/**
+ * Fetch the player's inventory items (supports pagination).
+ *
+ * @param {{ limit?: number, offset?: number }} [opts]
+ * @returns {Promise<{ items: Array, total: number }>}
+ */
+export async function fetchInventory({ limit, offset } = {}) {
+  const url = new URL(apiRoutes.inventory, window.location.origin);
+  if (limit != null) url.searchParams.set('limit', limit);
+  if (offset != null) url.searchParams.set('offset', offset);
+
+  const response = await fetch(url, {
+    headers: { 'Accept': 'application/json' },
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch inventory');
+  }
+  return response.json();
+}
+
+/**
+ * Destroy an inventory card — deletes media from DB/disk, awards dust.
+ *
+ * @param {number} inventoryId
+ * @returns {Promise<{ dustAwarded: number, dust: number }>}
+ */
+export async function destroyInventoryItem(inventoryId) {
+  const response = await fetch(`/inventory/${inventoryId}/destroy`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error('Failed to destroy card');
+  return response.json();
+}
+
+/**
+ * Sell an inventory card back to the library (keeps file, awards dust).
+ *
+ * @param {number} inventoryId
+ * @returns {Promise<{ dustAwarded: number, dust: number }>}
+ */
+export async function sellInventoryItem(inventoryId) {
+  const response = await fetch(`/inventory/${inventoryId}/sell`, { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to sell card');
+  return response.json();
+}
+
+/**
+ * Fetch player stats (dust balance).
+ *
+ * @returns {Promise<{ dust: number }>}
+ */
+export async function fetchPlayerStats() {
+  const response = await fetch(apiRoutes.player);
+  if (!response.ok) throw new Error('Failed to fetch player stats');
+  return response.json();
+}
+
+/**
+ * Fetch today's quest decks.
+ *
+ * @returns {Promise<{ decks: Array, dust: number }>}
+ */
+export async function fetchQuestDecks() {
+  const response = await fetch(apiRoutes.questDecks, {
+    headers: { 'Accept': 'application/json' },
+  });
+  if (!response.ok) throw new Error('Failed to fetch quest decks');
+  return response.json();
+}
+
+/**
+ * Fetch a specific quest deck with its current card.
+ *
+ * @param {number} deckId
+ * @returns {Promise<object>}
+ */
+export async function fetchQuestDeck(deckId) {
+  const response = await fetch(`/quest/decks/${deckId}`, {
+    headers: { 'Accept': 'application/json' },
+  });
+  if (!response.ok) throw new Error('Failed to fetch quest deck');
+  return response.json();
+}
+
+/**
+ * Advance to the next card in a quest deck.
+ *
+ * @param {number} deckId
+ * @returns {Promise<object>}
+ */
+export async function advanceQuestDeck(deckId) {
+  const response = await fetch(`/quest/decks/${deckId}/next`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to advance deck');
+  return response.json();
+}
+
+/**
+ * Spend dust to take the current card into inventory.
+ *
+ * @param {number} deckId
+ * @returns {Promise<object>}
+ */
+export async function takeQuestCard(deckId) {
+  const response = await fetch(`/quest/decks/${deckId}/take`, {
+    method: 'POST',
+  });
+  if (response.status === 400) {
+    const data = await response.json();
+    throw new Error(data.error);
+  }
+  if (!response.ok) throw new Error('Failed to take card');
+  return response.json();
+}
+
+/**
+ * Buy an extra quest deck from the market.
+ * @returns {Promise<{ deck: object, dust: number }>}
+ */
+export async function buyQuestDeck() {
+  const response = await fetch(apiRoutes.marketBuyDeck, { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to buy quest deck');
+  return response.json();
+}
+
+/**
+ * Buy a memory game ticket from the market.
+ * @returns {Promise<{ tickets: number, dust: number }>}
+ */
+export async function buyMemoryTicket() {
+  const response = await fetch(apiRoutes.marketBuyTicket, { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to buy memory ticket');
+  return response.json();
+}
+
+/**
+ * Get unused memory ticket count.
+ * @returns {Promise<{ tickets: number }>}
+ */
+export async function getMemoryTickets() {
+  const response = await fetch(apiRoutes.marketTickets);
+  if (!response.ok) throw new Error('Failed to get tickets');
+  return response.json();
+}
+
+/**
+ * Use a memory game ticket.
+ * @returns {Promise<{ tickets: number }>}
+ */
+export async function useMemoryTicket() {
+  const response = await fetch(apiRoutes.marketUseTicket, { method: 'POST' });
+  if (!response.ok) throw new Error('No tickets available');
+  return response.json();
+}
+
+/**
+ * Fetch all piles with card counts.
+ * @returns {Promise<Array<{ id: number, name: string, cardCount: number }>>}
+ */
+export async function fetchPiles() {
+  const response = await fetch(apiRoutes.piles);
+  if (!response.ok) throw new Error('Failed to fetch piles');
+  return response.json();
+}
+
+/**
+ * Create a new pile.
+ * @param {string} name
+ * @param {number[]} inventoryIds
+ */
+export async function createPile(name, inventoryIds) {
+  const response = await fetch(apiRoutes.piles, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, inventoryIds }),
+  });
+  if (!response.ok) throw new Error('Failed to create pile');
+  return response.json();
+}
+
+/**
+ * Rename a pile.
+ * @param {number} pileId
+ * @param {string} name
+ */
+export async function renamePile(pileId, name) {
+  const response = await fetch(`/piles/${pileId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) throw new Error('Failed to rename pile');
+  return response.json();
+}
+
+/**
+ * Delete a pile.
+ * @param {number} pileId
+ */
+export async function deletePile(pileId) {
+  const response = await fetch(`/piles/${pileId}`, { method: 'DELETE' });
+  if (!response.ok) throw new Error('Failed to delete pile');
+}
+
+/**
+ * Add cards to a pile.
+ * @param {number} pileId
+ * @param {number[]} inventoryIds
+ */
+export async function addToPile(pileId, inventoryIds) {
+  const response = await fetch(`/piles/${pileId}/cards`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inventoryIds }),
+  });
+  if (!response.ok) throw new Error('Failed to add to pile');
+  return response.json();
+}
+
+/**
+ * Remove a card from a pile.
+ * @param {number} pileId
+ * @param {number} inventoryId
+ */
+export async function removeFromPile(pileId, inventoryId) {
+  const response = await fetch(`/piles/${pileId}/cards/${inventoryId}`, { method: 'DELETE' });
+  if (!response.ok) throw new Error('Failed to remove from pile');
+}
+
+/**
+ * Fetch cards in a pile.
+ * @param {number} pileId
+ * @returns {Promise<Array>}
+ */
+export async function fetchPileCards(pileId) {
+  const response = await fetch(`/piles/${pileId}/cards`);
+  if (!response.ok) throw new Error('Failed to fetch pile cards');
   return response.json();
 }
 

@@ -14,7 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_PLAYER_STATS_TABLE, CREATE_INVENTORY_TABLE, CREATE_QUEST_DECKS_TABLE, CREATE_QUEST_CARDS_TABLE, CREATE_MEMORY_TICKETS_TABLE, CREATE_PILES_TABLE, CREATE_PILE_CARDS_TABLE } from '@photo-quest/shared';
 
 /* Compute __dirname for ES modules. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -56,6 +56,16 @@ export function initDb() {
   db.exec(CREATE_SCANS_TABLE);
   db.exec(CREATE_IMPORT_QUEUE_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
+  db.exec(CREATE_PLAYER_STATS_TABLE);
+  db.exec(CREATE_INVENTORY_TABLE);
+  db.exec(CREATE_QUEST_DECKS_TABLE);
+  db.exec(CREATE_QUEST_CARDS_TABLE);
+  db.exec(CREATE_MEMORY_TICKETS_TABLE);
+  db.exec(CREATE_PILES_TABLE);
+  db.exec(CREATE_PILE_CARDS_TABLE);
+
+  /* Seed the singleton player_stats row. */
+  db.exec('INSERT OR IGNORE INTO player_stats (id, dust) VALUES (1, 50)');
 
   /* Run migrations for existing databases. */
   migrateDb();
@@ -95,6 +105,8 @@ function migrateDb() {
     'ALTER TABLE media ADD COLUMN orientation INTEGER',
     'ALTER TABLE media ADD COLUMN camera TEXT',
     'ALTER TABLE media ADD COLUMN date_taken TEXT',
+    'ALTER TABLE media ADD COLUMN infusion INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE quest_decks ADD COLUMN free_take_used INTEGER NOT NULL DEFAULT 0',
   ];
 
   for (const sql of migrations) {
