@@ -10,7 +10,7 @@ import { RefreshProvider } from '../contexts/RefreshContext.jsx';
 import { clientRoutes as r } from '@photo-quest/shared';
 import ErrorBoundary from './ErrorBoundary';
 import Root from './Root';
-import { FolderPage, MediaPage, MemoryGamePage, InventoryPage, QuestPage, MarketPage } from './pages/index.js';
+import { DeckPage, FolderPage, MediaPage, MemoryGamePage, InventoryPage, QuestPage, MarketPage } from './pages/index.js';
 import ToasterMessage from './ToasterMessage';
 
 export default function Router() {
@@ -31,6 +31,7 @@ export default function Router() {
                   <Route path={r.folder} element={<FolderPage />} />
                   <Route path={r.media} element={<MediaPage />} />
                   <Route path={r.memoryGame} element={<MemoryGamePage />} />
+                  <Route path={r.deck} element={<DeckPage />} />
                   <Route path={r.inventory} element={<InventoryPage />} />
                   <Route path={r.quest} element={<QuestPage />} />
                   <Route path={r.market} element={<MarketPage />} />

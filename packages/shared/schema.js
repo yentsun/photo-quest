@@ -241,7 +241,7 @@ export const CREATE_QUEST_CARDS_TABLE = `
 export const CREATE_PILES_TABLE = `
   CREATE TABLE IF NOT EXISTS piles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL DEFAULT 'New Pile',
+    name TEXT NOT NULL DEFAULT 'New Deck',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `;

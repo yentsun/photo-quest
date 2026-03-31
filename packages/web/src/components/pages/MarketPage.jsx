@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { MARKET_PRICES, words } from '@photo-quest/shared';
 import { buyQuestDeck, buyMemoryTicket } from '../../utils/api.js';
-import { Button, ConsumableCard } from '../ui/index.js';
+import { Button, ConsumableCard, TicketCard } from '../ui/index.js';
 
 export default function MarketPage() {
   const [buying, setBuying] = useState(null);
@@ -71,13 +71,8 @@ export default function MarketPage() {
             </Button>
           </div>
         </ConsumableCard>
-        <ConsumableCard
-          label="Ticket"
-          title="Memory Game"
+        <TicketCard
           subtitle="Play one memory game"
-          emoji="🃏"
-          borderColor="border-purple-700/60"
-          bgGradient="bg-gradient-to-br from-purple-900 to-blue-900"
           className="w-full max-w-[200px]"
         >
           <div className="mt-3 text-center">
@@ -85,7 +80,7 @@ export default function MarketPage() {
               {buying === 'ticket' ? '...' : `${MARKET_PRICES.memoryTicket} ${words.dustSymbol}`}
             </Button>
           </div>
-        </ConsumableCard>
+        </TicketCard>
       </div>
     </div>
   );

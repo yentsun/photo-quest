@@ -6,7 +6,7 @@
 
 import Card from './Card.jsx';
 
-export default function ConsumableCard({ label, title, subtitle, emoji, borderColor, bgGradient, className, onClick, children }) {
+export default function ConsumableCard({ label, title, subtitle, emoji, icon, borderColor, bgGradient, className, onClick, children }) {
   return (
     <Card
       borderColor={borderColor}
@@ -15,7 +15,7 @@ export default function ConsumableCard({ label, title, subtitle, emoji, borderCo
       header={<span className="text-[10px] uppercase tracking-wide opacity-70">{label}</span>}
       art={
         <div className={`w-full h-full ${bgGradient} flex items-center justify-center`}>
-          <span className="text-5xl select-none">{emoji}</span>
+          {icon || <span className="text-5xl select-none">{emoji}</span>}
         </div>
       }
       footer={

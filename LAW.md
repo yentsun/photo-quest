@@ -124,7 +124,7 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.4** The inventory must support shuffle/slideshow browsing, reusing the existing viewer and navigation controls.
 
-**4.5** The app must have a **Quest** view. Each day, 10 decks of 10 cards are generated from media in the library. Media with higher dust infusion has a greater chance of appearing in decks (weighted random). Decks are displayed as a grid of face-down card stacks. The player picks a deck and browses through it one card at a time. Once all cards in a deck have been viewed, the deck disappears.
+**4.5** Each day, 10 **quest deck cards** are generated and placed in the player's inventory. Each deck contains 10 cards from the media library, weighted by infusion. The player opens a quest deck card from inventory to browse its cards one at a time. Once all cards have been viewed, the deck card is consumed (removed from inventory).
 
 **4.6** The player's magic dust balance must be visible in the app header at all times.
 
@@ -138,9 +138,9 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.13** Viewing a quest deck card passively infuses it **for free**: **1 infusion per 5 seconds**, capped at **2 minutes**. Same rate as inventory card view.
 
-**4.12** The app must have a **Market** page. The player can buy extra quest decks (**5 Đ** each) and memory game tickets (**1 Đ** each). The 10 free daily quest decks still generate; market decks are added on top. Memory game requires a ticket to play (consumed on first card flip).
+**4.12** The app must have a **Market** page. The player can buy extra quest deck cards (**5 Đ** each) and memory game ticket cards (**1 Đ** each). Purchased cards appear in inventory. The 10 free daily quest deck cards still generate; market decks are added on top. Memory game requires a ticket card to play (consumed on first card flip).
 
-**4.14** The player must be able to organize inventory cards into **piles** (like playlists). A card can belong to multiple piles. Piles are created by dragging a card onto another card. Piles can be named. Inventory view shows piles as stacked card groups and ungrouped cards.
+**4.14** The player must be able to organize inventory cards into **decks** (like playlists). A card can belong to multiple decks. Decks are created by dragging a card onto another card. Decks can be named. Inventory view shows decks as stacked card groups and ungrouped cards. Each deck has its own URL (`/deck/:id`) with a back button to return to inventory.
 
 **4.15** The player can **sell** an inventory card back to the media library. The card is removed from inventory but the media file stays on disk. The player receives **infusion × 1 Đ**. Selling a 0-infusion card returns 0 Đ.
 
@@ -153,5 +153,8 @@ The governing rules of the photo-quest project. This document is the source of t
 - **media** — A media file (video or image) in the library. Has path, title, duration, resolution, codec, status, transcoded_path, size.
 - **job** — A processing task tied to a media record (probe or transcode). Has type, status, progress, error. Belongs to media via `media_id` (cascade delete).
 - **magic dust** — In-game currency earned through gameplay. Persisted in the database. Symbol: Đ.
-- **inventory** — The player's personal collection of media items, acquired through gameplay. Separate from the full media library.
+- **inventory** — The player's card collection: media cards, quest deck cards, ticket cards. The central hub of the app.
 - **infusion** — Dust invested into a media item. Increases the card's chance of appearing in quest decks. Replaces the old "likes" system.
+- **deck** — A named group of inventory cards (like a playlist). Cards can belong to multiple decks. Each deck has its own URL.
+- **quest deck card** — A consumable inventory card linking to a quest deck. Consumed when all cards are viewed.
+- **ticket card** — A consumable inventory card for playing the memory game. Consumed on first flip.

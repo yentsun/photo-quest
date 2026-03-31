@@ -48,6 +48,9 @@ export const clientRoutes = {
   /** Daily quest — browse card decks and collect media. */
   quest: '/quest',
 
+  /** User-created deck — view cards in a pile. */
+  deck: '/deck/:id',
+
   /** Market — buy decks and tickets. */
   market: '/market'
 };
