@@ -17,3 +17,6 @@ transcoded/
 
 # User config (use config.example.json as template)
 config.json
+
+# Claude Code
+.claude/settings.local.json

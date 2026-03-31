@@ -351,10 +351,15 @@ export async function getMemoryTickets() {
 
 /**
  * Use a memory game ticket.
+ * @param {number} [inventoryId] - Specific ticket card to consume.
  * @returns {Promise<{ tickets: number }>}
  */
-export async function useMemoryTicket() {
-  const response = await fetch(apiRoutes.marketUseTicket, { method: 'POST' });
+export async function useMemoryTicket(inventoryId) {
+  const response = await fetch(apiRoutes.marketUseTicket, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inventoryId }),
+  });
   if (!response.ok) throw new Error('No tickets available');
   return response.json();
 }

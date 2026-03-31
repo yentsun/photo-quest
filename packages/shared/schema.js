@@ -164,8 +164,11 @@ export const CREATE_PLAYER_STATS_TABLE = `
 /**
  * SQL statement that creates the `inventory` table.
  *
- * Tracks which media items the player has acquired through gameplay.
- * Each media item can only appear once (UNIQUE on media_id).
+ * Tracks the player's card collection. Cards can be media items
+ * (card_type='media'), consumables like tickets (card_type='memory_ticket'),
+ * or quest decks (card_type='quest_deck').
+ * Media cards have a UNIQUE media_id; other card types use ref_id to
+ * reference their backing record (e.g. quest_decks.id).
  * Cascade-deletes when the underlying media record is removed.
  *
  * @type {string}
@@ -173,7 +176,9 @@ export const CREATE_PLAYER_STATS_TABLE = `
 export const CREATE_INVENTORY_TABLE = `
   CREATE TABLE IF NOT EXISTS inventory (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    media_id INTEGER NOT NULL UNIQUE,
+    media_id INTEGER UNIQUE,
+    card_type TEXT NOT NULL DEFAULT 'media',
+    ref_id INTEGER,
     acquired_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
   )
@@ -259,6 +264,7 @@ export const CREATE_PILE_CARDS_TABLE = `
   )
 `;
 
+/** @deprecated Memory tickets are now stored as inventory items with card_type='memory_ticket'. */
 export const CREATE_MEMORY_TICKETS_TABLE = `
   CREATE TABLE IF NOT EXISTS memory_tickets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

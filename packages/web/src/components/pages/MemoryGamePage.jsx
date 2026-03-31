@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import { fetchMedia, getImageUrl, useMemoryTicket, getMemoryTickets } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
@@ -114,6 +114,8 @@ async function addCardToInventory(mediaId) {
 
 export default function MemoryGamePage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const ticketIdRef = useRef(location.state?.ticketId ?? null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cards, setCards] = useState([]);
@@ -157,7 +159,7 @@ export default function MemoryGamePage() {
       const { tickets } = await getMemoryTickets();
       setHasTicket(tickets > 0);
       if (tickets === 0) {
-        setError('No tickets. Buy one from the Market.');
+        setError('No tickets. Buy one from the Market and find it in your Inventory.');
         setLoading(false);
         return;
       }
@@ -217,7 +219,7 @@ export default function MemoryGamePage() {
 
     if (!startedRef.current) {
       startedRef.current = true;
-      useMemoryTicket().catch(() => {});
+      useMemoryTicket(ticketIdRef.current || undefined).catch(() => {});
     }
 
     const newFlipped = [...flipped, card.id];
@@ -283,8 +285,8 @@ export default function MemoryGamePage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
         <p className="text-red-400">{error}</p>
-        <Button variant="secondary" onClick={() => navigate('/quest')}>
-          Back to Quest
+        <Button variant="secondary" onClick={() => navigate('/inventory')}>
+          Back to Inventory
         </Button>
       </div>
     );

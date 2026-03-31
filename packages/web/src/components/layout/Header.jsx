@@ -54,21 +54,15 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex items-center">
-            <Link to={clientRoutes.quest} className="text-xl font-bold text-white hover:text-gray-200 transition-colors">
+            <Link to={clientRoutes.inventory} className="text-xl font-bold text-white hover:text-gray-200 transition-colors">
               Photo Quest
             </Link>
           </div>
 
           {/* Navigation */}
           <nav className="flex items-center gap-2">
-            <NavLink to={clientRoutes.quest} className={linkClass}>
-              Quest
-            </NavLink>
             <NavLink to={clientRoutes.inventory} className={linkClass}>
               Inventory
-            </NavLink>
-            <NavLink to={clientRoutes.memoryGame} className={linkClass}>
-              Memory
             </NavLink>
             <NavLink to={clientRoutes.market} className={linkClass}>
               Market

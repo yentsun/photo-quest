@@ -7,7 +7,7 @@
  * @returns {{ deck: object, dust: number }|null} null if insufficient dust or no media.
  */
 
-import { MARKET_PRICES } from '@photo-quest/shared';
+import { MARKET_PRICES, CARD_TYPE } from '@photo-quest/shared';
 import { weightedSample } from '../src/weightedSample.js';
 
 export default function () {
@@ -39,6 +39,10 @@ export default function () {
     for (let p = 0; p < picked.length; p++) {
       stmt.run(deckId, p, picked[p].id);
     }
+
+    db.prepare(
+      'INSERT INTO inventory (card_type, ref_id) VALUES (?, ?)'
+    ).run(CARD_TYPE.QUEST_DECK, deckId);
 
     db.exec('COMMIT');
 

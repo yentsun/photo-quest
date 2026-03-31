@@ -6,10 +6,12 @@
  *
  * Generates 10 decks of 10 random cards from the media library.
  * Decks are keyed by date so they persist for the day.
+ * Each deck is also added to inventory as a quest_deck card.
  *
  * @returns {{ decks: object[], dust: number }}
  */
 
+import { CARD_TYPE } from '@photo-quest/shared';
 import { weightedSample } from '../src/weightedSample.js';
 
 export default function () {
@@ -66,6 +68,10 @@ function generateDecks(db, date) {
         'INSERT INTO quest_cards (deck_id, position, media_id) VALUES (?, ?, ?)'
       ).run(deckId, p, picked[p].id);
     }
+
+    db.prepare(
+      'INSERT INTO inventory (card_type, ref_id) VALUES (?, ?)'
+    ).run(CARD_TYPE.QUEST_DECK, deckId);
   }
   db.exec('COMMIT');
   } catch (err) {

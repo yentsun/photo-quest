@@ -1,39 +1,15 @@
 /**
- * @file Market page — buy quest decks and memory game tickets.
+ * @file Market page — buy cards with magic dust.
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { MARKET_PRICES, words } from '@photo-quest/shared';
-import { buyQuestDeck, buyMemoryTicket, getMemoryTickets } from '../../utils/api.js';
-import { Button, Spinner } from '../ui/index.js';
-
-function MarketItem({ title, description, price, count, buying, onBuy }) {
-  return (
-    <div className="rounded-2xl bg-gray-900 border border-gray-700 p-6 flex flex-col items-center gap-4 text-center">
-      <h2 className="text-xl font-bold text-white">{title}</h2>
-      <p className="text-gray-400 text-sm">{description}</p>
-      {count != null && (
-        <p className="text-purple-300 text-sm font-medium">
-          Owned: {count}
-        </p>
-      )}
-      <Button onClick={onBuy} disabled={buying}>
-        {buying ? '...' : `${price} ${words.dustSymbol}`}
-      </Button>
-    </div>
-  );
-}
+import { buyQuestDeck, buyMemoryTicket } from '../../utils/api.js';
+import { Button, ConsumableCard } from '../ui/index.js';
 
 export default function MarketPage() {
-  const [tickets, setTickets] = useState(null);
   const [buying, setBuying] = useState(null);
   const [message, setMessage] = useState(null);
-
-  useEffect(() => {
-    getMemoryTickets()
-      .then(({ tickets }) => setTickets(tickets))
-      .catch(() => {});
-  }, []);
 
   const showMessage = (text) => {
     setMessage(text);
@@ -56,9 +32,8 @@ export default function MarketPage() {
   const handleBuyTicket = async () => {
     setBuying('ticket');
     try {
-      const { tickets: t } = await buyMemoryTicket();
-      setTickets(t);
-      showMessage('Memory ticket purchased!');
+      await buyMemoryTicket();
+      showMessage('Memory ticket added to inventory!');
       window.dispatchEvent(new Event('dust-changed'));
     } catch {
       showMessage('Not enough dust');
@@ -80,22 +55,37 @@ export default function MarketPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <MarketItem
+      <div className="grid grid-cols-2 gap-8 justify-items-center">
+        <ConsumableCard
+          label="Quest"
           title="Quest Deck"
-          description="Add an extra deck of 10 cards to today's quest"
-          price={MARKET_PRICES.questDeck}
-          buying={buying === 'deck'}
-          onBuy={handleBuyDeck}
-        />
-        <MarketItem
-          title="Memory Ticket"
-          description="Required to play the memory card game"
-          price={MARKET_PRICES.memoryTicket}
-          count={tickets}
-          buying={buying === 'ticket'}
-          onBuy={handleBuyTicket}
-        />
+          subtitle="10 cards for today's quest"
+          emoji="🗂️"
+          borderColor="border-amber-700/60"
+          bgGradient="bg-gradient-to-br from-amber-900 to-orange-900"
+          className="w-full max-w-[200px]"
+        >
+          <div className="mt-3 text-center">
+            <Button onClick={handleBuyDeck} disabled={buying === 'deck'}>
+              {buying === 'deck' ? '...' : `${MARKET_PRICES.questDeck} ${words.dustSymbol}`}
+            </Button>
+          </div>
+        </ConsumableCard>
+        <ConsumableCard
+          label="Ticket"
+          title="Memory Game"
+          subtitle="Play one memory game"
+          emoji="🃏"
+          borderColor="border-purple-700/60"
+          bgGradient="bg-gradient-to-br from-purple-900 to-blue-900"
+          className="w-full max-w-[200px]"
+        >
+          <div className="mt-3 text-center">
+            <Button onClick={handleBuyTicket} disabled={buying === 'ticket'}>
+              {buying === 'ticket' ? '...' : `${MARKET_PRICES.memoryTicket} ${words.dustSymbol}`}
+            </Button>
+          </div>
+        </ConsumableCard>
       </div>
     </div>
   );

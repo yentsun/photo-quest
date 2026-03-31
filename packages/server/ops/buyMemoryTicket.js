@@ -1,5 +1,5 @@
 /**
- * @file Buy a memory game ticket.
+ * @file Buy a memory game ticket (stored as inventory card).
  *
  * Kojo op: accessed as `kojo.ops.buyMemoryTicket()`.
  * Must use `function()` syntax (not arrow) to receive kojo context via `this`.
@@ -7,7 +7,7 @@
  * @returns {{ tickets: number, dust: number }|null} null if insufficient dust.
  */
 
-import { MARKET_PRICES } from '@photo-quest/shared';
+import { MARKET_PRICES, CARD_TYPE } from '@photo-quest/shared';
 
 export default function () {
   const [kojo] = this;
@@ -16,7 +16,7 @@ export default function () {
   const dustResult = kojo.ops.updateDust(-MARKET_PRICES.memoryTicket);
   if (!dustResult) return null;
 
-  db.prepare('INSERT INTO memory_tickets (used) VALUES (0)').run();
+  db.prepare('INSERT INTO inventory (card_type) VALUES (?)').run(CARD_TYPE.MEMORY_TICKET);
 
   const { tickets } = kojo.ops.getMemoryTickets();
 

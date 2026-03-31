@@ -147,3 +147,14 @@ export const DUST_REWARDS = { 3: 50, 2: 30, 1: 10 };
  */
 export const MARKET_PRICES = { questDeck: 5, memoryTicket: 1 };
 
+/**
+ * Inventory card types. Stored in the `card_type` column of the inventory table.
+ * @readonly
+ * @enum {string}
+ */
+export const CARD_TYPE = {
+  MEDIA: 'media',
+  MEMORY_TICKET: 'memory_ticket',
+  QUEST_DECK: 'quest_deck'
+};
+

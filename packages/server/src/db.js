@@ -14,7 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_PLAYER_STATS_TABLE, CREATE_INVENTORY_TABLE, CREATE_QUEST_DECKS_TABLE, CREATE_QUEST_CARDS_TABLE, CREATE_MEMORY_TICKETS_TABLE, CREATE_PILES_TABLE, CREATE_PILE_CARDS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_PLAYER_STATS_TABLE, CREATE_INVENTORY_TABLE, CREATE_QUEST_DECKS_TABLE, CREATE_QUEST_CARDS_TABLE, CREATE_MEMORY_TICKETS_TABLE, CREATE_PILES_TABLE, CREATE_PILE_CARDS_TABLE, CARD_TYPE } from '@photo-quest/shared';
 
 /* Compute __dirname for ES modules. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -125,5 +125,38 @@ function migrateDb() {
     );
   } catch (err) {
     /* Table may not exist yet on first run -- ignore. */
+  }
+
+  /* Migrate inventory table: add card_type + ref_id, make media_id nullable. */
+  const invCols = db.prepare('PRAGMA table_info(inventory)').all();
+  if (!invCols.some(c => c.name === 'card_type')) {
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec('BEGIN');
+    db.exec('ALTER TABLE inventory RENAME TO inventory_old');
+    db.exec(CREATE_INVENTORY_TABLE);
+    db.exec(`INSERT INTO inventory (id, media_id, card_type, acquired_at)
+             SELECT id, media_id, '${CARD_TYPE.MEDIA}', acquired_at FROM inventory_old`);
+    db.exec('DROP TABLE inventory_old');
+    db.exec('COMMIT');
+    db.exec('PRAGMA foreign_keys = ON');
+    console.debug('[db] Migration applied: inventory table recreated with card_type');
+  } else if (!invCols.some(c => c.name === 'ref_id')) {
+    try {
+      db.exec('ALTER TABLE inventory ADD COLUMN ref_id INTEGER');
+      console.debug('[db] Migration applied: inventory.ref_id added');
+    } catch (err) { /* already exists */ }
+  }
+
+  /* Migrate unused memory_tickets into inventory as ticket cards. */
+  try {
+    const result = db.prepare(
+      `INSERT INTO inventory (card_type) SELECT '${CARD_TYPE.MEMORY_TICKET}' FROM memory_tickets WHERE used = 0`
+    ).run();
+    if (result.changes > 0) {
+      db.exec('DELETE FROM memory_tickets WHERE used = 0');
+      console.debug(`[db] Migrated ${result.changes} unused memory tickets to inventory`);
+    }
+  } catch (err) {
+    /* memory_tickets table may not exist -- ignore. */
   }
 }

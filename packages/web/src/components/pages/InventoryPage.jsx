@@ -2,22 +2,21 @@
  * @file Inventory page - cards with drag & drop piles.
  */
 
-import { useState, useEffect, useRef, memo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { MEDIA_TYPE, words } from '@photo-quest/shared';
+import { MEDIA_TYPE, CARD_TYPE, words, clientRoutes } from '@photo-quest/shared';
 import {
   fetchInventory, destroyInventoryItem, sellInventoryItem, freeInfuseMedia, getMediaUrl, getImageUrl,
   fetchPiles, fetchPileCards, createPile, renamePile as renamePileApi, deletePile as deletePileApi, addToPile,
+  fetchQuestDecks,
 } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, IconButton, Icon, Input, Spinner } from '../ui/index.js';
+import { Button, IconButton, Icon, Input, Spinner, MediaCard, ConsumableCard, Deck } from '../ui/index.js';
 
-/* ── Card component ── */
+/* ── Inventory media card (wraps MediaCard with drag & drop + actions) ── */
 
-const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, onSell, onDrop }) {
-  const isImage = item.type === MEDIA_TYPE.IMAGE;
-  const thumbUrl = isImage ? getImageUrl(item.id) : getMediaUrl(item);
+function InventoryMediaCard({ item, onClick, onDestroy, onSell, onDrop }) {
   const infusion = item.infusion || 0;
   const destroyReward = infusion > 0 ? infusion * 2 : 1;
   const sellReward = infusion;
@@ -25,30 +24,17 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, on
 
   return (
     <div
-      className={`group cursor-pointer ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
+      className={`group ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
       draggable
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(item.inventory_id)); }}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop?.(e, item); }}
-      onClick={() => onClick?.(item)}
     >
-      <div className="relative rounded-2xl bg-gray-900 border border-gray-700 shadow-[0_4px_16px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.6)] hover:border-gray-500 transition-all overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800/80 border-b border-gray-700">
-          <span className="text-gray-400 text-[10px] uppercase tracking-wide">{isImage ? 'Image' : 'Video'}</span>
-          <span className="text-purple-300 text-[10px] font-medium">{words.dustSymbol} {infusion}</span>
-        </div>
-        <div className="p-2 pb-0">
-          <div className="relative aspect-square rounded-lg overflow-hidden bg-black">
-            {isImage ? (
-              <img src={thumbUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" draggable={false} />
-            ) : (
-              <video src={thumbUrl} preload="metadata" muted className="w-full h-full object-cover" />
-            )}
-          </div>
-        </div>
-        <div className="px-3 py-2 flex items-center justify-between gap-1">
-          <p className="text-white text-xs font-medium truncate flex-1">{item.title}</p>
+      <MediaCard
+        item={item}
+        onClick={() => onClick?.(item)}
+        actions={
           <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex gap-0.5">
             {onSell && (
               <IconButton
@@ -65,15 +51,15 @@ const InventoryCard = memo(function InventoryCard({ item, onClick, onDestroy, on
               className="bg-red-900/70 hover:bg-red-700 text-red-200 hover:text-white"
             />
           </div>
-        </div>
-      </div>
+        }
+      />
     </div>
   );
-});
+}
 
-/* ── Pile card (stacked card look) ── */
+/* ── Pile deck ── */
 
-function PileCard({ pile, onOpen, onRename, onDelete, onDrop }) {
+function PileDeck({ pile, onOpen, onRename, onDelete, onDrop }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(pile.name);
   const [dragOver, setDragOver] = useState(false);
@@ -89,34 +75,23 @@ function PileCard({ pile, onOpen, onRename, onDelete, onDrop }) {
 
   return (
     <div
-      className={`group cursor-pointer ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
-      onClick={() => !editing && onOpen(pile.id)}
+      className={`group ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(e, pile.id); }}
     >
-      {/* Stacked shadow layers */}
-      <div className="relative">
-        {pile.cardCount >= 3 && (
-          <div className="absolute inset-0 rounded-2xl bg-gray-700 border border-gray-600 translate-x-2 translate-y-2" />
-        )}
-        {pile.cardCount >= 2 && (
-          <div className="absolute inset-0 rounded-2xl bg-gray-800 border border-gray-600 translate-x-1 translate-y-1" />
-        )}
-        <div className={`relative rounded-2xl bg-gray-900 border shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden transition-all
-          border-gray-700 hover:border-gray-500`}>
-          {/* Art area with preview */}
-          <div className="p-2 pb-0">
-            <div className="relative aspect-square rounded-lg overflow-hidden bg-black">
-              {previewUrl ? (
-                <img src={previewUrl} alt={pile.name} className="w-full h-full object-cover" loading="lazy" draggable={false} />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-600 text-3xl">?</div>
-              )}
-            </div>
-          </div>
-          {/* Bottom — name + count + actions */}
-          <div className="px-3 py-2">
+      <Deck
+        count={pile.cardCount}
+        onClick={() => !editing && onOpen(pile.id)}
+        art={
+          previewUrl ? (
+            <img src={previewUrl} alt={pile.name} className="w-full h-full object-cover" loading="lazy" draggable={false} />
+          ) : (
+            <div className="w-full h-full bg-black flex items-center justify-center text-gray-600 text-3xl">?</div>
+          )
+        }
+        footer={
+          <>
             {editing ? (
               <Input
                 value={name}
@@ -140,15 +115,15 @@ function PileCard({ pile, onOpen, onRename, onDelete, onDrop }) {
                 />
                 <IconButton
                   icon={<Icon name="trash" className="w-3 h-3" />}
-                  label="Delete pile"
+                  label="Delete deck"
                   onClick={(e) => { e.stopPropagation(); onDelete(pile.id); }}
                   className="text-red-400 hover:text-red-300"
                 />
               </div>
             </div>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
     </div>
   );
 }
@@ -247,8 +222,8 @@ export default function InventoryPage() {
   const closeOverlay = useCallback(() => { setSelectedItem(null); reload(); }, []);
 
   const reload = () => {
-    Promise.all([fetchInventory(), fetchPiles()])
-      .then(([{ items }, { piles: pilesData, groupedIds: gIds }]) => {
+    Promise.all([fetchQuestDecks(), fetchInventory(), fetchPiles()])
+      .then(([, { items }, { piles: pilesData, groupedIds: gIds }]) => {
         setItems(items);
         setPiles(pilesData);
         setGroupedIds(new Set(gIds));
@@ -276,6 +251,14 @@ export default function InventoryPage() {
   };
 
   const handleCardClick = (item) => setSelectedItem(item);
+
+  const handleTicketClick = (item) => {
+    navigate(clientRoutes.memoryGame, { state: { ticketId: item.inventory_id } });
+  };
+
+  const handleDeckClick = (item) => {
+    navigate(clientRoutes.quest, { state: { deckId: item.ref_id } });
+  };
 
   const handleSell = async (item) => {
     const infusion = item.infusion || 0;
@@ -309,9 +292,9 @@ export default function InventoryPage() {
   };
 
   const handleShuffle = () => {
-    if (items.length === 0) return;
+    if (mediaItems.length === 0) return;
     pendingShuffle.current = true;
-    slideshow.start(items, { order: 'random' });
+    slideshow.start(mediaItems, { order: 'random' });
   };
 
   useEffect(() => {
@@ -363,6 +346,16 @@ export default function InventoryPage() {
     }
   };
 
+  const { mediaItems, ticketItems, deckItems, ungrouped } = useMemo(() => {
+    const media = items.filter(i => i.card_type === CARD_TYPE.MEDIA);
+    return {
+      mediaItems: media,
+      ticketItems: items.filter(i => i.card_type === CARD_TYPE.MEMORY_TICKET),
+      deckItems: items.filter(i => i.card_type === CARD_TYPE.QUEST_DECK),
+      ungrouped: media.filter(i => !groupedIds.has(i.inventory_id)),
+    };
+  }, [items, groupedIds]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
@@ -373,7 +366,6 @@ export default function InventoryPage() {
   }
 
   const bagIcon = <Icon name="backpack" className="w-16 h-16" />;
-  const ungrouped = items.filter(i => !groupedIds.has(i.inventory_id));
 
   /* Pile view */
   if (viewingPile) {
@@ -390,7 +382,7 @@ export default function InventoryPage() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {viewingPileCards.map(item => (
-            <InventoryCard
+            <InventoryMediaCard
               key={item.inventory_id}
               item={item}
               onClick={handleCardClick}
@@ -411,19 +403,43 @@ export default function InventoryPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Inventory</h1>
-          <p className="text-gray-400 text-sm">{items.length} items</p>
+          <p className="text-gray-400 text-sm">{items.length} card{items.length !== 1 ? 's' : ''}</p>
         </div>
-        {items.length > 0 && (
+        {mediaItems.length > 0 && (
           <Button variant="secondary" onClick={handleShuffle}>
             Shuffle
           </Button>
         )}
       </div>
 
-      {ungrouped.length > 0 || piles.length > 0 ? (
+      {ungrouped.length > 0 || piles.length > 0 || ticketItems.length > 0 || deckItems.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {deckItems.map(item => (
+            <ConsumableCard
+              key={`deck-${item.inventory_id}`}
+              label="Quest"
+              title={`Deck ${(item.deck_index ?? 0) + 1}`}
+              subtitle={`${item.current_position ?? 0}/${item.total_cards ?? 0} viewed`}
+              emoji="🗂️"
+              borderColor="border-amber-700/60"
+              bgGradient="bg-gradient-to-br from-indigo-700 to-purple-800"
+              onClick={() => handleDeckClick(item)}
+            />
+          ))}
+          {ticketItems.map(item => (
+            <ConsumableCard
+              key={`ticket-${item.inventory_id}`}
+              label="Ticket"
+              title="Memory Game"
+              subtitle="Click to play"
+              emoji="🃏"
+              borderColor="border-purple-700/60"
+              bgGradient="bg-gradient-to-br from-purple-900 to-blue-900"
+              onClick={() => handleTicketClick(item)}
+            />
+          ))}
           {piles.map(pile => (
-            <PileCard
+            <PileDeck
               key={`pile-${pile.id}`}
               pile={pile}
               onOpen={openPile}
@@ -433,7 +449,7 @@ export default function InventoryPage() {
             />
           ))}
           {ungrouped.map(item => (
-            <InventoryCard
+            <InventoryMediaCard
               key={item.inventory_id}
               item={item}
               onClick={handleCardClick}

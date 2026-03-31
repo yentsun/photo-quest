@@ -26,8 +26,8 @@ export default function Router() {
             <BrowserRouter>
               <Routes>
                 <Route path={r.root} element={<Root />}>
-                  <Route index element={<Navigate replace to={r.quest} />} />
-                  <Route path={r.dashboard} element={<Navigate replace to={r.quest} />} />
+                  <Route index element={<Navigate replace to={r.inventory} />} />
+                  <Route path={r.dashboard} element={<Navigate replace to={r.inventory} />} />
                   <Route path={r.folder} element={<FolderPage />} />
                   <Route path={r.media} element={<MediaPage />} />
                   <Route path={r.memoryGame} element={<MemoryGamePage />} />
