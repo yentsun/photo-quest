@@ -176,7 +176,7 @@ export default defineConfig({
           }
         },
       },
-      '/piles': API_TARGET,
+      '/decks': API_TARGET,
       '/player': API_TARGET,
       '/stream': API_TARGET,
       '/image': API_TARGET,

@@ -26,7 +26,7 @@ export default memo(function MediaCard({ item, onClick, actions }) {
         isImage ? (
           <img src={thumbUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" draggable={false} />
         ) : (
-          <video src={thumbUrl} preload="metadata" muted className="w-full h-full object-cover" />
+          <video src={thumbUrl} preload="metadata" muted draggable={false} className="w-full h-full object-cover" />
         )
       }
       footer={

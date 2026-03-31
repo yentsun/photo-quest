@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { words, clientRoutes } from '@photo-quest/shared';
-import { fetchPileCards, destroyInventoryItem, sellInventoryItem } from '../../utils/api.js';
+import { fetchDeckCards, destroyInventoryItem, sellInventoryItem } from '../../utils/api.js';
 import { Button, Spinner, MediaCard, CardOverlay, IconButton, Icon } from '../ui/index.js';
 
 function DeckMediaCard({ item, onClick, onDestroy, onSell }) {
@@ -49,7 +49,7 @@ export default function DeckPage() {
   const [selectedItem, setSelectedItem] = useState(null);
 
   const reload = useCallback(() => {
-    fetchPileCards(id)
+    fetchDeckCards(id)
       .then(setCards)
       .catch(err => console.error('Failed to load deck:', err))
       .finally(() => setLoading(false));
@@ -121,7 +121,26 @@ export default function DeckPage() {
         ))}
       </div>
       {selectedItem && (
-        <CardOverlay item={selectedItem} onClose={closeOverlay} />
+        <CardOverlay
+          item={selectedItem}
+          onClose={closeOverlay}
+          actions={
+            <>
+              <IconButton
+                icon={<Icon name="prev" className="w-5 h-5" />}
+                label={`${words.sell} (+${selectedItem.infusion || 0} ${words.dustSymbol})`}
+                onClick={() => handleSell(selectedItem)}
+                className="bg-blue-900/80 hover:bg-blue-700 text-blue-200 hover:text-white rounded-full p-2"
+              />
+              <IconButton
+                icon={<Icon name="trash" className="w-5 h-5" />}
+                label={words.destroy}
+                onClick={() => handleDestroy(selectedItem)}
+                className="bg-red-900/80 hover:bg-red-700 text-red-200 hover:text-white rounded-full p-2"
+              />
+            </>
+          }
+        />
       )}
     </div>
   );

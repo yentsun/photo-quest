@@ -140,7 +140,7 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.12** The app must have a **Market** page. The player can buy extra quest deck cards (**5 Đ** each) and memory game ticket cards (**1 Đ** each). Purchased cards appear in inventory. The 10 free daily quest deck cards still generate; market decks are added on top. Memory game requires a ticket card to play (consumed on first card flip).
 
-**4.14** The player must be able to organize inventory cards into **decks** (like playlists). A card can belong to multiple decks. Decks are created by dragging a card onto another card. Decks can be named. Inventory view shows decks as stacked card groups and ungrouped cards. Each deck has its own URL (`/deck/:id`) with a back button to return to inventory.
+**4.14** The player must be able to organize inventory cards into **decks** (like playlists). There are no "piles" — only decks. A card can belong to multiple decks. Decks are created by dragging a card onto another card. Decks can be named. Inventory view shows decks as stacked card groups and ungrouped cards. Each deck has its own URL (`/deck/:id`) with a back button to return to inventory.
 
 **4.15** The player can **sell** an inventory card back to the media library. The card is removed from inventory but the media file stays on disk. The player receives **infusion × 1 Đ**. Selling a 0-infusion card returns 0 Đ.
 

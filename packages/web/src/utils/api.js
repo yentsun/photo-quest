@@ -365,87 +365,87 @@ export async function useMemoryTicket(inventoryId) {
 }
 
 /**
- * Fetch all piles with card counts.
+ * Fetch all decks with card counts.
  * @returns {Promise<Array<{ id: number, name: string, cardCount: number }>>}
  */
-export async function fetchPiles() {
-  const response = await fetch(apiRoutes.piles);
-  if (!response.ok) throw new Error('Failed to fetch piles');
+export async function fetchDecks() {
+  const response = await fetch(apiRoutes.decks);
+  if (!response.ok) throw new Error('Failed to fetch decks');
   return response.json();
 }
 
 /**
- * Create a new pile.
+ * Create a new deck.
  * @param {string} name
  * @param {number[]} inventoryIds
  */
-export async function createPile(name, inventoryIds) {
-  const response = await fetch(apiRoutes.piles, {
+export async function createDeck(name, inventoryIds) {
+  const response = await fetch(apiRoutes.decks, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, inventoryIds }),
   });
-  if (!response.ok) throw new Error('Failed to create pile');
+  if (!response.ok) throw new Error('Failed to create deck');
   return response.json();
 }
 
 /**
- * Rename a pile.
- * @param {number} pileId
+ * Rename a deck.
+ * @param {number} deckId
  * @param {string} name
  */
-export async function renamePile(pileId, name) {
-  const response = await fetch(`/piles/${pileId}`, {
+export async function renameDeck(deckId, name) {
+  const response = await fetch(`/decks/${deckId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   });
-  if (!response.ok) throw new Error('Failed to rename pile');
+  if (!response.ok) throw new Error('Failed to rename deck');
   return response.json();
 }
 
 /**
- * Delete a pile.
- * @param {number} pileId
+ * Delete a deck.
+ * @param {number} deckId
  */
-export async function deletePile(pileId) {
-  const response = await fetch(`/piles/${pileId}`, { method: 'DELETE' });
-  if (!response.ok) throw new Error('Failed to delete pile');
+export async function deleteDeck(deckId) {
+  const response = await fetch(`/decks/${deckId}`, { method: 'DELETE' });
+  if (!response.ok) throw new Error('Failed to delete deck');
 }
 
 /**
- * Add cards to a pile.
- * @param {number} pileId
+ * Add cards to a deck.
+ * @param {number} deckId
  * @param {number[]} inventoryIds
  */
-export async function addToPile(pileId, inventoryIds) {
-  const response = await fetch(`/piles/${pileId}/cards`, {
+export async function addToDeck(deckId, inventoryIds) {
+  const response = await fetch(`/decks/${deckId}/cards`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ inventoryIds }),
   });
-  if (!response.ok) throw new Error('Failed to add to pile');
+  if (!response.ok) throw new Error('Failed to add to deck');
   return response.json();
 }
 
 /**
- * Remove a card from a pile.
- * @param {number} pileId
+ * Remove a card from a deck.
+ * @param {number} deckId
  * @param {number} inventoryId
  */
-export async function removeFromPile(pileId, inventoryId) {
-  const response = await fetch(`/piles/${pileId}/cards/${inventoryId}`, { method: 'DELETE' });
-  if (!response.ok) throw new Error('Failed to remove from pile');
+export async function removeFromDeck(deckId, inventoryId) {
+  const response = await fetch(`/decks/${deckId}/cards/${inventoryId}`, { method: 'DELETE' });
+  if (!response.ok) throw new Error('Failed to remove from deck');
 }
 
 /**
- * Fetch cards in a pile.
- * @param {number} pileId
+ * Fetch cards in a deck.
+ * @param {number} deckId
  * @returns {Promise<Array>}
  */
-export async function fetchPileCards(pileId) {
-  const response = await fetch(`/piles/${pileId}/cards`);
-  if (!response.ok) throw new Error('Failed to fetch pile cards');
+export async function fetchDeckCards(deckId) {
+  const response = await fetch(`/decks/${deckId}/cards`);
+  if (!response.ok) throw new Error('Failed to fetch deck cards');
   return response.json();
 }
 

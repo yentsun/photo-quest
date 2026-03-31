@@ -1,5 +1,5 @@
 /**
- * @file POST /piles -- Create a new pile.
+ * @file POST /decks -- Create a new deck.
  * Body: { name?: string, inventoryIds?: number[] }
  */
 
@@ -8,7 +8,7 @@ import { json, parseBody } from '../src/http.js';
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
     method: 'POST',
-    pathname: '/piles',
+    pathname: '/decks',
   }, async (req, res) => {
     const body = await parseBody(req);
     const result = kojo.ops.createPile(body?.name, body?.inventoryIds || []);

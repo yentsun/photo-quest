@@ -5,7 +5,7 @@
 import ConsumableCard from './ConsumableCard.jsx';
 import ticketIcon from '../../icons/ticket2-svgrepo-com.svg';
 
-export default function TicketCard({ subtitle, className, onClick, children }) {
+export default function TicketCard({ subtitle, className, onClick, onDoubleClick, children }) {
   return (
     <ConsumableCard
       label="Ticket"
@@ -16,6 +16,7 @@ export default function TicketCard({ subtitle, className, onClick, children }) {
       bgGradient="bg-gradient-to-br from-purple-900 to-blue-900"
       className={className}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
     >
       {children}
     </ConsumableCard>

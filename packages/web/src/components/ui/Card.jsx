@@ -6,11 +6,11 @@
  *   ConsumableCard — emoji art with gradient background
  */
 
-export default function Card({ header, art, footer, borderColor = 'border-gray-700', className, onClick, children }) {
+export default function Card({ header, art, footer, borderColor = 'border-gray-700', className, onClick, onDoubleClick, children }) {
   return (
-    <div className={className} onClick={onClick}>
+    <div className={className} onClick={onClick} onDoubleClick={onDoubleClick}>
       <div className={`rounded-2xl bg-gray-900 border ${borderColor} shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden transition-all
-        ${onClick ? 'cursor-pointer hover:shadow-[0_8px_32px_rgba(0,0,0,0.5)]' : ''}`}>
+        ${onClick || onDoubleClick ? 'cursor-pointer hover:shadow-[0_8px_32px_rgba(0,0,0,0.5)]' : ''}`}>
         <div className={`flex items-center justify-between px-3 py-1.5 border-b ${borderColor}`}>
           {header}
         </div>

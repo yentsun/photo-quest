@@ -48,7 +48,7 @@ export const clientRoutes = {
   /** Daily quest — browse card decks and collect media. */
   quest: '/quest',
 
-  /** User-created deck — view cards in a pile. */
+  /** User-created deck — view cards in a deck. */
   deck: '/deck/:id',
 
   /** Market — buy decks and tickets. */
@@ -159,15 +159,15 @@ export const apiRoutes = {
   /** POST -- Use a memory game ticket. */
   marketUseTicket: '/market/use-ticket',
 
-  /** GET / POST -- List piles or create a new pile. */
-  piles: '/piles',
+  /** GET / POST -- List decks or create a new deck. */
+  decks: '/decks',
 
-  /** PATCH / DELETE -- Rename or delete a pile. */
-  pileById: '/piles/:id',
+  /** PATCH / DELETE -- Rename or delete a deck. */
+  deckById: '/decks/:id',
 
-  /** POST -- Add cards to a pile.  Body: { inventoryIds: [] }. */
-  pileCards: '/piles/:id/cards',
+  /** POST -- Add cards to a deck.  Body: { inventoryIds: [] }. */
+  deckCards: '/decks/:id/cards',
 
-  /** DELETE -- Remove a card from a pile. */
-  pileCardById: '/piles/:id/cards/:inventoryId'
+  /** DELETE -- Remove a card from a deck. */
+  deckCardById: '/decks/:id/cards/:inventoryId'
 };

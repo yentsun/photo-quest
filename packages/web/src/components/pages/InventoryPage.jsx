@@ -8,10 +8,11 @@ import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, CARD_TYPE, words, clientRoutes } from '@photo-quest/shared';
 import {
   fetchInventory, destroyInventoryItem, sellInventoryItem, getMediaUrl, getImageUrl,
-  fetchPiles, createPile, renamePile as renamePileApi, deletePile as deletePileApi, addToPile,
+  fetchDecks, createDeck, renameDeck, deleteDeck, addToDeck,
   fetchQuestDecks,
 } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
+import { showToast } from '../ToasterMessage.jsx';
 import { Button, IconButton, Icon, Input, Spinner, MediaCard, CardOverlay, ConsumableCard, TicketCard, Deck } from '../ui/index.js';
 
 /* ── Inventory media card (wraps MediaCard with drag & drop + actions) ── */
@@ -21,15 +22,17 @@ function InventoryMediaCard({ item, onClick, onDestroy, onSell, onDrop }) {
   const destroyReward = infusion > 0 ? infusion * 2 : 1;
   const sellReward = infusion;
   const [dragOver, setDragOver] = useState(false);
+  const dragCount = useRef(0);
 
   return (
     <div
       className={`group ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
       draggable
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(item.inventory_id)); }}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop?.(e, item); }}
+      onDragOver={(e) => { e.preventDefault(); }}
+      onDragEnter={(e) => { e.preventDefault(); dragCount.current++; setDragOver(true); }}
+      onDragLeave={() => { dragCount.current--; if (dragCount.current === 0) setDragOver(false); }}
+      onDrop={(e) => { e.preventDefault(); dragCount.current = 0; setDragOver(false); onDrop?.(e, item); }}
     >
       <MediaCard
         item={item}
@@ -57,35 +60,37 @@ function InventoryMediaCard({ item, onClick, onDestroy, onSell, onDrop }) {
   );
 }
 
-/* ── Pile deck ── */
+/* ── User deck (stacked card with rename/delete) ── */
 
-function PileDeck({ pile, onOpen, onRename, onDelete, onDrop }) {
+function UserDeck({ deck, onOpen, onRename, onDelete, onDrop }) {
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(pile.name);
+  const [name, setName] = useState(deck.name);
   const [dragOver, setDragOver] = useState(false);
+  const dragCount = useRef(0);
 
   const handleSave = () => {
     setEditing(false);
-    if (name.trim() && name !== pile.name) onRename(pile.id, name.trim());
+    if (name.trim() && name !== deck.name) onRename(deck.id, name.trim());
   };
 
-  const previewUrl = pile.preview
-    ? (pile.preview.type === MEDIA_TYPE.IMAGE ? getImageUrl(pile.preview.id) : getMediaUrl(pile.preview))
+  const previewUrl = deck.preview
+    ? (deck.preview.type === MEDIA_TYPE.IMAGE ? getImageUrl(deck.preview.id) : getMediaUrl(deck.preview))
     : null;
 
   return (
     <div
       className={`group ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(e, pile.id); }}
+      onDragOver={(e) => { e.preventDefault(); }}
+      onDragEnter={(e) => { e.preventDefault(); dragCount.current++; setDragOver(true); }}
+      onDragLeave={() => { dragCount.current--; if (dragCount.current === 0) setDragOver(false); }}
+      onDrop={(e) => { e.preventDefault(); dragCount.current = 0; setDragOver(false); onDrop(e, deck.id); }}
     >
       <Deck
-        count={pile.cardCount}
-        onClick={() => !editing && onOpen(pile.id)}
+        count={deck.cardCount}
+        onClick={() => !editing && onOpen(deck.id)}
         art={
           previewUrl ? (
-            <img src={previewUrl} alt={pile.name} className="w-full h-full object-cover" loading="lazy" draggable={false} />
+            <img src={previewUrl} alt={deck.name} className="w-full h-full object-cover" loading="lazy" draggable={false} />
           ) : (
             <div className="w-full h-full bg-black flex items-center justify-center text-gray-600 text-3xl">?</div>
           )
@@ -103,10 +108,10 @@ function PileDeck({ pile, onOpen, onRename, onDelete, onDrop }) {
                 className="text-xs"
               />
             ) : (
-              <p className="text-white text-xs font-medium truncate">{pile.name}</p>
+              <p className="text-white text-xs font-medium truncate">{deck.name}</p>
             )}
             <div className="flex items-center justify-between mt-0.5">
-              <span className="text-gray-500 text-[10px]">{pile.cardCount} card{pile.cardCount !== 1 ? 's' : ''}</span>
+              <span className="text-gray-500 text-[10px]">{deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}</span>
               <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <IconButton
                   icon={<Icon name="info" className="w-3 h-3" />}
@@ -116,7 +121,7 @@ function PileDeck({ pile, onOpen, onRename, onDelete, onDrop }) {
                 <IconButton
                   icon={<Icon name="trash" className="w-3 h-3" />}
                   label="Delete"
-                  onClick={(e) => { e.stopPropagation(); onDelete(pile.id); }}
+                  onClick={(e) => { e.stopPropagation(); onDelete(deck.id); }}
                   className="text-red-400 hover:text-red-300"
                 />
               </div>
@@ -138,17 +143,17 @@ export default function InventoryPage() {
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const [items, setItems] = useState([]);
-  const [piles, setPiles] = useState([]);
+  const [decks, setDecks] = useState([]);
   const [groupedIds, setGroupedIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const closeOverlay = useCallback(() => { setSelectedItem(null); reload(); }, []);
 
   const reload = () => {
-    Promise.all([fetchQuestDecks(), fetchInventory(), fetchPiles()])
-      .then(([, { items }, { piles: pilesData, groupedIds: gIds }]) => {
+    Promise.all([fetchQuestDecks(), fetchInventory(), fetchDecks()])
+      .then(([, { items }, { piles: userDecks, groupedIds: gIds }]) => {
         setItems(items);
-        setPiles(pilesData);
+        setDecks(userDecks);
         setGroupedIds(new Set(gIds));
         setLoading(false);
       })
@@ -157,8 +162,8 @@ export default function InventoryPage() {
 
   useEffect(() => { reload(); }, []);
 
-  const openDeck = (pileId) => {
-    navigate(`/deck/${pileId}`);
+  const openDeck = (deckId) => {
+    navigate(`/deck/${deckId}`);
   };
 
   const handleCardClick = (item) => setSelectedItem(item);
@@ -215,45 +220,50 @@ export default function InventoryPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
-  /* Drag & drop: card onto card = new pile, card onto pile = add */
+  /* Drag & drop: card onto card = new deck, card onto deck = add */
   const handleCardDrop = async (e, targetItem) => {
     const draggedId = Number(e.dataTransfer.getData('text/plain'));
     if (!draggedId || draggedId === targetItem.inventory_id) return;
     try {
-      await createPile('New Deck', [draggedId, targetItem.inventory_id]);
+      await createDeck('New Deck', [draggedId, targetItem.inventory_id]);
       reload();
     } catch (err) {
-      console.error('Failed to create pile:', err);
+      console.error('Failed to create deck:', err);
     }
   };
 
-  const handlePileDrop = async (e, pileId) => {
-    const draggedId = Number(e.dataTransfer.getData('text/plain'));
-    if (!draggedId) return;
+  const handleDeckDrop = async (e, deckId) => {
+    const raw = e.dataTransfer.getData('text/plain');
+    const draggedId = Number(raw);
+    if (!draggedId) {
+      showToast(`Drop failed: no card data (raw: "${raw}")`, 'error');
+      return;
+    }
     try {
-      await addToPile(pileId, [draggedId]);
+      await addToDeck(deckId, [draggedId]);
+      showToast('Card added to deck', 'success');
       reload();
     } catch (err) {
-      console.error('Failed to add to pile:', err);
+      showToast(`Failed: ${err.message}`, 'error');
     }
   };
 
-  const handleRenamePile = async (pileId, name) => {
+  const handleRenameDeck = async (deckId, name) => {
     try {
-      await renamePileApi(pileId, name);
-      setPiles(prev => prev.map(p => p.id === pileId ? { ...p, name } : p));
+      await renameDeck(deckId, name);
+      setDecks(prev => prev.map(d => d.id === deckId ? { ...d, name } : d));
     } catch (err) {
-      console.error('Failed to rename pile:', err);
+      console.error('Failed to rename deck:', err);
     }
   };
 
-  const handleDeletePile = async (pileId) => {
+  const handleDeleteDeck = async (deckId) => {
     if (!confirm('Delete this deck? Cards will stay in your inventory.')) return;
     try {
-      await deletePileApi(pileId);
+      await deleteDeck(deckId);
       reload();
     } catch (err) {
-      console.error('Failed to delete pile:', err);
+      console.error('Failed to delete deck:', err);
     }
   };
 
@@ -292,48 +302,58 @@ export default function InventoryPage() {
         )}
       </div>
 
-      {ungrouped.length > 0 || piles.length > 0 || ticketItems.length > 0 || deckItems.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {deckItems.map(item => (
-            <ConsumableCard
-              key={`deck-${item.inventory_id}`}
-              label="Quest"
-              title={`Deck ${(item.deck_index ?? 0) + 1}`}
-              subtitle={`${item.current_position ?? 0}/${item.total_cards ?? 0} viewed`}
-              emoji="🗂️"
-              borderColor="border-amber-700/60"
-              bgGradient="bg-gradient-to-br from-indigo-700 to-purple-800"
-              onClick={() => handleDeckClick(item)}
-            />
-          ))}
-          {ticketItems.map(item => (
-            <TicketCard
-              key={`ticket-${item.inventory_id}`}
-              subtitle="Click to play"
-              onClick={() => handleTicketClick(item)}
-            />
-          ))}
-          {piles.map(pile => (
-            <PileDeck
-              key={`pile-${pile.id}`}
-              pile={pile}
-              onOpen={openDeck}
-              onRename={handleRenamePile}
-              onDelete={handleDeletePile}
-              onDrop={handlePileDrop}
-            />
-          ))}
-          {ungrouped.map(item => (
-            <InventoryMediaCard
-              key={item.inventory_id}
-              item={item}
-              onClick={handleCardClick}
-              onDestroy={handleDestroy}
-              onSell={handleSell}
-              onDrop={handleCardDrop}
-            />
-          ))}
-        </div>
+      {ungrouped.length > 0 || decks.length > 0 || ticketItems.length > 0 || deckItems.length > 0 ? (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {deckItems.length > 0 && (
+              <Deck
+                count={deckItems.length}
+                card={
+                  <ConsumableCard
+                    label="Quest"
+                    title="Quest Decks"
+                    subtitle={`${deckItems.length} deck${deckItems.length !== 1 ? 's' : ''}`}
+                    emoji="🗂️"
+                    borderColor="border-amber-700/60"
+                    bgGradient="bg-gradient-to-br from-indigo-700 to-purple-800"
+                    onDoubleClick={() => handleDeckClick(deckItems[0])}
+                  />
+                }
+              />
+            )}
+            {ticketItems.length > 0 && (
+              <Deck
+                count={ticketItems.length}
+                card={
+                  <TicketCard
+                    subtitle={`${ticketItems.length} ticket${ticketItems.length !== 1 ? 's' : ''}`}
+                    onDoubleClick={() => handleTicketClick(ticketItems[0])}
+                  />
+                }
+              />
+            )}
+            {decks.map(d => (
+              <UserDeck
+                key={`deck-${d.id}`}
+                deck={d}
+                onOpen={openDeck}
+                onRename={handleRenameDeck}
+                onDelete={handleDeleteDeck}
+                onDrop={handleDeckDrop}
+              />
+            ))}
+            {ungrouped.map(item => (
+              <InventoryMediaCard
+                key={item.inventory_id}
+                item={item}
+                onClick={handleCardClick}
+                onDestroy={handleDestroy}
+                onSell={handleSell}
+                onDrop={handleCardDrop}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         <EmptyState
           icon={bagIcon}
@@ -343,7 +363,26 @@ export default function InventoryPage() {
       )}
 
       {selectedItem && (
-        <CardOverlay item={selectedItem} onClose={closeOverlay} />
+        <CardOverlay
+          item={selectedItem}
+          onClose={closeOverlay}
+          actions={
+            <>
+              <IconButton
+                icon={<Icon name="prev" className="w-5 h-5" />}
+                label={`${words.sell} (+${selectedItem.infusion || 0} ${words.dustSymbol})`}
+                onClick={() => handleSell(selectedItem)}
+                className="bg-blue-900/80 hover:bg-blue-700 text-blue-200 hover:text-white rounded-full p-2"
+              />
+              <IconButton
+                icon={<Icon name="trash" className="w-5 h-5" />}
+                label={words.destroy}
+                onClick={() => handleDestroy(selectedItem)}
+                className="bg-red-900/80 hover:bg-red-700 text-red-200 hover:text-white rounded-full p-2"
+              />
+            </>
+          }
+        />
       )}
     </div>
   );

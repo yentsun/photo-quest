@@ -232,14 +232,14 @@ export const CREATE_QUEST_CARDS_TABLE = `
  * @type {string}
  */
 /**
- * SQL statement that creates the `piles` table.
+ * SQL statement that creates the `decks` table.
  *
  * Named groups of inventory cards (like playlists).
  *
  * @type {string}
  */
-export const CREATE_PILES_TABLE = `
-  CREATE TABLE IF NOT EXISTS piles (
+export const CREATE_DECKS_TABLE = `
+  CREATE TABLE IF NOT EXISTS decks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL DEFAULT 'New Deck',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -247,20 +247,20 @@ export const CREATE_PILES_TABLE = `
 `;
 
 /**
- * SQL statement that creates the `pile_cards` join table.
+ * SQL statement that creates the `deck_cards` join table.
  *
- * Many-to-many: a card can belong to multiple piles.
+ * Many-to-many: a card can belong to multiple decks.
  *
  * @type {string}
  */
-export const CREATE_PILE_CARDS_TABLE = `
-  CREATE TABLE IF NOT EXISTS pile_cards (
+export const CREATE_DECK_CARDS_TABLE = `
+  CREATE TABLE IF NOT EXISTS deck_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    pile_id INTEGER NOT NULL,
+    deck_id INTEGER NOT NULL,
     inventory_id INTEGER NOT NULL,
-    FOREIGN KEY (pile_id) REFERENCES piles(id) ON DELETE CASCADE,
+    FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE,
     FOREIGN KEY (inventory_id) REFERENCES inventory(id) ON DELETE CASCADE,
-    UNIQUE(pile_id, inventory_id)
+    UNIQUE(deck_id, inventory_id)
   )
 `;
 

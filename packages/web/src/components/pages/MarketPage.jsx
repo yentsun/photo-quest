@@ -6,24 +6,19 @@ import { useState } from 'react';
 import { MARKET_PRICES, words } from '@photo-quest/shared';
 import { buyQuestDeck, buyMemoryTicket } from '../../utils/api.js';
 import { Button, ConsumableCard, TicketCard } from '../ui/index.js';
+import { showToast } from '../ToasterMessage.jsx';
 
 export default function MarketPage() {
   const [buying, setBuying] = useState(null);
-  const [message, setMessage] = useState(null);
-
-  const showMessage = (text) => {
-    setMessage(text);
-    setTimeout(() => setMessage(null), 3000);
-  };
 
   const handleBuyDeck = async () => {
     setBuying('deck');
     try {
       await buyQuestDeck();
-      showMessage('Quest deck added!');
+      showToast('Quest deck added!', 'success');
       window.dispatchEvent(new Event('dust-changed'));
     } catch {
-      showMessage('Not enough dust');
+      showToast('Not enough dust', 'error');
     } finally {
       setBuying(null);
     }
@@ -33,10 +28,10 @@ export default function MarketPage() {
     setBuying('ticket');
     try {
       await buyMemoryTicket();
-      showMessage('Memory ticket added to inventory!');
+      showToast('Memory ticket added to inventory!', 'success');
       window.dispatchEvent(new Event('dust-changed'));
     } catch {
-      showMessage('Not enough dust');
+      showToast('Not enough dust', 'error');
     } finally {
       setBuying(null);
     }
@@ -48,12 +43,6 @@ export default function MarketPage() {
         <h1 className="text-2xl font-bold text-white">Market</h1>
         <p className="text-gray-400 text-sm">Spend your magic dust</p>
       </div>
-
-      {message && (
-        <div className="mb-4 p-3 bg-blue-900/30 border border-blue-700/50 rounded-lg text-blue-300 text-sm text-center">
-          {message}
-        </div>
-      )}
 
       <div className="grid grid-cols-2 gap-8 justify-items-center">
         <ConsumableCard
