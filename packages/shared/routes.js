@@ -42,6 +42,9 @@ export const clientRoutes = {
   /** Memory card game. */
   memoryGame: '/memory',
 
+  /** Media library — browse added folders. */
+  library: '/library',
+
   /** Player inventory — owned media items. */
   inventory: '/inventory',
 

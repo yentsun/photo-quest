@@ -67,6 +67,9 @@ export default function Header() {
             <NavLink to={clientRoutes.market} className={linkClass}>
               Market
             </NavLink>
+            <NavLink to={clientRoutes.library} className={linkClass}>
+              Library
+            </NavLink>
           </nav>
 
           {/* Dust balance + Network URL */}

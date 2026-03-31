@@ -4,6 +4,7 @@
 
 export { default as DeckPage } from './DeckPage.jsx';
 export { default as FolderPage } from './FolderPage.jsx';
+export { default as LibraryPage } from './LibraryPage.jsx';
 export { default as MediaPage } from './MediaPage.jsx';
 export { default as MemoryGamePage } from './MemoryGamePage.jsx';
 export { default as InventoryPage } from './InventoryPage.jsx';
