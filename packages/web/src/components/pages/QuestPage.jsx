@@ -50,12 +50,8 @@ function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking 
       <Card
         size="large"
         className="w-full max-w-md"
-        header={
-          <>
-            <span className="text-xs uppercase tracking-wide opacity-70 truncate">{card.title}</span>
-            <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
-          </>
-        }
+        header={card.title}
+        headerRight={<span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>}
         art={
           <div className="w-full h-full bg-black">
             {isImage ? (

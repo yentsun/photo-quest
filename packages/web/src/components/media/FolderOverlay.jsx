@@ -34,7 +34,7 @@ export default function FolderOverlay({ folder, onClose, onRemove, onRefresh }) 
         <Card
           size="large"
           className="w-[min(28rem,45vw)]"
-          header={<span className="text-xs uppercase tracking-wide opacity-70 truncate">{folderName}</span>}
+          header={folderName}
           art={
             thumbnailUrl ? (
               <img src={thumbnailUrl} alt={folderName} className="w-full h-full object-cover" />

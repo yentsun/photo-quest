@@ -60,12 +60,8 @@ export default function CardOverlay({ item, onClose, actions }) {
         <Card
           size="large"
           className="w-[min(28rem,45vw)]"
-          header={
-            <>
-              <span className="text-xs uppercase tracking-wide opacity-70 truncate">{item.title}</span>
-              <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
-            </>
-          }
+          header={item.title}
+          headerRight={<span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>}
           art={
             <div className="group/art w-full h-full bg-black">
               {isImage ? (

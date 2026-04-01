@@ -16,12 +16,8 @@ export default memo(function MediaCard({ item, onClick, actions }) {
 
   return (
     <Card
-      header={
-        <>
-          <span className="text-[10px] uppercase tracking-wide opacity-70 truncate">{item.title}</span>
-          <span className="text-purple-300 text-[10px] font-medium">{words.dustSymbol} {infusion}</span>
-        </>
-      }
+      header={item.title}
+      headerRight={<span className="text-purple-300 text-[10px] font-medium">{words.dustSymbol} {infusion}</span>}
       art={
         isImage ? (
           <img src={thumbUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" draggable={false} />

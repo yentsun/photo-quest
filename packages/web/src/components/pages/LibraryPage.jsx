@@ -18,7 +18,7 @@ function FolderCard({ folder, onClick }) {
   return (
     <Card
       onClick={() => onClick?.(folder)}
-      header={<span className="text-[10px] uppercase tracking-wide opacity-70 truncate">{name}</span>}
+      header={name}
       art={
         folder.previewMediaId ? (
           <img src={getImageUrl(folder.previewMediaId)} alt={name} className="w-full h-full object-cover" loading="lazy" />

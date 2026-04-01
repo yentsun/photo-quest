@@ -13,12 +13,8 @@ export default function ConsumableCard({ cost, title, subtitle, emoji, icon, bor
       className={className}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      header={
-        <>
-          <span className="text-[10px] uppercase tracking-wide opacity-70">{title}</span>
-          {cost != null && <span className="text-purple-300 text-[10px] font-medium">{cost}</span>}
-        </>
-      }
+      header={title}
+      headerRight={cost != null ? <span className="text-purple-300 text-[10px] font-medium">{cost}</span> : undefined}
       art={
         <div className={`w-full h-full ${bgGradient} flex items-center justify-center`}>
           {icon || <span className="text-5xl select-none">{emoji}</span>}

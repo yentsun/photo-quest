@@ -101,9 +101,7 @@ function UserDeck({ deck, onOpen, onRename, onDelete, onDrop }) {
               onClick={(e) => e.stopPropagation()}
               className="text-xs w-full"
             />
-          ) : (
-            <span className="text-[10px] uppercase tracking-wide opacity-70 truncate">{deck.name}</span>
-          )
+          ) : deck.name
         }
         art={
           previewUrl ? (
