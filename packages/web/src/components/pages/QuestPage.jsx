@@ -7,10 +7,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
-import { fetchQuestDeck, advanceQuestDeck, takeQuestCard, freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
-import { Button, Card, Spinner } from '../ui/index.js';
+import { fetchQuestDeck, advanceQuestDeck, takeQuestCard, destroyQuestCard, freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
+import { Button, Card, Modal, Spinner } from '../ui/index.js';
 
-function CardViewer({ deck, onNext, onTake, onInfusionUpdate, taking }) {
+function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking }) {
   const card = deck.currentCard;
   const [localInfusion, setLocalInfusion] = useState(card?.infusion || 0);
 
@@ -95,6 +95,9 @@ function CardViewer({ deck, onNext, onTake, onInfusionUpdate, taking }) {
         <Button variant="secondary" onClick={onNext}>
           {words.skipCard}
         </Button>
+        <Button variant="secondary" onClick={() => onDestroy(infusion)} className="text-red-400 hover:text-red-300">
+          {words.destroy}
+        </Button>
       </div>
     </div>
   );
@@ -107,6 +110,7 @@ export default function QuestPage() {
   const [activeDeck, setActiveDeck] = useState(null);
   const [taking, setTaking] = useState(false);
   const [error, setError] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
 
   useEffect(() => {
     if (!deckId) {
@@ -147,6 +151,23 @@ export default function QuestPage() {
     } finally {
       setTaking(false);
     }
+  };
+
+  const handleDestroy = (infusion) => {
+    setConfirmAction({
+      message: words.destroyConfirm,
+      reward: `+${infusion} ${words.dustSymbol}`,
+      onConfirm: async () => {
+        try {
+          const result = await destroyQuestCard(deckId);
+          window.dispatchEvent(new Event('dust-changed'));
+          applyDeckResult(result.deck);
+        } catch (err) {
+          setError(err.message);
+        }
+        setConfirmAction(null);
+      },
+    });
   };
 
   const handlePassiveInfusionUpdate = useCallback(async () => {
@@ -196,9 +217,27 @@ export default function QuestPage() {
         deck={activeDeck}
         onNext={handleNext}
         onTake={handleTake}
+        onDestroy={handleDestroy}
         onInfusionUpdate={handlePassiveInfusionUpdate}
         taking={taking}
       />
+
+      <Modal open={!!confirmAction} onClose={() => setConfirmAction(null)}>
+        {confirmAction && (
+          <div className="text-center space-y-3">
+            <p className="text-white text-lg">{confirmAction.message}</p>
+            <p className="text-purple-300 font-semibold">{confirmAction.reward}</p>
+            <div className="flex gap-3 justify-center pt-2">
+              <Button onClick={confirmAction.onConfirm} className="bg-red-700 hover:bg-red-600">
+                {words.destroy}
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirmAction(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

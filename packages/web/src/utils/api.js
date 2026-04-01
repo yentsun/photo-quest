@@ -319,6 +319,14 @@ export async function takeQuestCard(deckId) {
   return response.json();
 }
 
+export async function destroyQuestCard(deckId) {
+  const response = await fetch(`/quest/decks/${deckId}/destroy`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to destroy card');
+  return response.json();
+}
+
 /**
  * Buy an extra quest deck from the market.
  * @returns {Promise<{ deck: object, dust: number }>}
