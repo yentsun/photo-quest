@@ -7,6 +7,7 @@ export { CARD_SIZES } from './cardSizes.js';
 export { default as Button } from './Button.jsx';
 export { default as Card } from './Card.jsx';
 export { default as CardOverlay } from './CardOverlay.jsx';
+export { default as ConfirmModal } from './ConfirmModal.jsx';
 export { default as ConsumableCard } from './ConsumableCard.jsx';
 export { default as Deck } from './Deck.jsx';
 export { default as DustBadge } from './DustBadge.jsx';

@@ -7,6 +7,7 @@ import { MARKET_PRICES, words } from '@photo-quest/shared';
 import { buyQuestDeck, buyMemoryTicket } from '../../utils/api.js';
 import { Button, ConsumableCard, TicketCard } from '../ui/index.js';
 import { showToast } from '../ToasterMessage.jsx';
+import { notifyDustChanged } from '../../utils/events.js';
 
 export default function MarketPage() {
   const [buying, setBuying] = useState(null);
@@ -16,7 +17,7 @@ export default function MarketPage() {
     try {
       await buyQuestDeck();
       showToast('Quest deck added!', 'success');
-      window.dispatchEvent(new Event('dust-changed'));
+      notifyDustChanged();
     } catch {
       showToast('Not enough dust', 'error');
     } finally {
@@ -29,7 +30,7 @@ export default function MarketPage() {
     try {
       await buyMemoryTicket();
       showToast('Memory ticket added to inventory!', 'success');
-      window.dispatchEvent(new Event('dust-changed'));
+      notifyDustChanged();
     } catch {
       showToast('Not enough dust', 'error');
     } finally {

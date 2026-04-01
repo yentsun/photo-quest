@@ -32,21 +32,15 @@ export default function (deckId) {
   const infusion = currentCard.infusion || 0;
   const dustAwarded = infusion;
 
-  // Remove the quest card entry
   db.prepare('DELETE FROM quest_cards WHERE id = ?').run(currentCard.card_id);
-
-  // Remove from inventory if present
   db.prepare('DELETE FROM inventory WHERE media_id = ?').run(currentCard.media_id);
-
-  // Delete media from DB and disk
   kojo.ops.removeMedia(currentCard.media_id);
 
-  // Award dust
   if (dustAwarded > 0) {
     kojo.ops.updateDust(dustAwarded);
   }
 
-  // Reindex remaining quest cards so positions are contiguous
+  // Reindex positions to stay contiguous after removal
   const remaining = db.prepare(
     'SELECT id FROM quest_cards WHERE deck_id = ? ORDER BY position'
   ).all(deck.id);
@@ -54,15 +48,12 @@ export default function (deckId) {
     db.prepare('UPDATE quest_cards SET position = ? WHERE id = ?').run(i, remaining[i].id);
   }
 
-  // Check if deck is now exhausted
   if (remaining.length === 0 || deck.current_position >= remaining.length) {
     db.prepare('UPDATE quest_decks SET exhausted = 1 WHERE id = ?').run(deck.id);
     db.prepare(
       'DELETE FROM inventory WHERE card_type = ? AND ref_id = ?'
     ).run(CARD_TYPE.QUEST_DECK, deck.id);
-    return { dustAwarded, deck: kojo.ops.getQuestDeck(deck.id) };
   }
 
-  // Keep position the same (next card slides into current position)
   return { dustAwarded, deck: kojo.ops.getQuestDeck(deck.id) };
 }

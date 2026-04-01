@@ -4,11 +4,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MEDIA_TYPE, words } from '@photo-quest/shared';
-import { fetchMedia, getImageUrl, useMemoryTicket, getMemoryTickets } from '../../utils/api.js';
+import { MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
+import { fetchMedia, getImageUrl, useMemoryTicket, getMemoryTickets, addToInventory } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Modal, Spinner } from '../ui/index.js';
 import { showToast } from '../ToasterMessage.jsx';
+import { notifyDustChanged } from '../../utils/events.js';
 import { CARD_SIZES } from '../ui/cardSizes.js';
 import ticketIcon from '../../icons/ticket2-svgrepo-com.svg';
 
@@ -85,7 +86,7 @@ function CardFace({ mediaId, onLoad }) {
   );
 }
 
-function Card({ card, flipped, matched, picked, picking, onClick, onImageLoad }) {
+function MemoryCard({ card, flipped, matched, picked, picking, onClick, onImageLoad }) {
   const isRevealed = flipped || matched;
 
   return (
@@ -106,14 +107,6 @@ function Card({ card, flipped, matched, picked, picking, onClick, onImageLoad })
   );
 }
 
-async function addCardToInventory(mediaId) {
-  const res = await fetch('/inventory', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mediaId }),
-  });
-  return res.status === 201;
-}
 
 export default function MemoryGamePage() {
   const navigate = useNavigate();
@@ -205,9 +198,9 @@ export default function MemoryGamePage() {
       next.add(card.mediaId);
       setPickedIds(next);
 
-      addCardToInventory(card.mediaId).then(added => {
+      addToInventory(card.mediaId, { infuseBonus: 10 }).then(({ added }) => {
         if (added) setPicksAdded(prev => prev + 1);
-      }).catch(() => {});
+      }).catch(() => showToast('Failed to add card', 'error'));
 
       if (next.size >= picksAllowed) {
         finishPicking();
@@ -260,7 +253,7 @@ export default function MemoryGamePage() {
   const finishPicking = () => {
     setPicking(false);
     setPicksDone(true);
-    window.dispatchEvent(new Event('dust-changed'));
+    notifyDustChanged();
     getMemoryTickets().then(({ tickets }) => setHasTicket(tickets > 0)).catch(() => {});
   };
 
@@ -290,7 +283,7 @@ export default function MemoryGamePage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
         <p className="text-red-400">{error}</p>
-        <Button variant="secondary" onClick={() => navigate('/inventory')}>
+        <Button variant="secondary" onClick={() => navigate(clientRoutes.inventory)}>
           Back to Inventory
         </Button>
       </div>
@@ -328,7 +321,7 @@ export default function MemoryGamePage() {
                 Play again
               </Button>
             )}
-            <Button variant="secondary" onClick={() => navigate('/inventory')}>
+            <Button variant="secondary" onClick={() => navigate(clientRoutes.inventory)}>
               Inventory
             </Button>
           </div>
@@ -337,7 +330,7 @@ export default function MemoryGamePage() {
 
       <div className="grid grid-cols-4 gap-3">
         {cards.map(card => (
-          <Card
+          <MemoryCard
             key={card.id}
             card={card}
             flipped={flipped.includes(card.id)}

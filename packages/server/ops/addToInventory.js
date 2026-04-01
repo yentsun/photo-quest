@@ -7,10 +7,12 @@
  * Uses INSERT OR IGNORE so adding the same item twice is a no-op.
  *
  * @param {number} mediaId - The media record's primary key.
+ * @param {Object} [options]
+ * @param {number} [options.infuseBonus=0] - Bonus infusion to apply when newly added.
  * @returns {{ added: boolean, item: object } | null} null if media not found.
  */
 
-export default function (mediaId) {
+export default function (mediaId, { infuseBonus = 0 } = {}) {
   const [kojo] = this;
   const db = kojo.get('db');
   const id = Number(mediaId);
@@ -27,6 +29,13 @@ export default function (mediaId) {
 
   /* FK constraint means INSERT fails silently if media doesn't exist */
   if (!item) return null;
+
+  if (result.changes > 0 && infuseBonus > 0) {
+    db.prepare(
+      "UPDATE media SET infusion = infusion + ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(infuseBonus, id);
+    item.infusion = (item.infusion || 0) + infuseBonus;
+  }
 
   return { added: result.changes > 0, item };
 }

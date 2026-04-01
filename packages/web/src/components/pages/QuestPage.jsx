@@ -8,13 +8,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
 import { fetchQuestDeck, advanceQuestDeck, takeQuestCard, destroyQuestCard, freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
-import { Button, Card, Modal, Spinner } from '../ui/index.js';
+import { Button, Card, ConfirmModal, Spinner } from '../ui/index.js';
+import { notifyDustChanged } from '../../utils/events.js';
 
 function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking }) {
   const card = deck.currentCard;
-  const [localInfusion, setLocalInfusion] = useState(card?.infusion || 0);
+  const [infusion, setInfusion] = useState(card?.infusion || 0);
 
-  useEffect(() => { setLocalInfusion(card?.infusion || 0); }, [card?.id]);
+  useEffect(() => { setInfusion(card?.infusion || 0); }, [card?.id]);
 
   useEffect(() => {
     if (!card) return;
@@ -23,7 +24,7 @@ function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking 
       if (Date.now() - startTime >= 120000) { clearInterval(interval); return; }
       freeInfuseMedia(card.id, 1)
         .then(({ media }) => {
-          setLocalInfusion(media.infusion);
+          setInfusion(media.infusion);
           if (onInfusionUpdate) onInfusionUpdate();
         })
         .catch(() => {});
@@ -42,7 +43,6 @@ function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking 
     : `${words.takeCard} (${takeCost} ${words.dustSymbol})`;
   const canAffordTake = canTake && (takeCost === 0 || deck.dust >= takeCost);
 
-  const infusion = localInfusion;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -145,7 +145,7 @@ export default function QuestPage() {
     setTaking(true);
     try {
       applyDeckResult(await takeQuestCard(deckId));
-      window.dispatchEvent(new Event('dust-changed'));
+      notifyDustChanged();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -157,10 +157,12 @@ export default function QuestPage() {
     setConfirmAction({
       message: words.destroyConfirm,
       reward: `+${infusion} ${words.dustSymbol}`,
+      confirmLabel: words.destroy,
+      destructive: true,
       onConfirm: async () => {
         try {
           const result = await destroyQuestCard(deckId);
-          window.dispatchEvent(new Event('dust-changed'));
+          notifyDustChanged();
           applyDeckResult(result.deck);
         } catch (err) {
           setError(err.message);
@@ -222,22 +224,7 @@ export default function QuestPage() {
         taking={taking}
       />
 
-      <Modal open={!!confirmAction} onClose={() => setConfirmAction(null)}>
-        {confirmAction && (
-          <div className="text-center space-y-3">
-            <p className="text-white text-lg">{confirmAction.message}</p>
-            <p className="text-purple-300 font-semibold">{confirmAction.reward}</p>
-            <div className="flex gap-3 justify-center pt-2">
-              <Button onClick={confirmAction.onConfirm} className="bg-red-700 hover:bg-red-600">
-                {words.destroy}
-              </Button>
-              <Button variant="secondary" onClick={() => setConfirmAction(null)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      <ConfirmModal action={confirmAction} onCancel={() => setConfirmAction(null)} />
     </div>
   );
 }

@@ -319,6 +319,16 @@ export async function takeQuestCard(deckId) {
   return response.json();
 }
 
+export async function addToInventory(mediaId, { infuseBonus = 0 } = {}) {
+  const response = await fetch('/inventory', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mediaId, infuseBonus }),
+  });
+  if (!response.ok) throw new Error('Failed to add to inventory');
+  return { added: response.status === 201 };
+}
+
 export async function destroyQuestCard(deckId) {
   const response = await fetch(`/quest/decks/${deckId}/destroy`, {
     method: 'POST',

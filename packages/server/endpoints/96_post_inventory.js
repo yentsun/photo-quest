@@ -22,7 +22,8 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: 'mediaId must be a positive number' });
     }
 
-    const result = kojo.ops.addToInventory(mediaId);
+    const infuseBonus = Number(body.infuseBonus) || 0;
+    const result = kojo.ops.addToInventory(mediaId, { infuseBonus });
 
     if (!result) {
       return json(res, 404, { error: 'Media not found' });

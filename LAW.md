@@ -148,6 +148,8 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.16** While browsing a quest deck, the player can **destroy** the current card. The card is permanently removed from the database and disk. The player receives the card's **infusion value** as magic dust (0-infusion cards yield 0 Đ). After destruction the deck advances to the next card.
 
+**4.17** When a card is picked as a reward from the memory game, it receives **+10 dust infusion** on top of its current infusion value.
+
 ---
 
 ## Section 5 — Cards

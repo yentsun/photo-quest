@@ -6,7 +6,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { words, clientRoutes } from '@photo-quest/shared';
 import { fetchDeckCards, destroyInventoryItem, sellInventoryItem } from '../../utils/api.js';
-import { Button, Modal, Spinner, MediaCard, CardOverlay, IconButton, Icon } from '../ui/index.js';
+import { Button, ConfirmModal, Spinner, MediaCard, CardOverlay, IconButton, Icon } from '../ui/index.js';
+import { notifyDustChanged } from '../../utils/events.js';
 
 function DeckMediaCard({ item, onClick, onDestroy, onSell }) {
   const infusion = item.infusion || 0;
@@ -73,7 +74,7 @@ export default function DeckPage() {
         try {
           await sellInventoryItem(item.inventory_id);
           setSelectedItem(null);
-          window.dispatchEvent(new Event('dust-changed'));
+          notifyDustChanged();
           reload();
         } catch (err) {
           console.error('Failed to sell card:', err);
@@ -95,7 +96,7 @@ export default function DeckPage() {
         try {
           await destroyInventoryItem(item.inventory_id);
           setSelectedItem(null);
-          window.dispatchEvent(new Event('dust-changed'));
+          notifyDustChanged();
           reload();
         } catch (err) {
           console.error('Failed to destroy card:', err);
@@ -158,25 +159,7 @@ export default function DeckPage() {
         />
       )}
 
-      <Modal open={!!confirmAction} onClose={() => setConfirmAction(null)}>
-        {confirmAction && (
-          <div className="text-center space-y-3">
-            <p className="text-white text-lg">{confirmAction.message}</p>
-            <p className="text-purple-300 font-semibold">{confirmAction.reward}</p>
-            <div className="flex gap-3 justify-center pt-2">
-              <Button
-                onClick={confirmAction.onConfirm}
-                className={confirmAction.destructive ? 'bg-red-700 hover:bg-red-600' : ''}
-              >
-                {confirmAction.confirmLabel}
-              </Button>
-              <Button variant="secondary" onClick={() => setConfirmAction(null)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      <ConfirmModal action={confirmAction} onCancel={() => setConfirmAction(null)} />
     </div>
   );
 }
