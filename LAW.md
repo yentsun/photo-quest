@@ -148,6 +148,14 @@ The governing rules of the photo-quest project. This document is the source of t
 
 ---
 
+## Section 5 — Cards
+
+**5.1** There must be exactly **three card sizes**: **micro** (used in the memory game), **normal** (used in inventory and market), and **large** (detailed view when a card is clicked). No other card sizes are allowed. Card types are unlimited.
+
+**5.2** Decks must follow card sizes — a deck wrapper must match the size of the cards it contains.
+
+---
+
 ## Glossary
 
 - **media** — A media file (video or image) in the library. Has path, title, duration, resolution, codec, status, transcoded_path, size.

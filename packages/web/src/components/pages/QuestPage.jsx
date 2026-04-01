@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
 import { fetchQuestDeck, advanceQuestDeck, takeQuestCard, freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
-import { Button, Spinner } from '../ui/index.js';
+import { Button, Card, Spinner } from '../ui/index.js';
 
 function CardViewer({ deck, onNext, onTake, onInfusionUpdate, taking }) {
   const card = deck.currentCard;
@@ -46,22 +46,26 @@ function CardViewer({ deck, onNext, onTake, onInfusionUpdate, taking }) {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <div className="w-full max-w-sm">
-        <div className="relative rounded-2xl bg-gray-900 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 bg-gray-800/80 border-b border-gray-700">
+      <Card
+        size="large"
+        className="w-full max-w-md"
+        header={
+          <>
             <span className="text-gray-400 text-xs">{deck.currentPosition + 1} / {deck.totalCards}</span>
             <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
+          </>
+        }
+        art={
+          <div className="w-full h-full bg-black">
+            {isImage ? (
+              <img src={mediaUrl} alt={card.title} className="w-full h-full object-cover" />
+            ) : (
+              <video src={mediaUrl} controls muted playsInline className="w-full h-full object-cover" />
+            )}
           </div>
-          <div className="p-3 pb-0">
-            <div className="relative aspect-[5/7] rounded-lg overflow-hidden bg-black">
-              {isImage ? (
-                <img src={mediaUrl} alt={card.title} className="w-full h-full object-cover" />
-              ) : (
-                <video src={mediaUrl} controls muted playsInline className="w-full h-full object-cover" />
-              )}
-            </div>
-          </div>
-          <div className="px-4 py-3">
+        }
+        footer={
+          <>
             <p className="text-white font-semibold text-sm truncate">{card.title}</p>
             <div className="flex items-center justify-between mt-1">
               <span className="text-gray-500 text-xs uppercase tracking-wide">
@@ -71,9 +75,9 @@ function CardViewer({ deck, onNext, onTake, onInfusionUpdate, taking }) {
                 <span className="text-yellow-400/70 text-xs">{takeCost} {words.dustSymbol}</span>
               )}
             </div>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="flex gap-3 flex-wrap justify-center">
         {!deck.inInventory && (

@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import { freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
 import Button from './Button.jsx';
+import Card from './Card.jsx';
 
 export default function CardOverlay({ item, onClose, actions }) {
   const [fullMedia, setFullMedia] = useState(false);
@@ -56,13 +57,17 @@ export default function CardOverlay({ item, onClose, actions }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 cursor-pointer" onClick={onClose}>
       <div className="relative" onClick={(e) => e.stopPropagation()}>
-        <div className="w-[min(20rem,33vw)] rounded-2xl bg-gray-900 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 bg-gray-800/80 border-b border-gray-700">
-            <span className="text-gray-400 text-xs uppercase tracking-wide">{isImage ? 'Image' : 'Video'}</span>
-            <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
-          </div>
-          <div className="p-3 pb-0">
-            <div className="relative aspect-[5/7] rounded-lg overflow-hidden bg-black group/art">
+        <Card
+          size="large"
+          className="w-[min(28rem,45vw)]"
+          header={
+            <>
+              <span className="text-gray-400 text-xs uppercase tracking-wide">{isImage ? 'Image' : 'Video'}</span>
+              <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
+            </>
+          }
+          art={
+            <div className="group/art w-full h-full bg-black">
               {isImage ? (
                 <img src={mediaUrl} alt={item.title} className="w-full h-full object-cover" />
               ) : (
@@ -72,11 +77,9 @@ export default function CardOverlay({ item, onClose, actions }) {
                 F
               </Button>
             </div>
-          </div>
-          <div className="px-4 py-3">
-            <p className="text-white font-semibold text-sm truncate">{item.title}</p>
-          </div>
-        </div>
+          }
+          footer={<p className="text-white font-semibold text-sm truncate">{item.title}</p>}
+        />
         {actions && (
           <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 flex flex-col gap-2">
             {actions}

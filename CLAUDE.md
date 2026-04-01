@@ -27,7 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-Plex-like media library app. pnpm workspace monorepo with 4 packages.
+Media library app with gamification. pnpm workspace monorepo with 4 packages.
 
 ### packages/shared
 Shared constants, SQLite schema definitions, route maps. No runtime dependencies. Imported by all other packages.

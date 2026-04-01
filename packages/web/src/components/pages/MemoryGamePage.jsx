@@ -8,6 +8,8 @@ import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import { fetchMedia, getImageUrl, useMemoryTicket, getMemoryTickets } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Spinner } from '../ui/index.js';
+import { CARD_SIZES } from '../ui/cardSizes.js';
+import ticketIcon from '../../icons/ticket2-svgrepo-com.svg';
 
 const PAIR_COUNT = 8;
 const STAR_THRESHOLDS = [15, 11, 8];
@@ -62,7 +64,7 @@ function buildDeck(mediaItems) {
 
 function CardBack() {
   return (
-    <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-700 rounded-lg flex items-center justify-center">
+    <div className={`absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-700 ${CARD_SIZES.micro.rounding} flex items-center justify-center`}>
       <span className="text-3xl select-none">?</span>
     </div>
   );
@@ -70,7 +72,7 @@ function CardBack() {
 
 function CardFace({ mediaId, onLoad }) {
   return (
-    <div className="absolute inset-0 rounded-lg overflow-hidden">
+    <div className={`absolute inset-0 ${CARD_SIZES.micro.rounding} overflow-hidden`}>
       <img
         src={getImageUrl(mediaId)}
         alt=""
@@ -88,7 +90,7 @@ function Card({ card, flipped, matched, picked, picking, onClick, onImageLoad })
   return (
     <button
       className={`
-        relative aspect-square rounded-lg cursor-pointer transition-all duration-200
+        relative ${CARD_SIZES.micro.art} ${CARD_SIZES.micro.rounding} cursor-pointer transition-all duration-200
         ${matched ? 'ring-2 ring-green-400 opacity-80' : ''}
         ${picked ? 'ring-3 ring-yellow-400 scale-95 opacity-100' : ''}
         ${picking && !picked ? 'hover:ring-2 hover:ring-yellow-400/50 hover:scale-105' : ''}
@@ -257,6 +259,7 @@ export default function MemoryGamePage() {
     setPicking(false);
     setPicksDone(true);
     window.dispatchEvent(new Event('dust-changed'));
+    getMemoryTickets().then(({ tickets }) => setHasTicket(tickets > 0)).catch(() => {});
   };
 
   const handleImageLoad = () => {
@@ -301,9 +304,6 @@ export default function MemoryGamePage() {
           <h1 className="text-2xl font-bold text-white">Memory Game</h1>
           <p className="text-gray-400 text-sm">Moves: {moves}</p>
         </div>
-        <Button variant="secondary" onClick={startGame}>
-          New Game
-        </Button>
       </div>
 
       {/* Picking phase banner */}
@@ -332,6 +332,12 @@ export default function MemoryGamePage() {
               ? `${picksAdded} card${picksAdded !== 1 ? 's' : ''} added to inventory`
               : 'Cards already in inventory'}
           </p>
+          {hasTicket && (
+            <Button onClick={startGame} className="mt-2">
+              <img src={ticketIcon} alt="" className="w-4 h-4 invert inline-block mr-1.5 -mt-0.5" />
+              Play again
+            </Button>
+          )}
         </div>
       )}
 

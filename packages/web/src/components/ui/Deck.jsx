@@ -6,19 +6,20 @@
  */
 
 import Card from './Card.jsx';
+import { CARD_SIZES } from './cardSizes.js';
 
-export default function Deck({ count = 0, card, className, onClick, header, art, footer, borderColor, children }) {
+export default function Deck({ size = 'normal', count = 0, card, className, onClick, header, art, footer, borderColor, children }) {
   return (
     <div className={`${className || ''} ${onClick ? 'cursor-pointer' : ''}`} onClick={onClick} onDragOver={(e) => e.preventDefault()}>
       <div className="relative" onDragOver={(e) => e.preventDefault()}>
         {count >= 3 && (
-          <div className="absolute inset-0 rounded-2xl bg-gray-700 border border-gray-600 translate-x-2 translate-y-2 pointer-events-none" />
+          <div className={`absolute inset-0 ${CARD_SIZES[size].rounding} bg-gray-700 border border-gray-600 translate-x-2 translate-y-2 pointer-events-none`} />
         )}
         {count >= 2 && (
-          <div className="absolute inset-0 rounded-2xl bg-gray-800 border border-gray-600 translate-x-1 translate-y-1 pointer-events-none" />
+          <div className={`absolute inset-0 ${CARD_SIZES[size].rounding} bg-gray-800 border border-gray-600 translate-x-1 translate-y-1 pointer-events-none`} />
         )}
         <div className="relative">
-          {card || <Card header={header} art={art} footer={footer} borderColor={borderColor} />}
+          {card || <Card size={size} header={header} art={art} footer={footer} borderColor={borderColor} />}
         </div>
       </div>
       {children}
