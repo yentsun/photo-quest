@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { words, clientRoutes } from '@photo-quest/shared';
 import { fetchDeckCards, destroyInventoryItem, sellInventoryItem } from '../../utils/api.js';
-import { Button, Spinner, MediaCard, CardOverlay, IconButton, Icon } from '../ui/index.js';
+import { Button, Modal, Spinner, MediaCard, CardOverlay, IconButton, Icon } from '../ui/index.js';
 
 function DeckMediaCard({ item, onClick, onDestroy, onSell }) {
   const infusion = item.infusion || 0;
@@ -47,6 +47,7 @@ export default function DeckPage() {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
 
   const reload = useCallback(() => {
     fetchDeckCards(id)
@@ -59,35 +60,49 @@ export default function DeckPage() {
 
   const closeOverlay = useCallback(() => { setSelectedItem(null); reload(); }, [reload]);
 
-  const handleSell = async (item) => {
+  const handleSell = (item) => {
     const infusion = item.infusion || 0;
     const sellReward = infusion;
-    const msg = sellReward > 0
-      ? `Sell this card back to library?\n\n+${sellReward} ${words.dustSymbol}`
-      : 'Return this card to library for free?';
-    if (!confirm(msg)) return;
-    try {
-      await sellInventoryItem(item.inventory_id);
-      setSelectedItem(null);
-      window.dispatchEvent(new Event('dust-changed'));
-      reload();
-    } catch (err) {
-      console.error('Failed to sell card:', err);
-    }
+    setConfirmAction({
+      message: sellReward > 0
+        ? 'Sell this card back to library?'
+        : 'Return this card to library for free?',
+      reward: `+${sellReward} ${words.dustSymbol}`,
+      confirmLabel: words.sell,
+      onConfirm: async () => {
+        try {
+          await sellInventoryItem(item.inventory_id);
+          setSelectedItem(null);
+          window.dispatchEvent(new Event('dust-changed'));
+          reload();
+        } catch (err) {
+          console.error('Failed to sell card:', err);
+        }
+        setConfirmAction(null);
+      },
+    });
   };
 
-  const handleDestroy = async (item) => {
+  const handleDestroy = (item) => {
     const infusion = item.infusion || 0;
     const dustReward = infusion > 0 ? infusion * 2 : 1;
-    if (!confirm(`${words.destroyConfirm}\n\n+${dustReward} ${words.dustSymbol}`)) return;
-    try {
-      await destroyInventoryItem(item.inventory_id);
-      setSelectedItem(null);
-      window.dispatchEvent(new Event('dust-changed'));
-      reload();
-    } catch (err) {
-      console.error('Failed to destroy card:', err);
-    }
+    setConfirmAction({
+      message: words.destroyConfirm,
+      reward: `+${dustReward} ${words.dustSymbol}`,
+      confirmLabel: words.destroy,
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await destroyInventoryItem(item.inventory_id);
+          setSelectedItem(null);
+          window.dispatchEvent(new Event('dust-changed'));
+          reload();
+        } catch (err) {
+          console.error('Failed to destroy card:', err);
+        }
+        setConfirmAction(null);
+      },
+    });
   };
 
   if (loading) {
@@ -142,6 +157,26 @@ export default function DeckPage() {
           }
         />
       )}
+
+      <Modal open={!!confirmAction} onClose={() => setConfirmAction(null)}>
+        {confirmAction && (
+          <div className="text-center space-y-3">
+            <p className="text-white text-lg">{confirmAction.message}</p>
+            <p className="text-purple-300 font-semibold">{confirmAction.reward}</p>
+            <div className="flex gap-3 justify-center pt-2">
+              <Button
+                onClick={confirmAction.onConfirm}
+                className={confirmAction.destructive ? 'bg-red-700 hover:bg-red-600' : ''}
+              >
+                {confirmAction.confirmLabel}
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirmAction(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

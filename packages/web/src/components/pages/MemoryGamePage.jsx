@@ -7,7 +7,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import { fetchMedia, getImageUrl, useMemoryTicket, getMemoryTickets } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
-import { Button, Spinner } from '../ui/index.js';
+import { Button, Modal, Spinner } from '../ui/index.js';
+import { showToast } from '../ToasterMessage.jsx';
 import { CARD_SIZES } from '../ui/cardSizes.js';
 import ticketIcon from '../../icons/ticket2-svgrepo-com.svg';
 
@@ -190,6 +191,7 @@ export default function MemoryGamePage() {
     const allowed = PICKS_PER_STAR[s] || 1;
     setPicking(true);
     setPicksAllowed(allowed);
+    showToast(`Pick ${allowed} card${allowed !== 1 ? 's' : ''} for your inventory`);
   }, [won]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClick = (card) => {
@@ -306,25 +308,12 @@ export default function MemoryGamePage() {
         </div>
       </div>
 
-      {/* Picking phase banner */}
-      {picking && (
-        <div className="mb-6 p-4 bg-yellow-900/30 border border-yellow-600/50 rounded-lg text-center space-y-2">
-          <p className="text-2xl tracking-widest">
+      <Modal open={picksDone} closable={false}>
+        <div className="text-center space-y-3">
+          <p className="text-3xl tracking-widest">
             <Stars count={stars} glow />
           </p>
-          <p className="text-yellow-200 text-lg font-semibold">
-            Pick {picksRemaining} card{picksRemaining !== 1 ? 's' : ''} for your inventory
-          </p>
-        </div>
-      )}
-
-      {/* Done banner */}
-      {picksDone && (
-        <div className="mb-6 p-4 bg-green-900/30 border border-green-700/50 rounded-lg text-center space-y-2">
-          <p className="text-2xl tracking-widest">
-            <Stars count={stars} glow />
-          </p>
-          <p className="text-green-300 text-lg font-semibold">
+          <p className="text-green-300 text-xl font-semibold">
             You won in {moves} moves!
           </p>
           <p className="text-gray-300 text-sm">
@@ -332,14 +321,19 @@ export default function MemoryGamePage() {
               ? `${picksAdded} card${picksAdded !== 1 ? 's' : ''} added to inventory`
               : 'Cards already in inventory'}
           </p>
-          {hasTicket && (
-            <Button onClick={startGame} className="mt-2">
-              <img src={ticketIcon} alt="" className="w-4 h-4 invert inline-block mr-1.5 -mt-0.5" />
-              Play again
+          <div className="flex gap-3 justify-center pt-2">
+            {hasTicket && (
+              <Button onClick={startGame}>
+                <img src={ticketIcon} alt="" className="w-4 h-4 invert inline-block mr-1.5 -mt-0.5" />
+                Play again
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => navigate('/inventory')}>
+              Inventory
             </Button>
-          )}
+          </div>
         </div>
-      )}
+      </Modal>
 
       <div className="grid grid-cols-4 gap-3">
         {cards.map(card => (
