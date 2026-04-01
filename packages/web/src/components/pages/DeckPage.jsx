@@ -7,11 +7,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { words, clientRoutes } from '@photo-quest/shared';
 import { fetchDeckCards, destroyInventoryItem, sellInventoryItem } from '../../utils/api.js';
 import { Button, CARD_GRID, ConfirmModal, Spinner, MediaCard, CardOverlay, IconButton, Icon, DeckDropdown } from '../ui/index.js';
+import { ICON_CLASS } from '../ui/Icon.jsx';
 import { notifyDustChanged } from '../../utils/events.js';
 
 function DeckMediaCard({ item, onClick, onDestroy, onSell }) {
   const infusion = item.infusion || 0;
-  const destroyReward = infusion > 0 ? infusion * 2 : 1;
+  const destroyReward = Math.max(2, infusion * 2);
   const sellReward = infusion;
 
   return (
@@ -45,6 +46,7 @@ function DeckMediaCard({ item, onClick, onDestroy, onSell }) {
 export default function DeckPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [deckName, setDeckName] = useState('');
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -52,7 +54,7 @@ export default function DeckPage() {
 
   const reload = useCallback(() => {
     fetchDeckCards(id)
-      .then(setCards)
+      .then(({ name, cards }) => { setDeckName(name); setCards(cards); })
       .catch(err => console.error('Failed to load deck:', err))
       .finally(() => setLoading(false));
   }, [id]);
@@ -86,7 +88,7 @@ export default function DeckPage() {
 
   const handleDestroy = (item) => {
     const infusion = item.infusion || 0;
-    const dustReward = infusion > 0 ? infusion * 2 : 1;
+    const dustReward = Math.max(2, infusion * 2);
     setConfirmAction({
       message: words.destroyConfirm,
       reward: `+${dustReward} ${words.dustSymbol}`,
@@ -119,6 +121,7 @@ export default function DeckPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
+          <h1 className="text-2xl font-bold text-white"><Icon name="deck" className={ICON_CLASS.pageHeader} />{deckName}</h1>
           <p className="text-gray-400 text-sm">{cards.length} card{cards.length !== 1 ? 's' : ''}</p>
         </div>
         <Button variant="ghost" onClick={() => navigate(clientRoutes.inventory)}>
@@ -142,7 +145,7 @@ export default function DeckPage() {
           onClose={closeOverlay}
           actions={
             <>
-              <DeckDropdown inventoryId={selectedItem.inventory_id} />
+              <DeckDropdown inventoryId={selectedItem.inventory_id} onAdd={closeOverlay} />
               <IconButton
                 icon={<Icon name="coin" className="w-5 h-5" />}
                 label={`${words.sell} (+${selectedItem.infusion || 0} ${words.dustSymbol})`}

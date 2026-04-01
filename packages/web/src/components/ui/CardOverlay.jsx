@@ -4,16 +4,19 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
-import { freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
+import { freeInfuseMedia, renameMedia, getMediaUrl } from '../../utils/api.js';
 import Button from './Button.jsx';
+import Input from './Input.jsx';
 import Card from './Card.jsx';
 
 export default function CardOverlay({ item, onClose, actions }) {
   const [fullMedia, setFullMedia] = useState(false);
   const [infusion, setInfusion] = useState(item?.infusion || 0);
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(item?.title || '');
   const fullMediaRef = useRef(false);
 
-  useEffect(() => { setInfusion(item?.infusion || 0); }, [item?.id]);
+  useEffect(() => { setInfusion(item?.infusion || 0); setTitle(item?.title || ''); setEditing(false); }, [item?.id]);
   useEffect(() => { fullMediaRef.current = fullMedia; }, [fullMedia]);
 
   useEffect(() => {
@@ -29,8 +32,22 @@ export default function CardOverlay({ item, onClose, actions }) {
     return () => clearInterval(interval);
   }, [item?.id]);
 
+  const handleSaveTitle = () => {
+    if (!editing) return;
+    setEditing(false);
+    const trimmed = title.trim();
+    if (trimmed && trimmed !== item.title) {
+      renameMedia(item.id, trimmed)
+        .then(({ media }) => setInfusion(media.infusion))
+        .catch(() => setTitle(item.title));
+    } else {
+      setTitle(item.title);
+    }
+  };
+
   useEffect(() => {
     const onKey = (e) => {
+      if (e.target.tagName === 'INPUT') return;
       if (e.key === 'Escape') { fullMediaRef.current ? setFullMedia(false) : onClose(); }
       if (e.key === 'f' || e.key === 'F') setFullMedia(prev => !prev);
     };
@@ -60,14 +77,27 @@ export default function CardOverlay({ item, onClose, actions }) {
         <Card
           size="large"
           className="w-[min(28rem,45vw)]"
-          header={item.title}
+          header={
+            editing ? (
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={handleSaveTitle}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveTitle(); if (e.key === 'Escape') { setTitle(item.title); setEditing(false); } }}
+                autoFocus
+                className="text-xs w-full"
+              />
+            ) : (
+              <span className="cursor-text" onClick={() => setEditing(true)}>{title}</span>
+            )
+          }
           headerRight={<span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>}
           art={
             <div className="group/art w-full h-full bg-black">
               {isImage ? (
                 <img src={mediaUrl} alt={item.title} className="w-full h-full object-cover" />
               ) : (
-                <video src={mediaUrl} controls muted playsInline className="w-full h-full object-cover" onClick={(e) => e.stopPropagation()} />
+                <video src={mediaUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" onClick={(e) => e.stopPropagation()} />
               )}
               <Button variant="ghost" size="sm" onClick={() => setFullMedia(true)} className="absolute bottom-2 right-2 opacity-0 group-hover/art:opacity-100 transition-opacity bg-black/60 hover:bg-black/80 text-white">
                 F

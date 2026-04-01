@@ -148,7 +148,7 @@ export default function QuestPage() {
   const handleDestroy = (infusion) => {
     setConfirmAction({
       message: words.destroyConfirm,
-      reward: `+${infusion} ${words.dustSymbol}`,
+      reward: `+${Math.max(2, infusion * 2)} ${words.dustSymbol}`,
       confirmLabel: words.destroy,
       destructive: true,
       onConfirm: async () => {

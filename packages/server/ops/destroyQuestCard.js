@@ -30,15 +30,13 @@ export default function (deckId) {
   if (!currentCard) return null;
 
   const infusion = currentCard.infusion || 0;
-  const dustAwarded = infusion;
+  const dustAwarded = Math.max(2, infusion * 2);
 
   db.prepare('DELETE FROM quest_cards WHERE id = ?').run(currentCard.card_id);
   db.prepare('DELETE FROM inventory WHERE media_id = ?').run(currentCard.media_id);
   kojo.ops.removeMedia(currentCard.media_id);
 
-  if (dustAwarded > 0) {
-    kojo.ops.updateDust(dustAwarded);
-  }
+  kojo.ops.updateDust(dustAwarded);
 
   // Reindex positions to stay contiguous after removal
   const remaining = db.prepare(

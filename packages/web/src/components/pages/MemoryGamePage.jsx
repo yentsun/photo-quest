@@ -123,7 +123,6 @@ export default function MemoryGamePage() {
   const flipTimeoutRef = useRef(null);
   const pendingMismatchRef = useRef(false);
 
-  const startedRef = useRef(false);
   const [hasTicket, setHasTicket] = useState(null);
 
   /* Picking phase state */
@@ -148,18 +147,20 @@ export default function MemoryGamePage() {
     setPickedIds(new Set());
     setPicksDone(false);
     setPicksAdded(0);
-    startedRef.current = false;
     lockRef.current = false;
     pendingMismatchRef.current = false;
 
     try {
-      const { tickets } = await getMemoryTickets();
-      setHasTicket(tickets > 0);
-      if (tickets === 0) {
+      const ticketId = ticketIdRef.current;
+      ticketIdRef.current = null;
+      const ticketResult = await useMemoryTicket(ticketId || undefined).catch(() => null);
+      if (!ticketResult) {
+        setHasTicket(false);
         setError('No tickets. Buy one from the Market and find it in your Inventory.');
         setLoading(false);
         return;
       }
+      setHasTicket(ticketResult.tickets > 0);
 
       const { items } = await fetchMedia();
       const deck = buildDeck(items);
@@ -182,7 +183,8 @@ export default function MemoryGamePage() {
     }
   };
 
-  useEffect(() => { startGame(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const mountedRef = useRef(false);
+  useEffect(() => { if (!mountedRef.current) { mountedRef.current = true; startGame(); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Enter picking phase when won */
   useEffect(() => {
@@ -220,11 +222,6 @@ export default function MemoryGamePage() {
     if (matched.has(card.pairKey)) return;
     if (flipped.includes(card.id)) return;
     if (flipped.length >= 2) return;
-
-    if (!startedRef.current) {
-      startedRef.current = true;
-      useMemoryTicket(ticketIdRef.current || undefined).catch(() => {});
-    }
 
     const newFlipped = [...flipped, card.id];
     setFlipped(newFlipped);

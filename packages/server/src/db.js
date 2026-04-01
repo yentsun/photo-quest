@@ -107,6 +107,7 @@ function migrateDb() {
     'ALTER TABLE media ADD COLUMN date_taken TEXT',
     'ALTER TABLE media ADD COLUMN infusion INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE quest_decks ADD COLUMN free_take_used INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE media ADD COLUMN title_edited INTEGER NOT NULL DEFAULT 0',
   ];
 
   for (const sql of migrations) {

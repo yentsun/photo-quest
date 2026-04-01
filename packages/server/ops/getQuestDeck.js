@@ -4,9 +4,13 @@
  * Kojo op: accessed as `kojo.ops.getQuestDeck(deckId)`.
  * Must use `function()` syntax (not arrow) to receive kojo context via `this`.
  *
+ * Auto-skips cards that are already in the player's inventory.
+ *
  * @param {number} deckId
  * @returns {object|null} Deck info with current card media, or null if not found.
  */
+
+import { CARD_TYPE } from '@photo-quest/shared';
 
 export default function (deckId) {
   const [kojo] = this;
@@ -19,20 +23,40 @@ export default function (deckId) {
     'SELECT COUNT(*) AS count FROM quest_cards WHERE deck_id = ?'
   ).get(deck.id).count;
 
-  const currentCard = db.prepare(
-    `SELECT qc.id AS card_id, qc.position, m.*
-     FROM quest_cards qc
-     JOIN media m ON m.id = qc.media_id
-     WHERE qc.deck_id = ? AND qc.position = ?`
-  ).get(deck.id, deck.current_position);
+  // Find the next card at or after current_position that isn't in inventory
+  let position = deck.current_position;
+  let currentCard = null;
 
-  // Check if current card is already in inventory
-  let inInventory = false;
-  if (currentCard) {
-    const inv = db.prepare(
+  while (position < totalCards) {
+    const candidate = db.prepare(
+      `SELECT qc.id AS card_id, qc.position, m.*
+       FROM quest_cards qc
+       JOIN media m ON m.id = qc.media_id
+       WHERE qc.deck_id = ? AND qc.position = ?`
+    ).get(deck.id, position);
+
+    if (!candidate) break;
+
+    const inInventory = db.prepare(
       'SELECT id FROM inventory WHERE media_id = ?'
-    ).get(currentCard.id);
-    inInventory = !!inv;
+    ).get(candidate.id);
+
+    if (!inInventory) {
+      currentCard = candidate;
+      break;
+    }
+
+    position++;
+  }
+
+  // If we skipped ahead, persist the new position
+  if (position !== deck.current_position) {
+    if (position >= totalCards) {
+      db.prepare('UPDATE quest_decks SET current_position = ?, exhausted = 1 WHERE id = ?').run(position, deck.id);
+      db.prepare('DELETE FROM inventory WHERE card_type = ? AND ref_id = ?').run(CARD_TYPE.QUEST_DECK, deck.id);
+    } else {
+      db.prepare('UPDATE quest_decks SET current_position = ? WHERE id = ?').run(position, deck.id);
+    }
   }
 
   const { dust } = kojo.ops.getPlayerStats();
@@ -43,20 +67,19 @@ export default function (deckId) {
   if (currentCard) {
     const infusion = currentCard.infusion || 0;
     if (infusion === 0 && freeTakeUsed) {
-      canTake = false; // no more free takes, can't buy 0-infusion cards
+      canTake = false;
     } else {
-      takeCost = infusion * 2; // 0 for uninfused (free), infusion×2 for infused
+      takeCost = infusion * 2;
     }
   }
 
   return {
     id: deck.id,
     deckIndex: deck.deck_index,
-    currentPosition: deck.current_position,
+    currentPosition: position,
     totalCards,
-    exhausted: !!deck.exhausted,
+    exhausted: position >= totalCards,
     currentCard: currentCard || null,
-    inInventory,
     takeCost,
     canTake,
     freeTakeUsed,

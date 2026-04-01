@@ -64,6 +64,7 @@ export const CREATE_MEDIA_TABLE = `
     likes INTEGER NOT NULL DEFAULT 0,
     infusion INTEGER NOT NULL DEFAULT 0,
     hidden INTEGER NOT NULL DEFAULT 0,
+    title_edited INTEGER NOT NULL DEFAULT 0,
     hash TEXT,
     orientation INTEGER,
     camera TEXT,

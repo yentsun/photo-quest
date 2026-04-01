@@ -21,7 +21,7 @@ import { notifyDustChanged } from '../../utils/events.js';
 
 function InventoryMediaCard({ item, onClick, onDestroy, onSell, onDrop }) {
   const infusion = item.infusion || 0;
-  const destroyReward = infusion > 0 ? infusion * 2 : 1;
+  const destroyReward = Math.max(2, infusion * 2);
   const sellReward = infusion;
   const [dragOver, setDragOver] = useState(false);
   const dragCount = useRef(0);
@@ -202,7 +202,7 @@ export default function InventoryPage() {
 
   const handleDestroy = (item) => {
     const infusion = item.infusion || 0;
-    const dustReward = infusion > 0 ? infusion * 2 : 1;
+    const dustReward = Math.max(2, infusion * 2);
     setConfirmAction({
       message: words.destroyConfirm,
       reward: `+${dustReward} ${words.dustSymbol}`,
@@ -384,7 +384,7 @@ export default function InventoryPage() {
           onClose={closeOverlay}
           actions={
             <>
-              <DeckDropdown inventoryId={selectedItem.inventory_id} />
+              <DeckDropdown inventoryId={selectedItem.inventory_id} onAdd={closeOverlay} />
               <IconButton
                 icon={<Icon name="coin" className="w-5 h-5" />}
                 label={`${words.sell} (+${selectedItem.infusion || 0} ${words.dustSymbol})`}

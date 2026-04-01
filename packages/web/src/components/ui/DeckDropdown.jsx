@@ -8,7 +8,7 @@ import { showToast } from '../ToasterMessage.jsx';
 import IconButton from './IconButton.jsx';
 import Icon from './Icon.jsx';
 
-export default function DeckDropdown({ inventoryId }) {
+export default function DeckDropdown({ inventoryId, onAdd }) {
   const [open, setOpen] = useState(false);
   const [decks, setDecks] = useState(null);
   const ref = useRef(null);
@@ -31,6 +31,7 @@ export default function DeckDropdown({ inventoryId }) {
     try {
       await addToDeck(deckId, [inventoryId]);
       showToast(`Added to ${deckName}`);
+      if (onAdd) onAdd();
     } catch {
       showToast('Failed to add to deck', 'error');
     }

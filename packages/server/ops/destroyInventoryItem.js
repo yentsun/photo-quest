@@ -24,7 +24,7 @@ export default function (inventoryId) {
   if (!inv) return null;
 
   const infusion = inv.infusion || 0;
-  const dustAwarded = infusion > 0 ? infusion * 2 : 1;
+  const dustAwarded = Math.max(2, infusion * 2);
 
   // Remove from inventory first (FK constraint)
   db.prepare('DELETE FROM inventory WHERE id = ?').run(inv.id);

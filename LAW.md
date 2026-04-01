@@ -144,9 +144,9 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.15** The player can **sell** an inventory card back to the media library. The card is removed from inventory but the media file stays on disk. The player receives **infusion × 1 Đ**. Selling a 0-infusion card returns 0 Đ.
 
-**4.10** The player can **destroy** a media card from their inventory. This permanently removes the media from the database and deletes the file from disk. The player receives **1 Đ** for a non-infused card, or **infusion × 2 Đ** for an infused card.
+**4.10** The player can **destroy** a media card from their inventory. This permanently removes the media from the database and deletes the file from disk. The player receives **infusion × 2 Đ**, minimum **2 Đ**.
 
-**4.16** While browsing a quest deck, the player can **destroy** the current card. The card is permanently removed from the database and disk. The player receives the card's **infusion value** as magic dust (0-infusion cards yield 0 Đ). After destruction the deck advances to the next card.
+**4.16** While browsing a quest deck, the player can **destroy** the current card. The card is permanently removed from the database and disk. The player receives **infusion × 2 Đ**, minimum **2 Đ** (same as inventory destroy). After destruction the deck advances to the next card.
 
 **4.17** When a card is picked as a reward from the memory game, it receives **+10 dust infusion** on top of its current infusion value.
 

@@ -84,6 +84,16 @@ export async function freeInfuseMedia(id, amount = 1) {
  * @param {number} id - Media ID
  * @returns {Promise<Object>}
  */
+export async function renameMedia(id, title) {
+  const response = await fetch(`/media/${id}/rename`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+  if (!response.ok) throw new Error('Failed to rename media');
+  return response.json();
+}
+
 export async function deleteMedia(id) {
   const response = await fetch(`/media/${id}`, {
     method: 'DELETE',
@@ -464,7 +474,7 @@ export async function removeFromDeck(deckId, inventoryId) {
 export async function fetchDeckCards(deckId) {
   const response = await fetch(`/decks/${deckId}/cards`);
   if (!response.ok) throw new Error('Failed to fetch deck cards');
-  return response.json();
+  return response.json(); // { name, cards }
 }
 
 /**
