@@ -10,7 +10,7 @@ import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { fetchFolders, fetchMedia } from '../utils/api.js';
 import { FolderCard, FolderOverlay } from './media/index.js';
 import { EmptyState } from './layout/index.js';
-import { Button, Icon, Input, Modal, Spinner } from './ui/index.js';
+import { Button, CARD_GRID, Icon, Input, Modal, Spinner } from './ui/index.js';
 import { ICON_CLASS } from './ui/Icon.jsx';
 
 /**
@@ -331,7 +331,7 @@ export default function Dashboard() {
 
       {/* Folder Grid or Empty State */}
       {rootFolders.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div className={CARD_GRID}>
           {rootFolders.map(folder => (
             <FolderCard
               key={folder.id}

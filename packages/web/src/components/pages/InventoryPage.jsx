@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { MEDIA_TYPE, CARD_TYPE, words, clientRoutes } from '@photo-quest/shared';
+import { MEDIA_TYPE, CARD_TYPE, MARKET_PRICES, words, clientRoutes } from '@photo-quest/shared';
 import {
   fetchInventory, destroyInventoryItem, sellInventoryItem, getMediaUrl, getImageUrl,
   fetchDecks, createDeck, renameDeck, deleteDeck, addToDeck,
@@ -13,7 +13,7 @@ import {
 } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
 import { showToast } from '../ToasterMessage.jsx';
-import { Button, IconButton, Icon, Input, ConfirmModal, Spinner, MediaCard, CardOverlay, ConsumableCard, TicketCard, Deck, DeckDropdown } from '../ui/index.js';
+import { Button, CARD_GRID, IconButton, Icon, Input, ConfirmModal, Spinner, MediaCard, CardOverlay, ConsumableCard, TicketCard, Deck, DeckDropdown } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
 import { notifyDustChanged } from '../../utils/events.js';
 
@@ -90,6 +90,21 @@ function UserDeck({ deck, onOpen, onRename, onDelete, onDrop }) {
       <Deck
         count={deck.cardCount}
         onClick={() => !editing && onOpen(deck.id)}
+        header={
+          editing ? (
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={handleSave}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs w-full"
+            />
+          ) : (
+            <span className="text-[10px] uppercase tracking-wide opacity-70 truncate">{deck.name}</span>
+          )
+        }
         art={
           previewUrl ? (
             <img src={previewUrl} alt={deck.name} className="w-full h-full object-cover" loading="lazy" draggable={false} />
@@ -98,37 +113,22 @@ function UserDeck({ deck, onOpen, onRename, onDelete, onDrop }) {
           )
         }
         footer={
-          <>
-            {editing ? (
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={handleSave}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-                autoFocus
-                onClick={(e) => e.stopPropagation()}
-                className="text-xs"
+          <div className="flex items-center justify-between">
+            <span className="text-gray-500 text-[10px]">{deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}</span>
+            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <IconButton
+                icon={<Icon name="info" className="w-3 h-3" />}
+                label="Rename"
+                onClick={(e) => { e.stopPropagation(); setEditing(true); }}
               />
-            ) : (
-              <p className="text-white text-xs font-medium truncate">{deck.name}</p>
-            )}
-            <div className="flex items-center justify-between mt-0.5">
-              <span className="text-gray-500 text-[10px]">{deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}</span>
-              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <IconButton
-                  icon={<Icon name="info" className="w-3 h-3" />}
-                  label="Rename"
-                  onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-                />
-                <IconButton
-                  icon={<Icon name="trash" className="w-3 h-3" />}
-                  label="Delete"
-                  onClick={(e) => { e.stopPropagation(); onDelete(deck.id); }}
-                  className="text-red-400 hover:text-red-300"
-                />
-              </div>
+              <IconButton
+                icon={<Icon name="trash" className="w-3 h-3" />}
+                label="Delete"
+                onClick={(e) => { e.stopPropagation(); onDelete(deck.id); }}
+                className="text-red-400 hover:text-red-300"
+              />
             </div>
-          </>
+          </div>
         }
       />
     </div>
@@ -321,13 +321,13 @@ export default function InventoryPage() {
 
       {ungrouped.length > 0 || decks.length > 0 || ticketItems.length > 0 || deckItems.length > 0 ? (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          <div className={CARD_GRID}>
             {deckItems.length > 0 && (
               <Deck
                 count={deckItems.length}
                 card={
                   <ConsumableCard
-                    label="Quest"
+                    cost={`${MARKET_PRICES.questDeck} ${words.dustSymbol}`}
                     title="Quest Decks"
                     subtitle={`${deckItems.length} deck${deckItems.length !== 1 ? 's' : ''}`}
                     icon={<Icon name="quest" className="w-28 h-28 opacity-70" />}
@@ -343,6 +343,7 @@ export default function InventoryPage() {
                 count={ticketItems.length}
                 card={
                   <TicketCard
+                    cost={`${MARKET_PRICES.memoryTicket} ${words.dustSymbol}`}
                     subtitle={`${ticketItems.length} ticket${ticketItems.length !== 1 ? 's' : ''}`}
                     onDoubleClick={() => handleTicketClick(ticketItems[0])}
                   />

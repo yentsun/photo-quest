@@ -52,7 +52,7 @@ function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking 
         className="w-full max-w-md"
         header={
           <>
-            <span className="text-gray-400 text-xs">{deck.currentPosition + 1} / {deck.totalCards}</span>
+            <span className="text-xs uppercase tracking-wide opacity-70 truncate">{card.title}</span>
             <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
           </>
         }
@@ -66,17 +66,12 @@ function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking 
           </div>
         }
         footer={
-          <>
-            <p className="text-white font-semibold text-sm truncate">{card.title}</p>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-gray-500 text-xs uppercase tracking-wide">
-                {isImage ? 'Image' : 'Video'}
-              </span>
-              {takeCost > 0 && (
-                <span className="text-yellow-400/70 text-xs">{takeCost} {words.dustSymbol}</span>
-              )}
-            </div>
-          </>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-500 text-xs">{deck.currentPosition + 1} / {deck.totalCards}</span>
+            {takeCost > 0 && (
+              <span className="text-yellow-400/70 text-xs">{takeCost} {words.dustSymbol}</span>
+            )}
+          </div>
         }
       />
 

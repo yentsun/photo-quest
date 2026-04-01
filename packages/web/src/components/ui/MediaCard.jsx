@@ -18,7 +18,7 @@ export default memo(function MediaCard({ item, onClick, actions }) {
     <Card
       header={
         <>
-          <span className="text-gray-400 text-[10px] uppercase tracking-wide">{isImage ? 'Image' : 'Video'}</span>
+          <span className="text-[10px] uppercase tracking-wide opacity-70 truncate">{item.title}</span>
           <span className="text-purple-300 text-[10px] font-medium">{words.dustSymbol} {infusion}</span>
         </>
       }
@@ -29,12 +29,7 @@ export default memo(function MediaCard({ item, onClick, actions }) {
           <video src={thumbUrl} preload="metadata" muted draggable={false} className="w-full h-full object-cover" />
         )
       }
-      footer={
-        <div className="flex items-center justify-between gap-1">
-          <p className="text-white text-xs font-medium truncate flex-1">{item.title}</p>
-          {actions}
-        </div>
-      }
+      footer={actions && <div className="flex items-center justify-end gap-1">{actions}</div>}
       onClick={onClick}
     />
   );

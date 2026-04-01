@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { words, clientRoutes } from '@photo-quest/shared';
 import { fetchDeckCards, destroyInventoryItem, sellInventoryItem } from '../../utils/api.js';
-import { Button, ConfirmModal, Spinner, MediaCard, CardOverlay, IconButton, Icon, DeckDropdown } from '../ui/index.js';
+import { Button, CARD_GRID, ConfirmModal, Spinner, MediaCard, CardOverlay, IconButton, Icon, DeckDropdown } from '../ui/index.js';
 import { notifyDustChanged } from '../../utils/events.js';
 
 function DeckMediaCard({ item, onClick, onDestroy, onSell }) {
@@ -125,7 +125,7 @@ export default function DeckPage() {
           Back
         </Button>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+      <div className={CARD_GRID}>
         {cards.map(item => (
           <DeckMediaCard
             key={item.inventory_id}

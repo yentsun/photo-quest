@@ -3,7 +3,7 @@
  */
 
 export { default as Badge } from './Badge.jsx';
-export { CARD_SIZES } from './cardSizes.js';
+export { CARD_SIZES, CARD_GRID } from './cardSizes.js';
 export { default as Button } from './Button.jsx';
 export { default as Card } from './Card.jsx';
 export { default as CardOverlay } from './CardOverlay.jsx';

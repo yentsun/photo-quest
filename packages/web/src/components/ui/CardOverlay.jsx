@@ -62,7 +62,7 @@ export default function CardOverlay({ item, onClose, actions }) {
           className="w-[min(28rem,45vw)]"
           header={
             <>
-              <span className="text-gray-400 text-xs uppercase tracking-wide">{isImage ? 'Image' : 'Video'}</span>
+              <span className="text-xs uppercase tracking-wide opacity-70 truncate">{item.title}</span>
               <span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>
             </>
           }
@@ -78,7 +78,7 @@ export default function CardOverlay({ item, onClose, actions }) {
               </Button>
             </div>
           }
-          footer={<p className="text-white font-semibold text-sm truncate">{item.title}</p>}
+          footer={null}
         />
         {actions && (
           <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 flex flex-col gap-2">

@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { fetchFolders, scanMedia, getImageUrl } from '../../utils/api.js';
-import { Spinner, Card, Button, Icon, Input } from '../ui/index.js';
+import { Spinner, CARD_GRID, Card, Button, Icon, Input } from '../ui/index.js';
 import { EmptyState } from '../layout/index.js';
 import { FolderOverlay } from '../media/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
@@ -18,7 +18,7 @@ function FolderCard({ folder, onClick }) {
   return (
     <Card
       onClick={() => onClick?.(folder)}
-      header={<span className="text-gray-400 text-[10px] uppercase tracking-wide">Folder</span>}
+      header={<span className="text-[10px] uppercase tracking-wide opacity-70 truncate">{name}</span>}
       art={
         folder.previewMediaId ? (
           <img src={getImageUrl(folder.previewMediaId)} alt={name} className="w-full h-full object-cover" loading="lazy" />
@@ -28,7 +28,6 @@ function FolderCard({ folder, onClick }) {
       }
       footer={
         <>
-          <p className="text-white text-xs font-medium truncate">{name}</p>
           <p className="text-gray-500 text-[10px] truncate" title={folder.path}>{folder.path}</p>
           <p className="text-gray-500 text-[10px]">
             {images > 0 && `${images} image${images !== 1 ? 's' : ''}`}
@@ -115,7 +114,7 @@ export default function LibraryPage() {
       )}
 
       {rootFolders.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div className={CARD_GRID}>
           {rootFolders.map(folder => (
             <FolderCard key={folder.id} folder={folder} onClick={setSelectedFolder} />
           ))}

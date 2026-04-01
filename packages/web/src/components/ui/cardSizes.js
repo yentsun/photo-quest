@@ -4,6 +4,8 @@
  * Law 5.1: exactly three card sizes are allowed.
  */
 
+export const CARD_GRID = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4';
+
 export const CARD_SIZES = {
   micro: {
     art: 'aspect-[5/7]',

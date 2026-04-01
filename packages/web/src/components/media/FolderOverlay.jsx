@@ -34,7 +34,7 @@ export default function FolderOverlay({ folder, onClose, onRemove, onRefresh }) 
         <Card
           size="large"
           className="w-[min(28rem,45vw)]"
-          header={<span className="text-gray-400 text-xs uppercase tracking-wide">Folder</span>}
+          header={<span className="text-xs uppercase tracking-wide opacity-70 truncate">{folderName}</span>}
           art={
             thumbnailUrl ? (
               <img src={thumbnailUrl} alt={folderName} className="w-full h-full object-cover" />
@@ -46,8 +46,7 @@ export default function FolderOverlay({ folder, onClose, onRemove, onRefresh }) 
           }
           footer={
             <>
-              <p className="text-white font-semibold text-sm truncate">{folderName}</p>
-              <p className="text-gray-500 text-xs truncate mt-0.5" title={folder.path}>{folder.path}</p>
+              <p className="text-gray-500 text-xs truncate" title={folder.path}>{folder.path}</p>
               <p className="text-gray-400 text-xs mt-0.5">
                 {imageCount > 0 && `${imageCount} image${imageCount !== 1 ? 's' : ''}`}
                 {imageCount > 0 && videoCount > 0 && ' · '}

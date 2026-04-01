@@ -5,10 +5,10 @@
 import ConsumableCard from './ConsumableCard.jsx';
 import ticketIcon from '../../icons/ticket2-svgrepo-com.svg';
 
-export default function TicketCard({ subtitle, className, onClick, onDoubleClick, children }) {
+export default function TicketCard({ cost, subtitle, className, onClick, onDoubleClick, children }) {
   return (
     <ConsumableCard
-      label="Ticket"
+      cost={cost}
       title="Memory Game"
       subtitle={subtitle}
       icon={<img src={ticketIcon} alt="Ticket" className="w-28 h-28 invert opacity-70" />}

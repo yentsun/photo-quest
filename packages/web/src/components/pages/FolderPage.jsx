@@ -12,7 +12,7 @@ import { fetchFolders, fetchMedia } from '../../utils/api.js';
 import { FolderCard, FolderOverlay } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, Spinner } from '../ui/index.js';
+import { Button, CARD_GRID, Icon, Spinner } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
 
 export default function FolderPage() {
@@ -168,7 +168,7 @@ export default function FolderPage() {
       {/* Subfolders */}
       {subfolders.length > 0 && (
         <div className="mb-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          <div className={CARD_GRID}>
             {subfolders.map(sub => (
               <FolderCard
                 key={sub.id}
