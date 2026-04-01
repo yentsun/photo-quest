@@ -7,6 +7,7 @@ import { NavLink, Link } from 'react-router-dom';
 import { clientRoutes } from '@photo-quest/shared';
 import { fetchNetworkInfo, fetchPlayerStats } from '../../utils/api.js';
 import { Button, DustBadge, Icon } from '../ui/index.js';
+import { ICON_CLASS } from '../ui/Icon.jsx';
 
 /**
  * Navigation header component.
@@ -62,12 +63,15 @@ export default function Header() {
           {/* Navigation */}
           <nav className="flex items-center gap-2">
             <NavLink to={clientRoutes.inventory} className={linkClass}>
+              <Icon name="inventory" className={ICON_CLASS.navLink} />
               Inventory
             </NavLink>
             <NavLink to={clientRoutes.market} className={linkClass}>
+              <Icon name="market" className={ICON_CLASS.navLink} />
               Market
             </NavLink>
             <NavLink to={clientRoutes.library} className={linkClass}>
+              <Icon name="folder" className={ICON_CLASS.navLink} />
               Library
             </NavLink>
           </nav>

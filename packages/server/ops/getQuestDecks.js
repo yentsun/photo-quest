@@ -45,7 +45,8 @@ export default function () {
 
 function generateDecks(db, date) {
   const allMedia = db.prepare(
-    'SELECT id, infusion FROM media WHERE hidden = 0'
+    `SELECT id, infusion FROM media
+     WHERE hidden = 0 AND id NOT IN (SELECT media_id FROM inventory WHERE media_id IS NOT NULL)`
   ).all();
 
   if (allMedia.length === 0) return;

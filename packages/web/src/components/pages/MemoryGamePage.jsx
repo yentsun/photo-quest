@@ -7,7 +7,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
 import { fetchMedia, getImageUrl, useMemoryTicket, getMemoryTickets, addToInventory } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
-import { Button, Modal, Spinner } from '../ui/index.js';
+import { Button, Icon, Modal, Spinner } from '../ui/index.js';
+import { ICON_CLASS } from '../ui/Icon.jsx';
 import { showToast } from '../ToasterMessage.jsx';
 import { notifyDustChanged } from '../../utils/events.js';
 import { CARD_SIZES } from '../ui/cardSizes.js';
@@ -167,6 +168,12 @@ export default function MemoryGamePage() {
         setLoading(false);
         return;
       }
+      const uniqueIds = [...new Set(deck.map(c => c.mediaId))];
+      await Promise.all(uniqueIds.map(id => {
+        const img = new Image();
+        img.src = getImageUrl(id);
+        return img.decode().catch(() => {});
+      }));
       setCards(deck);
     } catch (err) {
       setError('Failed to load media: ' + err.message);
@@ -296,7 +303,7 @@ export default function MemoryGamePage() {
     <div className="p-4 sm:p-6 lg:p-8 max-w-lg mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Memory Game</h1>
+          <h1 className="text-2xl font-bold text-white"><img src={ticketIcon} alt="" className={`invert ${ICON_CLASS.pageHeader}`} />Memory Game</h1>
           <p className="text-gray-400 text-sm">Moves: {moves}</p>
         </div>
       </div>

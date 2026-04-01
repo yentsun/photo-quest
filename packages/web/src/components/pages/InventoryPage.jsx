@@ -13,7 +13,8 @@ import {
 } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
 import { showToast } from '../ToasterMessage.jsx';
-import { Button, IconButton, Icon, Input, ConfirmModal, Spinner, MediaCard, CardOverlay, ConsumableCard, TicketCard, Deck } from '../ui/index.js';
+import { Button, IconButton, Icon, Input, ConfirmModal, Spinner, MediaCard, CardOverlay, ConsumableCard, TicketCard, Deck, DeckDropdown } from '../ui/index.js';
+import { ICON_CLASS } from '../ui/Icon.jsx';
 import { notifyDustChanged } from '../../utils/events.js';
 
 /* ── Inventory media card (wraps MediaCard with drag & drop + actions) ── */
@@ -42,14 +43,14 @@ function InventoryMediaCard({ item, onClick, onDestroy, onSell, onDrop }) {
           <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex gap-0.5">
             {onSell && (
               <IconButton
-                icon={<Icon name="prev" className="w-3.5 h-3.5" />}
+                icon={<Icon name="coin" className="w-3.5 h-3.5" />}
                 label={`${words.sell} (+${sellReward} ${words.dustSymbol})`}
                 onClick={(e) => { e.stopPropagation(); onSell(item); }}
                 className="bg-blue-900/70 hover:bg-blue-700 text-blue-200 hover:text-white"
               />
             )}
             <IconButton
-              icon={<Icon name="trash" className="w-3.5 h-3.5" />}
+              icon={<Icon name="bomb" className="w-3.5 h-3.5" />}
               label={`${words.destroy} (+${destroyReward} ${words.dustSymbol})`}
               onClick={(e) => { e.stopPropagation(); onDestroy?.(item); }}
               className="bg-red-900/70 hover:bg-red-700 text-red-200 hover:text-white"
@@ -308,7 +309,7 @@ export default function InventoryPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Inventory</h1>
+          <h1 className="text-2xl font-bold text-white"><Icon name="inventory" className={ICON_CLASS.pageHeader} />Inventory</h1>
           <p className="text-gray-400 text-sm">{items.length} card{items.length !== 1 ? 's' : ''}</p>
         </div>
         {mediaItems.length > 0 && (
@@ -329,7 +330,7 @@ export default function InventoryPage() {
                     label="Quest"
                     title="Quest Decks"
                     subtitle={`${deckItems.length} deck${deckItems.length !== 1 ? 's' : ''}`}
-                    emoji="🗂️"
+                    icon={<Icon name="quest" className="w-28 h-28 opacity-70" />}
                     borderColor="border-amber-700/60"
                     bgGradient="bg-gradient-to-br from-indigo-700 to-purple-800"
                     onDoubleClick={() => handleDeckClick(deckItems[0])}
@@ -384,14 +385,15 @@ export default function InventoryPage() {
           onClose={closeOverlay}
           actions={
             <>
+              <DeckDropdown inventoryId={selectedItem.inventory_id} />
               <IconButton
-                icon={<Icon name="prev" className="w-5 h-5" />}
+                icon={<Icon name="coin" className="w-5 h-5" />}
                 label={`${words.sell} (+${selectedItem.infusion || 0} ${words.dustSymbol})`}
                 onClick={() => handleSell(selectedItem)}
                 className="bg-blue-900/80 hover:bg-blue-700 text-blue-200 hover:text-white rounded-full p-2"
               />
               <IconButton
-                icon={<Icon name="trash" className="w-5 h-5" />}
+                icon={<Icon name="bomb" className="w-5 h-5" />}
                 label={words.destroy}
                 onClick={() => handleDestroy(selectedItem)}
                 className="bg-red-900/80 hover:bg-red-700 text-red-200 hover:text-white rounded-full p-2"

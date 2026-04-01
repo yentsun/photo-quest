@@ -8,9 +8,10 @@ import { useMediaActions } from '../hooks/useMedia.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { fetchFolders, fetchMedia } from '../utils/api.js';
-import { FolderCard } from './media/index.js';
+import { FolderCard, FolderOverlay } from './media/index.js';
 import { EmptyState } from './layout/index.js';
 import { Button, Icon, Input, Modal, Spinner } from './ui/index.js';
+import { ICON_CLASS } from './ui/Icon.jsx';
 
 /**
  * Debounced path validation against the server.
@@ -89,6 +90,7 @@ export default function Dashboard() {
   /* Fetch folders on mount and when refresh signal changes. */
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedFolder, setSelectedFolder] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,7 +235,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Library</h1>
+          <h1 className="text-2xl font-bold text-white"><Icon name="folder" className={ICON_CLASS.pageHeader} />Library</h1>
           <p className="text-gray-400 text-sm">{totalMedia} items</p>
         </div>
         <div className="flex gap-2">
@@ -334,7 +336,7 @@ export default function Dashboard() {
             <FolderCard
               key={folder.id}
               folder={folder}
-              onRemove={() => handleRemoveFolder(folder)}
+              onClick={setSelectedFolder}
             />
           ))}
         </div>
@@ -349,6 +351,13 @@ export default function Dashboard() {
           }}
         />
       )}
+
+      <FolderOverlay
+        folder={selectedFolder}
+        onClose={() => setSelectedFolder(null)}
+        onRemove={() => handleRemoveFolder(selectedFolder)}
+        onRefresh={bump}
+      />
     </div>
   );
 }

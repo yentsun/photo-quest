@@ -9,10 +9,11 @@ import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchFolders, fetchMedia } from '../../utils/api.js';
-import { FolderCard } from '../media/index.js';
+import { FolderCard, FolderOverlay } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, Spinner } from '../ui/index.js';
+import { ICON_CLASS } from '../ui/Icon.jsx';
 
 export default function FolderPage() {
   const { id } = useParams();
@@ -28,6 +29,7 @@ export default function FolderPage() {
   const [folders, setFolders] = useState([]);
   const [directMedia, setDirectMedia] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedFolder, setSelectedFolder] = useState(null);
 
   const folderId = Number(id);
 
@@ -148,7 +150,7 @@ export default function FolderPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">{folderName}</h1>
+          <h1 className="text-2xl font-bold text-white"><Icon name="folder" className={ICON_CLASS.pageHeader} />{folderName}</h1>
           <p className="text-gray-400 text-sm">
             {subfolders.length > 0 && `${subfolders.length} folder${subfolders.length !== 1 ? 's' : ''}`}
             {subfolders.length > 0 && directMedia.length > 0 && ', '}
@@ -171,6 +173,7 @@ export default function FolderPage() {
               <FolderCard
                 key={sub.id}
                 folder={sub}
+                onClick={setSelectedFolder}
               />
             ))}
           </div>
@@ -190,6 +193,11 @@ export default function FolderPage() {
           description="This folder doesn't exist or contains no media."
         />
       ) : null}
+
+      <FolderOverlay
+        folder={selectedFolder}
+        onClose={() => setSelectedFolder(null)}
+      />
     </div>
   );
 }

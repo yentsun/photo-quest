@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { words, clientRoutes } from '@photo-quest/shared';
 import { fetchDeckCards, destroyInventoryItem, sellInventoryItem } from '../../utils/api.js';
-import { Button, ConfirmModal, Spinner, MediaCard, CardOverlay, IconButton, Icon } from '../ui/index.js';
+import { Button, ConfirmModal, Spinner, MediaCard, CardOverlay, IconButton, Icon, DeckDropdown } from '../ui/index.js';
 import { notifyDustChanged } from '../../utils/events.js';
 
 function DeckMediaCard({ item, onClick, onDestroy, onSell }) {
@@ -23,14 +23,14 @@ function DeckMediaCard({ item, onClick, onDestroy, onSell }) {
           <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex gap-0.5">
             {onSell && (
               <IconButton
-                icon={<Icon name="prev" className="w-3.5 h-3.5" />}
+                icon={<Icon name="coin" className="w-3.5 h-3.5" />}
                 label={`${words.sell} (+${sellReward} ${words.dustSymbol})`}
                 onClick={(e) => { e.stopPropagation(); onSell(item); }}
                 className="bg-blue-900/70 hover:bg-blue-700 text-blue-200 hover:text-white"
               />
             )}
             <IconButton
-              icon={<Icon name="trash" className="w-3.5 h-3.5" />}
+              icon={<Icon name="bomb" className="w-3.5 h-3.5" />}
               label={`${words.destroy} (+${destroyReward} ${words.dustSymbol})`}
               onClick={(e) => { e.stopPropagation(); onDestroy?.(item); }}
               className="bg-red-900/70 hover:bg-red-700 text-red-200 hover:text-white"
@@ -142,14 +142,15 @@ export default function DeckPage() {
           onClose={closeOverlay}
           actions={
             <>
+              <DeckDropdown inventoryId={selectedItem.inventory_id} />
               <IconButton
-                icon={<Icon name="prev" className="w-5 h-5" />}
+                icon={<Icon name="coin" className="w-5 h-5" />}
                 label={`${words.sell} (+${selectedItem.infusion || 0} ${words.dustSymbol})`}
                 onClick={() => handleSell(selectedItem)}
                 className="bg-blue-900/80 hover:bg-blue-700 text-blue-200 hover:text-white rounded-full p-2"
               />
               <IconButton
-                icon={<Icon name="trash" className="w-5 h-5" />}
+                icon={<Icon name="bomb" className="w-5 h-5" />}
                 label={words.destroy}
                 onClick={() => handleDestroy(selectedItem)}
                 className="bg-red-900/80 hover:bg-red-700 text-red-200 hover:text-white rounded-full p-2"

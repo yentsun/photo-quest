@@ -4,17 +4,20 @@
 
 import { useState, useEffect } from 'react';
 import { fetchFolders, scanMedia, getImageUrl } from '../../utils/api.js';
-import { Spinner, Card, Button, Input } from '../ui/index.js';
+import { Spinner, Card, Button, Icon, Input } from '../ui/index.js';
 import { EmptyState } from '../layout/index.js';
+import { FolderOverlay } from '../media/index.js';
+import { ICON_CLASS } from '../ui/Icon.jsx';
 import { showToast } from '../ToasterMessage.jsx';
 
-function FolderCard({ folder }) {
+function FolderCard({ folder, onClick }) {
   const name = folder.path.split(/[\\/]/).pop();
   const images = folder.subtreeImageCount ?? folder.imageCount ?? 0;
   const videos = folder.subtreeVideoCount ?? folder.videoCount ?? 0;
 
   return (
     <Card
+      onClick={() => onClick?.(folder)}
       header={<span className="text-gray-400 text-[10px] uppercase tracking-wide">Folder</span>}
       art={
         folder.previewMediaId ? (
@@ -44,6 +47,7 @@ export default function LibraryPage() {
   const [adding, setAdding] = useState(false);
   const [folderPath, setFolderPath] = useState('');
   const [scanning, setScanning] = useState(false);
+  const [selectedFolder, setSelectedFolder] = useState(null);
 
   const reload = () => {
     fetchFolders()
@@ -86,7 +90,7 @@ export default function LibraryPage() {
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Library</h1>
+          <h1 className="text-2xl font-bold text-white"><Icon name="folder" className={ICON_CLASS.pageHeader} />Library</h1>
           <p className="text-gray-400 text-sm">{rootFolders.length} folder{rootFolders.length !== 1 ? 's' : ''}</p>
         </div>
         <Button variant="secondary" onClick={() => setAdding(!adding)}>
@@ -113,7 +117,7 @@ export default function LibraryPage() {
       {rootFolders.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {rootFolders.map(folder => (
-            <FolderCard key={folder.id} folder={folder} />
+            <FolderCard key={folder.id} folder={folder} onClick={setSelectedFolder} />
           ))}
         </div>
       ) : (
@@ -122,6 +126,12 @@ export default function LibraryPage() {
           description="Scan a folder to add media to your library."
         />
       )}
+
+      <FolderOverlay
+        folder={selectedFolder}
+        onClose={() => setSelectedFolder(null)}
+        onRefresh={reload}
+      />
     </div>
   );
 }

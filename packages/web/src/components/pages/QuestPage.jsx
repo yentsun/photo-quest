@@ -8,7 +8,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
 import { fetchQuestDeck, advanceQuestDeck, takeQuestCard, destroyQuestCard, freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
-import { Button, Card, ConfirmModal, Spinner } from '../ui/index.js';
+import { Button, Card, ConfirmModal, Icon, Spinner } from '../ui/index.js';
+import { ICON_CLASS } from '../ui/Icon.jsx';
 import { notifyDustChanged } from '../../utils/events.js';
 
 function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking }) {
@@ -200,7 +201,7 @@ export default function QuestPage() {
     <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Daily Quest</h1>
+          <h1 className="text-2xl font-bold text-white"><Icon name="quest" className={ICON_CLASS.pageHeader} />Daily Quest</h1>
           <p className="text-gray-400 text-sm">Deck {activeDeck.deckIndex + 1}</p>
         </div>
         <Button variant="ghost" onClick={() => navigate(clientRoutes.inventory)}>

@@ -10,6 +10,7 @@ export { default as CardOverlay } from './CardOverlay.jsx';
 export { default as ConfirmModal } from './ConfirmModal.jsx';
 export { default as ConsumableCard } from './ConsumableCard.jsx';
 export { default as Deck } from './Deck.jsx';
+export { default as DeckDropdown } from './DeckDropdown.jsx';
 export { default as DustBadge } from './DustBadge.jsx';
 export { default as Icon } from './Icon.jsx';
 export { default as IconButton } from './IconButton.jsx';

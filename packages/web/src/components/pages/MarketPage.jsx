@@ -5,7 +5,8 @@
 import { useState } from 'react';
 import { MARKET_PRICES, words } from '@photo-quest/shared';
 import { buyQuestDeck, buyMemoryTicket } from '../../utils/api.js';
-import { Button, ConsumableCard, TicketCard } from '../ui/index.js';
+import { Button, Icon, ConsumableCard, TicketCard } from '../ui/index.js';
+import { ICON_CLASS } from '../ui/Icon.jsx';
 import { showToast } from '../ToasterMessage.jsx';
 import { notifyDustChanged } from '../../utils/events.js';
 
@@ -41,7 +42,7 @@ export default function MarketPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Market</h1>
+        <h1 className="text-2xl font-bold text-white"><Icon name="market" className={ICON_CLASS.pageHeader} />Market</h1>
         <p className="text-gray-400 text-sm">Spend your magic dust</p>
       </div>
 
@@ -50,7 +51,7 @@ export default function MarketPage() {
           label="Quest"
           title="Quest Deck"
           subtitle="10 cards for today's quest"
-          emoji="🗂️"
+          icon={<Icon name="quest" className="w-28 h-28 opacity-70" />}
           borderColor="border-amber-700/60"
           bgGradient="bg-gradient-to-br from-amber-900 to-orange-900"
           className="w-full max-w-[200px]"
