@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../hooks/useMedia.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
-import { fetchFolders, fetchMedia } from '../utils/api.js';
+import { fetchFolders, fetchMedia, fetchInventoryMedia } from '../utils/api.js';
 import { FolderCard, FolderOverlay } from './media/index.js';
 import { EmptyState } from './layout/index.js';
 import { Button, CARD_GRID, Icon, Input, Modal, Spinner } from './ui/index.js';
@@ -112,14 +112,13 @@ export default function Dashboard() {
   }, [showAddFolder, reset]);
 
   const handleShuffle = async () => {
-    if (totalMedia === 0) return;
     try {
-      const { items } = await fetchMedia();
-      if (items.length === 0) return;
+      const mediaItems = await fetchInventoryMedia();
+      if (mediaItems.length === 0) return;
       pendingShuffle.current = true;
-      slideshow.start(items, { order: 'random' });
+      slideshow.start(mediaItems, { order: 'random' });
     } catch (err) {
-      console.error('Failed to fetch media for shuffle:', err);
+      console.error('Failed to fetch inventory for shuffle:', err);
     }
   };
 

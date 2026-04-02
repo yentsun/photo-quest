@@ -8,7 +8,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { fetchFolders, fetchMedia } from '../../utils/api.js';
+import { fetchFolders, fetchMedia, fetchInventoryMedia } from '../../utils/api.js';
 import { FolderCard, FolderOverlay } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
@@ -80,10 +80,15 @@ export default function FolderPage() {
   const handleShuffle = async () => {
     if (!folder) return;
     try {
-      const { items } = await fetchMedia({ folder: folder.path, subtree: true });
-      if (items.length === 0) return;
+      const [{ items: folderItems }, invMedia] = await Promise.all([
+        fetchMedia({ folder: folder.path, subtree: true }),
+        fetchInventoryMedia(),
+      ]);
+      const ownedIds = new Set(invMedia.map(i => i.id));
+      const owned = folderItems.filter(m => ownedIds.has(m.id));
+      if (owned.length === 0) return;
       pendingShuffle.current = true;
-      slideshow.start(items, { order: 'random' });
+      slideshow.start(owned, { order: 'random' });
     } catch (err) {
       console.error('Failed to fetch subtree media for shuffle:', err);
     }

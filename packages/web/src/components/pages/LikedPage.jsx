@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { fetchMedia } from '../../utils/api.js';
+import { fetchMedia, fetchInventoryMedia } from '../../utils/api.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, Spinner } from '../ui/index.js';
@@ -41,10 +41,18 @@ export default function LikedPage() {
     navigate(`/media/${clickedMedia.id}`);
   };
 
-  const handleShuffle = () => {
+  const handleShuffle = async () => {
     if (likedMedia.length === 0) return;
-    pendingShuffle.current = true;
-    slideshow.start(likedMedia, { order: 'random' });
+    try {
+      const invMedia = await fetchInventoryMedia();
+      const ownedIds = new Set(invMedia.map(i => i.id));
+      const owned = likedMedia.filter(m => ownedIds.has(m.id));
+      if (owned.length === 0) return;
+      pendingShuffle.current = true;
+      slideshow.start(owned, { order: 'random' });
+    } catch (err) {
+      console.error('Failed to fetch inventory for shuffle:', err);
+    }
   };
 
   useEffect(() => {

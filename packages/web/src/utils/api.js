@@ -2,7 +2,7 @@
  * @file API fetch wrappers for server endpoints.
  */
 
-import { apiRoutes, MEDIA_TYPE } from '@photo-quest/shared';
+import { apiRoutes, MEDIA_TYPE, CARD_TYPE } from '@photo-quest/shared';
 
 /**
  * Fetch media items from the server (supports filtering and pagination).
@@ -231,6 +231,16 @@ export async function fetchInventory({ limit, offset } = {}) {
     throw new Error('Failed to fetch inventory');
   }
   return response.json();
+}
+
+/**
+ * Fetch only media-type items from the player's inventory.
+ *
+ * @returns {Promise<Array>} Media inventory items (with full media fields).
+ */
+export async function fetchInventoryMedia() {
+  const { items } = await fetchInventory();
+  return items.filter(i => i.card_type === CARD_TYPE.MEDIA);
 }
 
 /**

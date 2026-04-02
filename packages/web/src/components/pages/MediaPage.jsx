@@ -6,7 +6,7 @@
  * LAW 1.30: in slideshow mode, left/right = shuffle nav, up/down = folder nav.
  */
 
-import { useEffect, useCallback, useState, useRef } from 'react';
+import { useEffect, useCallback, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
@@ -35,10 +35,19 @@ export default function MediaPage() {
   const [folder, setFolder] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  /* Fetch the media item and its folder siblings. */
+  /* Fetch the media item and its folder siblings.
+     In slideshow mode, use the slideshow's current item directly to avoid
+     a loading flash — the slideshow items already contain full media data. */
   useEffect(() => {
     let cancelled = false;
     const mediaId = Number(id);
+
+    /* Slideshow shortcut: set item from slideshow state, no fetch needed. */
+    if (inSlideshow && slideshow.current?.id === mediaId) {
+      setItem(slideshow.current);
+      setLoading(false);
+      return () => { cancelled = true; };
+    }
 
     const load = async () => {
       try {
@@ -154,6 +163,14 @@ export default function MediaPage() {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
+  /* Preload next image URL for hidden <img> in JSX */
+  const nextPreloadUrl = useMemo(() => {
+    if (!inSlideshow || currentIndex < 0 || navItems.length < 2) return null;
+    const nextItem = navItems[(currentIndex + 1) % navItems.length];
+    if (!nextItem || nextItem.type !== MEDIA_TYPE.IMAGE) return null;
+    return getMediaUrl(nextItem);
+  }, [inSlideshow, currentIndex, navItems]);
+
   /* Keyboard navigation */
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -210,6 +227,11 @@ export default function MediaPage() {
           <ImageViewer src={mediaUrl} alt={item.title} />
         ) : (
           <MediaPlayer ref={playerRef} src={mediaUrl} />
+        )}
+
+        {/* Preload next slideshow image (zero-size but in layout so browser fetches it) */}
+        {nextPreloadUrl && (
+          <img src={nextPreloadUrl} alt="" className="absolute w-0 h-0 overflow-hidden" />
         )}
 
         {/* Left arrow */}
