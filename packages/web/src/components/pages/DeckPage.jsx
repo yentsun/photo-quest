@@ -10,36 +10,12 @@ import { Button, CARD_GRID, ConfirmModal, Spinner, MediaCard, CardOverlay, IconB
 import { ICON_CLASS } from '../ui/Icon.jsx';
 import { notifyDustChanged } from '../../utils/events.js';
 
-function DeckMediaCard({ item, onClick, onDestroy, onSell }) {
-  const infusion = item.infusion || 0;
-  const destroyReward = Math.max(2, infusion * 2);
-  const sellReward = infusion;
-
+function DeckMediaCard({ item, onClick }) {
   return (
-    <div className="group">
-      <MediaCard
-        item={item}
-        onClick={() => onClick?.(item)}
-        actions={
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex gap-0.5">
-            {onSell && (
-              <IconButton
-                icon={<Icon name="coin" className="w-3.5 h-3.5" />}
-                label={`${words.sell} (+${sellReward} ${words.dustSymbol})`}
-                onClick={(e) => { e.stopPropagation(); onSell(item); }}
-                className="bg-blue-900/70 hover:bg-blue-700 text-blue-200 hover:text-white"
-              />
-            )}
-            <IconButton
-              icon={<Icon name="bomb" className="w-3.5 h-3.5" />}
-              label={`${words.destroy} (+${destroyReward} ${words.dustSymbol})`}
-              onClick={(e) => { e.stopPropagation(); onDestroy?.(item); }}
-              className="bg-red-900/70 hover:bg-red-700 text-red-200 hover:text-white"
-            />
-          </div>
-        }
-      />
-    </div>
+    <MediaCard
+      item={item}
+      onClick={() => onClick?.(item)}
+    />
   );
 }
 
@@ -134,8 +110,6 @@ export default function DeckPage() {
             key={item.inventory_id}
             item={item}
             onClick={setSelectedItem}
-            onDestroy={handleDestroy}
-            onSell={handleSell}
           />
         ))}
       </div>

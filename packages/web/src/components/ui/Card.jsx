@@ -25,7 +25,7 @@ export default function Card({ size = 'normal', header, headerRight, art, footer
             {art}
           </div>
         </div>
-        <div className={`${s.footerPadding} ${s.footerHeight} ${s.footerText} flex items-center`}>
+        <div className={`${s.footerPadding} ${s.footerHeight} ${s.footerText} overflow-hidden`}>
           {footer}
         </div>
       </div>

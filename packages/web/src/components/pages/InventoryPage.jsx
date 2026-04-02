@@ -19,16 +19,13 @@ import { notifyDustChanged } from '../../utils/events.js';
 
 /* ── Inventory media card (wraps MediaCard with drag & drop + actions) ── */
 
-function InventoryMediaCard({ item, onClick, onDestroy, onSell, onDrop }) {
-  const infusion = item.infusion || 0;
-  const destroyReward = Math.max(2, infusion * 2);
-  const sellReward = infusion;
+function InventoryMediaCard({ item, onClick, onDrop }) {
   const [dragOver, setDragOver] = useState(false);
   const dragCount = useRef(0);
 
   return (
     <div
-      className={`group ${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
+      className={`${dragOver ? 'ring-2 ring-blue-400 rounded-2xl' : ''}`}
       draggable
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(item.inventory_id)); }}
       onDragOver={(e) => { e.preventDefault(); }}
@@ -39,24 +36,6 @@ function InventoryMediaCard({ item, onClick, onDestroy, onSell, onDrop }) {
       <MediaCard
         item={item}
         onClick={() => onClick?.(item)}
-        actions={
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex gap-0.5">
-            {onSell && (
-              <IconButton
-                icon={<Icon name="coin" className="w-3.5 h-3.5" />}
-                label={`${words.sell} (+${sellReward} ${words.dustSymbol})`}
-                onClick={(e) => { e.stopPropagation(); onSell(item); }}
-                className="bg-blue-900/70 hover:bg-blue-700 text-blue-200 hover:text-white"
-              />
-            )}
-            <IconButton
-              icon={<Icon name="bomb" className="w-3.5 h-3.5" />}
-              label={`${words.destroy} (+${destroyReward} ${words.dustSymbol})`}
-              onClick={(e) => { e.stopPropagation(); onDestroy?.(item); }}
-              className="bg-red-900/70 hover:bg-red-700 text-red-200 hover:text-white"
-            />
-          </div>
-        }
       />
     </div>
   );
@@ -111,22 +90,7 @@ function UserDeck({ deck, onOpen, onRename, onDelete, onDrop }) {
           )
         }
         footer={
-          <div className="flex items-center justify-between">
-            <span className="text-gray-500 text-[10px]">{deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}</span>
-            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <IconButton
-                icon={<Icon name="info" className="w-3 h-3" />}
-                label="Rename"
-                onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-              />
-              <IconButton
-                icon={<Icon name="trash" className="w-3 h-3" />}
-                label="Delete"
-                onClick={(e) => { e.stopPropagation(); onDelete(deck.id); }}
-                className="text-red-400 hover:text-red-300"
-              />
-            </div>
-          </div>
+          <span className="text-gray-500 text-[10px]">{deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}</span>
         }
       />
     </div>
@@ -363,8 +327,6 @@ export default function InventoryPage() {
                 key={item.inventory_id}
                 item={item}
                 onClick={handleCardClick}
-                onDestroy={handleDestroy}
-                onSell={handleSell}
                 onDrop={handleCardDrop}
               />
             ))}

@@ -9,7 +9,7 @@ import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import Card from './Card.jsx';
 import { getImageUrl, getMediaUrl } from '../../utils/api.js';
 
-export default memo(function MediaCard({ item, onClick, actions }) {
+export default memo(function MediaCard({ item, onClick }) {
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const thumbUrl = isImage ? getImageUrl(item.id) : getMediaUrl(item);
   const infusion = item.infusion || 0;
@@ -25,7 +25,6 @@ export default memo(function MediaCard({ item, onClick, actions }) {
           <video src={thumbUrl} preload="metadata" muted draggable={false} className="w-full h-full object-cover" />
         )
       }
-      footer={actions && <div className="flex items-center justify-end gap-1">{actions}</div>}
       onClick={onClick}
     />
   );

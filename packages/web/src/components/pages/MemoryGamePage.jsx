@@ -343,7 +343,7 @@ export default function MemoryGamePage() {
         </div>
       </Modal>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-5">
         {cards.map(card => (
           <MemoryCard
             key={card.id}
