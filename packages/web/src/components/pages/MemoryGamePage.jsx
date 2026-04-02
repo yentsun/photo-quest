@@ -7,7 +7,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
 import { fetchMedia, getImageUrl, useMemoryTicket, getMemoryTickets, addToInventory } from '../../utils/api.js';
 import { shuffle } from '../../utils/shuffle.js';
-import { Button, Icon, Modal, Spinner } from '../ui/index.js';
+import { Button, Icon, MediaCard, Modal, Spinner } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
 import { showToast } from '../ToasterMessage.jsx';
 import { notifyDustChanged } from '../../utils/events.js';
@@ -67,7 +67,7 @@ function buildDeck(mediaItems) {
 
 function CardBack() {
   return (
-    <div className={`absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-700 ${CARD_SIZES.micro.rounding} flex items-center justify-center`}>
+    <div className={`absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-700 ${CARD_SIZES.small.rounding} flex items-center justify-center`}>
       <span className="text-3xl select-none">?</span>
     </div>
   );
@@ -75,7 +75,7 @@ function CardBack() {
 
 function CardFace({ mediaId, onLoad }) {
   return (
-    <div className={`absolute inset-0 ${CARD_SIZES.micro.rounding} overflow-hidden`}>
+    <div className={`absolute inset-0 ${CARD_SIZES.small.rounding} overflow-hidden`}>
       <img
         src={getImageUrl(mediaId)}
         alt=""
@@ -93,7 +93,7 @@ function MemoryCard({ card, flipped, matched, picked, picking, onClick, onImageL
   return (
     <button
       className={`
-        relative ${CARD_SIZES.micro.art} ${CARD_SIZES.micro.rounding} cursor-pointer transition-all duration-200
+        relative ${CARD_SIZES.small.art} ${CARD_SIZES.small.rounding} cursor-pointer transition-all duration-200
         ${matched ? 'ring-2 ring-green-400 opacity-80' : ''}
         ${picked ? 'ring-3 ring-yellow-400 scale-95 opacity-100' : ''}
         ${picking && !picked ? 'hover:ring-2 hover:ring-yellow-400/50 hover:scale-105' : ''}
@@ -124,6 +124,7 @@ export default function MemoryGamePage() {
   const pendingMismatchRef = useRef(false);
 
   const [hasTicket, setHasTicket] = useState(null);
+  const mediaMapRef = useRef(new Map());
 
   /* Picking phase state */
   const [picking, setPicking] = useState(false);
@@ -137,6 +138,7 @@ export default function MemoryGamePage() {
 
   const startGame = async () => {
     clearTimeout(flipTimeoutRef.current);
+    mediaMapRef.current = new Map();
     setLoading(true);
     setError(null);
     setFlipped([]);
@@ -163,6 +165,7 @@ export default function MemoryGamePage() {
       setHasTicket(ticketResult.tickets > 0);
 
       const { items } = await fetchMedia();
+      mediaMapRef.current = new Map(items.map(m => [m.id, m]));
       const deck = buildDeck(items);
       if (!deck) {
         setError('Need at least 8 images in your library to play.');
@@ -313,6 +316,14 @@ export default function MemoryGamePage() {
           <p className="text-green-300 text-xl font-semibold">
             You won in {moves} moves!
           </p>
+          {pickedIds.size > 0 && (
+            <div className="flex gap-2 justify-center">
+              {[...pickedIds].map(mediaId => {
+                const item = mediaMapRef.current.get(mediaId);
+                return item ? <MediaCard key={mediaId} item={item} /> : null;
+              })}
+            </div>
+          )}
           <p className="text-gray-300 text-sm">
             {picksAdded > 0
               ? `${picksAdded} card${picksAdded !== 1 ? 's' : ''} added to inventory`

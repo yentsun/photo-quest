@@ -154,7 +154,7 @@ The governing rules of the photo-quest project. This document is the source of t
 
 ## Section 5 — Cards
 
-**5.1** There must be exactly **three card sizes**: **micro** (used in the memory game), **normal** (used in inventory and market), and **large** (detailed view when a card is clicked). No other card sizes are allowed. Card types are unlimited.
+**5.1** There must be exactly **three card sizes**: **small** (memory game grid, reward previews, compact lists), **normal** (inventory, market, deck views), and **large** (detail view on card click). Every card display in the app must use one of these three sizes — no custom dimensions, no raw images in place of cards. Card types are unlimited.
 
 **5.2** Decks must follow card sizes — a deck wrapper must match the size of the cards it contains.
 

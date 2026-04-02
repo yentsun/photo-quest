@@ -1,7 +1,7 @@
 /**
  * @file Base card frame — header strip, art area, footer strip.
  *
- * Accepts a `size` prop: "micro", "normal" (default), "large".
+ * Accepts a `size` prop: "small", "normal" (default), "large".
  * All inventory/market cards share this structure.
  */
 
@@ -13,7 +13,7 @@ export default function Card({ size = 'normal', header, headerRight, art, footer
   const s = CARD_SIZES[size];
 
   return (
-    <div className={className} onClick={onClick} onDoubleClick={onDoubleClick}>
+    <div className={`${s.width} ${className || ''}`} onClick={onClick} onDoubleClick={onDoubleClick}>
       <div className={`${s.rounding} bg-gray-900 border ${borderColor} shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden transition-all
         ${onClick || onDoubleClick ? 'cursor-pointer hover:shadow-[0_8px_32px_rgba(0,0,0,0.5)]' : ''}`}>
         <div className={`flex items-center ${s.headerPadding} border-b ${borderColor} text-white whitespace-nowrap`}>
@@ -25,7 +25,7 @@ export default function Card({ size = 'normal', header, headerRight, art, footer
             {art}
           </div>
         </div>
-        <div className={s.footerPadding}>
+        <div className={`${s.footerPadding} ${s.footerHeight} ${s.footerText} flex items-center`}>
           {footer}
         </div>
       </div>
