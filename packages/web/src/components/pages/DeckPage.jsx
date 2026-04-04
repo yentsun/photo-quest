@@ -10,15 +10,6 @@ import { Button, CARD_GRID, ConfirmModal, Spinner, MediaCard, CardOverlay, IconB
 import { ICON_CLASS } from '../ui/Icon.jsx';
 import { notifyDustChanged } from '../../utils/events.js';
 
-function DeckMediaCard({ item, onClick }) {
-  return (
-    <MediaCard
-      item={item}
-      onClick={() => onClick?.(item)}
-    />
-  );
-}
-
 export default function DeckPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -106,10 +97,10 @@ export default function DeckPage() {
       </div>
       <div className={CARD_GRID}>
         {cards.map(item => (
-          <DeckMediaCard
+          <MediaCard
             key={item.inventory_id}
             item={item}
-            onClick={setSelectedItem}
+            onClick={() => setSelectedItem(item)}
           />
         ))}
       </div>
