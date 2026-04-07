@@ -150,6 +150,8 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.17** When a card is picked as a reward from the memory game, it receives **+10 dust infusion** on top of its current infusion value.
 
+**4.18** When a card is placed into a user deck, it receives **+10 dust infusion** as a reward for organization. The bonus is applied once per deck placement — re-adding the same card to the same deck does not grant additional infusion.
+
 ---
 
 ## Section 5 — Cards
