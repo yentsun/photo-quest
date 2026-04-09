@@ -361,3 +361,81 @@ function deleteQuestDeckInventory(t, inventory, deckId) {
     }
   }
 }
+
+/* ── Memory game ───────────────────────────────────────────────── */
+
+/**
+ * Consume a memory_ticket inventory row. Pass an explicit `invId` to
+ * target a specific ticket; otherwise the oldest ticket is used.
+ *
+ * Returns `{ tickets }` — the count of remaining ticket rows after the
+ * consume — to match the legacy `useMemoryTicket` API contract.
+ */
+export async function consumeMemoryTicket(invId) {
+  const result = await tx(
+    [STORES.INVENTORY, STORES.MUTATION_QUEUE],
+    'readwrite',
+    async (t) => {
+      const all = await req(t.objectStore(STORES.INVENTORY).getAll());
+      const tickets = all.filter(i => i.card_type === CARD_TYPE.MEMORY_TICKET);
+      const target = invId != null
+        ? tickets.find(t => t.inventory_id === invId)
+        : tickets[0];
+      if (!target) throw new Error('No tickets available');
+      t.objectStore(STORES.INVENTORY).delete(target.inventory_id);
+      enqueue(t, 'memory.useTicket', { invId: target.inventory_id });
+      return { tickets: tickets.length - 1 };
+    },
+  );
+  drainMutationQueue();
+  return result;
+}
+
+/**
+ * Add a media item to inventory with an optional infusion bonus
+ * (LAW 4.17: memory game pick = +10). Returns `{ added }` matching the
+ * legacy `addToInventory` API contract; `added` is false if the media
+ * was already in inventory.
+ */
+export async function addToInventory(mediaId, infuseBonus = 0) {
+  const result = await tx(
+    [STORES.INVENTORY, STORES.MEDIA, STORES.MUTATION_QUEUE],
+    'readwrite',
+    async (t) => {
+      const existing = await req(
+        t.objectStore(STORES.INVENTORY).index('media_id').get(mediaId),
+      );
+      if (existing) return { added: false };
+
+      const media = await req(t.objectStore(STORES.MEDIA).get(mediaId));
+      if (!media) throw new Error('Media not found');
+
+      if (infuseBonus > 0) {
+        t.objectStore(STORES.MEDIA).put({
+          ...media,
+          infusion: (media.infusion || 0) + infuseBonus,
+        });
+      }
+
+      /* Optimistic insert with a temp negative inventory_id; the post-push
+       * sync replaces the row with the server-assigned id. The shape mirrors
+       * what listInventory returns (joined inventory + media fields). */
+      const tempInvId = -Date.now();
+      t.objectStore(STORES.INVENTORY).put({
+        inventory_id: tempInvId,
+        media_id: mediaId,
+        card_type: CARD_TYPE.MEDIA,
+        ref_id: null,
+        acquired_at: new Date().toISOString(),
+        ...media,
+        infusion: (media.infusion || 0) + infuseBonus,
+        id: mediaId,
+      });
+
+      enqueue(t, 'inventory.add', { mediaId, infuseBonus });
+      return { added: true };
+    },
+  );
+  drainMutationQueue();
+  return result;
+}

@@ -13,12 +13,13 @@
  */
 
 import {
-  fetchInventory, fetchDecks, fetchPlayerStats, fetchQuestDecks,
+  fetchInventory, fetchDecks, fetchPlayerStats, fetchQuestDecks, fetchMedia,
   sellInventoryItem, destroyInventoryItem,
   createDeck as apiCreateDeck, renameDeck as apiRenameDeck,
   deleteDeck as apiDeleteDeck, addToDeck as apiAddToDeck,
   advanceQuestDeck as apiAdvanceQuestDeck, takeQuestCard as apiTakeQuestCard,
   destroyQuestCard as apiDestroyQuestCard, freeInfuseMedia as apiFreeInfuseMedia,
+  addToInventory as apiAddToInventory, useMemoryTicket as apiUseMemoryTicket,
 } from '../utils/api.js';
 import {
   snapshotReplace, putRow, getAll, tx, req, STORES,
@@ -51,6 +52,7 @@ export async function syncTable(table) {
     case STORES.QUEST_DECKS:
     case STORES.QUEST_CARDS:
       return syncQuests();
+    case STORES.MEDIA:        return syncMedia();
     default: throw new Error(`Unknown sync table: ${table}`);
   }
 }
@@ -70,6 +72,20 @@ async function syncQuestsFromResult(result) {
     snapshotReplace(STORES.QUEST_DECKS, decks),
     snapshotReplace(STORES.QUEST_CARDS, cards),
   ]);
+}
+
+/**
+ * Pull the full media library into local IDB. Called on demand (e.g. by
+ * MemoryGamePage) — not in syncAll because the table can be large (LAW
+ * 1.36: 10k+ items) and there's no `?since=` delta support yet.
+ */
+export async function syncMedia() {
+  try {
+    const { items } = await fetchMedia();
+    await snapshotReplace(STORES.MEDIA, items || []);
+  } catch (err) {
+    console.warn('syncMedia failed:', err.message);
+  }
 }
 
 async function syncInventory() {
@@ -150,6 +166,14 @@ const HANDLERS = {
   'media.freeInfuse': async ({ mediaId, amount }) => {
     await apiFreeInfuseMedia(mediaId, amount);
     return [STORES.QUEST_DECKS];
+  },
+  'inventory.add': async ({ mediaId, infuseBonus }) => {
+    await apiAddToInventory(mediaId, { infuseBonus });
+    return [STORES.INVENTORY, STORES.MEDIA];
+  },
+  'memory.useTicket': async ({ invId }) => {
+    await apiUseMemoryTicket(invId);
+    return [STORES.INVENTORY];
   },
 };
 

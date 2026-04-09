@@ -6,7 +6,7 @@
  */
 
 const DB_NAME = 'photo-quest-local';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 /** Canonical store names — import everywhere instead of raw strings. */
 export const STORES = {
@@ -17,6 +17,7 @@ export const STORES = {
   MUTATION_QUEUE: 'mutation_queue',
   QUEST_DECKS: 'quest_decks',
   QUEST_CARDS: 'quest_cards',
+  MEDIA: 'media',
 };
 
 const SCHEMA = [
@@ -45,6 +46,17 @@ const SCHEMA = [
     indexes: [
       { name: 'deck_id', keyPath: 'deck_id' },
       { name: 'media_id', keyPath: 'media_id' },
+    ],
+  },
+  /* Full library media. Populated on-demand by callers that need it
+   * (memory game) — not pulled in syncAll because the table can be
+   * large (LAW 1.36: 10k+ items) and there's no `?since=` support yet. */
+  {
+    name: STORES.MEDIA,
+    keyPath: 'id',
+    indexes: [
+      { name: 'type', keyPath: 'type' },
+      { name: 'hidden', keyPath: 'hidden' },
     ],
   },
 ];

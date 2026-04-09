@@ -4,13 +4,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
-import { fetchMedia, getImageUrl, useMemoryTicket, getMemoryTickets, addToInventory } from '../../utils/api.js';
+import { CARD_TYPE, MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
+import { getImageUrl } from '../../utils/api.js';
+import { useInventory } from '../../db/hooks.js';
+import { getAll, STORES } from '../../db/localDb.js';
+import { syncMedia } from '../../db/sync.js';
+import { consumeMemoryTicket, addToInventory } from '../../db/actions.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Icon, MediaCard, Modal, Spinner } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
 import { showToast } from '../ToasterMessage.jsx';
-import { notifyDustChanged } from '../../utils/events.js';
 import { CARD_SIZES } from '../ui/cardSizes.js';
 import ticketIcon from '../../icons/ticket2-svgrepo-com.svg';
 
@@ -123,7 +126,6 @@ export default function MemoryGamePage() {
   const flipTimeoutRef = useRef(null);
   const pendingMismatchRef = useRef(false);
 
-  const [hasTicket, setHasTicket] = useState(null);
   const mediaMapRef = useRef(new Map());
 
   /* Picking phase state */
@@ -132,6 +134,10 @@ export default function MemoryGamePage() {
   const [pickedIds, setPickedIds] = useState(new Set());
   const [picksDone, setPicksDone] = useState(false);
   const [picksAdded, setPicksAdded] = useState(0);
+
+  /* Live ticket count derived from local inventory. */
+  const { items: inventoryItems } = useInventory();
+  const hasTicket = inventoryItems.some(i => i.card_type === CARD_TYPE.MEMORY_TICKET);
 
   const won = cards.length > 0 && matched.size === PAIR_COUNT;
   const stars = won ? getStars(moves) : 0;
@@ -155,16 +161,19 @@ export default function MemoryGamePage() {
     try {
       const ticketId = ticketIdRef.current;
       ticketIdRef.current = null;
-      const ticketResult = await useMemoryTicket(ticketId || undefined).catch(() => null);
-      if (!ticketResult) {
-        setHasTicket(false);
+      try {
+        await consumeMemoryTicket(ticketId ?? undefined);
+      } catch {
         setError('No tickets. Buy one from the Market and find it in your Inventory.');
         setLoading(false);
         return;
       }
-      setHasTicket(ticketResult.tickets > 0);
 
-      const { items } = await fetchMedia();
+      /* Refresh the local media mirror so the weighted-pick pool reflects
+       * any newly-imported items since the last visit. */
+      await syncMedia();
+      const allMedia = await getAll(STORES.MEDIA);
+      const items = allMedia.filter(m => m.type === MEDIA_TYPE.IMAGE && !m.hidden);
       mediaMapRef.current = new Map(items.map(m => [m.id, m]));
       const deck = buildDeck(items);
       if (!deck) {
@@ -210,7 +219,7 @@ export default function MemoryGamePage() {
       next.add(card.mediaId);
       setPickedIds(next);
 
-      addToInventory(card.mediaId, { infuseBonus: 10 }).then(({ added }) => {
+      addToInventory(card.mediaId, 10).then(({ added }) => {
         if (added) setPicksAdded(prev => prev + 1);
       }).catch(() => showToast('Failed to add card', 'error'));
 
@@ -260,8 +269,6 @@ export default function MemoryGamePage() {
   const finishPicking = () => {
     setPicking(false);
     setPicksDone(true);
-    notifyDustChanged();
-    getMemoryTickets().then(({ tickets }) => setHasTicket(tickets > 0)).catch(() => {});
   };
 
   const handleImageLoad = () => {
