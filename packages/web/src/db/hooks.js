@@ -12,6 +12,7 @@ import { getAll, getByKey, subscribe, STORES } from './localDb.js';
 /* Stable references for hooks that subscribe to multiple stores —
  * avoids re-subscribing on every render. */
 const DECKS_STORES = [STORES.DECKS, STORES.META];
+const DECK_PAGE_STORES = [STORES.DECKS, STORES.DECK_CARDS];
 const QUEST_STORES = [STORES.QUEST_DECKS, STORES.QUEST_CARDS, STORES.INVENTORY, STORES.PLAYER_STATS];
 
 /**
@@ -82,6 +83,31 @@ export function useDecks() {
       return { piles, groupedIds: new Set(groupedRow?.value || []) };
     },
     { piles: [], groupedIds: new Set() },
+  );
+}
+
+/**
+ * Cards in a single user deck plus the deck's name. Returns `null`
+ * until the deck row has synced. Each card is the denormalized
+ * inventory + media join shape that DeckPage / MediaCard expect.
+ *
+ * @param {number|string|null} deckId
+ */
+export function useDeckCards(deckId) {
+  return useLocal(
+    DECK_PAGE_STORES,
+    async () => {
+      if (deckId == null) return null;
+      const id = Number(deckId);
+      const [deck, allCards] = await Promise.all([
+        getByKey(STORES.DECKS, id),
+        getAll(STORES.DECK_CARDS),
+      ]);
+      if (!deck) return null;
+      const cards = allCards.filter(c => c.deck_id === id);
+      return { name: deck.name, cards };
+    },
+    null,
   );
 }
 

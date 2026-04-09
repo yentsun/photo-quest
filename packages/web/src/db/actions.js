@@ -36,6 +36,16 @@ function getAllFromIndex(t, storeName, indexName, value) {
   return req(t.objectStore(storeName).index(indexName).getAll(value));
 }
 
+/* Cascade-delete every deck_cards row referencing an inventory_id (used
+ * when an inventory item is sold/destroyed). Mirrors the server's FK
+ * cascade. Caller must have STORES.DECK_CARDS in the active txn. */
+async function cascadeDeleteDeckCardsByInventory(t, invId) {
+  const rows = await getAllFromIndex(t, STORES.DECK_CARDS, 'inventory_id', invId);
+  for (const r of rows) {
+    t.objectStore(STORES.DECK_CARDS).delete([r.deck_id, r.inventory_id]);
+  }
+}
+
 /* ── Inventory ─────────────────────────────────────────────────── */
 
 /**
@@ -44,7 +54,7 @@ function getAllFromIndex(t, storeName, indexName, value) {
  */
 export async function sellInventory(invId) {
   await tx(
-    [STORES.INVENTORY, STORES.PLAYER_STATS, STORES.MUTATION_QUEUE],
+    [STORES.INVENTORY, STORES.PLAYER_STATS, STORES.DECK_CARDS, STORES.MUTATION_QUEUE],
     'readwrite',
     async (t) => {
       const inv = await req(t.objectStore(STORES.INVENTORY).get(invId));
@@ -53,6 +63,7 @@ export async function sellInventory(invId) {
       const reward = inv.infusion || 0;
       t.objectStore(STORES.INVENTORY).delete(invId);
       t.objectStore(STORES.PLAYER_STATS).put({ id: 1, dust: (stats?.dust || 0) + reward });
+      await cascadeDeleteDeckCardsByInventory(t, invId);
       enqueue(t, 'inventory.sell', { invId });
     },
   );
@@ -65,7 +76,7 @@ export async function sellInventory(invId) {
  */
 export async function destroyInventory(invId) {
   await tx(
-    [STORES.INVENTORY, STORES.PLAYER_STATS, STORES.MUTATION_QUEUE],
+    [STORES.INVENTORY, STORES.PLAYER_STATS, STORES.DECK_CARDS, STORES.MUTATION_QUEUE],
     'readwrite',
     async (t) => {
       const inv = await req(t.objectStore(STORES.INVENTORY).get(invId));
@@ -74,6 +85,7 @@ export async function destroyInventory(invId) {
       const reward = Math.max(2, (inv.infusion || 0) * 2);
       t.objectStore(STORES.INVENTORY).delete(invId);
       t.objectStore(STORES.PLAYER_STATS).put({ id: 1, dust: (stats?.dust || 0) + reward });
+      await cascadeDeleteDeckCardsByInventory(t, invId);
       enqueue(t, 'inventory.destroy', { invId });
     },
   );
@@ -94,10 +106,11 @@ export async function destroyInventory(invId) {
  */
 export async function addToDeck(deckId, inventoryIds) {
   await tx(
-    [STORES.INVENTORY, STORES.META, STORES.MUTATION_QUEUE],
+    [STORES.INVENTORY, STORES.DECK_CARDS, STORES.META, STORES.MUTATION_QUEUE],
     'readwrite',
     async (t) => {
       const invStore = t.objectStore(STORES.INVENTORY);
+      const dcStore  = t.objectStore(STORES.DECK_CARDS);
       const metaStore = t.objectStore(STORES.META);
 
       const groupedRow = (await req(metaStore.get('groupedIds'))) || { key: 'groupedIds', value: [] };
@@ -105,7 +118,23 @@ export async function addToDeck(deckId, inventoryIds) {
       for (const invId of inventoryIds) {
         const inv = await req(invStore.get(invId));
         if (!inv) continue;
-        invStore.put({ ...inv, infusion: (inv.infusion || 0) + 10 });
+
+        /* Server's addToPile removes the card from any other deck before
+         * inserting into the target — mirror that locally so the moved-from
+         * deck loses the row immediately. */
+        const existingMemberships = await getAllFromIndex(t, STORES.DECK_CARDS, 'inventory_id', invId);
+        for (const m of existingMemberships) {
+          if (m.deck_id !== deckId) dcStore.delete([m.deck_id, m.inventory_id]);
+        }
+
+        const updatedInv = { ...inv, infusion: (inv.infusion || 0) + 10 };
+        invStore.put(updatedInv);
+        dcStore.put({
+          deck_id: deckId,
+          inventory_id: invId,
+          acquired_at: inv.acquired_at,
+          ...updatedInv,
+        });
         groupedSet.add(invId);
       }
       metaStore.put({ key: 'groupedIds', value: [...groupedSet] });
@@ -164,10 +193,14 @@ export async function renameDeck(deckId, name) {
  */
 export async function deleteDeck(deckId) {
   await tx(
-    [STORES.DECKS, STORES.MUTATION_QUEUE],
+    [STORES.DECKS, STORES.DECK_CARDS, STORES.MUTATION_QUEUE],
     'readwrite',
     async (t) => {
       t.objectStore(STORES.DECKS).delete(deckId);
+      const rows = await getAllFromIndex(t, STORES.DECK_CARDS, 'deck_id', deckId);
+      for (const r of rows) {
+        t.objectStore(STORES.DECK_CARDS).delete([r.deck_id, r.inventory_id]);
+      }
       enqueue(t, 'deck.delete', { deckId });
     },
   );

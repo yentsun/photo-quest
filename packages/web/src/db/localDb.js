@@ -6,12 +6,13 @@
  */
 
 const DB_NAME = 'photo-quest-local';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 /** Canonical store names — import everywhere instead of raw strings. */
 export const STORES = {
   INVENTORY: 'inventory',
   DECKS: 'decks',
+  DECK_CARDS: 'deck_cards',
   PLAYER_STATS: 'player_stats',
   META: 'meta',
   MUTATION_QUEUE: 'mutation_queue',
@@ -31,6 +32,18 @@ const SCHEMA = [
     ],
   },
   { name: STORES.DECKS, keyPath: 'id' },
+  /* Denormalized deck membership: each row carries the joined inventory +
+   * media fields so DeckPage can render entirely from local IDB. The
+   * compound PK [deck_id, inventory_id] mirrors the server's UNIQUE
+   * constraint and enforces LAW 4.18 once-per-pair semantics locally. */
+  {
+    name: STORES.DECK_CARDS,
+    keyPath: ['deck_id', 'inventory_id'],
+    indexes: [
+      { name: 'deck_id', keyPath: 'deck_id' },
+      { name: 'inventory_id', keyPath: 'inventory_id' },
+    ],
+  },
   { name: STORES.PLAYER_STATS, keyPath: 'id' }, // Singleton, id=1
   { name: STORES.META, keyPath: 'key' },        // Misc key/value singletons
   // Persistent push queue for optimistic mutations awaiting server ack.

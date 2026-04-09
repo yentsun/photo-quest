@@ -48,7 +48,9 @@ export async function syncAll() {
 export async function syncTable(table) {
   switch (table) {
     case STORES.INVENTORY:    return syncInventory();
-    case STORES.DECKS:        return syncDecks();
+    case STORES.DECKS:
+    case STORES.DECK_CARDS:
+      return syncDecks();
     case STORES.PLAYER_STATS: return syncPlayerStats();
     case STORES.QUEST_DECKS:
     case STORES.QUEST_CARDS:
@@ -100,11 +102,15 @@ async function syncInventory() {
 
 async function syncDecks() {
   try {
-    const { piles, groupedIds } = await fetchDecks();
-    await snapshotReplace(STORES.DECKS, piles || []);
-    /* groupedIds — inventory_ids that belong to *any* deck — kept under a
-     * fixed meta key so the inventory page can filter "ungrouped" cards. */
-    await putRow(STORES.META, { key: 'groupedIds', value: groupedIds || [] });
+    const { piles, groupedIds, cards } = await fetchDecks();
+    await Promise.all([
+      snapshotReplace(STORES.DECKS, piles || []),
+      snapshotReplace(STORES.DECK_CARDS, cards || []),
+      /* groupedIds — inventory_ids that belong to *any* deck — kept under
+       * a fixed meta key so the inventory page can filter "ungrouped"
+       * cards without scanning deck_cards on every render. */
+      putRow(STORES.META, { key: 'groupedIds', value: groupedIds || [] }),
+    ]);
   } catch (err) {
     console.warn('syncDecks failed:', err.message);
   }
@@ -170,7 +176,12 @@ const HANDLERS = {
   },
   'inventory.add': async ({ mediaId, infuseBonus }) => {
     await apiAddToInventory(mediaId, { infuseBonus });
-    return [STORES.INVENTORY, STORES.MEDIA];
+    /* Don't re-sync MEDIA here — that's a full library snapshot replace
+     * (10k+ rows possible). The local infusion bump is correct unless the
+     * media already existed in inventory, in which case the action's
+     * existence check prevented the bump anyway. Next syncMedia (e.g. next
+     * memory game start) corrects any drift. */
+    return [STORES.INVENTORY];
   },
   'memory.useTicket': async ({ invId }) => {
     /* invId may be a temp negative id at push time — server doesn't

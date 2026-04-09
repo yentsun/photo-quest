@@ -25,6 +25,22 @@ function getStars(moves) {
   return STAR_THRESHOLDS.reduce((s, t) => (moves <= t ? s + 1 : s), 0);
 }
 
+/**
+ * Keep only image rows whose `/image/:id` URL is already in the Workbox
+ * `media-images` cache. The cache name matches vite.config.js workbox
+ * runtimeCaching. Used when offline so the deck never picks an image
+ * the SW can't serve.
+ */
+async function filterCachedImages(items) {
+  if (typeof caches === 'undefined') return [];
+  const cache = await caches.open('media-images').catch(() => null);
+  if (!cache) return [];
+  const checks = await Promise.all(
+    items.map(async m => (await cache.match(`/image/${m.id}`)) ? m : null),
+  );
+  return checks.filter(Boolean);
+}
+
 function Stars({ count, glow }) {
   return Array.from({ length: 3 }, (_, i) => (
     <span
@@ -159,6 +175,31 @@ export default function MemoryGamePage() {
     pendingMismatchRef.current = false;
 
     try {
+      /* Refresh the local media mirror so the weighted-pick pool reflects
+       * any newly-imported items since the last visit. Swallows network
+       * errors so an offline launch still proceeds against whatever the
+       * local store already has. */
+      await syncMedia();
+      const allMedia = await getAll(STORES.MEDIA);
+      let items = allMedia.filter(m => m.type === MEDIA_TYPE.IMAGE && !m.hidden);
+
+      /* Offline: only pick images that are already in the Workbox cache,
+       * otherwise the deck would render broken cards for any media that
+       * was never viewed online. */
+      if (!navigator.onLine) {
+        items = await filterCachedImages(items);
+      }
+
+      /* Validate playability *before* consuming the ticket, otherwise an
+       * insufficient pool wastes a ticket the user just paid for. */
+      if (items.length < PAIR_COUNT) {
+        setError(navigator.onLine
+          ? 'Need at least 8 images in your library to play.'
+          : `Need ${PAIR_COUNT} cached images for offline play. Browse some media online first.`);
+        setLoading(false);
+        return;
+      }
+
       const ticketId = ticketIdRef.current;
       ticketIdRef.current = null;
       try {
@@ -169,15 +210,10 @@ export default function MemoryGamePage() {
         return;
       }
 
-      /* Refresh the local media mirror so the weighted-pick pool reflects
-       * any newly-imported items since the last visit. */
-      await syncMedia();
-      const allMedia = await getAll(STORES.MEDIA);
-      const items = allMedia.filter(m => m.type === MEDIA_TYPE.IMAGE && !m.hidden);
       mediaMapRef.current = new Map(items.map(m => [m.id, m]));
       const deck = buildDeck(items);
       if (!deck) {
-        setError('Need at least 8 images in your library to play.');
+        setError('Failed to build deck.');
         setLoading(false);
         return;
       }
