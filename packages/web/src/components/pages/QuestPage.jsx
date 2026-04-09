@@ -7,29 +7,24 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
-import { fetchQuestDeck, advanceQuestDeck, takeQuestCard, destroyQuestCard, freeInfuseMedia, getMediaUrl } from '../../utils/api.js';
+import { getMediaUrl } from '../../utils/api.js';
+import { useQuestDeck } from '../../db/hooks.js';
+import { advanceQuest, takeQuest, destroyQuest, freeInfuseQuest } from '../../db/actions.js';
 import { Button, Card, ConfirmModal, Icon, Spinner } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
-import { notifyDustChanged } from '../../utils/events.js';
 
-function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking }) {
+function CardViewer({ deck, onNext, onTake, onDestroy }) {
   const card = deck.currentCard;
-  const [infusion, setInfusion] = useState(card?.infusion || 0);
   const [mediaLoaded, setMediaLoaded] = useState(false);
 
-  useEffect(() => { setInfusion(card?.infusion || 0); setMediaLoaded(false); }, [card?.id]);
+  useEffect(() => { setMediaLoaded(false); }, [card?.id]);
 
   useEffect(() => {
     if (!card) return;
     const startTime = Date.now();
     const interval = setInterval(() => {
       if (Date.now() - startTime >= 120000) { clearInterval(interval); return; }
-      freeInfuseMedia(card.id, 1)
-        .then(({ media }) => {
-          setInfusion(media.infusion);
-          if (onInfusionUpdate) onInfusionUpdate();
-        })
-        .catch(() => {});
+      freeInfuseQuest(card.media_id, 1).catch(() => {});
     }, 5000);
     return () => clearInterval(interval);
   }, [card?.id]);
@@ -45,14 +40,13 @@ function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking 
     : `${words.takeCard} (${takeCost} ${words.dustSymbol})`;
   const canAffordTake = canTake && (takeCost === 0 || deck.dust >= takeCost);
 
-
   return (
     <div className="flex flex-col items-center gap-4">
       <Card
         size="large"
         className="w-full max-w-md"
         header={card.title}
-        headerRight={<span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>}
+        headerRight={<span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {card.infusion || 0}</span>}
         art={
           <div className="w-full h-full bg-black relative">
             {!mediaLoaded && <Spinner size="lg" overlay />}
@@ -74,22 +68,17 @@ function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking 
       />
 
       <div className="flex gap-3 flex-wrap justify-center">
-        {!deck.inInventory && (
-          <Button
-            onClick={onTake}
-            disabled={taking || !canAffordTake}
-            title={!canAffordTake ? words.notEnoughDust : takeLabel}
-          >
-            {taking ? words.takingCard : takeLabel}
-          </Button>
-        )}
-        {deck.inInventory && (
-          <span className="px-4 py-2 text-green-400 text-sm font-medium">{words.inInventory}</span>
-        )}
+        <Button
+          onClick={onTake}
+          disabled={!canAffordTake}
+          title={!canAffordTake ? words.notEnoughDust : takeLabel}
+        >
+          {takeLabel}
+        </Button>
         <Button variant="secondary" onClick={onNext}>
           {words.skipCard}
         </Button>
-        <Button variant="secondary" onClick={() => onDestroy(infusion)} className="text-red-400 hover:text-red-300">
+        <Button variant="secondary" onClick={() => onDestroy(card.infusion || 0)} className="text-red-400 hover:text-red-300">
           {words.destroy}
         </Button>
       </div>
@@ -101,50 +90,28 @@ export default function QuestPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const deckId = location.state?.deckId;
-  const [activeDeck, setActiveDeck] = useState(null);
-  const [taking, setTaking] = useState(false);
   const [error, setError] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
 
-  useEffect(() => {
-    if (!deckId) {
-      navigate(clientRoutes.inventory);
-      return;
-    }
-    fetchQuestDeck(deckId)
-      .then(result => {
-        if (result.exhausted) navigate(clientRoutes.inventory);
-        else setActiveDeck(result);
-      })
-      .catch(err => setError(err.message));
-  }, [deckId]);
+  const activeDeck = useQuestDeck(deckId);
 
-  const applyDeckResult = (result) => {
-    if (result.exhausted) {
-      navigate(clientRoutes.inventory);
-    } else {
-      setActiveDeck(result);
-    }
-  };
+  useEffect(() => {
+    if (!deckId) navigate(clientRoutes.inventory);
+  }, [deckId, navigate]);
+
+  /* Bounce home once the live query says the deck has been fully consumed. */
+  useEffect(() => {
+    if (activeDeck?.exhausted) navigate(clientRoutes.inventory);
+  }, [activeDeck?.exhausted, navigate]);
 
   const handleNext = useCallback(async () => {
-    try {
-      applyDeckResult(await advanceQuestDeck(deckId));
-    } catch (err) {
-      setError(err.message);
-    }
+    try { await advanceQuest(deckId); }
+    catch (err) { setError(err.message); }
   }, [deckId]);
 
   const handleTake = async () => {
-    setTaking(true);
-    try {
-      applyDeckResult(await takeQuestCard(deckId));
-      notifyDustChanged();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setTaking(false);
-    }
+    try { await takeQuest(deckId); }
+    catch (err) { setError(err.message); }
   };
 
   const handleDestroy = (infusion) => {
@@ -154,29 +121,16 @@ export default function QuestPage() {
       confirmLabel: words.destroy,
       destructive: true,
       onConfirm: async () => {
-        try {
-          const result = await destroyQuestCard(deckId);
-          notifyDustChanged();
-          applyDeckResult(result.deck);
-        } catch (err) {
-          setError(err.message);
-        }
+        try { await destroyQuest(deckId); }
+        catch (err) { setError(err.message); }
         setConfirmAction(null);
       },
     });
   };
 
-  const handlePassiveInfusionUpdate = useCallback(async () => {
-    if (!deckId) return;
-    const data = await fetchQuestDeck(deckId).catch(() => null);
-    if (data && !data.exhausted) setActiveDeck(data);
-  }, [deckId]);
-
   useEffect(() => {
     if (!activeDeck) return;
-    const onKeyDown = (e) => {
-      if (e.key === 'ArrowRight') handleNext();
-    };
+    const onKeyDown = (e) => { if (e.key === 'ArrowRight') handleNext(); };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [activeDeck, handleNext]);
@@ -214,8 +168,6 @@ export default function QuestPage() {
         onNext={handleNext}
         onTake={handleTake}
         onDestroy={handleDestroy}
-        onInfusionUpdate={handlePassiveInfusionUpdate}
-        taking={taking}
       />
 
       <ConfirmModal action={confirmAction} onCancel={() => setConfirmAction(null)} />

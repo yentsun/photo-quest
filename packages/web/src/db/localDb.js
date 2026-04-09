@@ -6,7 +6,7 @@
  */
 
 const DB_NAME = 'photo-quest-local';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /** Canonical store names — import everywhere instead of raw strings. */
 export const STORES = {
@@ -15,6 +15,8 @@ export const STORES = {
   PLAYER_STATS: 'player_stats',
   META: 'meta',
   MUTATION_QUEUE: 'mutation_queue',
+  QUEST_DECKS: 'quest_decks',
+  QUEST_CARDS: 'quest_cards',
 };
 
 const SCHEMA = [
@@ -32,6 +34,19 @@ const SCHEMA = [
   { name: STORES.META, keyPath: 'key' },        // Misc key/value singletons
   // Persistent push queue for optimistic mutations awaiting server ack.
   { name: STORES.MUTATION_QUEUE, keyPath: 'id', autoIncrement: true },
+  // Today's quest decks (non-exhausted only).
+  { name: STORES.QUEST_DECKS, keyPath: 'id' },
+  /* Denormalized quest_cards: each row carries the joined media fields so
+   * QuestPage can render entirely from local IDB. media_id index is used
+   * for free-infuse fanout when the same media appears in multiple decks. */
+  {
+    name: STORES.QUEST_CARDS,
+    keyPath: 'card_id',
+    indexes: [
+      { name: 'deck_id', keyPath: 'deck_id' },
+      { name: 'media_id', keyPath: 'media_id' },
+    ],
+  },
 ];
 
 let dbPromise = null;

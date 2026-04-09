@@ -17,6 +17,8 @@ import {
   sellInventoryItem, destroyInventoryItem,
   createDeck as apiCreateDeck, renameDeck as apiRenameDeck,
   deleteDeck as apiDeleteDeck, addToDeck as apiAddToDeck,
+  advanceQuestDeck as apiAdvanceQuestDeck, takeQuestCard as apiTakeQuestCard,
+  destroyQuestCard as apiDestroyQuestCard, freeInfuseMedia as apiFreeInfuseMedia,
 } from '../utils/api.js';
 import {
   snapshotReplace, putRow, getAll, tx, req, STORES,
@@ -28,25 +30,46 @@ import { showToast } from '../components/ToasterMessage.jsx';
  * the UI keeps rendering whatever's in the local store (LAW 1.10).
  */
 export async function syncAll() {
-  /* Triggers daily quest_decks generation server-side; must complete
-   * before syncInventory or the new quest_deck inventory rows get missed. */
-  await fetchQuestDecks().catch(() => {});
+  /* fetchQuestDecks both triggers daily generation server-side AND returns
+   * today's deck/card snapshot. Must finish before syncInventory so the new
+   * quest_deck inventory rows show up in the same pass. */
+  const questResult = await fetchQuestDecks().catch(() => null);
 
   await Promise.all([
     syncInventory(),
     syncDecks(),
     syncPlayerStats(),
+    syncQuestsFromResult(questResult),
   ]);
 }
 
-/** @param {'inventory'|'decks'|'player_stats'} table */
 export async function syncTable(table) {
   switch (table) {
     case STORES.INVENTORY:    return syncInventory();
     case STORES.DECKS:        return syncDecks();
     case STORES.PLAYER_STATS: return syncPlayerStats();
+    case STORES.QUEST_DECKS:
+    case STORES.QUEST_CARDS:
+      return syncQuests();
     default: throw new Error(`Unknown sync table: ${table}`);
   }
+}
+
+async function syncQuests() {
+  try {
+    syncQuestsFromResult(await fetchQuestDecks());
+  } catch (err) {
+    console.warn('syncQuests failed:', err.message);
+  }
+}
+
+async function syncQuestsFromResult(result) {
+  if (!result) return;
+  const { decks = [], cards = [] } = result;
+  await Promise.all([
+    snapshotReplace(STORES.QUEST_DECKS, decks),
+    snapshotReplace(STORES.QUEST_CARDS, cards),
+  ]);
 }
 
 async function syncInventory() {
@@ -111,6 +134,22 @@ const HANDLERS = {
   'deck.delete': async ({ deckId }) => {
     await apiDeleteDeck(deckId);
     return [STORES.DECKS, STORES.INVENTORY];
+  },
+  'quest.advance': async ({ deckId }) => {
+    await apiAdvanceQuestDeck(deckId);
+    return [STORES.QUEST_DECKS, STORES.INVENTORY];
+  },
+  'quest.take': async ({ deckId }) => {
+    await apiTakeQuestCard(deckId);
+    return [STORES.QUEST_DECKS, STORES.INVENTORY, STORES.PLAYER_STATS];
+  },
+  'quest.destroy': async ({ deckId }) => {
+    await apiDestroyQuestCard(deckId);
+    return [STORES.QUEST_DECKS, STORES.QUEST_CARDS, STORES.INVENTORY, STORES.PLAYER_STATS];
+  },
+  'media.freeInfuse': async ({ mediaId, amount }) => {
+    await apiFreeInfuseMedia(mediaId, amount);
+    return [STORES.QUEST_DECKS];
   },
 };
 

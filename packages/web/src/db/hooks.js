@@ -12,6 +12,7 @@ import { getAll, getByKey, subscribe, STORES } from './localDb.js';
 /* Stable references for hooks that subscribe to multiple stores —
  * avoids re-subscribing on every render. */
 const DECKS_STORES = [STORES.DECKS, STORES.META];
+const QUEST_STORES = [STORES.QUEST_DECKS, STORES.QUEST_CARDS, STORES.INVENTORY, STORES.PLAYER_STATS];
 
 /**
  * Generic live-query hook.
@@ -96,6 +97,72 @@ export function usePlayerStats() {
     async () => {
       const row = await getByKey(STORES.PLAYER_STATS, 1);
       return row ? { dust: row.dust } : null;
+    },
+    null,
+  );
+}
+
+/**
+ * Compose the quest-deck view shape that QuestPage expects from local
+ * stores. Skips quest cards whose media is already owned (mirrors the
+ * server's `findNextUnownedCard`), computes takeCost / canTake from the
+ * current card's infusion and the deck's free_take_used flag.
+ *
+ * Returns `null` while the deck row hasn't synced yet, and an object with
+ * `exhausted: true` once the player has run through all unowned cards.
+ *
+ * @param {number|null} deckId
+ */
+export function useQuestDeck(deckId) {
+  return useLocal(
+    QUEST_STORES,
+    async () => {
+      if (deckId == null) return null;
+      const [deck, allCards, inventory, stats] = await Promise.all([
+        getByKey(STORES.QUEST_DECKS, Number(deckId)),
+        getAll(STORES.QUEST_CARDS),
+        getAll(STORES.INVENTORY),
+        getByKey(STORES.PLAYER_STATS, 1),
+      ]);
+      if (!deck) return null;
+
+      const ownedMediaIds = new Set(
+        inventory.filter(i => i.media_id != null).map(i => i.media_id),
+      );
+      const cards = allCards
+        .filter(c => c.deck_id === deck.id)
+        .sort((a, b) => a.position - b.position);
+
+      const findNextUnowned = (fromPos) =>
+        cards.find(c => c.position >= fromPos && !ownedMediaIds.has(c.media_id)) || null;
+
+      const currentCard = findNextUnowned(deck.current_position);
+      const position = currentCard ? currentCard.position : deck.total_cards;
+      const exhausted = position >= deck.total_cards;
+      const nextCard = currentCard ? findNextUnowned(position + 1) : null;
+
+      const freeTakeUsed = !!deck.free_take_used;
+      let takeCost = 0;
+      let canTake = true;
+      if (currentCard) {
+        const infusion = currentCard.infusion || 0;
+        if (infusion === 0 && freeTakeUsed) canTake = false;
+        else takeCost = infusion * 2;
+      }
+
+      return {
+        id: deck.id,
+        deckIndex: deck.deck_index,
+        currentPosition: position,
+        totalCards: deck.total_cards,
+        exhausted,
+        currentCard,
+        nextCard,
+        takeCost,
+        canTake,
+        freeTakeUsed,
+        dust: stats?.dust ?? 0,
+      };
     },
     null,
   );

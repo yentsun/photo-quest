@@ -17,6 +17,7 @@
  * after reconcile.
  */
 
+import { CARD_TYPE } from '@photo-quest/shared';
 import { tx, req, getByKey, STORES } from './localDb.js';
 import { drainMutationQueue } from './sync.js';
 
@@ -28,6 +29,11 @@ function enqueue(t, type, payload) {
     createdAt: Date.now(),
     attempts: 0,
   });
+}
+
+/* Read all rows from a store using an index, from inside an active txn. */
+function getAllFromIndex(t, storeName, indexName, value) {
+  return req(t.objectStore(storeName).index(indexName).getAll(value));
 }
 
 /* ── Inventory ─────────────────────────────────────────────────── */
@@ -166,4 +172,192 @@ export async function deleteDeck(deckId) {
     },
   );
   drainMutationQueue();
+}
+
+/* ── Quest ─────────────────────────────────────────────────────── */
+
+/* Find next quest_card in `cards` (sorted by position) at or after `fromPos`
+ * whose media isn't in `ownedMediaIds`. Mirrors getQuestDeck.findNextUnownedCard. */
+function findNextUnowned(cards, fromPos, ownedMediaIds) {
+  for (const c of cards) {
+    if (c.position >= fromPos && !ownedMediaIds.has(c.media_id)) return c;
+  }
+  return null;
+}
+
+/**
+ * Advance the quest deck to the next unowned card. Persists the new
+ * `current_position` (skipping owned cards) and, if the player has run out,
+ * marks the deck `exhausted` and removes its quest_deck inventory row.
+ */
+export async function advanceQuest(deckId) {
+  await tx(
+    [STORES.QUEST_DECKS, STORES.QUEST_CARDS, STORES.INVENTORY, STORES.MUTATION_QUEUE],
+    'readwrite',
+    async (t) => {
+      const deck = await req(t.objectStore(STORES.QUEST_DECKS).get(deckId));
+      if (!deck || deck.exhausted) return;
+      const cards = (await getAllFromIndex(t, STORES.QUEST_CARDS, 'deck_id', deckId))
+        .sort((a, b) => a.position - b.position);
+      const inventory = await req(t.objectStore(STORES.INVENTORY).getAll());
+      const ownedMediaIds = new Set(inventory.filter(i => i.media_id != null).map(i => i.media_id));
+
+      const next = findNextUnowned(cards, deck.current_position + 1, ownedMediaIds);
+      const newPos = next ? next.position : deck.total_cards;
+      const exhausted = newPos >= deck.total_cards;
+      t.objectStore(STORES.QUEST_DECKS).put({
+        ...deck,
+        current_position: newPos,
+        exhausted: exhausted ? 1 : 0,
+      });
+      if (exhausted) deleteQuestDeckInventory(t, inventory, deckId);
+      enqueue(t, 'quest.advance', { deckId });
+    },
+  );
+  drainMutationQueue();
+}
+
+/**
+ * Take the current quest card. LAW 4.9: free if infusion === 0 and
+ * !free_take_used, otherwise costs `infusion * 2`. Adds the card's media to
+ * inventory, deducts dust, sets free_take_used if used, then advances.
+ */
+export async function takeQuest(deckId) {
+  await tx(
+    [STORES.QUEST_DECKS, STORES.QUEST_CARDS, STORES.INVENTORY, STORES.PLAYER_STATS, STORES.MUTATION_QUEUE],
+    'readwrite',
+    async (t) => {
+      const deck = await req(t.objectStore(STORES.QUEST_DECKS).get(deckId));
+      if (!deck || deck.exhausted) return;
+      const cards = (await getAllFromIndex(t, STORES.QUEST_CARDS, 'deck_id', deckId))
+        .sort((a, b) => a.position - b.position);
+      const inventory = await req(t.objectStore(STORES.INVENTORY).getAll());
+      const ownedMediaIds = new Set(inventory.filter(i => i.media_id != null).map(i => i.media_id));
+
+      const card = findNextUnowned(cards, deck.current_position, ownedMediaIds);
+      if (!card) return;
+      const infusion = card.infusion || 0;
+      const freeTakeUsed = !!deck.free_take_used;
+      if (infusion === 0 && freeTakeUsed) throw new Error('Free take already used for this deck');
+      const cost = infusion * 2;
+
+      const stats = await req(t.objectStore(STORES.PLAYER_STATS).get(1));
+      const dust = stats?.dust || 0;
+      if (cost > dust) throw new Error('Insufficient magic dust');
+
+      if (cost > 0) t.objectStore(STORES.PLAYER_STATS).put({ id: 1, dust: dust - cost });
+
+      /* Optimistic inventory insert. The real inventory_id comes from the
+       * server; we use a negative temp id so it can't collide with real
+       * server-assigned ids. The post-push reconcile will replace the
+       * whole inventory store anyway. */
+      const tempInvId = -Date.now();
+      t.objectStore(STORES.INVENTORY).put({
+        inventory_id: tempInvId,
+        media_id: card.media_id,
+        card_type: CARD_TYPE.MEDIA,
+        ref_id: null,
+        acquired_at: new Date().toISOString(),
+        ...card,
+        id: card.media_id,
+      });
+
+      const newDeck = { ...deck };
+      if (infusion === 0) newDeck.free_take_used = 1;
+
+      /* Find next unowned starting after the just-taken card. */
+      const newOwned = new Set(ownedMediaIds).add(card.media_id);
+      const next = findNextUnowned(cards, card.position + 1, newOwned);
+      newDeck.current_position = next ? next.position : deck.total_cards;
+      newDeck.exhausted = newDeck.current_position >= deck.total_cards ? 1 : 0;
+      t.objectStore(STORES.QUEST_DECKS).put(newDeck);
+      if (newDeck.exhausted) {
+        const refreshed = await req(t.objectStore(STORES.INVENTORY).getAll());
+        deleteQuestDeckInventory(t, refreshed, deckId);
+      }
+
+      enqueue(t, 'quest.take', { deckId });
+    },
+  );
+  drainMutationQueue();
+}
+
+/**
+ * Destroy the current quest card: award dust (LAW 4.16: max(2, infusion*2)),
+ * remove the card row, hide the underlying media locally, advance.
+ */
+export async function destroyQuest(deckId) {
+  await tx(
+    [STORES.QUEST_DECKS, STORES.QUEST_CARDS, STORES.INVENTORY, STORES.PLAYER_STATS, STORES.MUTATION_QUEUE],
+    'readwrite',
+    async (t) => {
+      const deck = await req(t.objectStore(STORES.QUEST_DECKS).get(deckId));
+      if (!deck || deck.exhausted) return;
+      const cards = (await getAllFromIndex(t, STORES.QUEST_CARDS, 'deck_id', deckId))
+        .sort((a, b) => a.position - b.position);
+      const inventory = await req(t.objectStore(STORES.INVENTORY).getAll());
+      const ownedMediaIds = new Set(inventory.filter(i => i.media_id != null).map(i => i.media_id));
+
+      const card = findNextUnowned(cards, deck.current_position, ownedMediaIds);
+      if (!card) return;
+      const infusion = card.infusion || 0;
+      const reward = Math.max(2, infusion * 2);
+
+      const stats = await req(t.objectStore(STORES.PLAYER_STATS).get(1));
+      t.objectStore(STORES.PLAYER_STATS).put({ id: 1, dust: (stats?.dust || 0) + reward });
+
+      /* Remove the card from this deck (and reindex any later positions to
+       * stay contiguous, mirroring destroyQuestCard.js). */
+      t.objectStore(STORES.QUEST_CARDS).delete(card.card_id);
+      const remaining = cards.filter(c => c.card_id !== card.card_id);
+      let i = 0;
+      for (const r of remaining) {
+        if (r.position !== i) t.objectStore(STORES.QUEST_CARDS).put({ ...r, position: i });
+        i++;
+      }
+
+      const newTotal = remaining.length;
+      const newPos = deck.current_position >= newTotal ? newTotal : deck.current_position;
+      const exhausted = newTotal === 0 || newPos >= newTotal;
+      t.objectStore(STORES.QUEST_DECKS).put({
+        ...deck,
+        current_position: newPos,
+        total_cards: newTotal,
+        exhausted: exhausted ? 1 : 0,
+      });
+      if (exhausted) deleteQuestDeckInventory(t, inventory, deckId);
+
+      enqueue(t, 'quest.destroy', { deckId });
+    },
+  );
+  drainMutationQueue();
+}
+
+/**
+ * Bump the infusion of a media item by `amount` (passive viewing reward,
+ * LAW 4.13). Updates every quest_card row sharing the same media_id so
+ * the in-flight quest UI reflects the new value immediately.
+ */
+export async function freeInfuseQuest(mediaId, amount = 1) {
+  await tx(
+    [STORES.QUEST_CARDS, STORES.MUTATION_QUEUE],
+    'readwrite',
+    async (t) => {
+      const cards = await getAllFromIndex(t, STORES.QUEST_CARDS, 'media_id', mediaId);
+      for (const c of cards) {
+        t.objectStore(STORES.QUEST_CARDS).put({ ...c, infusion: (c.infusion || 0) + amount });
+      }
+      enqueue(t, 'media.freeInfuse', { mediaId, amount });
+    },
+  );
+  drainMutationQueue();
+}
+
+/* Helper: remove the quest_deck inventory row for a deck that just exhausted. */
+function deleteQuestDeckInventory(t, inventory, deckId) {
+  for (const inv of inventory) {
+    if (inv.card_type === CARD_TYPE.QUEST_DECK && inv.ref_id === deckId) {
+      t.objectStore(STORES.INVENTORY).delete(inv.inventory_id);
+    }
+  }
 }
