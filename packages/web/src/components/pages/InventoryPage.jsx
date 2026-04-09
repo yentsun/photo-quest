@@ -7,10 +7,11 @@ import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, CARD_TYPE, MARKET_PRICES, words, clientRoutes } from '@photo-quest/shared';
 import {
-  fetchInventory, destroyInventoryItem, sellInventoryItem, getMediaUrl, getImageUrl,
-  fetchDecks, createDeck, renameDeck, deleteDeck, addToDeck,
-  fetchQuestDecks,
+  destroyInventoryItem, sellInventoryItem, getMediaUrl, getImageUrl,
+  createDeck, renameDeck, deleteDeck, addToDeck,
 } from '../../utils/api.js';
+import { useInventory, useDecks } from '../../db/hooks.js';
+import { syncTable, syncAll } from '../../db/sync.js';
 import { EmptyState } from '../layout/index.js';
 import { showToast } from '../ToasterMessage.jsx';
 import { Button, CARD_GRID, IconButton, Icon, Input, ConfirmModal, Spinner, MediaCard, CardOverlay, ConsumableCard, TicketCard, Deck, DeckDropdown } from '../ui/index.js';
@@ -106,26 +107,27 @@ export default function InventoryPage() {
 
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [items, setItems] = useState([]);
-  const [decks, setDecks] = useState([]);
-  const [groupedIds, setGroupedIds] = useState(new Set());
-  const [loading, setLoading] = useState(true);
+  /* Live-queried local replica. Updates whenever sync pulls new data or
+   * a mutation notifies the inventory/decks/meta stores. `items` may be
+   * empty for a beat on the very first load before the initial sync
+   * completes — that's the SWR contract. */
+  const { items } = useInventory();
+  const { piles: decks, groupedIds } = useDecks();
+  const [hasSynced, setHasSynced] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
-  const closeOverlay = useCallback(() => { setSelectedItem(null); reload(); }, []);
 
-  const reload = () => {
-    Promise.all([fetchQuestDecks(), fetchInventory(), fetchDecks()])
-      .then(([, { items }, { piles: userDecks, groupedIds: gIds }]) => {
-        setItems(items);
-        setDecks(userDecks);
-        setGroupedIds(new Set(gIds));
-        setLoading(false);
-      })
-      .catch(err => { console.error('Failed to load inventory:', err); setLoading(false); });
-  };
+  /* Pull on mount so the page reflects server state even if Router's
+   * top-level syncAll() hasn't finished yet. */
+  useEffect(() => { syncAll().finally(() => setHasSynced(true)); }, []);
 
-  useEffect(() => { reload(); }, []);
+  /* Re-pull after server-side mutations (sell/destroy/deck-* still go
+   * through utils/api.js in Phase 1; Phase 2 will route them through
+   * db/actions.js with optimistic updates). */
+  const reload = useCallback(() => { syncAll(); }, []);
+  const closeOverlay = useCallback(() => { setSelectedItem(null); reload(); }, [reload]);
+
+  const loading = !hasSynced && items.length === 0;
 
   const openDeck = (deckId) => {
     navigate(`/deck/${deckId}`);
@@ -230,7 +232,7 @@ export default function InventoryPage() {
   const handleRenameDeck = async (deckId, name) => {
     try {
       await renameDeck(deckId, name);
-      setDecks(prev => prev.map(d => d.id === deckId ? { ...d, name } : d));
+      syncTable('decks');
     } catch (err) {
       console.error('Failed to rename deck:', err);
     }

@@ -5,7 +5,9 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo, fetchPlayerStats } from '../../utils/api.js';
+import { fetchNetworkInfo } from '../../utils/api.js';
+import { usePlayerStats } from '../../db/hooks.js';
+import { syncTable } from '../../db/sync.js';
 import { Button, DustBadge, Icon } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
 
@@ -15,21 +17,21 @@ import { ICON_CLASS } from '../ui/Icon.jsx';
 export default function Header() {
   const [networkUrl, setNetworkUrl] = useState(null);
   const [copied, setCopied] = useState(false);
-  const [dust, setDust] = useState(null);
-
-  const refreshDust = () => {
-    fetchPlayerStats()
-      .then(stats => setDust(stats.dust))
-      .catch(() => {});
-  };
+  /* Live-queried local replica. `null` until first sync; existing UI
+   * already hides the badge when null. */
+  const stats = usePlayerStats();
+  const dust = stats?.dust ?? null;
 
   useEffect(() => {
     fetchNetworkInfo()
       .then(info => setNetworkUrl(info.network))
       .catch(err => console.error('Failed to fetch network info:', err));
-    refreshDust();
 
-    const onDustChanged = () => refreshDust();
+    /* Legacy `dust-changed` event still fires from pages that mutate via
+     * utils/api.js (Phase 1). Re-pull player_stats so the header updates
+     * without waiting for the next focus event. Phase 2 will replace this
+     * with optimistic local writes. */
+    const onDustChanged = () => syncTable('player_stats');
     window.addEventListener('dust-changed', onDustChanged);
     return () => window.removeEventListener('dust-changed', onDustChanged);
   }, []);
