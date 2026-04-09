@@ -24,18 +24,15 @@ function getStars(moves) {
   return STAR_THRESHOLDS.reduce((s, t) => (moves <= t ? s + 1 : s), 0);
 }
 
-/**
- * Keep only image rows whose `/image/:id` URL is already in the Workbox
- * `media-images` cache. The cache name matches vite.config.js workbox
- * runtimeCaching. Used when offline so the deck never picks an image
- * the SW can't serve.
- */
+// Cache name must match the workbox runtimeCaching entry in vite.config.js.
+const IMAGE_CACHE_NAME = 'media-images';
+
 async function filterCachedImages(items) {
   if (typeof caches === 'undefined') return [];
-  const cache = await caches.open('media-images').catch(() => null);
+  const cache = await caches.open(IMAGE_CACHE_NAME).catch(() => null);
   if (!cache) return [];
   const checks = await Promise.all(
-    items.map(async m => (await cache.match(`/image/${m.id}`)) ? m : null),
+    items.map(async m => (await cache.match(getImageUrl(m.id))) ? m : null),
   );
   return checks.filter(Boolean);
 }
@@ -174,21 +171,12 @@ export default function MemoryGamePage() {
     pendingMismatchRef.current = false;
 
     try {
-      /* The media store and the SW image cache are populated by syncAll
-       * (Router mount + visibility-change + online events), so by the
-       * time the user opens the memory game both should already be warm. */
       const allMedia = await getAll(STORES.MEDIA);
       let items = allMedia.filter(m => m.type === MEDIA_TYPE.IMAGE && !m.hidden);
 
-      /* Offline: only pick images that are already in the Workbox cache,
-       * otherwise the deck would render broken cards for any media that
-       * was never viewed online. */
-      if (!navigator.onLine) {
-        items = await filterCachedImages(items);
-      }
+      if (!navigator.onLine) items = await filterCachedImages(items);
 
-      /* Validate playability *before* consuming the ticket, otherwise an
-       * insufficient pool wastes a ticket the user just paid for. */
+      // Validate playability before consuming the ticket, or it gets wasted.
       if (items.length < PAIR_COUNT) {
         setError(navigator.onLine
           ? 'Need at least 8 images in your library to play.'

@@ -88,8 +88,7 @@ export function useDecks() {
 
 /**
  * Cards in a single user deck plus the deck's name. Returns `null`
- * until the deck row has synced. Each card is the denormalized
- * inventory + media join shape that DeckPage / MediaCard expect.
+ * until the deck row has synced.
  *
  * @param {number|string|null} deckId
  */

@@ -9,7 +9,7 @@ import { MEDIA_TYPE, CARD_TYPE, MARKET_PRICES, words, clientRoutes } from '@phot
 import { getMediaUrl, getImageUrl } from '../../utils/api.js';
 import { useInventory, useDecks } from '../../db/hooks.js';
 import {
-  sellInventory, destroyInventory, createDeck, renameDeck, deleteDeck, addToDeck,
+  sellCard, destroyCard, createDeck, renameDeck, deleteDeck, addToDeck,
 } from '../../db/actions.js';
 import { EmptyState } from '../layout/index.js';
 import { showToast } from '../ToasterMessage.jsx';
@@ -137,7 +137,7 @@ export default function InventoryPage() {
       confirmLabel: words.sell,
       onConfirm: async () => {
         try {
-          await sellInventory(item.inventory_id);
+          await sellCard(item.inventory_id);
           setSelectedItem(null);
         } catch (err) {
           console.error('Failed to sell card:', err);
@@ -157,7 +157,7 @@ export default function InventoryPage() {
       destructive: true,
       onConfirm: async () => {
         try {
-          await destroyInventory(item.inventory_id);
+          await destroyCard(item.inventory_id);
           setSelectedItem(null);
         } catch (err) {
           console.error('Failed to destroy card:', err);

@@ -12,9 +12,10 @@
  * etc.) is corrected. Server is the source of truth.
  */
 
+import { MEDIA_TYPE } from '@photo-quest/shared';
 import {
   fetchInventory, fetchDecks, fetchPlayerStats, fetchQuestDecks, fetchMedia,
-  sellInventoryItem, destroyInventoryItem,
+  sellInventoryItem, destroyInventoryItem, getImageUrl,
   createDeck as apiCreateDeck, renameDeck as apiRenameDeck,
   deleteDeck as apiDeleteDeck, addToDeck as apiAddToDeck,
   advanceQuestDeck as apiAdvanceQuestDeck, takeQuestCard as apiTakeQuestCard,
@@ -78,31 +79,22 @@ async function syncQuestsFromResult(result) {
   ]);
 }
 
-/* Cap on how many images we proactively fetch to warm the Workbox
- * `media-images` cache for offline use. Sorted by infusion desc, so the
- * "most likely to be picked by the memory game" set is covered. Bigger
- * = more bandwidth on first sync; smaller = less variety offline. */
+// Top N (by infusion desc) images get pre-warmed into the SW cache.
 const OFFLINE_IMAGE_WARM_COUNT = 50;
+let warmedThisSession = false;
 
-/**
- * Pull the full media library into local IDB and warm the image cache so
- * the memory game has data to draw from offline. Called from syncAll;
- * failures are swallowed so the rest of the app keeps working.
- */
 export async function syncMedia() {
   try {
     const { items } = await fetchMedia();
     await snapshotReplace(STORES.MEDIA, items || []);
 
-    /* Fire-and-forget warm-up for the SW image cache. Workbox CacheFirst
-     * means already-cached URLs short-circuit without hitting the network,
-     * so re-running this on every sync is cheap after the first time. */
-    const toWarm = (items || [])
-      .filter(m => m.type === 'image' && !m.hidden)
-      .sort((a, b) => (b.infusion || 0) - (a.infusion || 0))
-      .slice(0, OFFLINE_IMAGE_WARM_COUNT);
-    for (const m of toWarm) {
-      fetch(`/image/${m.id}`).catch(() => {});
+    if (!warmedThisSession) {
+      warmedThisSession = true;
+      const toWarm = (items || [])
+        .filter(m => m.type === MEDIA_TYPE.IMAGE && !m.hidden)
+        .sort((a, b) => (b.infusion || 0) - (a.infusion || 0))
+        .slice(0, OFFLINE_IMAGE_WARM_COUNT);
+      for (const m of toWarm) fetch(getImageUrl(m.id)).catch(() => {});
     }
   } catch (err) {
     console.warn('syncMedia failed:', err.message);
@@ -194,11 +186,7 @@ const HANDLERS = {
   },
   'inventory.add': async ({ mediaId, infuseBonus }) => {
     await apiAddToInventory(mediaId, { infuseBonus });
-    /* Don't re-sync MEDIA here — that's a full library snapshot replace
-     * (10k+ rows possible). The local infusion bump is correct unless the
-     * media already existed in inventory, in which case the action's
-     * existence check prevented the bump anyway. Next syncMedia (e.g. next
-     * memory game start) corrects any drift. */
+    // Skip MEDIA: it's a 10k-row snapshot. Next syncMedia self-corrects.
     return [STORES.INVENTORY];
   },
   'memory.useTicket': async ({ invId }) => {

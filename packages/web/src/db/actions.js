@@ -36,73 +36,54 @@ function getAllFromIndex(t, storeName, indexName, value) {
   return req(t.objectStore(storeName).index(indexName).getAll(value));
 }
 
-/* Cascade-delete every deck_cards row referencing an inventory_id (used
- * when an inventory item is sold/destroyed). Mirrors the server's FK
- * cascade. Caller must have STORES.DECK_CARDS in the active txn. */
-async function cascadeDeleteDeckCardsByInventory(t, invId) {
-  const rows = await getAllFromIndex(t, STORES.DECK_CARDS, 'inventory_id', invId);
+/* Delete every deck_cards row matching an indexed value. Used by both
+ * inventory-side cascades (inventory sold/destroyed → drop from any deck)
+ * and deck-side cascades (deck deleted → drop all its rows). Caller must
+ * have STORES.DECK_CARDS in the active txn. */
+async function deleteDeckCardsBy(t, indexName, value) {
+  const rows = await getAllFromIndex(t, STORES.DECK_CARDS, indexName, value);
   for (const r of rows) {
     t.objectStore(STORES.DECK_CARDS).delete([r.deck_id, r.inventory_id]);
   }
 }
 
+/* Shared body for sellCard and destroyCard. */
+async function removeInventoryRow(t, invId, type, rewardFn) {
+  const inv = await req(t.objectStore(STORES.INVENTORY).get(invId));
+  if (!inv) throw new Error('Inventory item not found');
+  const stats = await req(t.objectStore(STORES.PLAYER_STATS).get(1));
+  const reward = rewardFn(inv.infusion || 0);
+  t.objectStore(STORES.INVENTORY).delete(invId);
+  t.objectStore(STORES.PLAYER_STATS).put({ id: 1, dust: (stats?.dust || 0) + reward });
+  await deleteDeckCardsBy(t, 'inventory_id', invId);
+  enqueue(t, type, { invId });
+}
+
 /* ── Inventory ─────────────────────────────────────────────────── */
 
-/**
- * Sell an inventory card back to the library. LAW 4.15: reward = infusion.
- * Removes the inventory row locally and credits dust immediately.
- */
-export async function sellInventory(invId) {
-  await tx(
-    [STORES.INVENTORY, STORES.PLAYER_STATS, STORES.DECK_CARDS, STORES.MUTATION_QUEUE],
-    'readwrite',
-    async (t) => {
-      const inv = await req(t.objectStore(STORES.INVENTORY).get(invId));
-      if (!inv) throw new Error('Inventory item not found');
-      const stats = await req(t.objectStore(STORES.PLAYER_STATS).get(1));
-      const reward = inv.infusion || 0;
-      t.objectStore(STORES.INVENTORY).delete(invId);
-      t.objectStore(STORES.PLAYER_STATS).put({ id: 1, dust: (stats?.dust || 0) + reward });
-      await cascadeDeleteDeckCardsByInventory(t, invId);
-      enqueue(t, 'inventory.sell', { invId });
-    },
-  );
+const RW_REMOVE_STORES = [STORES.INVENTORY, STORES.PLAYER_STATS, STORES.DECK_CARDS, STORES.MUTATION_QUEUE];
+
+/** Sell a card back to the library. LAW 4.15: reward = infusion. */
+export async function sellCard(invId) {
+  await tx(RW_REMOVE_STORES, 'readwrite',
+    (t) => removeInventoryRow(t, invId, 'inventory.sell', infusion => infusion));
   drainMutationQueue();
 }
 
-/**
- * Destroy an inventory card — removes the underlying media too.
- * LAW 4.10: reward = max(2, infusion * 2).
- */
-export async function destroyInventory(invId) {
-  await tx(
-    [STORES.INVENTORY, STORES.PLAYER_STATS, STORES.DECK_CARDS, STORES.MUTATION_QUEUE],
-    'readwrite',
-    async (t) => {
-      const inv = await req(t.objectStore(STORES.INVENTORY).get(invId));
-      if (!inv) throw new Error('Inventory item not found');
-      const stats = await req(t.objectStore(STORES.PLAYER_STATS).get(1));
-      const reward = Math.max(2, (inv.infusion || 0) * 2);
-      t.objectStore(STORES.INVENTORY).delete(invId);
-      t.objectStore(STORES.PLAYER_STATS).put({ id: 1, dust: (stats?.dust || 0) + reward });
-      await cascadeDeleteDeckCardsByInventory(t, invId);
-      enqueue(t, 'inventory.destroy', { invId });
-    },
-  );
+/** Destroy a card. LAW 4.10: reward = max(2, infusion * 2); media file deleted server-side. */
+export async function destroyCard(invId) {
+  await tx(RW_REMOVE_STORES, 'readwrite',
+    (t) => removeInventoryRow(t, invId, 'inventory.destroy', infusion => Math.max(2, infusion * 2)));
   drainMutationQueue();
 }
 
 /* ── Decks ─────────────────────────────────────────────────────── */
 
 /**
- * Add inventory cards to an existing deck. LAW 4.18: each card receives
- * +10 infusion the first time it lands in a deck, but the local replica
- * doesn't track per-deck membership in Phase 2 — we apply +10 optimistically
- * and let the post-push sync correct it if the server determined the card
- * was already a member.
- *
- * groupedIds is updated immediately so the inventory page can re-flow
- * "ungrouped" cards into the deck row.
+ * Move inventory cards into a deck. A card belongs to at most one deck,
+ * so any prior membership is dropped first (mirrors addToPile.js).
+ * LAW 4.18: +10 infusion is applied once per (card, deck), enforced
+ * locally by checking the compound PK before the bump.
  */
 export async function addToDeck(deckId, inventoryIds) {
   await tx(
@@ -116,18 +97,19 @@ export async function addToDeck(deckId, inventoryIds) {
       const groupedRow = (await req(metaStore.get('groupedIds'))) || { key: 'groupedIds', value: [] };
       const groupedSet = new Set(groupedRow.value);
       for (const invId of inventoryIds) {
-        const inv = await req(invStore.get(invId));
+        const [inv, alreadyHere] = await Promise.all([
+          req(invStore.get(invId)),
+          req(dcStore.get([deckId, invId])),
+        ]);
         if (!inv) continue;
 
-        /* Server's addToPile removes the card from any other deck before
-         * inserting into the target — mirror that locally so the moved-from
-         * deck loses the row immediately. */
-        const existingMemberships = await getAllFromIndex(t, STORES.DECK_CARDS, 'inventory_id', invId);
-        for (const m of existingMemberships) {
+        const memberships = await getAllFromIndex(t, STORES.DECK_CARDS, 'inventory_id', invId);
+        for (const m of memberships) {
           if (m.deck_id !== deckId) dcStore.delete([m.deck_id, m.inventory_id]);
         }
 
-        const updatedInv = { ...inv, infusion: (inv.infusion || 0) + 10 };
+        const newInfusion = alreadyHere ? (inv.infusion || 0) : (inv.infusion || 0) + 10;
+        const updatedInv = { ...inv, infusion: newInfusion };
         invStore.put(updatedInv);
         dcStore.put({
           deck_id: deckId,
@@ -185,22 +167,14 @@ export async function renameDeck(deckId, name) {
   drainMutationQueue();
 }
 
-/**
- * Delete a deck. Cards stay in inventory and become "ungrouped" — but
- * since we don't mirror deck_cards locally, we can't know which cards
- * were in this specific deck. The next sync will repopulate groupedIds
- * authoritatively.
- */
+/** Delete a deck. Member cards stay in inventory but lose their grouping. */
 export async function deleteDeck(deckId) {
   await tx(
     [STORES.DECKS, STORES.DECK_CARDS, STORES.MUTATION_QUEUE],
     'readwrite',
     async (t) => {
       t.objectStore(STORES.DECKS).delete(deckId);
-      const rows = await getAllFromIndex(t, STORES.DECK_CARDS, 'deck_id', deckId);
-      for (const r of rows) {
-        t.objectStore(STORES.DECK_CARDS).delete([r.deck_id, r.inventory_id]);
-      }
+      await deleteDeckCardsBy(t, 'deck_id', deckId);
       enqueue(t, 'deck.delete', { deckId });
     },
   );

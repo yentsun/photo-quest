@@ -32,10 +32,7 @@ const SCHEMA = [
     ],
   },
   { name: STORES.DECKS, keyPath: 'id' },
-  /* Denormalized deck membership: each row carries the joined inventory +
-   * media fields so DeckPage can render entirely from local IDB. The
-   * compound PK [deck_id, inventory_id] mirrors the server's UNIQUE
-   * constraint and enforces LAW 4.18 once-per-pair semantics locally. */
+  // Denormalized deck membership; compound PK mirrors server's UNIQUE.
   {
     name: STORES.DECK_CARDS,
     keyPath: ['deck_id', 'inventory_id'],

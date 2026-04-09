@@ -6,7 +6,7 @@ import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { words, clientRoutes } from '@photo-quest/shared';
 import { useDeckCards } from '../../db/hooks.js';
-import { sellInventory, destroyInventory } from '../../db/actions.js';
+import { sellCard, destroyCard } from '../../db/actions.js';
 import { Button, CARD_GRID, ConfirmModal, Spinner, MediaCard, CardOverlay, IconButton, Icon, DeckDropdown } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
 
@@ -30,7 +30,7 @@ export default function DeckPage() {
       confirmLabel: words.sell,
       onConfirm: async () => {
         try {
-          await sellInventory(item.inventory_id);
+          await sellCard(item.inventory_id);
           setSelectedItem(null);
         } catch (err) {
           console.error('Failed to sell card:', err);
@@ -50,7 +50,7 @@ export default function DeckPage() {
       destructive: true,
       onConfirm: async () => {
         try {
-          await destroyInventory(item.inventory_id);
+          await destroyCard(item.inventory_id);
           setSelectedItem(null);
         } catch (err) {
           console.error('Failed to destroy card:', err);
