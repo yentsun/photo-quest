@@ -28,9 +28,9 @@ export default function () {
     generateDecks(db, today);
   }
 
-  const result = db.prepare(
-    `SELECT d.id, d.deck_index AS deckIndex, d.current_position AS currentPosition,
-            COUNT(qc.id) AS totalCards
+  const decks = db.prepare(
+    `SELECT d.id, d.deck_index, d.current_position, d.exhausted, d.free_take_used,
+            COUNT(qc.id) AS total_cards
      FROM quest_decks d
      LEFT JOIN quest_cards qc ON qc.deck_id = d.id
      WHERE d.date = ? AND d.exhausted = 0
@@ -38,9 +38,21 @@ export default function () {
      ORDER BY d.deck_index`
   ).all(today);
 
+  /* Denormalized cards: each row carries the joined media fields so the
+   * client can drive QuestPage entirely from local IDB without a separate
+   * media-table sync. */
+  const cards = db.prepare(
+    `SELECT qc.id AS card_id, qc.deck_id, qc.position, qc.media_id, m.*
+     FROM quest_cards qc
+     JOIN media m ON m.id = qc.media_id
+     JOIN quest_decks d ON d.id = qc.deck_id
+     WHERE d.date = ? AND d.exhausted = 0
+     ORDER BY qc.deck_id, qc.position`
+  ).all(today);
+
   const { dust } = kojo.ops.getPlayerStats();
 
-  return { decks: result, dust };
+  return { decks, cards, dust };
 }
 
 function generateDecks(db, date) {

@@ -2,33 +2,22 @@
  * @file Deck page — view cards inside a user-created deck.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { words, clientRoutes } from '@photo-quest/shared';
-import { fetchDeckCards, destroyInventoryItem, sellInventoryItem } from '../../utils/api.js';
+import { useDeckCards } from '../../db/hooks.js';
+import { sellInventory, destroyInventory } from '../../db/actions.js';
 import { Button, CARD_GRID, ConfirmModal, Spinner, MediaCard, CardOverlay, IconButton, Icon, DeckDropdown } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
-import { notifyDustChanged } from '../../utils/events.js';
 
 export default function DeckPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [deckName, setDeckName] = useState('');
-  const [cards, setCards] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const deck = useDeckCards(id);
   const [selectedItem, setSelectedItem] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
 
-  const reload = useCallback(() => {
-    fetchDeckCards(id)
-      .then(({ name, cards }) => { setDeckName(name); setCards(cards); })
-      .catch(err => console.error('Failed to load deck:', err))
-      .finally(() => setLoading(false));
-  }, [id]);
-
-  useEffect(() => { reload(); }, [reload]);
-
-  const closeOverlay = useCallback(() => { setSelectedItem(null); reload(); }, [reload]);
+  const closeOverlay = useCallback(() => setSelectedItem(null), []);
 
   const handleSell = (item) => {
     const infusion = item.infusion || 0;
@@ -41,10 +30,8 @@ export default function DeckPage() {
       confirmLabel: words.sell,
       onConfirm: async () => {
         try {
-          await sellInventoryItem(item.inventory_id);
+          await sellInventory(item.inventory_id);
           setSelectedItem(null);
-          notifyDustChanged();
-          reload();
         } catch (err) {
           console.error('Failed to sell card:', err);
         }
@@ -63,10 +50,8 @@ export default function DeckPage() {
       destructive: true,
       onConfirm: async () => {
         try {
-          await destroyInventoryItem(item.inventory_id);
+          await destroyInventory(item.inventory_id);
           setSelectedItem(null);
-          notifyDustChanged();
-          reload();
         } catch (err) {
           console.error('Failed to destroy card:', err);
         }
@@ -75,7 +60,7 @@ export default function DeckPage() {
     });
   };
 
-  if (loading) {
+  if (!deck) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
         <Spinner size="lg" />
@@ -83,6 +68,8 @@ export default function DeckPage() {
       </div>
     );
   }
+
+  const { name: deckName, cards } = deck;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">

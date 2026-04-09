@@ -38,5 +38,16 @@ export default function () {
   const grouped = db.prepare('SELECT DISTINCT inventory_id FROM deck_cards').all();
   const groupedIds = grouped.map(r => r.inventory_id);
 
-  return { piles: result, groupedIds };
+  /* Denormalized membership rows so the client can render any user deck
+   * (DeckPage) entirely from the local IDB replica. Each row carries the
+   * joined inventory + media fields, mirroring listPileCards. */
+  const cards = db.prepare(
+    `SELECT dc.deck_id, i.id AS inventory_id, i.acquired_at, m.*
+     FROM deck_cards dc
+     JOIN inventory i ON i.id = dc.inventory_id
+     JOIN media m ON m.id = i.media_id
+     ORDER BY dc.deck_id, dc.id`
+  ).all();
+
+  return { piles: result, groupedIds, cards };
 }

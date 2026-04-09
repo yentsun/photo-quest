@@ -4,13 +4,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
-import { fetchMedia, getImageUrl, useMemoryTicket, getMemoryTickets, addToInventory } from '../../utils/api.js';
+import { CARD_TYPE, MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared';
+import { getImageUrl } from '../../utils/api.js';
+import { useInventory } from '../../db/hooks.js';
+import { getAll, STORES } from '../../db/localDb.js';
+import { syncMedia } from '../../db/sync.js';
+import { consumeMemoryTicket, addToInventory } from '../../db/actions.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Icon, MediaCard, Modal, Spinner } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
 import { showToast } from '../ToasterMessage.jsx';
-import { notifyDustChanged } from '../../utils/events.js';
 import { CARD_SIZES } from '../ui/cardSizes.js';
 import ticketIcon from '../../icons/ticket2-svgrepo-com.svg';
 
@@ -20,6 +23,22 @@ const PICKS_PER_STAR = { 1: 1, 2: 2, 3: PAIR_COUNT };
 
 function getStars(moves) {
   return STAR_THRESHOLDS.reduce((s, t) => (moves <= t ? s + 1 : s), 0);
+}
+
+/**
+ * Keep only image rows whose `/image/:id` URL is already in the Workbox
+ * `media-images` cache. The cache name matches vite.config.js workbox
+ * runtimeCaching. Used when offline so the deck never picks an image
+ * the SW can't serve.
+ */
+async function filterCachedImages(items) {
+  if (typeof caches === 'undefined') return [];
+  const cache = await caches.open('media-images').catch(() => null);
+  if (!cache) return [];
+  const checks = await Promise.all(
+    items.map(async m => (await cache.match(`/image/${m.id}`)) ? m : null),
+  );
+  return checks.filter(Boolean);
 }
 
 function Stars({ count, glow }) {
@@ -123,7 +142,6 @@ export default function MemoryGamePage() {
   const flipTimeoutRef = useRef(null);
   const pendingMismatchRef = useRef(false);
 
-  const [hasTicket, setHasTicket] = useState(null);
   const mediaMapRef = useRef(new Map());
 
   /* Picking phase state */
@@ -132,6 +150,10 @@ export default function MemoryGamePage() {
   const [pickedIds, setPickedIds] = useState(new Set());
   const [picksDone, setPicksDone] = useState(false);
   const [picksAdded, setPicksAdded] = useState(0);
+
+  /* Live ticket count derived from local inventory. */
+  const { items: inventoryItems } = useInventory();
+  const hasTicket = inventoryItems.some(i => i.card_type === CARD_TYPE.MEMORY_TICKET);
 
   const won = cards.length > 0 && matched.size === PAIR_COUNT;
   const stars = won ? getStars(moves) : 0;
@@ -153,22 +175,45 @@ export default function MemoryGamePage() {
     pendingMismatchRef.current = false;
 
     try {
+      /* Refresh the local media mirror so the weighted-pick pool reflects
+       * any newly-imported items since the last visit. Swallows network
+       * errors so an offline launch still proceeds against whatever the
+       * local store already has. */
+      await syncMedia();
+      const allMedia = await getAll(STORES.MEDIA);
+      let items = allMedia.filter(m => m.type === MEDIA_TYPE.IMAGE && !m.hidden);
+
+      /* Offline: only pick images that are already in the Workbox cache,
+       * otherwise the deck would render broken cards for any media that
+       * was never viewed online. */
+      if (!navigator.onLine) {
+        items = await filterCachedImages(items);
+      }
+
+      /* Validate playability *before* consuming the ticket, otherwise an
+       * insufficient pool wastes a ticket the user just paid for. */
+      if (items.length < PAIR_COUNT) {
+        setError(navigator.onLine
+          ? 'Need at least 8 images in your library to play.'
+          : `Need ${PAIR_COUNT} cached images for offline play. Browse some media online first.`);
+        setLoading(false);
+        return;
+      }
+
       const ticketId = ticketIdRef.current;
       ticketIdRef.current = null;
-      const ticketResult = await useMemoryTicket(ticketId || undefined).catch(() => null);
-      if (!ticketResult) {
-        setHasTicket(false);
+      try {
+        await consumeMemoryTicket(ticketId ?? undefined);
+      } catch {
         setError('No tickets. Buy one from the Market and find it in your Inventory.');
         setLoading(false);
         return;
       }
-      setHasTicket(ticketResult.tickets > 0);
 
-      const { items } = await fetchMedia();
       mediaMapRef.current = new Map(items.map(m => [m.id, m]));
       const deck = buildDeck(items);
       if (!deck) {
-        setError('Need at least 8 images in your library to play.');
+        setError('Failed to build deck.');
         setLoading(false);
         return;
       }
@@ -210,7 +255,7 @@ export default function MemoryGamePage() {
       next.add(card.mediaId);
       setPickedIds(next);
 
-      addToInventory(card.mediaId, { infuseBonus: 10 }).then(({ added }) => {
+      addToInventory(card.mediaId, 10).then(({ added }) => {
         if (added) setPicksAdded(prev => prev + 1);
       }).catch(() => showToast('Failed to add card', 'error'));
 
@@ -260,8 +305,6 @@ export default function MemoryGamePage() {
   const finishPicking = () => {
     setPicking(false);
     setPicksDone(true);
-    notifyDustChanged();
-    getMemoryTickets().then(({ tickets }) => setHasTicket(tickets > 0)).catch(() => {});
   };
 
   const handleImageLoad = () => {

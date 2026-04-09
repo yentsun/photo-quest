@@ -6,16 +6,15 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, CARD_TYPE, MARKET_PRICES, words, clientRoutes } from '@photo-quest/shared';
+import { getMediaUrl, getImageUrl } from '../../utils/api.js';
+import { useInventory, useDecks } from '../../db/hooks.js';
 import {
-  fetchInventory, destroyInventoryItem, sellInventoryItem, getMediaUrl, getImageUrl,
-  fetchDecks, createDeck, renameDeck, deleteDeck, addToDeck,
-  fetchQuestDecks,
-} from '../../utils/api.js';
+  sellInventory, destroyInventory, createDeck, renameDeck, deleteDeck, addToDeck,
+} from '../../db/actions.js';
 import { EmptyState } from '../layout/index.js';
 import { showToast } from '../ToasterMessage.jsx';
-import { Button, CARD_GRID, IconButton, Icon, Input, ConfirmModal, Spinner, MediaCard, CardOverlay, ConsumableCard, TicketCard, Deck, DeckDropdown } from '../ui/index.js';
+import { Button, CARD_GRID, IconButton, Icon, Input, ConfirmModal, MediaCard, CardOverlay, ConsumableCard, TicketCard, Deck, DeckDropdown } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
-import { notifyDustChanged } from '../../utils/events.js';
 
 /* ── Inventory media card (wraps MediaCard with drag & drop + actions) ── */
 
@@ -106,26 +105,12 @@ export default function InventoryPage() {
 
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [items, setItems] = useState([]);
-  const [decks, setDecks] = useState([]);
-  const [groupedIds, setGroupedIds] = useState(new Set());
-  const [loading, setLoading] = useState(true);
+  const { items } = useInventory();
+  const { piles: decks, groupedIds } = useDecks();
   const [selectedItem, setSelectedItem] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
-  const closeOverlay = useCallback(() => { setSelectedItem(null); reload(); }, []);
 
-  const reload = () => {
-    Promise.all([fetchQuestDecks(), fetchInventory(), fetchDecks()])
-      .then(([, { items }, { piles: userDecks, groupedIds: gIds }]) => {
-        setItems(items);
-        setDecks(userDecks);
-        setGroupedIds(new Set(gIds));
-        setLoading(false);
-      })
-      .catch(err => { console.error('Failed to load inventory:', err); setLoading(false); });
-  };
-
-  useEffect(() => { reload(); }, []);
+  const closeOverlay = useCallback(() => setSelectedItem(null), []);
 
   const openDeck = (deckId) => {
     navigate(`/deck/${deckId}`);
@@ -152,10 +137,8 @@ export default function InventoryPage() {
       confirmLabel: words.sell,
       onConfirm: async () => {
         try {
-          await sellInventoryItem(item.inventory_id);
+          await sellInventory(item.inventory_id);
           setSelectedItem(null);
-          notifyDustChanged();
-          reload();
         } catch (err) {
           console.error('Failed to sell card:', err);
         }
@@ -174,10 +157,8 @@ export default function InventoryPage() {
       destructive: true,
       onConfirm: async () => {
         try {
-          await destroyInventoryItem(item.inventory_id);
+          await destroyInventory(item.inventory_id);
           setSelectedItem(null);
-          notifyDustChanged();
-          reload();
         } catch (err) {
           console.error('Failed to destroy card:', err);
         }
@@ -205,7 +186,6 @@ export default function InventoryPage() {
     if (!draggedId || draggedId === targetItem.inventory_id) return;
     try {
       await createDeck('New Deck', [draggedId, targetItem.inventory_id]);
-      reload();
     } catch (err) {
       console.error('Failed to create deck:', err);
     }
@@ -221,7 +201,6 @@ export default function InventoryPage() {
     try {
       await addToDeck(deckId, [draggedId]);
       showToast('Card added to deck', 'success');
-      reload();
     } catch (err) {
       showToast(`Failed: ${err.message}`, 'error');
     }
@@ -230,7 +209,6 @@ export default function InventoryPage() {
   const handleRenameDeck = async (deckId, name) => {
     try {
       await renameDeck(deckId, name);
-      setDecks(prev => prev.map(d => d.id === deckId ? { ...d, name } : d));
     } catch (err) {
       console.error('Failed to rename deck:', err);
     }
@@ -240,7 +218,6 @@ export default function InventoryPage() {
     if (!confirm('Delete this deck? Cards will stay in your inventory.')) return;
     try {
       await deleteDeck(deckId);
-      reload();
     } catch (err) {
       console.error('Failed to delete deck:', err);
     }
@@ -255,15 +232,6 @@ export default function InventoryPage() {
       ungrouped: media.filter(i => !groupedIds.has(i.inventory_id)),
     };
   }, [items, groupedIds]);
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <Spinner size="lg" />
-        <p className="text-gray-400 text-sm">Loading inventory...</p>
-      </div>
-    );
-  }
 
   const bagIcon = <Icon name="backpack" className="w-16 h-16" />;
 
