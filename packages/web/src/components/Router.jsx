@@ -17,14 +17,13 @@ import { syncAll } from '../db/sync.js';
 export default function Router() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  /* Local-first sync: pull on app mount and on tab focus. Stale-while-
-   * revalidate — pages render from IndexedDB immediately and live queries
-   * update once the pull completes. Phase 0: syncAll is a no-op stub. */
   useEffect(() => {
     syncAll();
-    const onFocus = () => { if (document.visibilityState === 'visible') syncAll(); };
-    document.addEventListener('visibilitychange', onFocus);
-    return () => document.removeEventListener('visibilitychange', onFocus);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') syncAll();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, []);
 
   return (
