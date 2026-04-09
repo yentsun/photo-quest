@@ -6,7 +6,7 @@
  */
 
 const DB_NAME = 'photo-quest-local';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /** Canonical store names — import everywhere instead of raw strings. */
 export const STORES = {
@@ -14,6 +14,7 @@ export const STORES = {
   DECKS: 'decks',
   PLAYER_STATS: 'player_stats',
   META: 'meta',
+  MUTATION_QUEUE: 'mutation_queue',
 };
 
 const SCHEMA = [
@@ -29,6 +30,8 @@ const SCHEMA = [
   { name: STORES.DECKS, keyPath: 'id' },
   { name: STORES.PLAYER_STATS, keyPath: 'id' }, // Singleton, id=1
   { name: STORES.META, keyPath: 'key' },        // Misc key/value singletons
+  // Persistent push queue for optimistic mutations awaiting server ack.
+  { name: STORES.MUTATION_QUEUE, keyPath: 'id', autoIncrement: true },
 ];
 
 let dbPromise = null;
@@ -43,7 +46,10 @@ function openDb() {
       const database = event.target.result;
       for (const def of SCHEMA) {
         if (!database.objectStoreNames.contains(def.name)) {
-          const store = database.createObjectStore(def.name, { keyPath: def.keyPath });
+          const store = database.createObjectStore(def.name, {
+            keyPath: def.keyPath,
+            autoIncrement: !!def.autoIncrement,
+          });
           for (const idx of def.indexes || []) {
             store.createIndex(idx.name, idx.keyPath, { unique: !!idx.unique });
           }
@@ -54,7 +60,8 @@ function openDb() {
   return dbPromise;
 }
 
-function req(request) {
+/** Promisify a single IDBRequest. Exported for use inside `tx` callbacks. */
+export function req(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -71,31 +78,42 @@ export async function getByKey(storeName, key) {
   return req(db.transaction(storeName, 'readonly').objectStore(storeName).get(key));
 }
 
+/**
+ * Run a multi-store transaction. The callback receives the IDBTransaction
+ * and can await IDB requests inside it (modern browsers keep the txn alive
+ * across microtask continuations as long as it's only IDB work). Don't
+ * await non-IDB Promises inside `fn` — that will let the txn auto-commit.
+ *
+ * Auto-notifies subscribers of every store touched in `'readwrite'` mode.
+ */
+export async function tx(stores, mode, fn) {
+  const db = await openDb();
+  const list = Array.isArray(stores) ? stores : [stores];
+  let result;
+  await new Promise((resolve, reject) => {
+    const t = db.transaction(list, mode);
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error);
+    Promise.resolve(fn(t)).then(r => { result = r; }).catch(reject);
+  });
+  if (mode === 'readwrite') notify(list);
+  return result;
+}
+
 /** Replace store contents in one transaction; notifies subscribers on commit. */
 export async function snapshotReplace(storeName, rows) {
-  const db = await openDb();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    const store = tx.objectStore(storeName);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+  return tx(storeName, 'readwrite', (t) => {
+    const store = t.objectStore(storeName);
     store.clear();
     for (const row of rows) store.put(row);
   });
-  notify(storeName);
 }
 
 export async function putRow(storeName, row) {
-  const db = await openDb();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-    tx.objectStore(storeName).put(row);
+  return tx(storeName, 'readwrite', (t) => {
+    t.objectStore(storeName).put(row);
   });
-  notify(storeName);
 }
 
 const subscribers = new Map(); // store name -> Set<fn>

@@ -3,20 +3,16 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { fetchDecks, addToDeck } from '../../utils/api.js';
+import { useDecks } from '../../db/hooks.js';
+import { addToDeck } from '../../db/actions.js';
 import { showToast } from '../ToasterMessage.jsx';
 import IconButton from './IconButton.jsx';
 import Icon from './Icon.jsx';
 
 export default function DeckDropdown({ inventoryId, onAdd }) {
   const [open, setOpen] = useState(false);
-  const [decks, setDecks] = useState(null);
+  const { piles: decks } = useDecks();
   const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) { setDecks(null); return; }
-    fetchDecks().then(({ piles }) => setDecks(piles)).catch(() => setDecks([]));
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -48,13 +44,10 @@ export default function DeckDropdown({ inventoryId, onAdd }) {
       />
       {open && (
         <div className="absolute left-full top-0 ml-2 bg-gray-800 border border-gray-600 rounded-lg shadow-xl min-w-[10rem] py-1 z-10">
-          {decks === null && (
-            <p className="px-3 py-2 text-gray-400 text-xs">Loading...</p>
-          )}
-          {decks && decks.length === 0 && (
+          {decks.length === 0 && (
             <p className="px-3 py-2 text-gray-400 text-xs">No decks</p>
           )}
-          {decks && decks.map(d => (
+          {decks.map(d => (
             <button
               key={d.id}
               onClick={() => handleAdd(d.id, d.name)}

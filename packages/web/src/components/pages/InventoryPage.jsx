@@ -6,17 +6,15 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, CARD_TYPE, MARKET_PRICES, words, clientRoutes } from '@photo-quest/shared';
-import {
-  destroyInventoryItem, sellInventoryItem, getMediaUrl, getImageUrl,
-  createDeck, renameDeck, deleteDeck, addToDeck,
-} from '../../utils/api.js';
+import { getMediaUrl, getImageUrl } from '../../utils/api.js';
 import { useInventory, useDecks } from '../../db/hooks.js';
-import { syncAll, syncTable } from '../../db/sync.js';
+import {
+  sellInventory, destroyInventory, createDeck, renameDeck, deleteDeck, addToDeck,
+} from '../../db/actions.js';
 import { EmptyState } from '../layout/index.js';
 import { showToast } from '../ToasterMessage.jsx';
 import { Button, CARD_GRID, IconButton, Icon, Input, ConfirmModal, MediaCard, CardOverlay, ConsumableCard, TicketCard, Deck, DeckDropdown } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
-import { notifyDustChanged } from '../../utils/events.js';
 
 /* ── Inventory media card (wraps MediaCard with drag & drop + actions) ── */
 
@@ -112,7 +110,7 @@ export default function InventoryPage() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
 
-  const closeOverlay = useCallback(() => { setSelectedItem(null); syncAll(); }, []);
+  const closeOverlay = useCallback(() => setSelectedItem(null), []);
 
   const openDeck = (deckId) => {
     navigate(`/deck/${deckId}`);
@@ -139,10 +137,8 @@ export default function InventoryPage() {
       confirmLabel: words.sell,
       onConfirm: async () => {
         try {
-          await sellInventoryItem(item.inventory_id);
+          await sellInventory(item.inventory_id);
           setSelectedItem(null);
-          notifyDustChanged();
-          reload();
         } catch (err) {
           console.error('Failed to sell card:', err);
         }
@@ -161,10 +157,8 @@ export default function InventoryPage() {
       destructive: true,
       onConfirm: async () => {
         try {
-          await destroyInventoryItem(item.inventory_id);
+          await destroyInventory(item.inventory_id);
           setSelectedItem(null);
-          notifyDustChanged();
-          reload();
         } catch (err) {
           console.error('Failed to destroy card:', err);
         }
@@ -192,7 +186,6 @@ export default function InventoryPage() {
     if (!draggedId || draggedId === targetItem.inventory_id) return;
     try {
       await createDeck('New Deck', [draggedId, targetItem.inventory_id]);
-      reload();
     } catch (err) {
       console.error('Failed to create deck:', err);
     }
@@ -208,7 +201,6 @@ export default function InventoryPage() {
     try {
       await addToDeck(deckId, [draggedId]);
       showToast('Card added to deck', 'success');
-      reload();
     } catch (err) {
       showToast(`Failed: ${err.message}`, 'error');
     }
@@ -217,7 +209,6 @@ export default function InventoryPage() {
   const handleRenameDeck = async (deckId, name) => {
     try {
       await renameDeck(deckId, name);
-      syncTable('decks');
     } catch (err) {
       console.error('Failed to rename deck:', err);
     }
@@ -227,7 +218,6 @@ export default function InventoryPage() {
     if (!confirm('Delete this deck? Cards will stay in your inventory.')) return;
     try {
       await deleteDeck(deckId);
-      reload();
     } catch (err) {
       console.error('Failed to delete deck:', err);
     }
