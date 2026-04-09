@@ -2,7 +2,7 @@
  * @file Top-level routing and global state provider.
  */
 
-import { useReducer } from 'react';
+import { useEffect, useReducer } from 'react';
 import { Routes, Route, BrowserRouter, Navigate } from 'react-router-dom';
 import GlobalContext, { initialState, reducer } from '../globalContext';
 import { SlideshowProvider } from '../contexts/SlideshowContext.jsx';
@@ -12,9 +12,20 @@ import ErrorBoundary from './ErrorBoundary';
 import Root from './Root';
 import { DeckPage, FolderPage, LibraryPage, MediaPage, MemoryGamePage, InventoryPage, QuestPage, MarketPage } from './pages/index.js';
 import ToasterMessage from './ToasterMessage';
+import { syncAll } from '../db/sync.js';
 
 export default function Router() {
   const [state, dispatch] = useReducer(reducer, initialState);
+
+  /* Local-first sync: pull on app mount and on tab focus. Stale-while-
+   * revalidate — pages render from IndexedDB immediately and live queries
+   * update once the pull completes. Phase 0: syncAll is a no-op stub. */
+  useEffect(() => {
+    syncAll();
+    const onFocus = () => { if (document.visibilityState === 'visible') syncAll(); };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
+  }, []);
 
   return (
     <GlobalContext.Provider value={{ state, dispatch }}>
