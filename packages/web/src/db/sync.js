@@ -42,6 +42,7 @@ export async function syncAll() {
     syncDecks(),
     syncPlayerStats(),
     syncQuestsFromResult(questResult),
+    syncMedia(),
   ]);
 }
 
@@ -77,15 +78,32 @@ async function syncQuestsFromResult(result) {
   ]);
 }
 
+/* Cap on how many images we proactively fetch to warm the Workbox
+ * `media-images` cache for offline use. Sorted by infusion desc, so the
+ * "most likely to be picked by the memory game" set is covered. Bigger
+ * = more bandwidth on first sync; smaller = less variety offline. */
+const OFFLINE_IMAGE_WARM_COUNT = 50;
+
 /**
- * Pull the full media library into local IDB. Called on demand (e.g. by
- * MemoryGamePage) — not in syncAll because the table can be large (LAW
- * 1.36: 10k+ items) and there's no `?since=` delta support yet.
+ * Pull the full media library into local IDB and warm the image cache so
+ * the memory game has data to draw from offline. Called from syncAll;
+ * failures are swallowed so the rest of the app keeps working.
  */
 export async function syncMedia() {
   try {
     const { items } = await fetchMedia();
     await snapshotReplace(STORES.MEDIA, items || []);
+
+    /* Fire-and-forget warm-up for the SW image cache. Workbox CacheFirst
+     * means already-cached URLs short-circuit without hitting the network,
+     * so re-running this on every sync is cheap after the first time. */
+    const toWarm = (items || [])
+      .filter(m => m.type === 'image' && !m.hidden)
+      .sort((a, b) => (b.infusion || 0) - (a.infusion || 0))
+      .slice(0, OFFLINE_IMAGE_WARM_COUNT);
+    for (const m of toWarm) {
+      fetch(`/image/${m.id}`).catch(() => {});
+    }
   } catch (err) {
     console.warn('syncMedia failed:', err.message);
   }

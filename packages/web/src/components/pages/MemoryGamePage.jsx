@@ -8,7 +8,6 @@ import { CARD_TYPE, MEDIA_TYPE, words, clientRoutes } from '@photo-quest/shared'
 import { getImageUrl } from '../../utils/api.js';
 import { useInventory } from '../../db/hooks.js';
 import { getAll, STORES } from '../../db/localDb.js';
-import { syncMedia } from '../../db/sync.js';
 import { consumeMemoryTicket, addToInventory } from '../../db/actions.js';
 import { shuffle } from '../../utils/shuffle.js';
 import { Button, Icon, MediaCard, Modal, Spinner } from '../ui/index.js';
@@ -175,11 +174,9 @@ export default function MemoryGamePage() {
     pendingMismatchRef.current = false;
 
     try {
-      /* Refresh the local media mirror so the weighted-pick pool reflects
-       * any newly-imported items since the last visit. Swallows network
-       * errors so an offline launch still proceeds against whatever the
-       * local store already has. */
-      await syncMedia();
+      /* The media store and the SW image cache are populated by syncAll
+       * (Router mount + visibility-change + online events), so by the
+       * time the user opens the memory game both should already be warm. */
       const allMedia = await getAll(STORES.MEDIA);
       let items = allMedia.filter(m => m.type === MEDIA_TYPE.IMAGE && !m.hidden);
 
