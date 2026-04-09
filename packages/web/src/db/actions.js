@@ -17,7 +17,7 @@
  * after reconcile.
  */
 
-import { CARD_TYPE } from '@photo-quest/shared';
+import { CARD_TYPE, MARKET_PRICES } from '@photo-quest/shared';
 import { tx, req, getByKey, STORES } from './localDb.js';
 import { drainMutationQueue } from './sync.js';
 
@@ -362,6 +362,58 @@ function deleteQuestDeckInventory(t, inventory, deckId) {
   }
 }
 
+/* ── Market ────────────────────────────────────────────────────── */
+
+/**
+ * Buy a memory ticket. LAW 4.12: 1 Đ. Optimistic dust deduction +
+ * optimistic ticket inventory row (temp negative id, replaced by sync
+ * after the server creates the real row).
+ */
+export async function buyMemoryTicket() {
+  await tx(
+    [STORES.PLAYER_STATS, STORES.INVENTORY, STORES.MUTATION_QUEUE],
+    'readwrite',
+    async (t) => {
+      const stats = await req(t.objectStore(STORES.PLAYER_STATS).get(1));
+      const dust = stats?.dust || 0;
+      if (dust < MARKET_PRICES.memoryTicket) throw new Error('Not enough dust');
+
+      t.objectStore(STORES.PLAYER_STATS).put({ id: 1, dust: dust - MARKET_PRICES.memoryTicket });
+      t.objectStore(STORES.INVENTORY).put({
+        inventory_id: -Date.now(),
+        media_id: null,
+        card_type: CARD_TYPE.MEMORY_TICKET,
+        ref_id: null,
+        acquired_at: new Date().toISOString(),
+      });
+      enqueue(t, 'market.buyTicket', {});
+    },
+  );
+  drainMutationQueue();
+}
+
+/**
+ * Buy an extra quest deck. LAW 4.12: 5 Đ. The server generates the deck
+ * and its 10 cards in one transaction; we can't predict either, so we
+ * deduct dust optimistically and let the post-push reconcile add the
+ * new quest_decks / quest_cards / inventory rows.
+ */
+export async function buyQuestDeck() {
+  await tx(
+    [STORES.PLAYER_STATS, STORES.MUTATION_QUEUE],
+    'readwrite',
+    async (t) => {
+      const stats = await req(t.objectStore(STORES.PLAYER_STATS).get(1));
+      const dust = stats?.dust || 0;
+      if (dust < MARKET_PRICES.questDeck) throw new Error('Not enough dust');
+
+      t.objectStore(STORES.PLAYER_STATS).put({ id: 1, dust: dust - MARKET_PRICES.questDeck });
+      enqueue(t, 'market.buyDeck', {});
+    },
+  );
+  drainMutationQueue();
+}
+
 /* ── Memory game ───────────────────────────────────────────────── */
 
 /**
@@ -378,9 +430,11 @@ export async function consumeMemoryTicket(invId) {
     async (t) => {
       const all = await req(t.objectStore(STORES.INVENTORY).getAll());
       const tickets = all.filter(i => i.card_type === CARD_TYPE.MEMORY_TICKET);
-      const target = invId != null
-        ? tickets.find(t => t.inventory_id === invId)
-        : tickets[0];
+      /* Fall back to "any ticket" if a stale id was passed (e.g. the
+       * inventory page held a temp negative id that was already replaced
+       * by a real one during reconcile). */
+      const target = (invId != null && tickets.find(t => t.inventory_id === invId))
+        || tickets[0];
       if (!target) throw new Error('No tickets available');
       t.objectStore(STORES.INVENTORY).delete(target.inventory_id);
       enqueue(t, 'memory.useTicket', { invId: target.inventory_id });

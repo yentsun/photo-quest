@@ -20,6 +20,7 @@ import {
   advanceQuestDeck as apiAdvanceQuestDeck, takeQuestCard as apiTakeQuestCard,
   destroyQuestCard as apiDestroyQuestCard, freeInfuseMedia as apiFreeInfuseMedia,
   addToInventory as apiAddToInventory, useMemoryTicket as apiUseMemoryTicket,
+  buyMemoryTicket as apiBuyMemoryTicket, buyQuestDeck as apiBuyQuestDeck,
 } from '../utils/api.js';
 import {
   snapshotReplace, putRow, getAll, tx, req, STORES,
@@ -172,8 +173,18 @@ const HANDLERS = {
     return [STORES.INVENTORY, STORES.MEDIA];
   },
   'memory.useTicket': async ({ invId }) => {
-    await apiUseMemoryTicket(invId);
+    /* invId may be a temp negative id at push time — server doesn't
+     * understand it, so just consume any ticket on the server side. */
+    await apiUseMemoryTicket(invId > 0 ? invId : undefined);
     return [STORES.INVENTORY];
+  },
+  'market.buyTicket': async () => {
+    await apiBuyMemoryTicket();
+    return [STORES.INVENTORY, STORES.PLAYER_STATS];
+  },
+  'market.buyDeck': async () => {
+    await apiBuyQuestDeck();
+    return [STORES.INVENTORY, STORES.PLAYER_STATS, STORES.QUEST_DECKS];
   },
 };
 
