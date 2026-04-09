@@ -12,6 +12,18 @@
 
 import { CARD_TYPE } from '@photo-quest/shared';
 
+function findNextUnownedCard(db, deckId, startPos, totalCards) {
+  return db.prepare(
+    `SELECT qc.id AS card_id, qc.position, m.*
+     FROM quest_cards qc
+     JOIN media m ON m.id = qc.media_id
+     LEFT JOIN inventory inv ON inv.media_id = m.id
+     WHERE qc.deck_id = ? AND qc.position >= ? AND inv.id IS NULL
+     ORDER BY qc.position ASC
+     LIMIT 1`
+  ).get(deckId, startPos) || null;
+}
+
 export default function (deckId) {
   const [kojo] = this;
   const db = kojo.get('db');
@@ -23,31 +35,8 @@ export default function (deckId) {
     'SELECT COUNT(*) AS count FROM quest_cards WHERE deck_id = ?'
   ).get(deck.id).count;
 
-  // Find the next card at or after current_position that isn't in inventory
-  let position = deck.current_position;
-  let currentCard = null;
-
-  while (position < totalCards) {
-    const candidate = db.prepare(
-      `SELECT qc.id AS card_id, qc.position, m.*
-       FROM quest_cards qc
-       JOIN media m ON m.id = qc.media_id
-       WHERE qc.deck_id = ? AND qc.position = ?`
-    ).get(deck.id, position);
-
-    if (!candidate) break;
-
-    const inInventory = db.prepare(
-      'SELECT id FROM inventory WHERE media_id = ?'
-    ).get(candidate.id);
-
-    if (!inInventory) {
-      currentCard = candidate;
-      break;
-    }
-
-    position++;
-  }
+  const currentCard = findNextUnownedCard(db, deck.id, deck.current_position, totalCards);
+  const position = currentCard ? currentCard.position : totalCards;
 
   // If we skipped ahead, persist the new position
   if (position !== deck.current_position) {
@@ -73,6 +62,10 @@ export default function (deckId) {
     }
   }
 
+  const nextCard = currentCard
+    ? findNextUnownedCard(db, deck.id, position + 1, totalCards)
+    : null;
+
   return {
     id: deck.id,
     deckIndex: deck.deck_index,
@@ -80,6 +73,7 @@ export default function (deckId) {
     totalCards,
     exhausted: position >= totalCards,
     currentCard: currentCard || null,
+    nextCard,
     takeCost,
     canTake,
     freeTakeUsed,

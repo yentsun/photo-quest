@@ -15,8 +15,9 @@ import { notifyDustChanged } from '../../utils/events.js';
 function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking }) {
   const card = deck.currentCard;
   const [infusion, setInfusion] = useState(card?.infusion || 0);
+  const [mediaLoaded, setMediaLoaded] = useState(false);
 
-  useEffect(() => { setInfusion(card?.infusion || 0); }, [card?.id]);
+  useEffect(() => { setInfusion(card?.infusion || 0); setMediaLoaded(false); }, [card?.id]);
 
   useEffect(() => {
     if (!card) return;
@@ -53,11 +54,12 @@ function CardViewer({ deck, onNext, onTake, onDestroy, onInfusionUpdate, taking 
         header={card.title}
         headerRight={<span className="text-purple-300 text-xs font-medium">{words.dustSymbol} {infusion}</span>}
         art={
-          <div className="w-full h-full bg-black">
+          <div className="w-full h-full bg-black relative">
+            {!mediaLoaded && <Spinner size="lg" overlay />}
             {isImage ? (
-              <img src={mediaUrl} alt={card.title} className="w-full h-full object-cover" />
+              <img src={mediaUrl} alt={card.title} className={`w-full h-full object-cover transition-opacity ${mediaLoaded ? 'opacity-100' : 'opacity-0'}`} onLoad={() => setMediaLoaded(true)} />
             ) : (
-              <video src={mediaUrl} controls muted playsInline className="w-full h-full object-cover" />
+              <video src={mediaUrl} controls muted playsInline className={`w-full h-full object-cover transition-opacity ${mediaLoaded ? 'opacity-100' : 'opacity-0'}`} onLoadedData={() => setMediaLoaded(true)} />
             )}
           </div>
         }
@@ -217,6 +219,10 @@ export default function QuestPage() {
       />
 
       <ConfirmModal action={confirmAction} onCancel={() => setConfirmAction(null)} />
+
+      {activeDeck.nextCard?.type === MEDIA_TYPE.IMAGE && (
+        <img src={getMediaUrl(activeDeck.nextCard)} alt="" className="absolute w-0 h-0 overflow-hidden" />
+      )}
     </div>
   );
 }
