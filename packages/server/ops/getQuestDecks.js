@@ -25,6 +25,17 @@ export default function () {
   ).all(today);
 
   if (existing.length === 0) {
+    /* Purge stale quest_deck inventory rows from prior days before
+     * generating today's. Only runs on the first call of the day since
+     * once cleaned, no new stale rows can appear until tomorrow. */
+    db.prepare(
+      `DELETE FROM inventory
+       WHERE card_type = ?
+         AND ref_id NOT IN (
+           SELECT id FROM quest_decks WHERE date = ? AND exhausted = 0
+         )`
+    ).run(CARD_TYPE.QUEST_DECK, today);
+
     generateDecks(db, today);
   }
 

@@ -228,7 +228,11 @@ export default function InventoryPage() {
     return {
       mediaItems: media,
       ticketItems: items.filter(i => i.card_type === CARD_TYPE.MEMORY_TICKET),
-      deckItems: items.filter(i => i.card_type === CARD_TYPE.QUEST_DECK),
+      /* Sort newest first (server used acquired_at DESC; getAll returns
+       * by key ASC so today's decks would land at the end otherwise). */
+      deckItems: items
+        .filter(i => i.card_type === CARD_TYPE.QUEST_DECK)
+        .sort((a, b) => b.inventory_id - a.inventory_id),
       ungrouped: media.filter(i => !groupedIds.has(i.inventory_id)),
     };
   }, [items, groupedIds]);

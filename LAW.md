@@ -140,7 +140,7 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.12** The app must have a **Market** page. The player can buy extra quest deck cards (**5 Đ** each) and memory game ticket cards (**1 Đ** each). Purchased cards appear in inventory. The 10 free daily quest deck cards still generate; market decks are added on top. Memory game requires a ticket card to play (consumed on first card flip).
 
-**4.14** The player must be able to organize inventory cards into **decks** (like playlists). There are no "piles" — only decks. A card can belong to multiple decks. Decks are created by dragging a card onto another card. Decks can be named. Inventory view shows decks as stacked card groups and ungrouped cards. Each deck has its own URL (`/deck/:id`) with a back button to return to inventory.
+**4.14** The player must be able to organize inventory cards into **decks** (like playlists). There are no "piles" — only decks. A card belongs to **at most one** deck — adding it to a new deck removes it from its previous deck. Decks are created by dragging a card onto another card. Decks can be named. Inventory view shows decks as stacked card groups and ungrouped cards. Each deck has its own URL (`/deck/:id`) with a back button to return to inventory.
 
 **4.15** The player can **sell** an inventory card back to the media library. The card is removed from inventory but the media file stays on disk. The player receives **infusion × 1 Đ**. Selling a 0-infusion card returns 0 Đ.
 
@@ -151,6 +151,25 @@ The governing rules of the photo-quest project. This document is the source of t
 **4.17** When a card is picked as a reward from the memory game, it receives **+10 dust infusion** on top of its current infusion value.
 
 **4.18** When a card is placed into a user deck, it receives **+10 dust infusion** as a reward for organization. The bonus is applied once per deck placement — re-adding the same card to the same deck does not grant additional infusion.
+
+**4.19** Quest decks are tied to a calendar date. Each day on first access, 10 new quest decks are generated for that date. Any quest deck inventory cards from prior days that were never opened (still not exhausted) must be purged at generation time — they do not carry over. The 10 free daily decks regenerate even if none were played.
+
+**4.20** While browsing a quest deck, any card whose media is already in the player's inventory is silently skipped (never displayed). Skipping, taking, or destroying the current card advances the deck to the next non-owned card. When no non-owned card remains, the deck is exhausted and its inventory card is consumed.
+
+**4.21** Quest action inputs must be idempotent under rapid repeat input. While a take, skip, or destroy action is in flight, the UI must reject further invocations of any quest action for that deck (button disabled, key ignored) until the action settles. One click equals one action — a held `ArrowRight` key or fast double-click must not stack multiple advances.
+
+**4.22** Memory game mechanics:
+- The board has **8 pairs** (16 cards), dealt face-down, drawn from the player's library using infusion-weighted random selection (a card with infusion N has weight N+1).
+- The player flips two cards per move; matching pairs stay face-up, non-matching pairs flip back after a brief reveal.
+- Moves are counted. Rating: **3 stars** at ≤8 moves, **2 stars** at ≤11 moves, **1 star** at ≤15 moves, otherwise 0 stars.
+- After all pairs are matched, the player picks reward cards from the matched pairs: **1 star → 1 pick, 2 stars → 2 picks, 3 stars → all 8 picks**. Each picked card is added to inventory with **+10 dust infusion** (per 4.17).
+- Starting the game consumes **one ticket card** from inventory. The ticket is consumed on the first card flip, not on page load — abandoning before the first flip does not cost a ticket.
+
+**4.23** Market-bought quest decks (4.12) follow the same mechanics as daily quest decks (4.5, 4.9, 4.19, 4.20) — same card count, same infusion-weighted selection, same take/destroy/skip rules, same exhaustion behaviour. They are additive to the 10 free daily decks, not a replacement.
+
+**4.24** The current quest card's infusion value must be visible in the card UI and update live as passive infusion (4.13) or explicit infusion (4.8) accrues. The take cost shown on the take button must reflect the live infusion value.
+
+**4.25** Inventory listings (inventory page, "open quest deck" shortcut, etc.) must present items **newest-first** (most recently acquired at the top) regardless of the underlying storage order.
 
 ---
 
