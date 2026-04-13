@@ -4,7 +4,9 @@
  * No server calls. A future sync pass will reconcile.
  */
 
+import { CARD_TYPE } from '@photo-quest/shared';
 import { openDb, STORES } from './localDb.js';
+import { emitMutation } from './events.js';
 
 function txn(db, stores, mode, fn) {
   return new Promise((resolve, reject) => {
@@ -77,4 +79,25 @@ export async function addToDeck(deckId, inventoryId) {
     grouped.add(inventoryId);
     decksOS.put({ ...meta, groupedIds: [...grouped] });
   });
+  emitMutation();
+}
+
+/**
+ * Consume the oldest quest-deck inventory row and return it. The caller
+ * navigates to the quest view with the returned row (ref_id = quest_deck id).
+ */
+export async function consumeQuestDeck() {
+  const db = await openDb();
+  const target = await txn(db, [STORES.CARDS], 'readwrite', async (t) => {
+    const all = await req(t.objectStore(STORES.CARDS).getAll());
+    const questDecks = all
+      .filter(r => r.card_type === CARD_TYPE.QUEST_DECK)
+      .sort((a, b) => (a.acquired_at || '').localeCompare(b.acquired_at || ''));
+    const first = questDecks[0];
+    if (!first) throw new Error('No quest decks to consume');
+    t.objectStore(STORES.CARDS).delete(first.inventory_id);
+    return first;
+  });
+  emitMutation();
+  return target;
 }

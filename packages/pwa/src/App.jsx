@@ -5,6 +5,7 @@ import InventoryPage from './pages/InventoryPage.jsx';
 import MarketPage from './pages/MarketPage.jsx';
 import LibraryPage from './pages/LibraryPage.jsx';
 import DeckPage from './pages/DeckPage.jsx';
+import QuestPage from './pages/QuestPage.jsx';
 import { useSync } from './hooks/useSync.js';
 import './App.css';
 
@@ -26,25 +27,25 @@ const PAGES = {
 
 export default function App() {
   const [page, setPage] = useState('inventory');
-  const [deckId, setDeckId] = useState(null);
+  const [view, setView] = useState(null); /* { kind: 'deck'|'quest', id } */
   const [finderOpen, setFinderOpen] = useState(false);
   const [server, setServer] = useState(loadServer);
 
-  const navigate = (p) => { setDeckId(null); setPage(p); };
+  const navigate = (p) => { setView(null); setPage(p); };
 
-  /* Push a history entry when a deck opens so browser back (mouse X1,
-   * keyboard, gesture) closes the deck instead of leaving the PWA. */
-  const openDeck = (id) => {
-    history.pushState({ deckOpen: true }, '');
-    setDeckId(id);
+  /* Push a history entry when a sub-view opens so browser back (mouse X1,
+   * keyboard, gesture) closes it instead of leaving the PWA. */
+  const openView = (v) => {
+    history.pushState({ viewOpen: true }, '');
+    setView(v);
   };
-  const closeDeck = () => {
-    if (history.state?.deckOpen) history.back();
-    else                          setDeckId(null);
+  const closeView = () => {
+    if (history.state?.viewOpen) history.back();
+    else                         setView(null);
   };
 
   useEffect(() => {
-    const onPop = () => setDeckId(null);
+    const onPop = () => setView(null);
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -69,19 +70,25 @@ export default function App() {
       />
 
       <main className="app__main">
-        {deckId != null ? (
+        {view?.kind === 'deck' ? (
           <DeckPage
-            deckId={deckId}
+            deckId={view.id}
             server={server}
             sync={sync}
-            onBack={closeDeck}
+            onBack={closeView}
+          />
+        ) : view?.kind === 'quest' ? (
+          <QuestPage
+            questDeckId={view.id}
+            onBack={closeView}
           />
         ) : (
           <PageComponent
             onLookForServer={() => setFinderOpen(true)}
             server={server}
             sync={sync}
-            onOpenDeck={openDeck}
+            onOpenDeck={(id) => openView({ kind: 'deck', id })}
+            onStartQuest={(id) => openView({ kind: 'quest', id })}
           />
         )}
       </main>

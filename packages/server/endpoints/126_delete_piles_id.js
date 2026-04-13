@@ -11,6 +11,8 @@ export default async (kojo, logger) => {
   }, (req, res, params) => {
     const ok = kojo.ops.deletePile(Number(params.id));
     if (!ok) return json(res, 404, { error: 'Deck not found' });
+    kojo.ops.bumpVersion('decks');
+    kojo.ops.bumpVersion('inventory');
     json(res, 204, null);
   });
 };

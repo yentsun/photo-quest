@@ -1,9 +1,14 @@
 /**
  * @file Main-thread bridge to the sync Web Worker.
  *
- * `startSync(serverUrl, onStatus)` spawns the worker, kicks off a full
- * sync, and routes progress/done/error messages back through `onStatus`.
- * Returns a `stop()` handle that terminates the worker.
+ * `startSync(serverUrl, onStatus)` spawns the worker, runs an initial
+ * full sync, and subscribes to the server's change stream so later
+ * mutations trigger per-table resyncs. All HTTP (incl. the SSE
+ * connection) stays inside the worker — the main thread never touches
+ * the backend.
+ *
+ * Returns a `stop()` handle that closes the SSE stream and terminates
+ * the worker.
  */
 
 export function startSync(serverUrl, onStatus) {
@@ -15,7 +20,11 @@ export function startSync(serverUrl, onStatus) {
   worker.onmessage = ({ data }) => onStatus(data);
   worker.onerror = (e) => onStatus({ type: 'error', message: e.message });
 
-  worker.postMessage({ type: 'sync-all', serverUrl });
+  worker.postMessage({ type: 'sync-all',     serverUrl });
+  worker.postMessage({ type: 'start-events', serverUrl });
 
-  return () => worker.terminate();
+  return () => {
+    worker.postMessage({ type: 'stop-events' });
+    worker.terminate();
+  };
 }

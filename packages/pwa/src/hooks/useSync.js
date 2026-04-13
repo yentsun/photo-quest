@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { startSync } from '../db/sync.js';
+import { onMutation } from '../db/events.js';
+
+const LOCAL_PULSE_MS = 350;
 
 /**
  * Spawn a sync worker whenever `serverUrl` is set and we're not paused.
@@ -27,14 +30,28 @@ export function useSync(serverUrl) {
           ...prev,
           progress: { ...prev.progress, [msg.store]: { count: msg.count, total: msg.total } },
         };
-        if (msg.type === 'done')     return { ...prev, phase: 'done' };
-        if (msg.type === 'error')    return { ...prev, phase: 'error', error: msg.message };
+        if (msg.type === 'change') return { ...prev, phase: 'syncing' };
+        if (msg.type === 'done')   return { ...prev, phase: 'done' };
+        if (msg.type === 'error')  return { ...prev, phase: 'error', error: msg.message };
         return prev;
       });
     });
 
     return () => { stopRef.current?.(); stopRef.current = null; };
   }, [serverUrl, paused]);
+
+  /* Flash the pill yellow briefly after any local IDB mutation, so the
+   * user sees feedback even when the server isn't involved. */
+  useEffect(() => {
+    let timer = null;
+    return onMutation(() => {
+      setStatus(prev => prev.phase === 'syncing' ? prev : { ...prev, phase: 'syncing' });
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        setStatus(prev => prev.phase === 'syncing' ? { ...prev, phase: 'done' } : prev);
+      }, LOCAL_PULSE_MS);
+    });
+  }, []);
 
   const toggle = () => {
     if (status.phase === 'syncing') setPaused(true);

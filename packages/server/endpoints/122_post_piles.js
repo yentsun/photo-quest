@@ -12,6 +12,8 @@ export default async (kojo, logger) => {
   }, async (req, res) => {
     const body = await parseBody(req);
     const result = kojo.ops.createPile(body?.name, body?.inventoryIds || []);
+    kojo.ops.bumpVersion('decks');
+    kojo.ops.bumpVersion('inventory');
     json(res, 201, result);
   });
 };

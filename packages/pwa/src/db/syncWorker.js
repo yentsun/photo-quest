@@ -1,16 +1,19 @@
 /**
  * @file Sync worker — fetches server state and writes to IndexedDB off
  * the main thread. All HTTP + IDB work happens here so the UI stays
- * responsive even on slow connections or large snapshot replaces.
+ * responsive and the main thread never talks to the backend.
  *
  * Protocol:
  *   main → worker: { type: 'sync-all', serverUrl }
+ *                  { type: 'start-events', serverUrl }
+ *                  { type: 'stop-events' }
  *   worker → main: { type: 'progress', store, count, total }
  *                  { type: 'done' }
  *                  { type: 'error', message }
+ *                  { type: 'change', table, version }
  */
 
-import { STORES, snapshotReplace, clearStore, putRows } from './localDb.js';
+import { STORES, clearStore, putRows } from './localDb.js';
 
 const PAGE_SIZE = 100;
 
@@ -39,29 +42,80 @@ async function syncInventory(serverUrl) {
   }
 }
 
-async function syncDecks(serverUrl) {
-  const data = await fetchJson(`${serverUrl}/decks`);
-  const piles = data.piles || [];
-  const cards = data.cards || [];
-  const groupedIds = data.groupedIds || [];
-  /* Stash grouped-ids as a singleton meta row keyed by id=0. */
-  const deckRows = [...piles, { id: 0, __meta: true, groupedIds }];
-  await Promise.all([
-    snapshotReplace(STORES.DECKS,      deckRows),
-    snapshotReplace(STORES.DECK_CARDS, cards),
-  ]);
-  self.postMessage({ type: 'progress', store: STORES.DECKS, count: piles.length, total: piles.length });
+/* Decks are PWA-owned: users build them locally, server never dictates
+ * membership. No syncDecks — mutations stay in IDB. */
+
+const TABLE_SYNCERS = {
+  inventory: syncInventory,
+};
+
+async function syncTable(serverUrl, table) {
+  const fn = TABLE_SYNCERS[table];
+  if (!fn) return;
+  try { await fn(serverUrl); self.postMessage({ type: 'done' }); }
+  catch (err) { self.postMessage({ type: 'error', message: err.message }); }
 }
 
 async function syncAll(serverUrl) {
   try {
-    await Promise.all([syncInventory(serverUrl), syncDecks(serverUrl)]);
+    await syncInventory(serverUrl);
     self.postMessage({ type: 'done' });
   } catch (err) {
     self.postMessage({ type: 'error', message: err.message });
   }
 }
 
+/* ── SSE change stream ─────────────────────────────────────────────
+ * EventSource runs inside the worker so the main thread never opens a
+ * connection to the backend. Each `change` event triggers a per-table
+ * resync; a brief debounce coalesces bursts (e.g. create-deck +
+ * add-cards emits two events within a few ms). */
+
+let eventSource = null;
+const debounceTimers = new Map();
+const DEBOUNCE_MS = 75;
+
+function scheduleResync(serverUrl, table) {
+  clearTimeout(debounceTimers.get(table));
+  debounceTimers.set(table, setTimeout(() => {
+    debounceTimers.delete(table);
+    syncTable(serverUrl, table);
+  }, DEBOUNCE_MS));
+}
+
+function startEvents(serverUrl) {
+  stopEvents();
+  try {
+    eventSource = new EventSource(`${serverUrl}/changes/events`);
+  } catch (err) {
+    self.postMessage({ type: 'error', message: `SSE: ${err.message}` });
+    return;
+  }
+  eventSource.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type === 'snapshot') return; /* initial versions; ignored */
+    if (msg.table && msg.version) {
+      self.postMessage({ type: 'change', table: msg.table, version: msg.version });
+      scheduleResync(serverUrl, msg.table);
+    }
+  };
+  eventSource.onerror = () => {
+    /* EventSource auto-reconnects; surface the condition but keep it alive. */
+    self.postMessage({ type: 'error', message: 'change stream disconnected, retrying…' });
+  };
+}
+
+function stopEvents() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  for (const id of debounceTimers.values()) clearTimeout(id);
+  debounceTimers.clear();
+}
+
 self.onmessage = ({ data }) => {
-  if (data.type === 'sync-all') syncAll(data.serverUrl);
+  switch (data.type) {
+    case 'sync-all':     syncAll(data.serverUrl); break;
+    case 'start-events': startEvents(data.serverUrl); break;
+    case 'stop-events':  stopEvents(); break;
+  }
 };

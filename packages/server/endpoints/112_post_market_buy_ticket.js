@@ -15,6 +15,7 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: 'Insufficient magic dust' });
     }
 
+    kojo.ops.bumpVersion('inventory');
     json(res, 201, result);
   });
 };
