@@ -6,7 +6,7 @@ import { openDb } from '../db/localDb.js';
  * changes — pass `sync.phase` so the list refreshes when sync completes.
  */
 export function useLocalStore(store, refreshKey) {
-  const [rows, setRows] = useState([]);
+  const [rows, setRows] = useState(null);
 
   useEffect(() => {
     let cancelled = false;

@@ -40,15 +40,17 @@ async function syncInventory(serverUrl) {
 }
 
 async function syncDecks(serverUrl) {
-  const store = STORES.DECKS;
   const data = await fetchJson(`${serverUrl}/decks`);
-  const piles = data.piles || data || [];
+  const piles = data.piles || [];
+  const cards = data.cards || [];
   const groupedIds = data.groupedIds || [];
-  /* Stash grouped-ids as a singleton row keyed by id=0 so the page can
-   * filter inventory cards already in some deck. */
-  const rows = [...piles, { id: 0, __meta: true, groupedIds }];
-  await snapshotReplace(store, rows);
-  self.postMessage({ type: 'progress', store, count: piles.length, total: piles.length });
+  /* Stash grouped-ids as a singleton meta row keyed by id=0. */
+  const deckRows = [...piles, { id: 0, __meta: true, groupedIds }];
+  await Promise.all([
+    snapshotReplace(STORES.DECKS,      deckRows),
+    snapshotReplace(STORES.DECK_CARDS, cards),
+  ]);
+  self.postMessage({ type: 'progress', store: STORES.DECKS, count: piles.length, total: piles.length });
 }
 
 async function syncAll(serverUrl) {

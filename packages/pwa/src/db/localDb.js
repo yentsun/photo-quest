@@ -6,16 +6,18 @@
  */
 
 const DB_NAME = 'photo-quest';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export const STORES = {
-  CARDS: 'cards',
-  DECKS: 'decks',
+  CARDS:      'cards',
+  DECKS:      'decks',
+  DECK_CARDS: 'deckCards',
 };
 
 const SCHEMA = [
-  { name: STORES.CARDS, keyPath: 'inventory_id' },
-  { name: STORES.DECKS, keyPath: 'id' },
+  { name: STORES.CARDS,      keyPath: 'inventory_id' },
+  { name: STORES.DECKS,      keyPath: 'id' },
+  { name: STORES.DECK_CARDS, keyPath: 'inventory_id' },
 ];
 
 let dbPromise = null;

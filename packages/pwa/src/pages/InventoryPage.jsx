@@ -4,11 +4,12 @@ import EmptyState from '../components/EmptyState.jsx';
 import MediaCard from '../components/ui/MediaCard.jsx';
 import ConsumableCard from '../components/ui/ConsumableCard.jsx';
 import Deck from '../components/ui/Deck.jsx';
+import Spinner from '../components/ui/Spinner.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
 import { STORES } from '../db/localDb.js';
 import './InventoryPage.css';
 
-function DeckCard({ deck, serverUrl }) {
+function DeckCard({ deck, serverUrl, onOpen }) {
   const previewUrl = deck.preview
     ? (deck.preview.type === MEDIA_TYPE.IMAGE
         ? `${serverUrl}/image/${deck.preview.id}`
@@ -18,6 +19,7 @@ function DeckCard({ deck, serverUrl }) {
   return (
     <Deck
       count={deck.cardCount}
+      onClick={onOpen}
       header={deck.name || 'Untitled deck'}
       art={
         previewUrl
@@ -63,7 +65,7 @@ function QuestDecksStack({ count }) {
   );
 }
 
-export default function InventoryPage({ onLookForServer, server, sync }) {
+export default function InventoryPage({ onLookForServer, server, sync, onOpenDeck }) {
   const items = useLocalStore(STORES.CARDS, sync?.phase);
   const decksRaw = useLocalStore(STORES.DECKS, sync?.phase);
 
@@ -82,6 +84,10 @@ export default function InventoryPage({ onLookForServer, server, sync }) {
     );
   }
 
+  if (items === null || decksRaw === null) {
+    return <Spinner label="Loading inventory…" />;
+  }
+
   const decks = decksRaw.filter(d => !d.__meta);
   const meta = decksRaw.find(d => d.__meta);
   const groupedIds = new Set(meta?.groupedIds || []);
@@ -90,6 +96,9 @@ export default function InventoryPage({ onLookForServer, server, sync }) {
   const otherItems = ungrouped.filter(it => it.card_type !== CARD_TYPE.QUEST_DECK);
 
   if (!decks.length && !ungrouped.length) {
+    if (sync?.phase === 'idle' || sync?.phase === 'syncing') {
+      return <Spinner label="Loading inventory…" />;
+    }
     return (
       <EmptyState
         icon="📷"
@@ -103,7 +112,12 @@ export default function InventoryPage({ onLookForServer, server, sync }) {
     <div className="inventory">
       {questDecks.length > 0 && <QuestDecksStack count={questDecks.length} />}
       {decks.map(deck => (
-        <DeckCard key={`d-${deck.id}`} deck={deck} serverUrl={server.url} />
+        <DeckCard
+          key={`d-${deck.id}`}
+          deck={deck}
+          serverUrl={server.url}
+          onOpen={() => onOpenDeck(deck.id)}
+        />
       ))}
       {otherItems.map(item => (
         <InventoryItem key={`i-${item.inventory_id}`} item={item} serverUrl={server.url} />
