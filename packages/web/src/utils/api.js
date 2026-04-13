@@ -11,7 +11,7 @@ import { apiRoutes, MEDIA_TYPE, CARD_TYPE } from '@photo-quest/shared';
  * @returns {Promise<{ items: Array, total: number }>}
  */
 export async function fetchMedia({ limit, offset, folder, subtree } = {}) {
-  const url = new URL(apiRoutes.media, window.location.origin);
+  const url = new URL(apiRoutes.media, self.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
   if (folder != null) url.searchParams.set('folder', folder);
@@ -220,7 +220,7 @@ export async function removeFolder(folderId) {
  * @returns {Promise<{ items: Array, total: number }>}
  */
 export async function fetchInventory({ limit, offset } = {}) {
-  const url = new URL(apiRoutes.inventory, window.location.origin);
+  const url = new URL(apiRoutes.inventory, self.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
 

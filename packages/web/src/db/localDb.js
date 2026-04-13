@@ -179,7 +179,7 @@ export function subscribe(stores, fn) {
  *
  * @param {string|string[]} stores
  */
-function notify(stores) {
+export function notify(stores) {
   const list = Array.isArray(stores) ? stores : [stores];
   const called = new Set();
   for (const s of list) {
