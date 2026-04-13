@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import Button from '../components/ui/Button.jsx';
 import MediaCard from '../components/ui/MediaCard.jsx';
+import CardOverlay from '../components/ui/CardOverlay.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
 import { STORES } from '../db/localDb.js';
 import './DeckPage.css';
 
 export default function DeckPage({ deckId, server, sync, onBack }) {
+  const [selected, setSelected] = useState(null);
   const decks     = useLocalStore(STORES.DECKS,      sync?.phase);
   const deckCards = useLocalStore(STORES.DECK_CARDS, sync?.phase);
 
@@ -25,9 +28,18 @@ export default function DeckPage({ deckId, server, sync, onBack }) {
 
       <div className="deck-page__grid">
         {cards.map(item => (
-          <MediaCard key={item.inventory_id} item={item} serverUrl={server.url} />
+          <MediaCard
+            key={item.inventory_id}
+            item={item}
+            serverUrl={server.url}
+            onClick={() => setSelected(item)}
+          />
         ))}
       </div>
+
+      {selected && (
+        <CardOverlay item={selected} serverUrl={server.url} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }

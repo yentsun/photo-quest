@@ -1,0 +1,54 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
+  cursor: pointer;
+}
+.overlay--full { background: #000; }
+
+.overlay__card { cursor: default; }
+
+.overlay__fullmedia {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.card--large { width: min(28rem, 45vw); }
+.card--large .card__art { aspect-ratio: 5 / 7; }
+.card--large .card__header { padding: 0.625rem 1.25rem; }
+.card--large .card__header-title { font-size: 0.875rem; }
+.card--large .card__header-right { font-size: 0.75rem; }
+
+.overlay__art {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+.overlay__art img,
+.overlay__art video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.overlay__fs-btn {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.overlay__art:hover .overlay__fs-btn { opacity: 1; }
+.overlay__fs-btn:hover { background: rgba(0, 0, 0, 0.8); }

@@ -4,3 +4,11 @@
   gap: 2.5rem;
   padding: 1.5rem;
 }
+
+.drop-target {
+  border-radius: 1rem;
+  transition: box-shadow 0.15s;
+}
+.drop-target--over {
+  box-shadow: 0 0 0 2px #60a5fa;
+}

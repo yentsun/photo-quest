@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { CARD_TYPE, MEDIA_TYPE } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -5,11 +6,33 @@ import MediaCard from '../components/ui/MediaCard.jsx';
 import ConsumableCard from '../components/ui/ConsumableCard.jsx';
 import Deck from '../components/ui/Deck.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
+import CardOverlay from '../components/ui/CardOverlay.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
 import { STORES } from '../db/localDb.js';
+import { addToDeck } from '../db/actions.js';
 import './InventoryPage.css';
 
-function DeckCard({ deck, serverUrl, onOpen }) {
+const DND_TYPE = 'application/x-inventory-id';
+
+function useDropTarget(onDropId) {
+  const [over, setOver] = useState(false);
+  const depth = useRef(0);
+  const handlers = {
+    onDragOver:  (e) => { if (e.dataTransfer.types.includes(DND_TYPE)) e.preventDefault(); },
+    onDragEnter: (e) => { if (!e.dataTransfer.types.includes(DND_TYPE)) return; e.preventDefault(); depth.current++; setOver(true); },
+    onDragLeave: () => { depth.current--; if (depth.current <= 0) { depth.current = 0; setOver(false); } },
+    onDrop:      (e) => {
+      e.preventDefault();
+      depth.current = 0; setOver(false);
+      const id = Number(e.dataTransfer.getData(DND_TYPE));
+      if (id) onDropId(id);
+    },
+  };
+  return { over, handlers };
+}
+
+function DeckCard({ deck, serverUrl, onOpen, onDropCard }) {
+  const { over, handlers } = useDropTarget((invId) => onDropCard(deck.id, invId));
   const previewUrl = deck.preview
     ? (deck.preview.type === MEDIA_TYPE.IMAGE
         ? `${serverUrl}/image/${deck.preview.id}`
@@ -17,24 +40,37 @@ function DeckCard({ deck, serverUrl, onOpen }) {
     : null;
 
   return (
-    <Deck
-      count={deck.cardCount}
-      onClick={onOpen}
-      header={deck.name || 'Untitled deck'}
-      art={
-        previewUrl
-          ? <img src={previewUrl} alt={deck.name} loading="lazy" draggable={false} />
-          : <div style={{ width: '100%', height: '100%', background: '#000', display: 'flex',
-                          alignItems: 'center', justifyContent: 'center', color: '#4b5563', fontSize: '2rem' }}>?</div>
-      }
-      footer={<span>{deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}</span>}
-    />
+    <div className={`drop-target ${over ? 'drop-target--over' : ''}`} {...handlers}>
+      <Deck
+        count={deck.cardCount}
+        onClick={onOpen}
+        header={deck.name || 'Untitled deck'}
+        art={
+          previewUrl
+            ? <img src={previewUrl} alt={deck.name} loading="lazy" draggable={false} />
+            : <div style={{ width: '100%', height: '100%', background: '#000', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center', color: '#4b5563', fontSize: '2rem' }}>?</div>
+        }
+        footer={<span>{deck.cardCount} card{deck.cardCount !== 1 ? 's' : ''}</span>}
+      />
+    </div>
   );
 }
 
-function InventoryItem({ item, serverUrl }) {
+function DraggableMedia({ item, serverUrl, onClick }) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => e.dataTransfer.setData(DND_TYPE, String(item.inventory_id))}
+    >
+      <MediaCard item={item} serverUrl={serverUrl} onClick={onClick} />
+    </div>
+  );
+}
+
+function InventoryItem({ item, serverUrl, onClick }) {
   if (item.card_type === CARD_TYPE.MEDIA) {
-    return <MediaCard item={item} serverUrl={serverUrl} />;
+    return <DraggableMedia item={item} serverUrl={serverUrl} onClick={onClick} />;
   }
   if (item.card_type === CARD_TYPE.MEMORY_TICKET) {
     return <ConsumableCard title="Memory Game" subtitle="Play to earn dust" emoji="🎟️" gradient="purple" />;
@@ -66,8 +102,16 @@ function QuestDecksStack({ count }) {
 }
 
 export default function InventoryPage({ onLookForServer, server, sync, onOpenDeck }) {
-  const items = useLocalStore(STORES.CARDS, sync?.phase);
-  const decksRaw = useLocalStore(STORES.DECKS, sync?.phase);
+  const [version, setVersion] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const refreshKey = `${sync?.phase}-${version}`;
+  const items    = useLocalStore(STORES.CARDS, refreshKey);
+  const decksRaw = useLocalStore(STORES.DECKS, refreshKey);
+
+  const handleDropCard = async (deckId, invId) => {
+    await addToDeck(deckId, invId);
+    setVersion(v => v + 1);
+  };
 
   if (!server) {
     return (
@@ -117,11 +161,20 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
           deck={deck}
           serverUrl={server.url}
           onOpen={() => onOpenDeck(deck.id)}
+          onDropCard={handleDropCard}
         />
       ))}
       {otherItems.map(item => (
-        <InventoryItem key={`i-${item.inventory_id}`} item={item} serverUrl={server.url} />
+        <InventoryItem
+          key={`i-${item.inventory_id}`}
+          item={item}
+          serverUrl={server.url}
+          onClick={() => setSelected(item)}
+        />
       ))}
+      {selected && (
+        <CardOverlay item={selected} serverUrl={server.url} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }
