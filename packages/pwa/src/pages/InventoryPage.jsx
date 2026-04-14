@@ -104,7 +104,7 @@ function QuestDecksStack({ count, onDoubleClick }) {
 
 export default function InventoryPage({ onLookForServer, server, sync, onOpenDeck, onStartQuest }) {
   const [version, setVersion] = useState(0);
-  const [selected, setSelected] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const refreshKey = `${sync?.phase}-${version}`;
   const items      = useLocalStore(STORES.CARDS,      refreshKey);
   const decks      = useLocalStore(STORES.DECKS,      refreshKey);
@@ -181,12 +181,16 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
           key={`i-${item.inventory_id}`}
           item={item}
           serverUrl={server.url}
-          onClick={() => setSelected(item)}
+          onClick={() => setSelectedId(item.inventory_id)}
         />
       ))}
-      {selected && (
-        <CardOverlay item={selected} serverUrl={server.url} onClose={() => setSelected(null)} />
-      )}
+      {selectedId != null && (() => {
+        const live = items.find(it => it.inventory_id === selectedId);
+        if (!live) return null;
+        return (
+          <CardOverlay item={live} serverUrl={server.url} onClose={() => setSelectedId(null)} />
+        );
+      })()}
     </div>
   );
 }

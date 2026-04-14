@@ -242,7 +242,16 @@ export async function destroyQuest(deckId) {
 }
 
 /* Free-infuse is not version-bumped server-side, so per-tick writes
- * don't trigger a library resync. */
+ * don't trigger a resync. */
+export async function freeInfuseCard(inventoryId, amount = 1) {
+  const row = await readRow(STORES.CARDS, inventoryId);
+  if (!row?.id) return;
+  await putRow(STORES.CARDS, { ...row, infusion: (row.infusion || 0) + amount });
+  emitMutation();
+  mutate({ method: 'PATCH', path: `/media/${row.id}/free-infuse`, body: { amount } })
+    .catch(() => {});
+}
+
 export async function freeInfuseQuest(deckId, mediaId, amount = 1) {
   const state = await readRow(STORES.QUEST_STATE, deckId);
   if (state?.currentCard?.id === mediaId) {

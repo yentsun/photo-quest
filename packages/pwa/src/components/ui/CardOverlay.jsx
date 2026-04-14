@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import Card from './Card.jsx';
+import { useLocalStore } from '../../hooks/useLocalStore.js';
+import { STORES } from '../../db/localDb.js';
+import { freeInfuseCard } from '../../db/actions.js';
 import './CardOverlay.css';
 
-export default function CardOverlay({ item, serverUrl, onClose }) {
+const PASSIVE_TICK_MS = 5_000;
+const PASSIVE_CAP_MS  = 120_000;
+
+export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
   const [fullMedia, setFullMedia] = useState(false);
+  const items = useLocalStore(STORES.CARDS, null);
+  const item = items?.find(it => it.inventory_id === initialItem?.inventory_id) || initialItem;
 
   useEffect(() => {
     const onKey = (e) => {
@@ -15,6 +23,18 @@ export default function CardOverlay({ item, serverUrl, onClose }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [fullMedia, onClose]);
+
+  /* LAW 4.11: 1 infusion / 5s in card view, 2 / 5s in full view, capped at 2 min. */
+  useEffect(() => {
+    if (!item?.inventory_id) return;
+    const start = Date.now();
+    const amount = fullMedia ? 2 : 1;
+    const t = setInterval(() => {
+      if (Date.now() - start >= PASSIVE_CAP_MS) { clearInterval(t); return; }
+      freeInfuseCard(item.inventory_id, amount);
+    }, PASSIVE_TICK_MS);
+    return () => clearInterval(t);
+  }, [item?.inventory_id, fullMedia]);
 
   if (!item) return null;
   const isImage = item.type === MEDIA_TYPE.IMAGE;
