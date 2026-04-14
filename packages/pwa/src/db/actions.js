@@ -142,7 +142,10 @@ export async function advanceQuest(deckId) {
 export async function takeQuest(deckId) {
   const prev = await readRow(STORES.QUEST_STATE, deckId);
   if (!prev?.currentCard) throw new Error('Quest deck exhausted');
-  const cost = prev.takeCost || 0;
+  /* Derive from live infusion, not cached takeCost — passive infusion
+   * may have bumped the card since the last server refetch. */
+  const infusion = prev.currentCard.infusion || 0;
+  const cost = infusion === 0 ? 0 : infusion * 2;
   const consumedFreeTake = cost === 0 && !prev.freeTakeUsed;
   const db = await openDb();
   await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE], 'readwrite', async (t) => {
