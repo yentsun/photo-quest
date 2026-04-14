@@ -244,11 +244,22 @@ export async function destroyQuest(deckId) {
 /* Free-infuse is not version-bumped server-side, so per-tick writes
  * don't trigger a resync. */
 export async function freeInfuseCard(inventoryId, amount = 1) {
-  const row = await readRow(STORES.CARDS, inventoryId);
-  if (!row?.id) return;
-  await putRow(STORES.CARDS, { ...row, infusion: (row.infusion || 0) + amount });
+  const db = await openDb();
+  const mediaId = await txn(db, [STORES.CARDS, STORES.DECK_CARDS], 'readwrite', async (t) => {
+    const cards = t.objectStore(STORES.CARDS);
+    const row = await req(cards.get(inventoryId));
+    if (!row?.id) return null;
+    cards.put({ ...row, infusion: (row.infusion || 0) + amount });
+
+    const deckRow = await req(t.objectStore(STORES.DECK_CARDS).get(inventoryId));
+    if (deckRow) {
+      t.objectStore(STORES.DECK_CARDS).put({ ...deckRow, infusion: (deckRow.infusion || 0) + amount });
+    }
+    return row.id;
+  });
+  if (!mediaId) return;
   emitMutation();
-  mutate({ method: 'PATCH', path: `/media/${row.id}/free-infuse`, body: { amount } })
+  mutate({ method: 'PATCH', path: `/media/${mediaId}/free-infuse`, body: { amount } })
     .catch(() => {});
 }
 
