@@ -159,6 +159,10 @@ export default function QuestPage({ questDeckId, server, onBack }) {
         <p className="quest-page__placeholder">Deck exhausted.</p>
       )}
 
+      {state.nextCard?.type === MEDIA_TYPE.IMAGE && (
+        <img src={`${server.url}/image/${state.nextCard.id}`} alt="" aria-hidden style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} />
+      )}
+
       <Modal open={!!confirmDestroy} title="Destroy this card?" onClose={() => setConfirmDestroy(null)}>
         <p style={{ color: '#d1d5db', marginBottom: '0.75rem' }}>
           The file will be deleted from disk. You'll receive{' '}
