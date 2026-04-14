@@ -11,7 +11,7 @@ export default async (kojo, logger) => {
     pathname: '/decks/:id',
   }, async (req, res, params) => {
     const body = await parseBody(req);
-    const ok = kojo.ops.renamePile(Number(params.id), body?.name);
+    const ok = kojo.ops.renameDeck(Number(params.id), body?.name);
     if (!ok) return json(res, 404, { error: 'Deck not found' });
     kojo.ops.bumpVersion('decks');
     json(res, 200, { ok: true });

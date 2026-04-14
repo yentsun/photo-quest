@@ -7,10 +7,9 @@ import LibraryPage from './pages/LibraryPage.jsx';
 import DeckPage from './pages/DeckPage.jsx';
 import QuestPage from './pages/QuestPage.jsx';
 import { useSync } from './hooks/useSync.js';
+import { useLocalStore } from './hooks/useLocalStore.js';
+import { STORES } from './db/localDb.js';
 import './App.css';
-
-/* LAW 4.7: player starting balance. */
-const STARTING_DUST = 50;
 
 const SERVER_KEY = 'photo-quest:server';
 
@@ -56,6 +55,8 @@ export default function App() {
   }, [server]);
 
   const sync = useSync(server?.url);
+  const playerRows = useLocalStore(STORES.PLAYER_STATS, sync?.phase);
+  const dust = playerRows?.[0]?.dust ?? 0;
 
   const PageComponent = PAGES[page];
 
@@ -64,7 +65,7 @@ export default function App() {
       <Nav
         page={page}
         onNavigate={navigate}
-        dust={STARTING_DUST}
+        dust={dust}
         server={server}
         sync={sync}
       />
@@ -80,6 +81,7 @@ export default function App() {
         ) : view?.kind === 'quest' ? (
           <QuestPage
             questDeckId={view.id}
+            server={server}
             onBack={closeView}
           />
         ) : (

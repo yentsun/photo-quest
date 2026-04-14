@@ -1,7 +1,7 @@
 /**
  * @file Rename a deck.
  *
- * Kojo op: accessed as `kojo.ops.renamePile(id, name)`.
+ * Kojo op: accessed as `kojo.ops.renameDeck(id, name)`.
  */
 
 export default function (id, name) {

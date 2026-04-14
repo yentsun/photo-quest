@@ -20,6 +20,7 @@ export default async (kojo, logger) => {
 
     kojo.ops.bumpVersion('inventory');
     kojo.ops.bumpVersion('decks');
+    kojo.ops.bumpVersion('player');
     json(res, 200, result);
   });
 };

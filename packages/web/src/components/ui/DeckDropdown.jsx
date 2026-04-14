@@ -11,7 +11,7 @@ import Icon from './Icon.jsx';
 
 export default function DeckDropdown({ inventoryId, onAdd }) {
   const [open, setOpen] = useState(false);
-  const { piles: decks } = useDecks();
+  const { decks } = useDecks();
   const ref = useRef(null);
 
   useEffect(() => {

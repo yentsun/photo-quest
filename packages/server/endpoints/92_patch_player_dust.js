@@ -28,6 +28,7 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: 'Insufficient magic dust' });
     }
 
+    kojo.ops.bumpVersion('player');
     json(res, 200, result);
   });
 };

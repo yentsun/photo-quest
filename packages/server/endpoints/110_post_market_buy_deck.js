@@ -16,6 +16,7 @@ export default async (kojo, logger) => {
     }
 
     kojo.ops.bumpVersion('inventory');
+    kojo.ops.bumpVersion('player');
     json(res, 201, result);
   });
 };

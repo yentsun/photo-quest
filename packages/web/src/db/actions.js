@@ -81,7 +81,7 @@ export async function destroyCard(invId) {
 
 /**
  * Move inventory cards into a deck. A card belongs to at most one deck,
- * so any prior membership is dropped first (mirrors addToPile.js).
+ * so any prior membership is dropped first (mirrors addToDeck.js).
  * LAW 4.18: +10 infusion is applied once per (card, deck), enforced
  * locally by checking the compound PK before the bump.
  */

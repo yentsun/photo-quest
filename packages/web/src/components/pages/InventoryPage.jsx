@@ -106,7 +106,7 @@ export default function InventoryPage() {
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const { items } = useInventory();
-  const { piles: decks, groupedIds } = useDecks();
+  const { decks, groupedIds } = useDecks();
   const [selectedItem, setSelectedItem] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
 

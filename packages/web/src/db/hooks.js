@@ -70,19 +70,19 @@ export function useInventory() {
  * User decks plus the `groupedIds` set so pages can filter ungrouped
  * inventory cards.
  *
- * @returns {{ piles: object[], groupedIds: Set<number> }}
+ * @returns {{ decks: object[], groupedIds: Set<number> }}
  */
 export function useDecks() {
   return useLocal(
     DECKS_STORES,
     async () => {
-      const [piles, groupedRow] = await Promise.all([
+      const [decks, groupedRow] = await Promise.all([
         getAll(STORES.DECKS),
         getByKey(STORES.META, 'groupedIds'),
       ]);
-      return { piles, groupedIds: new Set(groupedRow?.value || []) };
+      return { decks, groupedIds: new Set(groupedRow?.value || []) };
     },
-    { piles: [], groupedIds: new Set() },
+    { decks: [], groupedIds: new Set() },
   );
 }
 

@@ -9,7 +9,7 @@ import Spinner from '../components/ui/Spinner.jsx';
 import CardOverlay from '../components/ui/CardOverlay.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
 import { STORES } from '../db/localDb.js';
-import { addToDeck, consumeQuestDeck } from '../db/actions.js';
+import { addToDeck, startQuest } from '../db/actions.js';
 import './InventoryPage.css';
 
 const DND_TYPE = 'application/x-inventory-id';
@@ -106,8 +106,9 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
   const [version, setVersion] = useState(0);
   const [selected, setSelected] = useState(null);
   const refreshKey = `${sync?.phase}-${version}`;
-  const items    = useLocalStore(STORES.CARDS, refreshKey);
-  const decksRaw = useLocalStore(STORES.DECKS, refreshKey);
+  const items      = useLocalStore(STORES.CARDS,      refreshKey);
+  const decks      = useLocalStore(STORES.DECKS,      refreshKey);
+  const deckCards  = useLocalStore(STORES.DECK_CARDS, refreshKey);
 
   const handleDropCard = async (deckId, invId) => {
     await addToDeck(deckId, invId);
@@ -116,9 +117,9 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
 
   const handleStartQuest = async () => {
     try {
-      const consumed = await consumeQuestDeck();
+      const deckId = await startQuest();
       setVersion(v => v + 1);
-      onStartQuest?.(consumed.ref_id ?? consumed.inventory_id);
+      onStartQuest?.(deckId);
     } catch (err) {
       console.warn(err.message);
     }
@@ -139,13 +140,11 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
     );
   }
 
-  if (items === null || decksRaw === null) {
+  if (items === null || decks === null || deckCards === null) {
     return <Spinner label="Loading inventory…" />;
   }
 
-  const decks = decksRaw.filter(d => !d.__meta);
-  const meta = decksRaw.find(d => d.__meta);
-  const groupedIds = new Set(meta?.groupedIds || []);
+  const groupedIds = new Set(deckCards.map(dc => dc.inventory_id));
   const ungrouped = items.filter(it => !groupedIds.has(it.inventory_id));
   const questDecks = ungrouped.filter(it => it.card_type === CARD_TYPE.QUEST_DECK);
   const otherItems = ungrouped.filter(it => it.card_type !== CARD_TYPE.QUEST_DECK);

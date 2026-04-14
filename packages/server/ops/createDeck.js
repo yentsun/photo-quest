@@ -1,7 +1,7 @@
 /**
  * @file Create a deck with initial cards.
  *
- * Kojo op: accessed as `kojo.ops.createPile(name, inventoryIds)`.
+ * Kojo op: accessed as `kojo.ops.createDeck(name, inventoryIds)`.
  */
 
 export default function (name, inventoryIds = []) {
@@ -12,7 +12,7 @@ export default function (name, inventoryIds = []) {
   const deckId = Number(result.lastInsertRowid);
 
   if (inventoryIds.length > 0) {
-    kojo.ops.addToPile(deckId, inventoryIds);
+    kojo.ops.addToDeck(deckId, inventoryIds);
   }
 
   return { id: deckId, name: name || 'New Deck', cardCount: inventoryIds.length };

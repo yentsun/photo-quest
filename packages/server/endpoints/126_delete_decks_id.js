@@ -9,7 +9,7 @@ export default async (kojo, logger) => {
     method: 'DELETE',
     pathname: '/decks/:id',
   }, (req, res, params) => {
-    const ok = kojo.ops.deletePile(Number(params.id));
+    const ok = kojo.ops.deleteDeck(Number(params.id));
     if (!ok) return json(res, 404, { error: 'Deck not found' });
     kojo.ops.bumpVersion('decks');
     kojo.ops.bumpVersion('inventory');

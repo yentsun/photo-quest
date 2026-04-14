@@ -6,19 +6,26 @@
  */
 
 const DB_NAME = 'photo-quest';
-const DB_VERSION = 5;
+const DB_VERSION = 7;
 
 export const STORES = {
-  CARDS:      'cards',
-  DECKS:      'decks',
-  DECK_CARDS: 'deckCards',
+  CARDS:        'cards',
+  DECKS:        'decks',
+  DECK_CARDS:   'deckCards',
+  PLAYER_STATS: 'playerStats',
+  QUEST_STATE:  'questState',
 };
 
 const SCHEMA = [
-  { name: STORES.CARDS,      keyPath: 'inventory_id' },
-  { name: STORES.DECKS,      keyPath: 'id' },
-  { name: STORES.DECK_CARDS, keyPath: 'inventory_id' },
+  { name: STORES.CARDS,        keyPath: 'inventory_id' },
+  { name: STORES.DECKS,        keyPath: 'id' },
+  { name: STORES.DECK_CARDS,   keyPath: 'inventory_id' },
+  { name: STORES.PLAYER_STATS, keyPath: 'id' },
+  { name: STORES.QUEST_STATE,  keyPath: 'id' },
 ];
+
+/* Stores that existed in earlier versions and should be cleaned up. */
+const OBSOLETE_STORES = ['library', 'questDecks'];
 
 let dbPromise = null;
 
@@ -31,8 +38,10 @@ export function openDb() {
     req.onupgradeneeded = () => {
       const db = req.result;
       for (const { name, keyPath } of SCHEMA) {
+        if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath });
+      }
+      for (const name of OBSOLETE_STORES) {
         if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
-        db.createObjectStore(name, { keyPath });
       }
     };
   });

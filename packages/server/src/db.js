@@ -161,12 +161,4 @@ function migrateDb() {
     /* memory_tickets table may not exist -- ignore. */
   }
 
-  /* Rename piles → decks, pile_cards → deck_cards. */
-  try {
-    db.exec('ALTER TABLE piles RENAME TO decks');
-    db.exec('ALTER TABLE pile_cards RENAME TO deck_cards');
-    console.debug('[db] Migration applied: piles/pile_cards renamed to decks/deck_cards');
-  } catch (err) {
-    /* Already renamed or tables don't exist. */
-  }
 }

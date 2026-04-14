@@ -1,7 +1,7 @@
 /**
  * @file Add cards to a deck.
  *
- * Kojo op: accessed as `kojo.ops.addToPile(deckId, inventoryIds)`.
+ * Kojo op: accessed as `kojo.ops.addToDeck(deckId, inventoryIds)`.
  */
 
 export default function (deckId, inventoryIds) {

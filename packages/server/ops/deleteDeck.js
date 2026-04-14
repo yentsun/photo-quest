@@ -1,7 +1,7 @@
 /**
  * @file Delete a deck (cards stay in inventory).
  *
- * Kojo op: accessed as `kojo.ops.deletePile(id)`.
+ * Kojo op: accessed as `kojo.ops.deleteDeck(id)`.
  */
 
 export default function (id) {

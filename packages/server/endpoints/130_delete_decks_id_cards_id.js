@@ -9,7 +9,7 @@ export default async (kojo, logger) => {
     method: 'DELETE',
     pathname: '/decks/:id/cards/:inventoryId',
   }, (req, res, params) => {
-    const ok = kojo.ops.removeFromPile(Number(params.id), Number(params.inventoryId));
+    const ok = kojo.ops.removeFromDeck(Number(params.id), Number(params.inventoryId));
     if (!ok) return json(res, 404, { error: 'Card not in deck' });
     kojo.ops.bumpVersion('decks');
     kojo.ops.bumpVersion('inventory');

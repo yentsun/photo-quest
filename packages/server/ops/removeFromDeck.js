@@ -1,7 +1,7 @@
 /**
  * @file Remove a card from a deck.
  *
- * Kojo op: accessed as `kojo.ops.removeFromPile(deckId, inventoryId)`.
+ * Kojo op: accessed as `kojo.ops.removeFromDeck(deckId, inventoryId)`.
  */
 
 export default function (deckId, inventoryId) {

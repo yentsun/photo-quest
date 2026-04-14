@@ -9,6 +9,6 @@ export default async (kojo, logger) => {
     method: 'GET',
     pathname: '/decks/:id/cards',
   }, (req, res, params) => {
-    json(res, 200, kojo.ops.listPileCards(Number(params.id)));
+    json(res, 200, kojo.ops.listDeckCards(Number(params.id)));
   });
 };

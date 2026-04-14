@@ -7,13 +7,15 @@
  *   main → worker: { type: 'sync-all', serverUrl }
  *                  { type: 'start-events', serverUrl }
  *                  { type: 'stop-events' }
+ *                  { type: 'mutate', id, serverUrl, method, path, body? }
  *   worker → main: { type: 'progress', store, count, total }
  *                  { type: 'done' }
  *                  { type: 'error', message }
  *                  { type: 'change', table, version }
+ *                  { type: 'mutate-result', id, ok, status, data?, message? }
  */
 
-import { STORES, clearStore, putRows } from './localDb.js';
+import { STORES, clearStore, putRows, snapshotReplace } from './localDb.js';
 
 const PAGE_SIZE = 100;
 
@@ -23,9 +25,8 @@ async function fetchJson(url) {
   return res.json();
 }
 
-async function syncInventory(serverUrl) {
-  const store = STORES.CARDS;
-  const first = await fetchJson(`${serverUrl}/inventory?limit=${PAGE_SIZE}&offset=0`);
+async function syncPaged(serverUrl, path, store) {
+  const first = await fetchJson(`${serverUrl}${path}?limit=${PAGE_SIZE}&offset=0`);
   const total = first.total ?? first.items.length;
 
   await clearStore(store);
@@ -34,7 +35,7 @@ async function syncInventory(serverUrl) {
   self.postMessage({ type: 'progress', store, count, total });
 
   while (count < total) {
-    const page = await fetchJson(`${serverUrl}/inventory?limit=${PAGE_SIZE}&offset=${count}`);
+    const page = await fetchJson(`${serverUrl}${path}?limit=${PAGE_SIZE}&offset=${count}`);
     if (!page.items.length) break;
     await putRows(store, page.items);
     count += page.items.length;
@@ -42,11 +43,26 @@ async function syncInventory(serverUrl) {
   }
 }
 
-/* Decks are PWA-owned: users build them locally, server never dictates
- * membership. No syncDecks — mutations stay in IDB. */
+const syncInventory = (serverUrl) => syncPaged(serverUrl, '/inventory', STORES.CARDS);
+
+async function syncDecks(serverUrl) {
+  const { decks = [], cards = [] } = await fetchJson(`${serverUrl}/decks`);
+  await Promise.all([
+    snapshotReplace(STORES.DECKS,      decks),
+    snapshotReplace(STORES.DECK_CARDS, cards),
+  ]);
+  self.postMessage({ type: 'progress', store: STORES.DECKS, count: decks.length, total: decks.length });
+}
+
+async function syncPlayer(serverUrl) {
+  const row = await fetchJson(`${serverUrl}/player`);
+  await snapshotReplace(STORES.PLAYER_STATS, [{ id: 1, ...row }]);
+}
 
 const TABLE_SYNCERS = {
   inventory: syncInventory,
+  decks:     syncDecks,
+  player:    syncPlayer,
 };
 
 async function syncTable(serverUrl, table) {
@@ -58,18 +74,36 @@ async function syncTable(serverUrl, table) {
 
 async function syncAll(serverUrl) {
   try {
-    await syncInventory(serverUrl);
+    await Promise.all([
+      syncInventory(serverUrl),
+      syncDecks(serverUrl),
+      syncPlayer(serverUrl),
+    ]);
     self.postMessage({ type: 'done' });
   } catch (err) {
     self.postMessage({ type: 'error', message: err.message });
   }
 }
 
-/* ── SSE change stream ─────────────────────────────────────────────
- * EventSource runs inside the worker so the main thread never opens a
- * connection to the backend. Each `change` event triggers a per-table
- * resync; a brief debounce coalesces bursts (e.g. create-deck +
- * add-cards emits two events within a few ms). */
+async function mutate(id, serverUrl, method, path, body) {
+  try {
+    const res = await fetch(`${serverUrl}${path}`, {
+      method,
+      headers: body != null ? { 'Content-Type': 'application/json' } : {},
+      body:    body != null ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    let data = null;
+    if (text) { try { data = JSON.parse(text); } catch { data = text; } }
+    if (!res.ok) {
+      self.postMessage({ type: 'mutate-result', id, ok: false, status: res.status, message: data?.error || text || res.statusText });
+      return;
+    }
+    self.postMessage({ type: 'mutate-result', id, ok: true, status: res.status, data });
+  } catch (err) {
+    self.postMessage({ type: 'mutate-result', id, ok: false, status: 0, message: err.message });
+  }
+}
 
 let eventSource = null;
 const debounceTimers = new Map();
@@ -112,10 +146,14 @@ function stopEvents() {
   debounceTimers.clear();
 }
 
+let activeServerUrl = null;
+
 self.onmessage = ({ data }) => {
+  if (data.serverUrl) activeServerUrl = data.serverUrl;
   switch (data.type) {
-    case 'sync-all':     syncAll(data.serverUrl); break;
-    case 'start-events': startEvents(data.serverUrl); break;
+    case 'sync-all':     syncAll(activeServerUrl); break;
+    case 'start-events': startEvents(activeServerUrl); break;
     case 'stop-events':  stopEvents(); break;
+    case 'mutate':       mutate(data.id, activeServerUrl, data.method, data.path, data.body); break;
   }
 };

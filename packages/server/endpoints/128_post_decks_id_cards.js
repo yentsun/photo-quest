@@ -11,7 +11,7 @@ export default async (kojo, logger) => {
     pathname: '/decks/:id/cards',
   }, async (req, res, params) => {
     const body = await parseBody(req);
-    const result = kojo.ops.addToPile(Number(params.id), body?.inventoryIds || []);
+    const result = kojo.ops.addToDeck(Number(params.id), body?.inventoryIds || []);
     kojo.ops.bumpVersion('decks');
     kojo.ops.bumpVersion('inventory');
     json(res, 200, result);

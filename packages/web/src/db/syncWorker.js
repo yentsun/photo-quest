@@ -44,9 +44,9 @@ async function syncInventory() {
 
 async function syncDecks() {
   try {
-    const { piles, groupedIds, cards } = await fetchDecks();
+    const { decks, groupedIds, cards } = await fetchDecks();
     await Promise.all([
-      snapshotReplace(STORES.DECKS, piles || []),
+      snapshotReplace(STORES.DECKS, decks || []),
       snapshotReplace(STORES.DECK_CARDS, cards || []),
       putRow(STORES.META, { key: 'groupedIds', value: groupedIds || [] }),
     ]);

@@ -1,7 +1,7 @@
 /**
  * @file List cards in a deck (joined with inventory + media).
  *
- * Kojo op: accessed as `kojo.ops.listPileCards(deckId)`.
+ * Kojo op: accessed as `kojo.ops.listDeckCards(deckId)`.
  */
 
 export default function (deckId) {

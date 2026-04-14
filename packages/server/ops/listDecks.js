@@ -1,7 +1,7 @@
 /**
  * @file List all decks with card counts and preview.
  *
- * Kojo op: accessed as `kojo.ops.listPiles()`.
+ * Kojo op: accessed as `kojo.ops.listDecks()`.
  */
 
 export default function () {
@@ -40,7 +40,7 @@ export default function () {
 
   /* Denormalized membership rows so the client can render any user deck
    * (DeckPage) entirely from the local IDB replica. Each row carries the
-   * joined inventory + media fields, mirroring listPileCards. */
+   * joined inventory + media fields, mirroring listDeckCards. */
   const cards = db.prepare(
     `SELECT dc.deck_id, i.id AS inventory_id, i.acquired_at, m.*
      FROM deck_cards dc
@@ -49,5 +49,5 @@ export default function () {
      ORDER BY dc.deck_id, dc.id`
   ).all();
 
-  return { piles: result, groupedIds, cards };
+  return { decks: result, groupedIds, cards };
 }

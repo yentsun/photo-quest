@@ -14,14 +14,6 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.4** If the user has media in their library, they must be able to launch a slideshow (optionally shuffled). Slideshow is manual — no auto-advance, only prev/next controls.
 
-**1.5** _(removed)_
-
-**1.6** _(removed)_
-
-**1.7** _(removed — replaced by dust infusion, see 4.8)_
-
-**1.8** _(removed — replaced by dust infusion, see 4.8)_
-
 **1.9** The user must be able to launch a slideshow from the folder containing a media item, in either random or sequential order.
 
 **1.10** Items loaded into the PWA must remain available even when offline.
@@ -124,13 +116,11 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.4** The inventory must support shuffle/slideshow browsing, reusing the existing viewer and navigation controls.
 
-**4.5** Each day, 10 **quest deck cards** are generated and placed in the player's inventory. Each deck contains 10 cards from the media library, weighted by infusion. The player opens a quest deck card from inventory to browse its cards one at a time. Once all cards have been viewed, the deck card is consumed (removed from inventory).
+**4.5** A **quest deck card** is an inventory item that contains 10 cards sampled from the media library, weighted by infusion. The player opens a quest deck card from inventory to browse its cards one at a time. Once all cards have been viewed, the deck card is consumed (removed from inventory).
 
 **4.6** The player's magic dust balance must be visible in the app header at all times.
 
 **4.7** The player's starting magic dust balance is **50**.
-
-**4.8** Each media item has a **dust infusion** value (starts at 0). While browsing quest decks, the player can **infuse** the current card by spending 1 magic dust per click — this replaces the old "like" mechanic. Infusion is cumulative and persists. Higher infusion increases the chance of appearing in future quest decks.
 
 **4.9** While browsing quest decks, the player can **take** the current card into their inventory. Each deck allows **one free take** of a 0-infusion card. After that, 0-infusion cards cannot be taken. Infused cards cost **infusion × 2** magic dust to take.
 
@@ -138,7 +128,7 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.13** Viewing a quest deck card passively infuses it **for free**: **1 infusion per 5 seconds**, capped at **2 minutes**. Same rate as inventory card view.
 
-**4.12** The app must have a **Market** page. The player can buy extra quest deck cards (**5 Đ** each) and memory game ticket cards (**1 Đ** each). Purchased cards appear in inventory. The 10 free daily quest deck cards still generate; market decks are added on top. Memory game requires a ticket card to play (consumed on first card flip).
+**4.12** The app must have a **Market** page. The player can buy quest deck cards (**5 Đ** each) and memory game ticket cards (**1 Đ** each). Purchased cards appear in inventory. Quest decks are acquired solely through market purchase — there is no daily auto-generation. Memory game requires a ticket card to play (consumed on first card flip).
 
 **4.14** The player must be able to organize inventory cards into **decks** (like playlists). There are no "piles" — only decks. A card belongs to **at most one** deck — adding it to a new deck removes it from its previous deck. Decks are created by dragging a card onto another card. Decks can be named. Inventory view shows decks as stacked card groups and ungrouped cards. Each deck has its own URL (`/deck/:id`) with a back button to return to inventory.
 
@@ -152,8 +142,6 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.18** When a card is placed into a user deck, it receives **+10 dust infusion** as a reward for organization. The bonus is applied once per deck placement — re-adding the same card to the same deck does not grant additional infusion.
 
-**4.19** Quest decks are tied to a calendar date. Each day on first access, 10 new quest decks are generated for that date. Any quest deck inventory cards from prior days that were never opened (still not exhausted) must be purged at generation time — they do not carry over. The 10 free daily decks regenerate even if none were played.
-
 **4.20** While browsing a quest deck, any card whose media is already in the player's inventory is silently skipped (never displayed). Skipping, taking, or destroying the current card advances the deck to the next non-owned card. When no non-owned card remains, the deck is exhausted and its inventory card is consumed.
 
 **4.21** Quest action inputs must be idempotent under rapid repeat input. While a take, skip, or destroy action is in flight, the UI must reject further invocations of any quest action for that deck (button disabled, key ignored) until the action settles. One click equals one action — a held `ArrowRight` key or fast double-click must not stack multiple advances.
@@ -165,9 +153,7 @@ The governing rules of the photo-quest project. This document is the source of t
 - After all pairs are matched, the player picks reward cards from the matched pairs: **1 star → 1 pick, 2 stars → 2 picks, 3 stars → all 8 picks**. Each picked card is added to inventory with **+10 dust infusion** (per 4.17).
 - Starting the game consumes **one ticket card** from inventory. The ticket is consumed on the first card flip, not on page load — abandoning before the first flip does not cost a ticket.
 
-**4.23** Market-bought quest decks (4.12) follow the same mechanics as daily quest decks (4.5, 4.9, 4.19, 4.20) — same card count, same infusion-weighted selection, same take/destroy/skip rules, same exhaustion behaviour. They are additive to the 10 free daily decks, not a replacement.
-
-**4.24** The current quest card's infusion value must be visible in the card UI and update live as passive infusion (4.13) or explicit infusion (4.8) accrues. The take cost shown on the take button must reflect the live infusion value.
+**4.24** The current quest card's infusion value must be visible in the card UI and update live as passive infusion (4.13) accrues. The take cost shown on the take button must reflect the live infusion value.
 
 **4.25** Inventory listings (inventory page, "open quest deck" shortcut, etc.) must present items **newest-first** (most recently acquired at the top) regardless of the underlying storage order.
 
