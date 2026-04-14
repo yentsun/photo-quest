@@ -39,6 +39,7 @@ function CardViewer({ state, server, busy, onTake, onSkip, onDestroy }) {
   return (
     <div className="quest-page__viewer">
       <Card
+        size="large"
         header={card.title || card.filename || 'Untitled'}
         headerRight={<span style={{ color: '#d8b4fe' }}>{words.dustSymbol} {card.infusion || 0}</span>}
         art={

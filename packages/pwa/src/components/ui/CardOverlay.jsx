@@ -67,7 +67,7 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
     <div className="overlay" onClick={onClose}>
       <div className="overlay__card" onClick={(e) => e.stopPropagation()}>
         <Card
-          className="card--large"
+          size="large"
           header={editing ? (
             <Input
               value={draftTitle}

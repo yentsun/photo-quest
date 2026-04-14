@@ -1,10 +1,11 @@
 import Card from './Card.jsx';
 
 export default function ConsumableCard({
-  title, subtitle, emoji, gradient = 'purple', borderColor, onClick, onDoubleClick,
+  title, subtitle, emoji, gradient = 'purple', size = 'normal', borderColor, onClick, onDoubleClick,
 }) {
   return (
     <Card
+      size={size}
       borderColor={borderColor}
       onClick={onClick}
       onDoubleClick={onDoubleClick}

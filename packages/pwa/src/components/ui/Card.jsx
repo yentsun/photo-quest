@@ -1,13 +1,13 @@
 import './Card.css';
 
 export default function Card({
-  header, headerRight, art, footer,
+  header, headerRight, art, footer, size = 'normal',
   borderColor, className = '', onClick, onDoubleClick, children,
 }) {
   const clickable = !!(onClick || onDoubleClick);
   return (
     <div
-      className={`card ${clickable ? 'card--clickable' : ''} ${className}`}
+      className={`card card--${size} ${clickable ? 'card--clickable' : ''} ${className}`}
       style={borderColor ? { borderColor } : undefined}
       onClick={onClick}
       onDoubleClick={onDoubleClick}

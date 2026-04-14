@@ -9,15 +9,21 @@ import { buyQuestDeck, buyTicket } from '../db/actions.js';
 import './InventoryPage.css';
 
 const ITEMS = [
-  { kind: 'deck',   title: 'Quest Deck',     emoji: '🃏', gradient: 'amber',  price: MARKET_PRICES.questDeck,    buy: buyQuestDeck },
-  { kind: 'ticket', title: 'Memory Ticket',  emoji: '🎟️', gradient: 'purple', price: MARKET_PRICES.memoryTicket, buy: buyTicket    },
+  { kind: 'deck',   title: 'Quest Deck',    emoji: '🃏', gradient: 'quest',  borderColor: 'rgba(180, 83, 9, 0.6)', price: MARKET_PRICES.questDeck,    buy: buyQuestDeck },
+  { kind: 'ticket', title: 'Memory Ticket', emoji: '🎟️', gradient: 'purple',                                       price: MARKET_PRICES.memoryTicket, buy: buyTicket    },
 ];
 
 function MarketEntry({ item, busy, canAfford, onBuy }) {
   const label = `${item.price} ${words.dustSymbol}`;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
-      <ConsumableCard title={item.title} subtitle={label} emoji={item.emoji} gradient={item.gradient} />
+      <ConsumableCard
+        title={item.title}
+        subtitle={label}
+        emoji={item.emoji}
+        gradient={item.gradient}
+        borderColor={item.borderColor}
+      />
       <Button onClick={onBuy} disabled={busy || !canAfford}>
         {busy ? 'Buying…' : `Buy (${label})`}
       </Button>

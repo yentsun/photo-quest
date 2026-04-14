@@ -18,12 +18,6 @@
   object-fit: contain;
 }
 
-.card--large { width: min(28rem, 45vw); }
-.card--large .card__art { aspect-ratio: 5 / 7; }
-.card--large .card__header { padding: 0.625rem 1.25rem; }
-.card--large .card__header-title { font-size: 0.875rem; }
-.card--large .card__header-right { font-size: 0.75rem; }
-
 .overlay__art {
   position: relative;
   width: 100%;

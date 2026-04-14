@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { CARD_TYPE, MEDIA_TYPE } from '@photo-quest/shared';
+import { CARD_TYPE, MARKET_PRICES, MEDIA_TYPE, words } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import MediaCard from '../components/ui/MediaCard.jsx';
@@ -86,8 +86,12 @@ function QuestDecksStack({ count, onDoubleClick }) {
       count={count}
       onDoubleClick={onDoubleClick}
       header="Quest Decks"
+      headerRight={
+        <span style={{ color: '#d8b4fe' }}>{MARKET_PRICES.questDeck} {words.dustSymbol}</span>
+      }
+      borderColor="rgba(180, 83, 9, 0.6)"
       art={
-        <div className="card__art--gradient-amber" style={{ width: '100%', height: '100%' }}>
+        <div className="card__art--gradient-quest" style={{ width: '100%', height: '100%' }}>
           <svg
             viewBox="0 -336 1557 1557"
             fill="currentColor"

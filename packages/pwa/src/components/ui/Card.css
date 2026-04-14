@@ -1,5 +1,4 @@
 .card {
-  width: 11rem;
   background: #111827;
   border: 1px solid #374151;
   border-radius: 1rem;
@@ -9,6 +8,33 @@
   display: flex;
   flex-direction: column;
 }
+/* LAW 5.1: exactly three card sizes. Every attribute that varies by
+ * size (width, art aspect, header / footer padding and text) lives
+ * here so sub-components only pass `size` and everything follows. */
+.card--small  { width:  5rem; }
+.card--normal { width: 11rem; }
+.card--large  { width: min(24rem, 90vw); }
+
+.card--small  .card__art { aspect-ratio: 5 / 7; }
+.card--normal .card__art { aspect-ratio: 3 / 4; }
+.card--large  .card__art { aspect-ratio: 5 / 7; }
+
+.card--small  .card__header { padding: 0.25rem  0.5rem; }
+.card--normal .card__header { padding: 0.375rem 0.75rem; }
+.card--large  .card__header { padding: 0.625rem 1.25rem; }
+
+.card--small  .card__header-title { font-size: 0.5rem;   }
+.card--normal .card__header-title { font-size: 0.625rem; }
+.card--large  .card__header-title { font-size: 0.875rem; }
+
+.card--small  .card__header-right { font-size: 0.5rem;   }
+.card--normal .card__header-right { font-size: 0.625rem; }
+.card--large  .card__header-right { font-size: 0.75rem;  }
+
+.card--small  .card__footer { padding: 0.25rem 0.5rem;   height: 1.25rem; font-size: 0.5625rem; }
+.card--normal .card__footer { padding: 0.5rem  0.75rem;  height: 3rem;    font-size: 0.75rem;   }
+.card--large  .card__footer { padding: 1rem    1.25rem;  min-height: 2.5rem; font-size: 1rem;   }
+
 .card--clickable { cursor: pointer; }
 .card--clickable:hover {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -18,14 +44,12 @@
 .card__header {
   display: flex;
   align-items: center;
-  padding: 0.375rem 0.75rem;
   border-bottom: 1px solid #374151;
   color: #fff;
   white-space: nowrap;
 }
 .card__header-title {
   width: 100%;
-  font-size: 0.625rem;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -37,13 +61,11 @@
 .card__header-right {
   width: 20%;
   text-align: right;
-  font-size: 0.625rem;
 }
 
 .card__art-wrap { padding: 0.5rem 0.5rem 0; }
 .card__art {
   position: relative;
-  aspect-ratio: 3 / 4;
   border-radius: 0.5rem;
   overflow: hidden;
   background: #000;
@@ -57,9 +79,6 @@
 }
 
 .card__footer {
-  padding: 0.5rem 0.75rem;
-  height: 3rem;
-  font-size: 0.75rem;
   color: #9ca3af;
   overflow: hidden;
 }
@@ -86,6 +105,12 @@
 }
 .card__art--gradient-amber {
   background: linear-gradient(135deg, #78350f 0%, #7c2d12 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.card__art--gradient-quest {
+  background: linear-gradient(135deg, #4338ca 0%, #6b21a8 100%);
   display: flex;
   align-items: center;
   justify-content: center;
