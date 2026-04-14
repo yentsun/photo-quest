@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { MEDIA_TYPE, words } from '@photo-quest/shared';
+import { CARD_TYPE, MEDIA_TYPE, words } from '@photo-quest/shared';
+import Button from './Button.jsx';
 import Card from './Card.jsx';
+import DeckDropdown from './DeckDropdown.jsx';
 import Input from './Input.jsx';
+import Modal from './Modal.jsx';
 import { useLocalStore } from '../../hooks/useLocalStore.js';
 import { STORES } from '../../db/localDb.js';
-import { freeInfuseCard, renameCard } from '../../db/actions.js';
+import { destroyCard, freeInfuseCard, renameCard, sellCard } from '../../db/actions.js';
 import './CardOverlay.css';
 
 const PASSIVE_TICK_MS = 5_000;
@@ -14,6 +17,7 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
   const [fullMedia, setFullMedia] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
+  const [confirm, setConfirm] = useState(null);
   const items = useLocalStore(STORES.CARDS, null);
   const item = items?.find(it => it.inventory_id === initialItem?.inventory_id) || initialItem;
 
@@ -98,7 +102,52 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
             </div>
           }
         />
+        {item.card_type === CARD_TYPE.MEDIA && (
+          <div className="overlay__actions">
+            <DeckDropdown inventoryId={item.inventory_id} onAdd={onClose} />
+            <Button
+              variant="secondary"
+              onClick={() => setConfirm({
+                kind: 'sell',
+                title: `Sell (+${infusion} ${words.dustSymbol})`,
+                message: 'Sell this card back to the library?',
+                run: () => sellCard(item.inventory_id),
+              })}
+            >
+              Sell (+{infusion} {words.dustSymbol})
+            </Button>
+            <Button
+              variant="secondary"
+              style={{ color: '#f87171' }}
+              onClick={() => setConfirm({
+                kind: 'destroy',
+                title: `Destroy (+${Math.max(2, infusion * 2)} ${words.dustSymbol})`,
+                message: 'Destroy this card? The file is deleted from disk.',
+                run: () => destroyCard(item.inventory_id),
+              })}
+            >
+              Destroy (+{Math.max(2, infusion * 2)} {words.dustSymbol})
+            </Button>
+          </div>
+        )}
       </div>
+
+      <Modal open={!!confirm} title={confirm?.title} onClose={() => setConfirm(null)}>
+        <p style={{ color: '#d1d5db', marginBottom: '0.75rem' }}>{confirm?.message}</p>
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          <Button variant="secondary" onClick={() => setConfirm(null)}>Cancel</Button>
+          <Button
+            onClick={async () => {
+              const run = confirm.run;
+              setConfirm(null); onClose();
+              try { await run(); } catch (err) { console.error(err); }
+            }}
+            style={confirm?.kind === 'destroy' ? { color: '#f87171' } : undefined}
+          >
+            {confirm?.kind === 'destroy' ? 'Destroy' : 'Sell'}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -181,6 +181,46 @@ export async function destroyQuest(deckId) {
   });
 }
 
+/** Sell a card back to the library. Reward = infusion (LAW 4.15). */
+export async function sellCard(inventoryId) {
+  const db = await openDb();
+  const mediaId = await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.PLAYER_STATS], 'readwrite', async (t) => {
+    const cards = t.objectStore(STORES.CARDS);
+    const row = await req(cards.get(inventoryId));
+    if (!row) return null;
+    const reward = row.infusion || 0;
+    cards.delete(inventoryId);
+    t.objectStore(STORES.DECK_CARDS).delete(inventoryId);
+    const ps  = t.objectStore(STORES.PLAYER_STATS);
+    const pl  = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
+    ps.put({ ...pl, dust: (pl.dust || 0) + reward });
+    return row.id;
+  });
+  if (!mediaId) return;
+  emitMutation();
+  return mutate({ method: 'POST', path: `/inventory/${inventoryId}/sell` });
+}
+
+/** Destroy a card: remove from inventory + delete file from disk. Reward = max(2, infusion*2) (LAW 4.10). */
+export async function destroyCard(inventoryId) {
+  const db = await openDb();
+  const deleted = await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.PLAYER_STATS], 'readwrite', async (t) => {
+    const cards = t.objectStore(STORES.CARDS);
+    const row = await req(cards.get(inventoryId));
+    if (!row) return false;
+    const reward = Math.max(2, (row.infusion || 0) * 2);
+    cards.delete(inventoryId);
+    t.objectStore(STORES.DECK_CARDS).delete(inventoryId);
+    const ps = t.objectStore(STORES.PLAYER_STATS);
+    const pl = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
+    ps.put({ ...pl, dust: (pl.dust || 0) + reward });
+    return true;
+  });
+  if (!deleted) return;
+  emitMutation();
+  return mutate({ method: 'DELETE', path: `/inventory/${inventoryId}/destroy` });
+}
+
 export async function renameCard(inventoryId, title) {
   const clean = (title || '').trim();
   if (!clean) return;

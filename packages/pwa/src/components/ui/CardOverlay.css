@@ -10,7 +10,28 @@
 }
 .overlay--full { background: #000; }
 
-.overlay__card { cursor: default; }
+.overlay__card {
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.overlay__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+@media (max-width: 640px) {
+  .overlay__card {
+    flex-direction: column;
+  }
+  .overlay__actions {
+    flex-direction: row;
+    justify-content: center;
+  }
+}
 
 .overlay__fullmedia {
   max-width: 100%;
