@@ -6,22 +6,24 @@
  */
 
 const DB_NAME = 'photo-quest';
-const DB_VERSION = 7;
+const DB_VERSION = 9;
 
 export const STORES = {
-  CARDS:        'cards',
-  DECKS:        'decks',
-  DECK_CARDS:   'deckCards',
-  PLAYER_STATS: 'playerStats',
-  QUEST_STATE:  'questState',
+  CARDS:              'cards',
+  DECKS:              'decks',
+  DECK_CARDS:         'deckCards',
+  PLAYER_STATS:       'playerStats',
+  QUEST_STATE:        'questState',
+  PENDING_MUTATIONS:  'pendingMutations',
 };
 
 const SCHEMA = [
-  { name: STORES.CARDS,        keyPath: 'inventory_id' },
-  { name: STORES.DECKS,        keyPath: 'id' },
-  { name: STORES.DECK_CARDS,   keyPath: 'inventory_id' },
-  { name: STORES.PLAYER_STATS, keyPath: 'id' },
-  { name: STORES.QUEST_STATE,  keyPath: 'id' },
+  { name: STORES.CARDS,             keyPath: 'inventory_id' },
+  { name: STORES.DECKS,             keyPath: 'id' },
+  { name: STORES.DECK_CARDS,        keyPath: 'inventory_id' },
+  { name: STORES.PLAYER_STATS,      keyPath: 'id' },
+  { name: STORES.QUEST_STATE,       keyPath: 'id' },
+  { name: STORES.PENDING_MUTATIONS, keyPath: 'id', autoIncrement: true },
 ];
 
 /* Stores that existed in earlier versions and should be cleaned up. */
@@ -37,8 +39,16 @@ export function openDb() {
     req.onsuccess = () => resolve(req.result);
     req.onupgradeneeded = () => {
       const db = req.result;
-      for (const { name, keyPath } of SCHEMA) {
-        if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath });
+      /* Recreate pendingMutations so its autoIncrement flag is applied
+       * (earlier versions created it without). Safe — the queue is
+       * transient and empty on first drain. */
+      if (db.objectStoreNames.contains(STORES.PENDING_MUTATIONS)) {
+        db.deleteObjectStore(STORES.PENDING_MUTATIONS);
+      }
+      for (const { name, keyPath, autoIncrement } of SCHEMA) {
+        if (!db.objectStoreNames.contains(name)) {
+          db.createObjectStore(name, { keyPath, autoIncrement });
+        }
       }
       for (const name of OBSOLETE_STORES) {
         if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);

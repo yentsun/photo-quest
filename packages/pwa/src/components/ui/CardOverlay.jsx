@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { MEDIA_TYPE, words } from '@photo-quest/shared';
 import Card from './Card.jsx';
+import Input from './Input.jsx';
 import { useLocalStore } from '../../hooks/useLocalStore.js';
 import { STORES } from '../../db/localDb.js';
-import { freeInfuseCard } from '../../db/actions.js';
+import { freeInfuseCard, renameCard } from '../../db/actions.js';
 import './CardOverlay.css';
 
 const PASSIVE_TICK_MS = 5_000;
@@ -11,8 +12,18 @@ const PASSIVE_CAP_MS  = 120_000;
 
 export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
   const [fullMedia, setFullMedia] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState('');
   const items = useLocalStore(STORES.CARDS, null);
   const item = items?.find(it => it.inventory_id === initialItem?.inventory_id) || initialItem;
+
+  useEffect(() => { setEditing(false); }, [item?.inventory_id]);
+
+  const saveTitle = () => {
+    const trimmed = draftTitle.trim();
+    if (trimmed && trimmed !== item.title) renameCard(item.inventory_id, trimmed);
+    setEditing(false);
+  };
 
   useEffect(() => {
     const onKey = (e) => {
@@ -57,7 +68,25 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
       <div className="overlay__card" onClick={(e) => e.stopPropagation()}>
         <Card
           className="card--large"
-          header={item.title || 'Untitled'}
+          header={editing ? (
+            <Input
+              value={draftTitle}
+              autoFocus
+              onChange={(e) => setDraftTitle(e.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter')  saveTitle();
+                if (e.key === 'Escape') setEditing(false);
+              }}
+            />
+          ) : (
+            <span
+              onClick={() => { setDraftTitle(item.title || ''); setEditing(true); }}
+              style={{ cursor: 'text' }}
+            >
+              {item.title || 'Untitled'}
+            </span>
+          )}
           headerRight={<span style={{ color: '#d8b4fe' }}>{words?.dustSymbol || 'Đ'} {infusion}</span>}
           art={
             <div className="overlay__art">

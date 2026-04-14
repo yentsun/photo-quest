@@ -1,6 +1,7 @@
 /**
- * @file Optimistic IDB writes with background server reconciliation.
- * All HTTP lives in syncWorker.js via `mutate(...)` in sync.js.
+ * @file Optimistic IDB writes; mutations go through the sync queue in
+ * `sync.js`. Server truth returns via the queue's `then` refetches or
+ * via SSE-triggered resyncs — never synchronously from these actions.
  */
 
 import { CARD_TYPE, MARKET_PRICES } from '@photo-quest/shared';
@@ -36,97 +37,47 @@ async function putRow(store, row) {
   const db = await openDb();
   await txn(db, [store], 'readwrite', (t) => { t.objectStore(store).put(row); });
 }
-async function deleteRow(store, key) {
-  const db = await openDb();
-  await txn(db, [store], 'readwrite', (t) => { t.objectStore(store).delete(key); });
-}
 
-/**
- * 1. `applyLocally` writes the expected next state to IDB
- * 2. `request` fires the server call in the background
- * 3. `onSuccess(data)` reconciles IDB with the authoritative response
- * 4. `revert` rolls back IDB if the server rejects
- */
-async function optimistic({ applyLocally, request, onSuccess, revert }) {
-  await applyLocally();
-  emitMutation();
-  try {
-    const data = await request();
-    if (onSuccess) { await onSuccess(data); emitMutation(); }
-    return data;
-  } catch (err) {
-    if (revert) { await revert(); emitMutation(); }
-    throw err;
-  }
-}
-
-/* Atomic read-modify-write on player dust to avoid being clobbered by
- * an in-flight SSE resync. Returns the previous balance for rollback. */
 async function adjustDust(delta) {
   const db = await openDb();
-  return txn(db, [STORES.PLAYER_STATS], 'readwrite', async (t) => {
+  await txn(db, [STORES.PLAYER_STATS], 'readwrite', async (t) => {
     const os = t.objectStore(STORES.PLAYER_STATS);
     const row = (await req(os.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
-    const prev = row.dust || 0;
-    os.put({ ...row, dust: Math.max(0, prev + delta) });
-    return prev;
+    os.put({ ...row, dust: Math.max(0, (row.dust || 0) + delta) });
   });
-}
-
-async function restoreDust(value) {
-  await putRow(STORES.PLAYER_STATS, { id: PLAYER_STATS_KEY, dust: value });
 }
 
 /* ── Decks ─────────────────────────────────────────────────────── */
 
 export async function addToDeck(deckId, inventoryId) {
   const db = await openDb();
-  const { prevDeckCard, deck, card } = await txn(
-    db, [STORES.DECK_CARDS, STORES.DECKS, STORES.CARDS], 'readonly',
-    async (t) => ({
-      prevDeckCard: await req(t.objectStore(STORES.DECK_CARDS).get(inventoryId)),
-      deck:         await req(t.objectStore(STORES.DECKS).get(deckId)),
-      card:         await req(t.objectStore(STORES.CARDS).get(inventoryId)),
-    }),
-  );
-
-  return optimistic({
-    applyLocally: () => txn(db, [STORES.DECK_CARDS, STORES.DECKS], 'readwrite', (t) => {
-      if (card) t.objectStore(STORES.DECK_CARDS).put({ ...card, deck_id: deckId, inventory_id: inventoryId });
-      if (deck) {
-        const bumped = prevDeckCard?.deck_id === deckId ? 0 : 1;
-        t.objectStore(STORES.DECKS).put({ ...deck, cardCount: (deck.cardCount || 0) + bumped });
-      }
-    }),
-    request: () => mutate({
-      method: 'POST',
-      path:   `/decks/${deckId}/cards`,
-      body:   { inventoryIds: [inventoryId] },
-    }),
-    revert: () => txn(db, [STORES.DECK_CARDS, STORES.DECKS], 'readwrite', (t) => {
-      if (prevDeckCard) t.objectStore(STORES.DECK_CARDS).put(prevDeckCard);
-      else              t.objectStore(STORES.DECK_CARDS).delete(inventoryId);
-      if (deck) t.objectStore(STORES.DECKS).put(deck);
-    }),
+  await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.DECKS], 'readwrite', async (t) => {
+    const card = await req(t.objectStore(STORES.CARDS).get(inventoryId));
+    if (!card) return;
+    const prev = await req(t.objectStore(STORES.DECK_CARDS).get(inventoryId));
+    if (prev?.deck_id === deckId) return;
+    t.objectStore(STORES.DECK_CARDS).put({ ...card, deck_id: deckId, inventory_id: inventoryId });
+    const deck = await req(t.objectStore(STORES.DECKS).get(deckId));
+    if (deck) t.objectStore(STORES.DECKS).put({ ...deck, cardCount: (deck.cardCount || 0) + 1 });
+  });
+  emitMutation();
+  return mutate({
+    method: 'POST',
+    path:   `/decks/${deckId}/cards`,
+    body:   { inventoryIds: [inventoryId] },
   });
 }
 
-/** Server assigns the id; no optimistic write possible. */
 export async function createDeck(name, inventoryIds = []) {
-  const result = await mutate({ method: 'POST', path: '/decks', body: { name, inventoryIds } });
-  emitMutation();
-  return result;
+  return mutate({ method: 'POST', path: '/decks', body: { name, inventoryIds } });
 }
 
 /* ── Market ────────────────────────────────────────────────────── */
 
 async function buy(path, price) {
-  let prevDust = 0;
-  return optimistic({
-    applyLocally: async () => { prevDust = await adjustDust(-price); },
-    request:      () => mutate({ method: 'POST', path }),
-    revert:       () => restoreDust(prevDust),
-  });
+  await adjustDust(-price);
+  emitMutation();
+  return mutate({ method: 'POST', path });
 }
 
 export const buyQuestDeck = () => buy('/market/buy-deck',   MARKET_PRICES.questDeck);
@@ -152,11 +103,11 @@ function advancedState(state, { consumedFreeTake = false } = {}) {
   };
 }
 
-function reconcileQuest(deckId) {
-  return (state) => state?.exhausted
-    ? deleteRow(STORES.QUEST_STATE, deckId)
-    : putRow(STORES.QUEST_STATE, state);
-}
+const questRefetch = (deckId) => ({
+  method: 'GET',
+  path:   `/quest/decks/${deckId}`,
+  store:  STORES.QUEST_STATE,
+});
 
 export async function startQuest() {
   const db = await openDb();
@@ -179,12 +130,12 @@ export async function startQuest() {
 export async function advanceQuest(deckId) {
   const prev = await readRow(STORES.QUEST_STATE, deckId);
   if (!prev) throw new Error('Quest deck not found');
-
-  return optimistic({
-    applyLocally: () => putRow(STORES.QUEST_STATE, advancedState(prev)),
-    request:      () => mutate({ method: 'POST', path: `/quest/decks/${deckId}/next` }),
-    onSuccess:    reconcileQuest(deckId),
-    revert:       () => putRow(STORES.QUEST_STATE, prev),
+  await putRow(STORES.QUEST_STATE, advancedState(prev));
+  emitMutation();
+  return mutate({
+    method: 'POST',
+    path:   `/quest/decks/${deckId}/next`,
+    then:   questRefetch(deckId),
   });
 }
 
@@ -194,24 +145,17 @@ export async function takeQuest(deckId) {
   const cost = prev.takeCost || 0;
   const consumedFreeTake = cost === 0 && !prev.freeTakeUsed;
   const db = await openDb();
-  let prevDust = 0;
-
-  return optimistic({
-    applyLocally: async () => {
-      await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE], 'readwrite', async (t) => {
-        const ps = t.objectStore(STORES.PLAYER_STATS);
-        const row = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
-        prevDust = row.dust || 0;
-        ps.put({ ...row, dust: Math.max(0, prevDust - cost) });
-        t.objectStore(STORES.QUEST_STATE).put(advancedState(prev, { consumedFreeTake }));
-      });
-    },
-    request:   () => mutate({ method: 'POST', path: `/quest/decks/${deckId}/take` }),
-    onSuccess: reconcileQuest(deckId),
-    revert:    () => txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE], 'readwrite', (t) => {
-      t.objectStore(STORES.PLAYER_STATS).put({ id: PLAYER_STATS_KEY, dust: prevDust });
-      t.objectStore(STORES.QUEST_STATE).put(prev);
-    }),
+  await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE], 'readwrite', async (t) => {
+    const ps  = t.objectStore(STORES.PLAYER_STATS);
+    const row = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
+    ps.put({ ...row, dust: Math.max(0, (row.dust || 0) - cost) });
+    t.objectStore(STORES.QUEST_STATE).put(advancedState(prev, { consumedFreeTake }));
+  });
+  emitMutation();
+  return mutate({
+    method: 'POST',
+    path:   `/quest/decks/${deckId}/take`,
+    then:   questRefetch(deckId),
   });
 }
 
@@ -220,29 +164,42 @@ export async function destroyQuest(deckId) {
   if (!prev?.currentCard) throw new Error('Quest deck exhausted');
   const reward = Math.max(2, (prev.currentCard.infusion || 0) * 2);
   const db = await openDb();
-  let prevDust = 0;
-
-  return optimistic({
-    applyLocally: async () => {
-      await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE], 'readwrite', async (t) => {
-        const ps = t.objectStore(STORES.PLAYER_STATS);
-        const row = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
-        prevDust = row.dust || 0;
-        ps.put({ ...row, dust: prevDust + reward });
-        t.objectStore(STORES.QUEST_STATE).put(advancedState(prev));
-      });
-    },
-    request:   () => mutate({ method: 'POST', path: `/quest/decks/${deckId}/destroy` }),
-    onSuccess: reconcileQuest(deckId),
-    revert:    () => txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE], 'readwrite', (t) => {
-      t.objectStore(STORES.PLAYER_STATS).put({ id: PLAYER_STATS_KEY, dust: prevDust });
-      t.objectStore(STORES.QUEST_STATE).put(prev);
-    }),
+  await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE], 'readwrite', async (t) => {
+    const ps  = t.objectStore(STORES.PLAYER_STATS);
+    const row = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
+    ps.put({ ...row, dust: (row.dust || 0) + reward });
+    t.objectStore(STORES.QUEST_STATE).put(advancedState(prev));
+  });
+  emitMutation();
+  return mutate({
+    method: 'POST',
+    path:   `/quest/decks/${deckId}/destroy`,
+    then:   questRefetch(deckId),
   });
 }
 
-/* Free-infuse is not version-bumped server-side, so per-tick writes
- * don't trigger a resync. */
+export async function renameCard(inventoryId, title) {
+  const clean = (title || '').trim();
+  if (!clean) return;
+  const db = await openDb();
+  const mediaId = await txn(db, [STORES.CARDS, STORES.DECK_CARDS], 'readwrite', async (t) => {
+    const cards = t.objectStore(STORES.CARDS);
+    const row = await req(cards.get(inventoryId));
+    if (!row?.id) return null;
+    if (row.title === clean) return row.id;
+    cards.put({ ...row, title: clean });
+
+    const deckRow = await req(t.objectStore(STORES.DECK_CARDS).get(inventoryId));
+    if (deckRow) t.objectStore(STORES.DECK_CARDS).put({ ...deckRow, title: clean });
+    return row.id;
+  });
+  if (!mediaId) return;
+  emitMutation();
+  return mutate({ method: 'PATCH', path: `/media/${mediaId}/rename`, body: { title: clean } });
+}
+
+/* Free-infuse fires very often (5 s ticks); don't version-bump server
+ * side, so per-tick writes don't trigger resyncs. */
 export async function freeInfuseCard(inventoryId, amount = 1) {
   const db = await openDb();
   const mediaId = await txn(db, [STORES.CARDS, STORES.DECK_CARDS], 'readwrite', async (t) => {
@@ -259,8 +216,7 @@ export async function freeInfuseCard(inventoryId, amount = 1) {
   });
   if (!mediaId) return;
   emitMutation();
-  mutate({ method: 'PATCH', path: `/media/${mediaId}/free-infuse`, body: { amount } })
-    .catch(() => {});
+  mutate({ method: 'PATCH', path: `/media/${mediaId}/free-infuse`, body: { amount } });
 }
 
 export async function freeInfuseQuest(deckId, mediaId, amount = 1) {
@@ -272,6 +228,5 @@ export async function freeInfuseQuest(deckId, mediaId, amount = 1) {
     });
     emitMutation();
   }
-  mutate({ method: 'PATCH', path: `/media/${mediaId}/free-infuse`, body: { amount } })
-    .catch(() => {});
+  mutate({ method: 'PATCH', path: `/media/${mediaId}/free-infuse`, body: { amount } });
 }
