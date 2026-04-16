@@ -1,23 +1,25 @@
 import { useEffect, useState } from 'react';
-import { openDb } from '../db/localDb.js';
+import { tx, req } from '../db/localDb.js';
+import { onMutation } from '../db/events.js';
 
 /**
- * Read all rows from an IndexedDB store. Re-reads whenever `refreshKey`
- * changes — pass `sync.phase` so the list refreshes when sync completes.
+ * Read all rows from an IndexedDB store. Re-reads automatically on any
+ * IDB change — local actions call `emitMutation` after commit, and the
+ * sync bridge fires it on worker 'done'/'change' messages.
  */
-export function useLocalStore(store, refreshKey) {
+export function useLocalStore(store) {
   const [rows, setRows] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const db = await openDb();
-      const tx = db.transaction(store, 'readonly');
-      const req = tx.objectStore(store).getAll();
-      req.onsuccess = () => { if (!cancelled) setRows(req.result || []); };
-    })();
-    return () => { cancelled = true; };
-  }, [store, refreshKey]);
+    const read = async () => {
+      const result = await tx(store, 'readonly', (t) => req(t.objectStore(store).getAll()));
+      if (!cancelled) setRows(result);
+    };
+    read();
+    const unsub = onMutation(read);
+    return () => { cancelled = true; unsub(); };
+  }, [store]);
 
   return rows;
 }

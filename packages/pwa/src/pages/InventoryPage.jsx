@@ -100,22 +100,16 @@ function QuestDecksStack({ count, onDoubleClick }) {
 }
 
 export default function InventoryPage({ onLookForServer, server, sync, onOpenDeck, onStartQuest }) {
-  const [version, setVersion] = useState(0);
   const [selected, setSelected] = useState(null);
-  const refreshKey = `${sync?.phase}-${version}`;
-  const items = useLocalStore(STORES.CARDS, refreshKey);
-  const decks = useLocalStore(STORES.DECKS, refreshKey);
-  const metaRows = useLocalStore(STORES.META, refreshKey);
+  const items    = useLocalStore(STORES.CARDS);
+  const decks    = useLocalStore(STORES.DECKS);
+  const metaRows = useLocalStore(STORES.META);
 
-  const handleDropCard = async (deckId, invId) => {
-    await addToDeck(deckId, invId);
-    setVersion(v => v + 1);
-  };
+  const handleDropCard = (deckId, invId) => addToDeck(deckId, invId);
 
   const handleStartQuest = async () => {
     try {
       const consumed = await consumeQuestDeck();
-      setVersion(v => v + 1);
       onStartQuest?.(consumed.ref_id ?? consumed.inventory_id);
     } catch (err) {
       console.warn(err.message);

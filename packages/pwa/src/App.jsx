@@ -74,7 +74,6 @@ export default function App() {
           <DeckPage
             deckId={view.id}
             server={server}
-            sync={sync}
             onBack={closeView}
           />
         ) : view?.kind === 'quest' ? (
