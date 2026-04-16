@@ -6,10 +6,10 @@ import { useLocalStore } from '../hooks/useLocalStore.js';
 import { STORES } from '../db/localDb.js';
 import './DeckPage.css';
 
-export default function DeckPage({ deckId, server, sync, onBack }) {
+export default function DeckPage({ deckId, server, onBack }) {
   const [selected, setSelected] = useState(null);
-  const decks     = useLocalStore(STORES.DECKS,      sync?.phase);
-  const deckCards = useLocalStore(STORES.DECK_CARDS, sync?.phase);
+  const decks     = useLocalStore(STORES.DECKS);
+  const deckCards = useLocalStore(STORES.DECK_CARDS);
 
   const deck = decks?.find(d => d.id === deckId);
   const cards = deckCards?.filter(c => c.deck_id === deckId) || [];

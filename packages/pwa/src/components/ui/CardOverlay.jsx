@@ -3,11 +3,14 @@ import { CARD_TYPE, MEDIA_TYPE, words } from '@photo-quest/shared';
 import Button from './Button.jsx';
 import Card from './Card.jsx';
 import DeckDropdown from './DeckDropdown.jsx';
+import InfusionBadge from './InfusionBadge.jsx';
 import Input from './Input.jsx';
 import Modal from './Modal.jsx';
+import { useKeydown } from '../../hooks/useKeydown.js';
 import { useLocalStore } from '../../hooks/useLocalStore.js';
 import { STORES } from '../../db/localDb.js';
 import { destroyCard, freeInfuseCard, renameCard, sellCard } from '../../db/actions.js';
+import { mediaUrl as buildMediaUrl } from '../../utils/mediaUrl.js';
 import './CardOverlay.css';
 
 const PASSIVE_TICK_MS = 5_000;
@@ -18,7 +21,7 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [confirm, setConfirm] = useState(null);
-  const items = useLocalStore(STORES.CARDS, null);
+  const items = useLocalStore(STORES.CARDS);
   const item = items?.find(it => it.inventory_id === initialItem?.inventory_id) || initialItem;
 
   useEffect(() => { setEditing(false); }, [item?.inventory_id]);
@@ -29,15 +32,10 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
     setEditing(false);
   };
 
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.target.tagName === 'INPUT') return;
-      if (e.key === 'Escape') fullMedia ? setFullMedia(false) : onClose();
-      if (e.key === 'f' || e.key === 'F') setFullMedia(v => !v);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [fullMedia, onClose]);
+  useKeydown((e) => {
+    if (e.key === 'Escape') fullMedia ? setFullMedia(false) : onClose();
+    if (e.key === 'f' || e.key === 'F') setFullMedia(v => !v);
+  }, true, [fullMedia, onClose]);
 
   /* LAW 4.11: 1 infusion / 5s in card view, 2 / 5s in full view, capped at 2 min. */
   useEffect(() => {
@@ -53,7 +51,7 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
 
   if (!item) return null;
   const isImage = item.type === MEDIA_TYPE.IMAGE;
-  const mediaUrl = isImage ? `${serverUrl}/image/${item.id}` : `${serverUrl}/stream/${item.id}`;
+  const mediaUrl = buildMediaUrl(serverUrl, item);
   const infusion = item.infusion || 0;
 
   if (fullMedia) {
@@ -91,7 +89,7 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
               {item.title || 'Untitled'}
             </span>
           )}
-          headerRight={<span style={{ color: '#d8b4fe' }}>{words?.dustSymbol || 'Đ'} {infusion}</span>}
+          headerRight={<InfusionBadge amount={infusion} />}
           art={
             <div className="overlay__art">
               {isImage

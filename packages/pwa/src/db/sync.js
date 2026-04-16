@@ -30,6 +30,9 @@ export function startSync(serverUrl, onStatus) {
       else         p.reject(Object.assign(new Error(data.message || `HTTP ${data.status}`), { status: data.status }));
       return;
     }
+    /* Emit before onStatus so useSync's pulse listener observes the
+     * pre-update phase ('syncing') and doesn't flash on completion. */
+    if (data.type === 'done' || data.type === 'change') emitMutation();
     if (data.type === 'done') drainQueue();
     onStatus(data);
   };

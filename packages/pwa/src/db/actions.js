@@ -49,16 +49,43 @@ async function adjustDust(delta) {
 
 /* ── Decks ─────────────────────────────────────────────────────── */
 
+/**
+ * Add an inventory card to a deck. A card belongs to at most one deck —
+ * if it's already in another, move it (and decrement the prior deck's
+ * count). Bumps the target deck's cardCount and updates its preview when
+ * it previously had none.
+ */
 export async function addToDeck(deckId, inventoryId) {
   const db = await openDb();
   await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.DECKS], 'readwrite', async (t) => {
-    const card = await req(t.objectStore(STORES.CARDS).get(inventoryId));
+    const cardsOS     = t.objectStore(STORES.CARDS);
+    const decksOS     = t.objectStore(STORES.DECKS);
+    const deckCardsOS = t.objectStore(STORES.DECK_CARDS);
+
+    const card = await req(cardsOS.get(inventoryId));
     if (!card) return;
-    const prev = await req(t.objectStore(STORES.DECK_CARDS).get(inventoryId));
-    if (prev?.deck_id === deckId) return;
-    t.objectStore(STORES.DECK_CARDS).put({ ...card, deck_id: deckId, inventory_id: inventoryId });
-    const deck = await req(t.objectStore(STORES.DECKS).get(deckId));
-    if (deck) t.objectStore(STORES.DECKS).put({ ...deck, cardCount: (deck.cardCount || 0) + 1 });
+
+    const existing = await req(deckCardsOS.get(inventoryId));
+    if (existing?.deck_id === deckId) return;
+
+    if (existing) deckCardsOS.delete(inventoryId);
+    deckCardsOS.put({ ...card, deck_id: deckId, inventory_id: inventoryId });
+
+    const deck = await req(decksOS.get(deckId));
+    if (deck) {
+      const updated = { ...deck, cardCount: (deck.cardCount || 0) + 1 };
+      if (!deck.preview && card.card_type === CARD_TYPE.MEDIA && card.id) {
+        updated.preview = { id: card.id, type: card.type, title: card.title };
+      }
+      decksOS.put(updated);
+    }
+
+    if (existing && existing.deck_id !== deckId) {
+      const prevDeck = await req(decksOS.get(existing.deck_id));
+      if (prevDeck) {
+        decksOS.put({ ...prevDeck, cardCount: Math.max(0, (prevDeck.cardCount || 1) - 1) });
+      }
+    }
   });
   emitMutation();
   return mutate({

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { CARD_TYPE, MARKET_PRICES, MEDIA_TYPE, words } from '@photo-quest/shared';
+import { CARD_TYPE, MARKET_PRICES, words } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import MediaCard from '../components/ui/MediaCard.jsx';
@@ -10,6 +10,7 @@ import CardOverlay from '../components/ui/CardOverlay.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
 import { STORES } from '../db/localDb.js';
 import { addToDeck, startQuest } from '../db/actions.js';
+import { mediaUrl } from '../utils/mediaUrl.js';
 import './InventoryPage.css';
 
 const DND_TYPE = 'application/x-inventory-id';
@@ -33,11 +34,7 @@ function useDropTarget(onDropId) {
 
 function DeckCard({ deck, serverUrl, onOpen, onDropCard }) {
   const { over, handlers } = useDropTarget((invId) => onDropCard(deck.id, invId));
-  const previewUrl = deck.preview
-    ? (deck.preview.type === MEDIA_TYPE.IMAGE
-        ? `${serverUrl}/image/${deck.preview.id}`
-        : `${serverUrl}/stream/${deck.preview.id}`)
-    : null;
+  const previewUrl = deck.preview ? mediaUrl(serverUrl, deck.preview) : null;
 
   return (
     <div className={`drop-target ${over ? 'drop-target--over' : ''}`} {...handlers}>
@@ -107,22 +104,16 @@ function QuestDecksStack({ count, onDoubleClick }) {
 }
 
 export default function InventoryPage({ onLookForServer, server, sync, onOpenDeck, onStartQuest }) {
-  const [version, setVersion] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
-  const refreshKey = `${sync?.phase}-${version}`;
-  const items      = useLocalStore(STORES.CARDS,      refreshKey);
-  const decks      = useLocalStore(STORES.DECKS,      refreshKey);
-  const deckCards  = useLocalStore(STORES.DECK_CARDS, refreshKey);
+  const items     = useLocalStore(STORES.CARDS);
+  const decks     = useLocalStore(STORES.DECKS);
+  const deckCards = useLocalStore(STORES.DECK_CARDS);
 
-  const handleDropCard = async (deckId, invId) => {
-    await addToDeck(deckId, invId);
-    setVersion(v => v + 1);
-  };
+  const handleDropCard = (deckId, invId) => addToDeck(deckId, invId);
 
   const handleStartQuest = async () => {
     try {
       const deckId = await startQuest();
-      setVersion(v => v + 1);
       onStartQuest?.(deckId);
     } catch (err) {
       console.warn(err.message);

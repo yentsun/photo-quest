@@ -115,6 +115,11 @@ export async function getByKey(storeName, key) {
   return req(db.transaction(storeName, 'readonly').objectStore(storeName).get(key));
 }
 
+export async function getAllByIndex(storeName, indexName, key) {
+  const db = await openDb();
+  return req(db.transaction(storeName, 'readonly').objectStore(storeName).index(indexName).getAll(key));
+}
+
 /**
  * Run a multi-store transaction. The callback receives the IDBTransaction
  * and can await IDB requests inside it (modern browsers keep the txn alive

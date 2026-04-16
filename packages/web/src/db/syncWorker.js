@@ -66,19 +66,14 @@ async function syncPlayerStats() {
   }
 }
 
-async function syncQuestsFromResult(result) {
-  if (!result) return;
-  const { decks = [], cards = [] } = result;
-  await Promise.all([
-    snapshotReplace(STORES.QUEST_DECKS, decks),
-    snapshotReplace(STORES.QUEST_CARDS, cards),
-  ]);
-  updated([STORES.QUEST_DECKS, STORES.QUEST_CARDS]);
-}
-
 async function syncQuests() {
   try {
-    await syncQuestsFromResult(await fetchQuestDecks());
+    const { decks = [], cards = [] } = await fetchQuestDecks();
+    await Promise.all([
+      snapshotReplace(STORES.QUEST_DECKS, decks),
+      snapshotReplace(STORES.QUEST_CARDS, cards),
+    ]);
+    updated([STORES.QUEST_DECKS, STORES.QUEST_CARDS]);
   } catch (err) {
     console.warn('syncQuests failed:', err.message);
   }
@@ -122,16 +117,12 @@ async function syncTable(table) {
 }
 
 async function syncAll() {
-  const questResult = await fetchQuestDecks().catch(() => null);
-
   await Promise.all([
     syncInventory(),
     syncDecks(),
     syncPlayerStats(),
-    syncQuestsFromResult(questResult),
+    syncQuests(),
   ]);
-
-  // Media is huge — run after game-critical stores are done.
   syncMedia();
 }
 
