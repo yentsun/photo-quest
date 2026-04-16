@@ -72,6 +72,10 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.37** The user must be able to enter fullscreen mode where media occupies all visible space with only minimal controls shown. F key must toggle fullscreen on/off.
 
+**1.38** Nothing may interrupt the user's in-progress UI or game flow. Background work — sync ticks, queue drains, server refetches, snapshot replacements, SSE-triggered resyncs — must never close a view, bounce a page, cancel a modal, reset focus, or cause a card/transition to jump. Sync happens around the user, not through them.
+
+**1.39** The PWA is self-sufficient. All gameplay, navigation, and inventory interaction must work purely against the local IndexedDB replica. Server sync is optional — a background replication concern, not a prerequisite for any UI action. A disconnected or unavailable server must never block the player from playing.
+
 ---
 
 ## Section 2 — Server

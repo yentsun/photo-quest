@@ -100,6 +100,10 @@ export async function mutate({ method, path, body, then }) {
   });
   dirty = true;
   console.debug('[mutate] queued, dirty=true');
+  /* Mutations with a `then` refetch are user-interactive (quest take/skip
+   * etc.); the caller's next optimistic step needs fresh server state, so
+   * we drain now instead of waiting for the 30 s tick. */
+  if (then) flushNow();
   return { __queued: true };
 }
 

@@ -119,6 +119,9 @@ export default function QuestPage({ questDeckId, server, onBack }) {
     await runLocked(() => destroyQuest(questDeckId));
   }, [questDeckId, runLocked]);
 
+  /* Auto-return to inventory only on server-confirmed exhaustion (4.20).
+   * Local optimistic advance never sets `exhausted`, so this won't fire
+   * mid-interaction while the refetch is still in flight. */
   useEffect(() => {
     if (state?.exhausted) onBack?.();
   }, [state?.exhausted, onBack]);

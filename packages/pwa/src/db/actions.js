@@ -120,7 +120,11 @@ export const buyTicket    = () => buy('/market/buy-ticket', MARKET_PRICES.memory
 
 /* ── Quests ────────────────────────────────────────────────────── */
 
-/** Drop the current card, promote `nextCard`. Recomputes takeCost + canTake. */
+/** Drop the current card, promote `nextCard`. Recomputes takeCost + canTake.
+ *  Doesn't touch `exhausted` — only the server's refetch can confirm the
+ *  deck is empty. A locally-null nextCard just means "next card unknown
+ *  until refetch"; treating it as exhausted would prematurely bounce the
+ *  user out (violates LAW 1.38). */
 function advancedState(state, { consumedFreeTake = false } = {}) {
   const nextCard = state.nextCard || null;
   const freeTakeUsed = state.freeTakeUsed || consumedFreeTake;
@@ -131,7 +135,6 @@ function advancedState(state, { consumedFreeTake = false } = {}) {
     currentPosition: state.currentPosition + 1,
     currentCard:     nextCard,
     nextCard:        null,
-    exhausted:       !nextCard,
     takeCost:        isFree ? 0 : infusion * 2,
     canTake:         !isFree || !freeTakeUsed,
     freeTakeUsed,
