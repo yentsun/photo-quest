@@ -86,9 +86,13 @@ function sendDirect({ method, path, body }) {
  * @param {*}      [req.body]
  * @param {{ method:string, path:string, store:string }} [req.then] —
  *   optional follow-up GET whose response is written to `store` after
- *   the main request succeeds.
+ *   the main request succeeds. Presence of `then` also forces an
+ *   immediate drain (caller needs the refetched state now).
+ * @param {boolean} [req.flush] — force immediate drain without a refetch.
+ *   Use for actions that require server-side work the player is waiting
+ *   on (e.g. forming a quest deck) but don't care about a specific reply.
  */
-export async function mutate({ method, path, body, then }) {
+export async function mutate({ method, path, body, then, flush }) {
   if (method === 'GET') return sendDirect({ method, path });
   console.debug('[mutate] queueing', method, path);
   const db = await openDb();
@@ -100,10 +104,7 @@ export async function mutate({ method, path, body, then }) {
   });
   dirty = true;
   console.debug('[mutate] queued, dirty=true');
-  /* Mutations with a `then` refetch are user-interactive (quest take/skip
-   * etc.); the caller's next optimistic step needs fresh server state, so
-   * we drain now instead of waiting for the 30 s tick. */
-  if (then) flushNow();
+  if (then || flush) flushNow();
   return { __queued: true };
 }
 

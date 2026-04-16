@@ -77,18 +77,23 @@ function InventoryItem({ item, serverUrl, onClick }) {
 
 const QUEST_ICON_PATH = 'M158,885V812H0v73Zm1099,0V812H300v73Zm300,0V812H1399v73ZM1240,394a238.81563,238.81563,0,0,1,14.5,24q7.5,14,8.5,21,2.00005,12-5.5,32T1240,498q-51.99995,30-147,28T935,498q-26-11-45.5-37.5T870,393q0-64,51-130L779,0,636,263l13,19q13,18,25.5,50.5T687,393q0,41-19.5,67.5T622,498q-63,26-158,28T317,498q-10-7-18-27t-6-32q3-15,31-56L239,239,199,391,300,763h957l101-372-40-152-85,144Z';
 
-function QuestDecksStack({ count, onDoubleClick }) {
+function QuestDecksStack({ ready, pending, onDoubleClick }) {
+  const total = ready + pending;
+  const footerText = pending > 0
+    ? `${total} deck${total !== 1 ? 's' : ''} · ${pending} forming…`
+    : `${total} deck${total !== 1 ? 's' : ''}`;
   return (
     <Deck
-      count={count}
-      onDoubleClick={onDoubleClick}
+      count={total}
+      onDoubleClick={ready > 0 ? onDoubleClick : undefined}
       header="Quest Decks"
       headerRight={
         <span style={{ color: '#d8b4fe' }}>{MARKET_PRICES.questDeck} {words.dustSymbol}</span>
       }
       borderColor="rgba(180, 83, 9, 0.6)"
       art={
-        <div className="card__art--gradient-quest" style={{ width: '100%', height: '100%' }}>
+        <div className="card__art--gradient-quest" style={{ width: '100%', height: '100%',
+             position: 'relative', opacity: ready > 0 ? 1 : 0.6 }}>
           <svg
             viewBox="0 -336 1557 1557"
             fill="currentColor"
@@ -96,9 +101,16 @@ function QuestDecksStack({ count, onDoubleClick }) {
           >
             <path d={QUEST_ICON_PATH} />
           </svg>
+          {pending > 0 && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex',
+                          alignItems: 'flex-end', justifyContent: 'center', paddingBottom: '0.5rem',
+                          color: '#fde68a', fontSize: '0.75rem', opacity: 0.9 }}>
+              forming…
+            </div>
+          )}
         </div>
       }
-      footer={<span>{count} deck{count !== 1 ? 's' : ''}</span>}
+      footer={<span>{footerText}</span>}
     />
   );
 }
@@ -141,8 +153,10 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
 
   const groupedIds = new Set(deckCards.map(dc => dc.inventory_id));
   const ungrouped = items.filter(it => !groupedIds.has(it.inventory_id));
-  const questDecks = ungrouped.filter(it => it.card_type === CARD_TYPE.QUEST_DECK);
-  const otherItems = ungrouped.filter(it => it.card_type !== CARD_TYPE.QUEST_DECK);
+  const questDecks        = ungrouped.filter(it => it.card_type === CARD_TYPE.QUEST_DECK);
+  const questDecksReady   = questDecks.filter(it => !it._pending && it.ref_id).length;
+  const questDecksPending = questDecks.length - questDecksReady;
+  const otherItems        = ungrouped.filter(it => it.card_type !== CARD_TYPE.QUEST_DECK);
 
   /* Per-deck preview = most recently added row (highest deck_card_id).
    * Server returns `deck_card_id` (dc.id); optimistic writes use Date.now()
@@ -172,7 +186,11 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
   return (
     <div className="inventory">
       {questDecks.length > 0 && (
-        <QuestDecksStack count={questDecks.length} onDoubleClick={handleStartQuest} />
+        <QuestDecksStack
+          ready={questDecksReady}
+          pending={questDecksPending}
+          onDoubleClick={handleStartQuest}
+        />
       )}
       {decks.map(deck => (
         <DeckCard

@@ -6,7 +6,7 @@ import Modal from '../components/ui/Modal.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
 import { STORES } from '../db/localDb.js';
-import { advanceQuest, takeQuest, destroyQuest, freeInfuseQuest } from '../db/actions.js';
+import { advanceQuest, takeQuest, destroyQuest, freeInfuseQuest, consumeExhaustedQuestDeck } from '../db/actions.js';
 import './QuestPage.css';
 
 const PASSIVE_TICK_MS = 5_000;
@@ -121,10 +121,16 @@ export default function QuestPage({ questDeckId, server, onBack }) {
 
   /* Auto-return to inventory only on server-confirmed exhaustion (4.20).
    * Local optimistic advance never sets `exhausted`, so this won't fire
-   * mid-interaction while the refetch is still in flight. */
+   * mid-interaction while the refetch is still in flight.
+   * Wipe the inventory row first so the user doesn't see a stale quest
+   * deck card on bounce-back (sync-all would clear it, but not instantly). */
   useEffect(() => {
-    if (state?.exhausted) onBack?.();
-  }, [state?.exhausted, onBack]);
+    if (!state?.exhausted) return;
+    (async () => {
+      try { await consumeExhaustedQuestDeck(questDeckId); }
+      finally { onBack?.(); }
+    })();
+  }, [state?.exhausted, questDeckId, onBack]);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'ArrowRight') handleSkip(); };

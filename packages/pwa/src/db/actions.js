@@ -109,14 +109,46 @@ export async function createDeck(name, inventoryIds = []) {
 
 /* ── Market ────────────────────────────────────────────────────── */
 
-async function buy(path, price) {
-  await adjustDust(-price);
-  emitMutation();
-  return mutate({ method: 'POST', path });
+/**
+ * Optimistic inventory insert for market buys. Uses a negative temp
+ * inventory_id so it never collides with server-assigned positive ids.
+ * `_pending: true` signals UI that the row is awaiting server-side
+ * construction (quest decks need cards sampled); `ref_id: null` is the
+ * cue startQuest uses to refuse to open the deck yet.
+ */
+async function optimisticCard(card) {
+  const db = await openDb();
+  await txn(db, [STORES.CARDS], 'readwrite', (t) => {
+    t.objectStore(STORES.CARDS).put(card);
+  });
 }
 
-export const buyQuestDeck = () => buy('/market/buy-deck',   MARKET_PRICES.questDeck);
-export const buyTicket    = () => buy('/market/buy-ticket', MARKET_PRICES.memoryTicket);
+export async function buyQuestDeck() {
+  await adjustDust(-MARKET_PRICES.questDeck);
+  await optimisticCard({
+    inventory_id: -Date.now(),
+    card_type:    CARD_TYPE.QUEST_DECK,
+    ref_id:       null,
+    acquired_at:  new Date().toISOString(),
+    _pending:     true,
+  });
+  emitMutation();
+  /* Player is waiting on this to become playable — bypass the tick. */
+  return mutate({ method: 'POST', path: '/market/buy-deck', flush: true });
+}
+
+export async function buyTicket() {
+  await adjustDust(-MARKET_PRICES.memoryTicket);
+  await optimisticCard({
+    inventory_id: -Date.now(),
+    card_type:    CARD_TYPE.MEMORY_TICKET,
+    ref_id:       null,
+    acquired_at:  new Date().toISOString(),
+    _pending:     true,
+  });
+  emitMutation();
+  return mutate({ method: 'POST', path: '/market/buy-ticket', flush: true });
+}
 
 /* ── Quests ────────────────────────────────────────────────────── */
 
@@ -147,17 +179,33 @@ const questRefetch = (deckId) => ({
   store:  STORES.QUEST_STATE,
 });
 
+/** Remove the consumed quest-deck inventory card after server-confirmed
+ *  exhaustion — mirrors server-side `DELETE FROM inventory WHERE ref_id = ?`
+ *  so the user doesn't briefly see the stale card on bounce-back. */
+export async function consumeExhaustedQuestDeck(questDeckId) {
+  const db = await openDb();
+  await txn(db, [STORES.CARDS], 'readwrite', async (t) => {
+    const os = t.objectStore(STORES.CARDS);
+    const all = await req(os.getAll());
+    for (const row of all) {
+      if (row.card_type === CARD_TYPE.QUEST_DECK && row.ref_id === questDeckId) {
+        os.delete(row.inventory_id);
+      }
+    }
+  });
+  emitMutation();
+}
+
 export async function startQuest() {
   const db = await openDb();
   const row = await txn(db, [STORES.CARDS], 'readonly', async (t) => {
     const all = await req(t.objectStore(STORES.CARDS).getAll());
     return all
-      .filter(r => r.card_type === CARD_TYPE.QUEST_DECK)
+      .filter(r => r.card_type === CARD_TYPE.QUEST_DECK && !r._pending && r.ref_id)
       .sort((a, b) => (a.acquired_at || '').localeCompare(b.acquired_at || ''))[0];
   });
   if (!row) throw new Error('No quest decks to open');
   const deckId = row.ref_id;
-  if (!deckId) throw new Error('Quest deck card missing ref_id');
 
   const state = await mutate({ method: 'GET', path: `/quest/decks/${deckId}` });
   await putRow(STORES.QUEST_STATE, state);

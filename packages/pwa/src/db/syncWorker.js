@@ -15,7 +15,7 @@
  *                  { type: 'mutate-result', id, ok, status, data?, message? }
  */
 
-import { openDb, STORES, clearStore, putRows, snapshotReplace } from './localDb.js';
+import { openDb, STORES, clearStore, putRows, snapshotReplace, tx, req } from './localDb.js';
 
 const PAGE_SIZE = 100;
 const PAGE_CONCURRENCY = 4;
@@ -42,12 +42,19 @@ async function fetchJson(url) {
   return res.json();
 }
 
+/**
+ * Upsert server rows and prune any local rows the server no longer has.
+ * Reads never see a cleared store mid-sync — unrelated emits (passive
+ * infusion ticks, local mutations) that re-read during a big inventory
+ * refresh won't observe a transient empty state (LAW 1.38).
+ */
 async function syncPaged(serverUrl, path, store) {
   const first = await fetchJson(`${serverUrl}${path}?limit=${PAGE_SIZE}&offset=0`);
   const total = first.total ?? first.items.length;
 
-  await clearStore(store);
+  const seenKeys = new Set();
   await putRows(store, first.items);
+  for (const row of first.items) seenKeys.add(row.inventory_id);
   let count = first.items.length;
   self.postMessage({ type: 'progress', store, count, total });
 
@@ -63,10 +70,24 @@ async function syncPaged(serverUrl, path, store) {
     for (const page of pages) {
       if (!page.items?.length) continue;
       await putRows(store, page.items);
+      for (const row of page.items) seenKeys.add(row.inventory_id);
       count += page.items.length;
     }
     self.postMessage({ type: 'progress', store, count, total });
   }
+
+  /* Prune: drop any local row the server didn't return. The hasPendingMutations
+   * gate above ensures we never run this while optimistic writes are in flight,
+   * so any stale `_pending` row here belongs to a drained (or dropped) mutation
+   * whose server counterpart either just arrived in `seenKeys` or never will. */
+  await tx(store, 'readwrite', async (t) => {
+    const os = t.objectStore(store);
+    const keys = await req(os.getAllKeys());
+    for (const key of keys) {
+      if (seenKeys.has(key)) continue;
+      os.delete(key);
+    }
+  });
 }
 
 const syncInventory = (serverUrl) => syncPaged(serverUrl, '/inventory', STORES.CARDS);
