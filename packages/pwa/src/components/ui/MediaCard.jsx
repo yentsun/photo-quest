@@ -1,17 +1,16 @@
-import { MEDIA_TYPE, words } from '@photo-quest/shared';
+import { MEDIA_TYPE } from '@photo-quest/shared';
 import Card from './Card.jsx';
+import InfusionBadge from './InfusionBadge.jsx';
+import { mediaUrl } from '../../utils/mediaUrl.js';
 
 export default function MediaCard({ item, serverUrl, onClick }) {
   const isImage = item.type === MEDIA_TYPE.IMAGE;
-  const thumbUrl = isImage
-    ? `${serverUrl}/image/${item.id}`
-    : `${serverUrl}/stream/${item.id}`;
-  const infusion = item.infusion || 0;
+  const thumbUrl = mediaUrl(serverUrl, item);
 
   return (
     <Card
       header={item.title || item.filename || 'Untitled'}
-      headerRight={<span style={{ color: '#d8b4fe' }}>{words?.dustSymbol || 'Đ'} {infusion}</span>}
+      headerRight={<InfusionBadge amount={item.infusion || 0} />}
       art={
         isImage
           ? <img src={thumbUrl} alt={item.title} loading="lazy" draggable={false} />

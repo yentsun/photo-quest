@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { MEDIA_TYPE, words } from '@photo-quest/shared';
+import { MEDIA_TYPE } from '@photo-quest/shared';
 import Card from './Card.jsx';
+import InfusionBadge from './InfusionBadge.jsx';
+import { mediaUrl as buildMediaUrl } from '../../utils/mediaUrl.js';
 import './CardOverlay.css';
 
 export default function CardOverlay({ item, serverUrl, onClose }) {
@@ -18,8 +20,7 @@ export default function CardOverlay({ item, serverUrl, onClose }) {
 
   if (!item) return null;
   const isImage = item.type === MEDIA_TYPE.IMAGE;
-  const mediaUrl = isImage ? `${serverUrl}/image/${item.id}` : `${serverUrl}/stream/${item.id}`;
-  const infusion = item.infusion || 0;
+  const mediaUrl = buildMediaUrl(serverUrl, item);
 
   if (fullMedia) {
     return (
@@ -38,7 +39,7 @@ export default function CardOverlay({ item, serverUrl, onClose }) {
         <Card
           className="card--large"
           header={item.title || 'Untitled'}
-          headerRight={<span style={{ color: '#d8b4fe' }}>{words?.dustSymbol || 'Đ'} {infusion}</span>}
+          headerRight={<InfusionBadge amount={item.infusion || 0} />}
           art={
             <div className="overlay__art">
               {isImage

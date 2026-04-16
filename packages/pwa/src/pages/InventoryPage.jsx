@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { CARD_TYPE, MEDIA_TYPE } from '@photo-quest/shared';
+import { CARD_TYPE } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import MediaCard from '../components/ui/MediaCard.jsx';
@@ -10,6 +10,7 @@ import CardOverlay from '../components/ui/CardOverlay.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
 import { STORES } from '../db/localDb.js';
 import { addToDeck, consumeQuestDeck } from '../db/actions.js';
+import { mediaUrl } from '../utils/mediaUrl.js';
 import './InventoryPage.css';
 
 const DND_TYPE = 'application/x-inventory-id';
@@ -33,11 +34,7 @@ function useDropTarget(onDropId) {
 
 function DeckCard({ deck, serverUrl, onOpen, onDropCard }) {
   const { over, handlers } = useDropTarget((invId) => onDropCard(deck.id, invId));
-  const previewUrl = deck.preview
-    ? (deck.preview.type === MEDIA_TYPE.IMAGE
-        ? `${serverUrl}/image/${deck.preview.id}`
-        : `${serverUrl}/stream/${deck.preview.id}`)
-    : null;
+  const previewUrl = deck.preview ? mediaUrl(serverUrl, deck.preview) : null;
 
   return (
     <div className={`drop-target ${over ? 'drop-target--over' : ''}`} {...handlers}>
