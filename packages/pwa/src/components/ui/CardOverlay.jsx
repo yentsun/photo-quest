@@ -1,22 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import Card from './Card.jsx';
 import InfusionBadge from './InfusionBadge.jsx';
+import { useKeydown } from '../../hooks/useKeydown.js';
 import { mediaUrl as buildMediaUrl } from '../../utils/mediaUrl.js';
 import './CardOverlay.css';
 
 export default function CardOverlay({ item, serverUrl, onClose }) {
   const [fullMedia, setFullMedia] = useState(false);
 
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.target.tagName === 'INPUT') return;
-      if (e.key === 'Escape') fullMedia ? setFullMedia(false) : onClose();
-      if (e.key === 'f' || e.key === 'F') setFullMedia(v => !v);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [fullMedia, onClose]);
+  useKeydown((e) => {
+    if (e.key === 'Escape') fullMedia ? setFullMedia(false) : onClose();
+    if (e.key === 'f' || e.key === 'F') setFullMedia(v => !v);
+  }, true, [fullMedia, onClose]);
 
   if (!item) return null;
   const isImage = item.type === MEDIA_TYPE.IMAGE;
