@@ -6,6 +6,7 @@ import MarketPage from './pages/MarketPage.jsx';
 import LibraryPage from './pages/LibraryPage.jsx';
 import DeckPage from './pages/DeckPage.jsx';
 import QuestPage from './pages/QuestPage.jsx';
+import MemoryPage from './pages/MemoryPage.jsx';
 import { useSync } from './hooks/useSync.js';
 import { useLocalStore } from './hooks/useLocalStore.js';
 import { STORES } from './db/localDb.js';
@@ -83,6 +84,11 @@ export default function App() {
             server={server}
             onBack={closeView}
           />
+        ) : view?.kind === 'memory' ? (
+          <MemoryPage
+            server={server}
+            onBack={closeView}
+          />
         ) : (
           <PageComponent
             onLookForServer={() => setFinderOpen(true)}
@@ -90,6 +96,7 @@ export default function App() {
             sync={sync}
             onOpenDeck={(id) => openView({ kind: 'deck', id })}
             onStartQuest={(id) => openView({ kind: 'quest', id })}
+            onStartMemory={() => openView({ kind: 'memory' })}
           />
         )}
       </main>

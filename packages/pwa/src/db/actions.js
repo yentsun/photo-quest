@@ -307,6 +307,119 @@ export async function destroyCard(inventoryId) {
   return mutate({ method: 'DELETE', path: `/inventory/${inventoryId}/destroy` });
 }
 
+/* ── Memory game ───────────────────────────────────────────────── */
+
+const PAIR_COUNT = 8;
+
+function buildMemoryDeck(gameCards) {
+  const cards = [];
+  for (const m of gameCards) {
+    cards.push({ id: `${m.id}-a`, mediaId: m.id, pairKey: m.id, type: m.type, title: m.title });
+    cards.push({ id: `${m.id}-b`, mediaId: m.id, pairKey: m.id, type: m.type, title: m.title });
+  }
+  for (let i = cards.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cards[i], cards[j]] = [cards[j], cards[i]];
+  }
+  return cards;
+}
+
+/**
+ * Start a memory game from a ready (server-formed) ticket. The deck was
+ * sampled at purchase time and shipped with the ticket's inventory row
+ * as `game_cards`, so this is fully local — no network call needed
+ * (LAW 1.39). The ticket is optimistically deleted and the server is
+ * told to consume it via the queue.
+ */
+export async function startMemory() {
+  const db = await openDb();
+  const ticket = await txn(db, [STORES.CARDS], 'readonly', async (t) => {
+    const all = await req(t.objectStore(STORES.CARDS).getAll());
+    return all
+      .filter(r =>
+        r.card_type === CARD_TYPE.MEMORY_TICKET &&
+        !r._pending &&
+        Array.isArray(r.game_cards) &&
+        r.game_cards.length >= PAIR_COUNT
+      )
+      .sort((a, b) => (a.acquired_at || '').localeCompare(b.acquired_at || ''))[0];
+  });
+  if (!ticket) throw new Error('No ready memory tickets to play');
+
+  const deck = buildMemoryDeck(ticket.game_cards.slice(0, PAIR_COUNT));
+
+  await txn(db, [STORES.CARDS, STORES.MEMORY_STATE], 'readwrite', (t) => {
+    t.objectStore(STORES.CARDS).delete(ticket.inventory_id);
+    t.objectStore(STORES.MEMORY_STATE).put({
+      id:        1,
+      phase:     'play',
+      cards:     deck,
+      pairCount: PAIR_COUNT,
+      matched:   [],
+      moves:     0,
+      startedAt: Date.now(),
+    });
+  });
+  emitMutation();
+
+  /* Tell the server the ticket is spent. Queued so play stays online-agnostic. */
+  mutate({
+    method: 'POST',
+    path:   '/market/use-ticket',
+    body:   ticket.inventory_id > 0 ? { inventoryId: ticket.inventory_id } : {},
+  });
+
+  return 1;
+}
+
+/** Persist a local-only update of the memory game state. */
+export async function patchMemoryState(patch) {
+  const prev = await readRow(STORES.MEMORY_STATE, 1);
+  if (!prev) return;
+  await putRow(STORES.MEMORY_STATE, { ...prev, ...patch });
+  emitMutation();
+}
+
+/** Clear the active memory game (called on leave / after rewards claimed). */
+export async function endMemory() {
+  const db = await openDb();
+  await txn(db, [STORES.MEMORY_STATE], 'readwrite', (t) => {
+    t.objectStore(STORES.MEMORY_STATE).delete(1);
+  });
+  emitMutation();
+}
+
+/**
+ * Claim a matched card as a reward. Optimistic inventory insert (server
+ * echoes the real inventory_id on the next sync-all). +10 dust infusion
+ * bonus per LAW 4.17.
+ */
+export async function claimMemoryPick(mediaId, card) {
+  const db = await openDb();
+  await txn(db, [STORES.CARDS], 'readwrite', async (t) => {
+    const cards = t.objectStore(STORES.CARDS);
+    const all = await req(cards.getAll());
+    if (all.some(r => r.id === mediaId && r.card_type === CARD_TYPE.MEDIA)) return;
+    cards.put({
+      inventory_id: -Date.now() - Math.floor(Math.random() * 1000),
+      card_type:    CARD_TYPE.MEDIA,
+      id:           mediaId,
+      type:         card.type,
+      title:        card.title,
+      infusion:     (card.infusion || 0) + 10,
+      acquired_at:  new Date().toISOString(),
+      _pending:     true,
+    });
+  });
+  emitMutation();
+  return mutate({
+    method: 'POST',
+    path:   '/inventory',
+    body:   { mediaId, infuseBonus: 10 },
+    flush:  true,
+  });
+}
+
 export async function renameCard(inventoryId, title) {
   const clean = (title || '').trim();
   if (!clean) return;

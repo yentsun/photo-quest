@@ -14,7 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_PLAYER_STATS_TABLE, CREATE_INVENTORY_TABLE, CREATE_QUEST_DECKS_TABLE, CREATE_QUEST_CARDS_TABLE, CREATE_MEMORY_TICKETS_TABLE, CREATE_DECKS_TABLE, CREATE_DECK_CARDS_TABLE, CARD_TYPE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_PLAYER_STATS_TABLE, CREATE_INVENTORY_TABLE, CREATE_QUEST_DECKS_TABLE, CREATE_QUEST_CARDS_TABLE, CREATE_MEMORY_TICKETS_TABLE, CREATE_MEMORY_GAMES_TABLE, CREATE_MEMORY_GAME_CARDS_TABLE, CREATE_DECKS_TABLE, CREATE_DECK_CARDS_TABLE, CARD_TYPE } from '@photo-quest/shared';
 
 /* Compute __dirname for ES modules. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -61,6 +61,8 @@ export function initDb() {
   db.exec(CREATE_QUEST_DECKS_TABLE);
   db.exec(CREATE_QUEST_CARDS_TABLE);
   db.exec(CREATE_MEMORY_TICKETS_TABLE);
+  db.exec(CREATE_MEMORY_GAMES_TABLE);
+  db.exec(CREATE_MEMORY_GAME_CARDS_TABLE);
   db.exec(CREATE_DECKS_TABLE);
   db.exec(CREATE_DECK_CARDS_TABLE);
 
@@ -159,6 +161,41 @@ function migrateDb() {
     }
   } catch (err) {
     /* memory_tickets table may not exist -- ignore. */
+  }
+
+  /* Pre-form memory games for legacy tickets that have no ref_id, so
+   * the client can play them offline like freshly-bought tickets. */
+  try {
+    const orphans = db.prepare(
+      `SELECT id FROM inventory WHERE card_type = '${CARD_TYPE.MEMORY_TICKET}' AND (ref_id IS NULL OR ref_id = 0)`
+    ).all();
+    if (orphans.length > 0) {
+      const images = db.prepare(
+        `SELECT id, infusion FROM media WHERE type = 'image' AND (hidden IS NULL OR hidden = 0)`
+      ).all();
+      if (images.length >= 8) {
+        for (const ticket of orphans) {
+          const bag = images.map(m => ({ ...m, weight: (m.infusion || 0) + 1 }));
+          const picked = [];
+          for (let i = 0; i < 8 && bag.length > 0; i++) {
+            const total = bag.reduce((s, m) => s + m.weight, 0);
+            let r = Math.random() * total;
+            let idx = 0;
+            for (; idx < bag.length - 1; idx++) { r -= bag[idx].weight; if (r <= 0) break; }
+            picked.push(bag[idx]);
+            bag.splice(idx, 1);
+          }
+          const res = db.prepare('INSERT INTO memory_games DEFAULT VALUES').run();
+          const gameId = Number(res.lastInsertRowid);
+          const stmt = db.prepare('INSERT INTO memory_game_cards (game_id, media_id) VALUES (?, ?)');
+          for (const m of picked) stmt.run(gameId, m.id);
+          db.prepare('UPDATE inventory SET ref_id = ? WHERE id = ?').run(gameId, ticket.id);
+        }
+        console.debug(`[db] Formed games for ${orphans.length} legacy memory tickets`);
+      }
+    }
+  } catch (err) {
+    console.debug('[db] legacy ticket backfill skipped:', err.message);
   }
 
 }

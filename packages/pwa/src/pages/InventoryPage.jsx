@@ -3,13 +3,12 @@ import { CARD_TYPE, MARKET_PRICES, words } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import MediaCard from '../components/ui/MediaCard.jsx';
-import ConsumableCard from '../components/ui/ConsumableCard.jsx';
 import Deck from '../components/ui/Deck.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
 import CardOverlay from '../components/ui/CardOverlay.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
 import { STORES } from '../db/localDb.js';
-import { addToDeck, startQuest } from '../db/actions.js';
+import { addToDeck, startQuest, startMemory } from '../db/actions.js';
 import { mediaUrl } from '../utils/mediaUrl.js';
 import './InventoryPage.css';
 
@@ -69,13 +68,43 @@ function InventoryItem({ item, serverUrl, onClick }) {
   if (item.card_type === CARD_TYPE.MEDIA) {
     return <DraggableMedia item={item} serverUrl={serverUrl} onClick={onClick} />;
   }
-  if (item.card_type === CARD_TYPE.MEMORY_TICKET) {
-    return <ConsumableCard title="Memory Game" subtitle="Play to earn dust" emoji="🎟️" gradient="purple" />;
-  }
   return null;
 }
 
 const QUEST_ICON_PATH = 'M158,885V812H0v73Zm1099,0V812H300v73Zm300,0V812H1399v73ZM1240,394a238.81563,238.81563,0,0,1,14.5,24q7.5,14,8.5,21,2.00005,12-5.5,32T1240,498q-51.99995,30-147,28T935,498q-26-11-45.5-37.5T870,393q0-64,51-130L779,0,636,263l13,19q13,18,25.5,50.5T687,393q0,41-19.5,67.5T622,498q-63,26-158,28T317,498q-10-7-18-27t-6-32q3-15,31-56L239,239,199,391,300,763h957l101-372-40-152-85,144Z';
+
+function MemoryTicketsStack({ ready, pending, onDoubleClick }) {
+  const total = ready + pending;
+  const footerText = pending > 0
+    ? `${total} ticket${total !== 1 ? 's' : ''} · ${pending} forming…`
+    : `${total} ticket${total !== 1 ? 's' : ''}`;
+  return (
+    <Deck
+      count={total}
+      onDoubleClick={ready > 0 ? onDoubleClick : undefined}
+      header="Memory Tickets"
+      headerRight={
+        <span style={{ color: '#d8b4fe' }}>{MARKET_PRICES.memoryTicket} {words.dustSymbol}</span>
+      }
+      borderColor="rgba(139, 92, 246, 0.6)"
+      art={
+        <div className="card__art--gradient-purple" style={{ width: '100%', height: '100%',
+             position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
+             opacity: ready > 0 ? 1 : 0.6 }}>
+          <span style={{ fontSize: '3rem' }}>🎟️</span>
+          {pending > 0 && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex',
+                          alignItems: 'flex-end', justifyContent: 'center', paddingBottom: '0.5rem',
+                          color: '#fde68a', fontSize: '0.75rem', opacity: 0.9 }}>
+              forming…
+            </div>
+          )}
+        </div>
+      }
+      footer={<span>{footerText}</span>}
+    />
+  );
+}
 
 function QuestDecksStack({ ready, pending, onDoubleClick }) {
   const total = ready + pending;
@@ -115,7 +144,7 @@ function QuestDecksStack({ ready, pending, onDoubleClick }) {
   );
 }
 
-export default function InventoryPage({ onLookForServer, server, sync, onOpenDeck, onStartQuest }) {
+export default function InventoryPage({ onLookForServer, server, sync, onOpenDeck, onStartQuest, onStartMemory }) {
   const [selectedId, setSelectedId] = useState(null);
   const items     = useLocalStore(STORES.CARDS);
   const decks     = useLocalStore(STORES.DECKS);
@@ -129,6 +158,17 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
       onStartQuest?.(deckId);
     } catch (err) {
       console.warn(err.message);
+    }
+  };
+
+  const handlePlayMemory = async () => {
+    /* startMemory is local (no server call) so it resolves in one tick;
+     * only open the view if we actually seeded a game. */
+    try {
+      await startMemory();
+      onStartMemory?.();
+    } catch (err) {
+      console.warn('memory start failed', err.message);
     }
   };
 
@@ -156,7 +196,16 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
   const questDecks        = ungrouped.filter(it => it.card_type === CARD_TYPE.QUEST_DECK);
   const questDecksReady   = questDecks.filter(it => !it._pending && it.ref_id).length;
   const questDecksPending = questDecks.length - questDecksReady;
-  const otherItems        = ungrouped.filter(it => it.card_type !== CARD_TYPE.QUEST_DECK);
+
+  const tickets           = ungrouped.filter(it => it.card_type === CARD_TYPE.MEMORY_TICKET);
+  const ticketsReady      = tickets.filter(
+    it => !it._pending && Array.isArray(it.game_cards) && it.game_cards.length >= 8,
+  ).length;
+  const ticketsPending    = tickets.length - ticketsReady;
+
+  const otherItems        = ungrouped.filter(
+    it => it.card_type !== CARD_TYPE.QUEST_DECK && it.card_type !== CARD_TYPE.MEMORY_TICKET,
+  );
 
   /* Per-deck preview = most recently added row (highest deck_card_id).
    * Server returns `deck_card_id` (dc.id); optimistic writes use Date.now()
@@ -190,6 +239,13 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
           ready={questDecksReady}
           pending={questDecksPending}
           onDoubleClick={handleStartQuest}
+        />
+      )}
+      {tickets.length > 0 && (
+        <MemoryTicketsStack
+          ready={ticketsReady}
+          pending={ticketsPending}
+          onDoubleClick={handlePlayMemory}
         />
       )}
       {decks.map(deck => (

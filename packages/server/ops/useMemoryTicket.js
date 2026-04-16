@@ -14,20 +14,28 @@ export default function (inventoryId) {
   const [kojo] = this;
   const db = kojo.get('db');
 
-  let result;
-  if (inventoryId) {
-    result = db.prepare(
-      'DELETE FROM inventory WHERE id = ? AND card_type = ?'
-    ).run(Number(inventoryId), CARD_TYPE.MEMORY_TICKET);
-  } else {
-    const ticket = db.prepare(
-      'SELECT id FROM inventory WHERE card_type = ? ORDER BY id LIMIT 1'
-    ).get(CARD_TYPE.MEMORY_TICKET);
-    if (!ticket) return null;
-    result = db.prepare('DELETE FROM inventory WHERE id = ?').run(ticket.id);
-  }
+  const ticket = inventoryId
+    ? db.prepare(
+        'SELECT id, ref_id FROM inventory WHERE id = ? AND card_type = ?'
+      ).get(Number(inventoryId), CARD_TYPE.MEMORY_TICKET)
+    : db.prepare(
+        'SELECT id, ref_id FROM inventory WHERE card_type = ? ORDER BY id LIMIT 1'
+      ).get(CARD_TYPE.MEMORY_TICKET);
 
-  if (!result.changes) return null;
+  if (!ticket) return null;
+
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM inventory WHERE id = ?').run(ticket.id);
+    if (ticket.ref_id) {
+      /* Cascades to memory_game_cards via FK. */
+      db.prepare('DELETE FROM memory_games WHERE id = ?').run(ticket.ref_id);
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
 
   return kojo.ops.getMemoryTickets();
 }

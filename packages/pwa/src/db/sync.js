@@ -72,6 +72,15 @@ function sendDirect({ method, path, body }) {
 }
 
 /**
+ * Fire-and-resolve HTTP call that bypasses the offline queue entirely.
+ * Use only when the caller requires the server's response right now and
+ * the action can't be made useful offline (e.g. memory game setup needs
+ * the server to sample images from the library). Rejects with
+ * `{ status: 0 }` when offline.
+ */
+export const request = sendDirect;
+
+/**
  * Queue a mutation and mark the queue dirty. Returns `{ __queued: true }`
  * immediately — callers rely on optimistic IDB writes for UI and the
  * drain's `then` refetch or SSE resync for authoritative reconciliation.
