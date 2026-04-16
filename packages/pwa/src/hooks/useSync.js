@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { startSync } from '../db/sync.js';
-import { onMutation } from '../db/events.js';
-
-const LOCAL_PULSE_MS = 350;
 
 /**
  * Spawn a sync worker whenever `serverUrl` is set and we're not paused.
@@ -10,6 +7,10 @@ const LOCAL_PULSE_MS = 350;
  * `toggle()` pauses an in-flight sync (terminates the worker) or resumes
  * it (spawns a new one that re-fetches). Pause is reversible — no state
  * is lost on the client, the server snapshot is just replaced again.
+ *
+ * The pill reflects server traffic only — local IDB mutations don't
+ * flip it. Queued mutations show up here when the worker actually
+ * pushes them (tick drain triggers 'change'/'done' over SSE).
  *
  * phases: 'idle' | 'syncing' | 'done' | 'error' | 'paused'
  */
@@ -39,20 +40,6 @@ export function useSync(serverUrl) {
 
     return () => { stopRef.current?.(); stopRef.current = null; };
   }, [serverUrl, paused]);
-
-  /* Flash the pill yellow briefly after any local IDB mutation, so the
-   * user sees feedback even when the server isn't involved. */
-  useEffect(() => {
-    let timer = null;
-    const unsub = onMutation(() => {
-      setStatus(prev => prev.phase === 'syncing' ? prev : { ...prev, phase: 'syncing' });
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        setStatus(prev => prev.phase === 'syncing' ? { ...prev, phase: 'done' } : prev);
-      }, LOCAL_PULSE_MS);
-    });
-    return () => { clearTimeout(timer); unsub(); };
-  }, []);
 
   const toggle = () => {
     if (status.phase === 'syncing') setPaused(true);

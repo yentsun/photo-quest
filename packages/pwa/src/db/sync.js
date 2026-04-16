@@ -3,17 +3,21 @@
  * All HTTP (sync, SSE, outgoing mutations) stays inside the worker.
  *
  * Mutations are queued to IDB (`pendingMutations`) before hitting the
- * network — the queue drains in order as soon as a worker is live.
- * This keeps the UI instant, survives reloads, and handles offline
- * windows without special-casing. GETs bypass the queue.
+ * network; the queue is drained on a 30 s tick instead of per-mutation
+ * so bursts of optimistic writes coalesce into one round-trip. Prompt
+ * flushes cover startup, online, and pagehide so nothing strands on
+ * reconnect or tab close. GETs bypass the queue.
  */
 
 import { openDb, STORES } from './localDb.js';
 import { emitMutation } from './events.js';
 
+const TICK_MS = 30_000;
+
 let activeWorker = null;
 let nextRpcId = 1;
 const pending = new Map();
+let dirty = false;
 
 export function startSync(serverUrl, onStatus) {
   const worker = new Worker(
@@ -33,7 +37,7 @@ export function startSync(serverUrl, onStatus) {
     /* Emit before onStatus so useSync's pulse listener observes the
      * pre-update phase ('syncing') and doesn't flash on completion. */
     if (data.type === 'done' || data.type === 'change') emitMutation();
-    if (data.type === 'done') drainQueue();
+    if (data.type === 'done') flushNow();
     onStatus(data);
   };
   worker.onerror = (e) => onStatus({ type: 'error', message: e.message });
@@ -42,6 +46,9 @@ export function startSync(serverUrl, onStatus) {
   worker.postMessage({ type: 'start-events', serverUrl });
 
   activeWorker = worker;
+  /* Ship anything the previous session left queued as soon as we're connected. */
+  dirty = true;
+  flushNow();
 
   return () => {
     if (activeWorker === worker) activeWorker = null;
@@ -65,11 +72,13 @@ function sendDirect({ method, path, body }) {
 }
 
 /**
- * Queue a mutation and trigger a drain. Returns `{ __queued: true }`
+ * Queue a mutation and mark the queue dirty. Returns `{ __queued: true }`
  * immediately — callers rely on optimistic IDB writes for UI and the
  * drain's `then` refetch or SSE resync for authoritative reconciliation.
  *
- * GETs bypass the queue and resolve with the server's response.
+ * The server push happens on the next 30 s tick (or sooner on online /
+ * pagehide / sync-done). GETs bypass the queue and resolve with the
+ * server's response.
  *
  * @param {object} req
  * @param {string} req.method — 'GET'|'POST'|'PATCH'|'DELETE'
@@ -81,6 +90,7 @@ function sendDirect({ method, path, body }) {
  */
 export async function mutate({ method, path, body, then }) {
   if (method === 'GET') return sendDirect({ method, path });
+  console.debug('[mutate] queueing', method, path);
   const db = await openDb();
   await new Promise((resolve, reject) => {
     const tx = db.transaction(STORES.PENDING_MUTATIONS, 'readwrite');
@@ -88,7 +98,8 @@ export async function mutate({ method, path, body, then }) {
     tx.onerror    = () => reject(tx.error);
     tx.objectStore(STORES.PENDING_MUTATIONS).add({ method, path, body, then, createdAt: Date.now() });
   });
-  drainQueue();
+  dirty = true;
+  console.debug('[mutate] queued, dirty=true');
   return { __queued: true };
 }
 
@@ -96,9 +107,22 @@ export async function mutate({ method, path, body, then }) {
 
 let draining = false;
 
+/**
+ * Flush dirty mutations now. Safe to call concurrently — `drainQueue`
+ * guards against overlapping drains, and re-marking `dirty` during a
+ * drain is picked up by the next tick.
+ */
+function flushNow() {
+  if (!dirty) return;
+  console.debug('[flushNow] draining');
+  dirty = false;
+  drainQueue();
+}
+
 export async function drainQueue() {
   if (draining || !activeWorker) return;
   draining = true;
+  let drained = 0;
   try {
     while (activeWorker) {
       const head = await peekHead();
@@ -110,15 +134,21 @@ export async function drainQueue() {
           if (fresh) await putIntoStore(head.then.store, fresh);
         }
         await deleteHead(head.id);
+        drained++;
       } catch (err) {
         if (err.status === 0) break; /* network — retry on next online */
         await deleteHead(head.id);   /* 4xx/5xx — can't retry, drop */
+        drained++;
         console.warn(`mutation ${head.method} ${head.path} dropped:`, err.message);
       }
     }
   } finally {
     draining = false;
     emitMutation();
+    /* Snapshot syncs skip while the queue is non-empty — now that it's
+     * empty (or we bailed on network) kick a fresh sync so server truth
+     * converges with whatever just drained. */
+    if (drained > 0 && activeWorker) activeWorker.postMessage({ type: 'sync-all' });
   }
 }
 
@@ -153,6 +183,9 @@ async function putIntoStore(store, row) {
   emitMutation();
 }
 
+setInterval(flushNow, TICK_MS);
+
 if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => drainQueue());
+  window.addEventListener('online',   () => { dirty = true; flushNow(); });
+  window.addEventListener('pagehide', () => { dirty = true; flushNow(); });
 }

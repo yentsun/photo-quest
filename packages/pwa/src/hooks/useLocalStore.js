@@ -14,6 +14,7 @@ export function useLocalStore(store) {
     let cancelled = false;
     const read = async () => {
       const result = await tx(store, 'readonly', (t) => req(t.objectStore(store).getAll()));
+      console.debug('[useLocalStore] read', store, '→', result?.length, 'rows', { cancelled });
       if (!cancelled) setRows(result);
     };
     read();

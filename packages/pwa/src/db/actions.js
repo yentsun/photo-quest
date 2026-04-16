@@ -56,37 +56,45 @@ async function adjustDust(delta) {
  * it previously had none.
  */
 export async function addToDeck(deckId, inventoryId) {
+  console.debug('[addToDeck] start', { deckId, inventoryId });
   const db = await openDb();
-  await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.DECKS], 'readwrite', async (t) => {
-    const cardsOS     = t.objectStore(STORES.CARDS);
-    const decksOS     = t.objectStore(STORES.DECKS);
-    const deckCardsOS = t.objectStore(STORES.DECK_CARDS);
+  try {
+    await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.DECKS], 'readwrite', async (t) => {
+      const cardsOS     = t.objectStore(STORES.CARDS);
+      const decksOS     = t.objectStore(STORES.DECKS);
+      const deckCardsOS = t.objectStore(STORES.DECK_CARDS);
 
-    const card = await req(cardsOS.get(inventoryId));
-    if (!card) return;
+      const card = await req(cardsOS.get(inventoryId));
+      console.debug('[addToDeck] fetched card', card);
+      if (!card) { console.warn('[addToDeck] no card found, bailing'); return; }
 
-    const existing = await req(deckCardsOS.get(inventoryId));
-    if (existing?.deck_id === deckId) return;
+      const existing = await req(deckCardsOS.get(inventoryId));
+      console.debug('[addToDeck] existing deckCards row', existing);
+      if (existing?.deck_id === deckId) { console.debug('[addToDeck] already in this deck, bailing'); return; }
 
-    if (existing) deckCardsOS.delete(inventoryId);
-    deckCardsOS.put({ ...card, deck_id: deckId, inventory_id: inventoryId });
+      if (existing) deckCardsOS.delete(inventoryId);
+      /* Use Date.now() as the optimistic deck_card_id so this row ranks
+       * newest-first for preview computation (InventoryPage sorts by it).
+       * The server's real dc.id replaces it on resync. */
+      const row = { ...card, deck_id: deckId, inventory_id: inventoryId, deck_card_id: Date.now() };
+      console.debug('[addToDeck] putting row', JSON.parse(JSON.stringify(row)));
+      deckCardsOS.put(row);
 
-    const deck = await req(decksOS.get(deckId));
-    if (deck) {
-      const updated = { ...deck, cardCount: (deck.cardCount || 0) + 1 };
-      if (!deck.preview && card.card_type === CARD_TYPE.MEDIA && card.id) {
-        updated.preview = { id: card.id, type: card.type, title: card.title };
+      const deck = await req(decksOS.get(deckId));
+      if (deck) decksOS.put({ ...deck, cardCount: (deck.cardCount || 0) + 1 });
+
+      if (existing && existing.deck_id !== deckId) {
+        const prevDeck = await req(decksOS.get(existing.deck_id));
+        if (prevDeck) {
+          decksOS.put({ ...prevDeck, cardCount: Math.max(0, (prevDeck.cardCount || 1) - 1) });
+        }
       }
-      decksOS.put(updated);
-    }
-
-    if (existing && existing.deck_id !== deckId) {
-      const prevDeck = await req(decksOS.get(existing.deck_id));
-      if (prevDeck) {
-        decksOS.put({ ...prevDeck, cardCount: Math.max(0, (prevDeck.cardCount || 1) - 1) });
-      }
-    }
-  });
+    });
+    console.debug('[addToDeck] txn committed');
+  } catch (err) {
+    console.error('[addToDeck] txn FAILED', err);
+    throw err;
+  }
   emitMutation();
   return mutate({
     method: 'POST',

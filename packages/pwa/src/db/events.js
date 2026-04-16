@@ -9,10 +9,15 @@
 const listeners = new Set();
 
 export function emitMutation() {
+  console.debug('[emit] mutation →', listeners.size, 'listeners');
   for (const fn of listeners) fn();
 }
 
 export function onMutation(fn) {
   listeners.add(fn);
-  return () => listeners.delete(fn);
+  console.debug('[emit] +listener, total', listeners.size);
+  return () => {
+    listeners.delete(fn);
+    console.debug('[emit] -listener, total', listeners.size);
+  };
 }

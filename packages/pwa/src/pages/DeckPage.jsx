@@ -12,7 +12,9 @@ export default function DeckPage({ deckId, server, onBack }) {
   const deckCards = useLocalStore(STORES.DECK_CARDS);
 
   const deck = decks?.find(d => d.id === deckId);
-  const cards = deckCards?.filter(c => c.deck_id === deckId) || [];
+  /* Newest-first — same ordering the InventoryPage preview uses. */
+  const cards = (deckCards?.filter(c => c.deck_id === deckId) || [])
+    .sort((a, b) => (b.deck_card_id || 0) - (a.deck_card_id || 0));
 
   return (
     <div className="deck-page">

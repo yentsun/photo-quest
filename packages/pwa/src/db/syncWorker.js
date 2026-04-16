@@ -15,10 +15,26 @@
  *                  { type: 'mutate-result', id, ok, status, data?, message? }
  */
 
-import { STORES, clearStore, putRows, snapshotReplace } from './localDb.js';
+import { openDb, STORES, clearStore, putRows, snapshotReplace } from './localDb.js';
 
 const PAGE_SIZE = 100;
 const PAGE_CONCURRENCY = 4;
+
+/**
+ * Pending optimistic writes win over server snapshots. If any mutation
+ * is queued we skip snapshot replacement entirely — once the queue
+ * drains, the server's own change event will re-trigger a resync and
+ * the snapshot will then contain our applied mutations.
+ */
+async function hasPendingMutations() {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(STORES.PENDING_MUTATIONS, 'readonly');
+    const r = t.objectStore(STORES.PENDING_MUTATIONS).count();
+    r.onsuccess = () => resolve(r.result > 0);
+    r.onerror   = () => reject(r.error);
+  });
+}
 
 async function fetchJson(url) {
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -57,6 +73,7 @@ const syncInventory = (serverUrl) => syncPaged(serverUrl, '/inventory', STORES.C
 
 async function syncDecks(serverUrl) {
   const { decks = [], cards = [] } = await fetchJson(`${serverUrl}/decks`);
+  console.debug('[worker] syncDecks replacing stores:', decks.length, 'decks,', cards.length, 'deckCards');
   await Promise.all([
     snapshotReplace(STORES.DECKS,      decks),
     snapshotReplace(STORES.DECK_CARDS, cards),
@@ -78,11 +95,21 @@ const TABLE_SYNCERS = {
 async function syncTable(serverUrl, table) {
   const fn = TABLE_SYNCERS[table];
   if (!fn) return;
+  if (await hasPendingMutations()) {
+    console.debug('[worker] syncTable', table, 'SKIPPED (pending queue)');
+    return;
+  }
+  console.debug('[worker] syncTable', table, 'running');
   try { await fn(serverUrl); self.postMessage({ type: 'done' }); }
   catch (err) { self.postMessage({ type: 'error', message: err.message }); }
 }
 
 async function syncAll(serverUrl) {
+  if (await hasPendingMutations()) {
+    console.debug('[worker] syncAll SKIPPED (pending queue)');
+    return;
+  }
+  console.debug('[worker] syncAll running');
   try {
     await Promise.all([
       syncInventory(serverUrl),

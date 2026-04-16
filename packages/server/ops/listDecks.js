@@ -1,5 +1,8 @@
 /**
- * @file List all decks with card counts and preview.
+ * @file List all decks with card counts plus the denormalized membership rows.
+ *
+ * The client picks the preview from its local replica (most recent card by
+ * `deck_card_id`); the server only stores, it doesn't choose.
  *
  * Kojo op: accessed as `kojo.ops.listDecks()`.
  */
@@ -8,46 +11,27 @@ export default function () {
   const [kojo] = this;
   const db = kojo.get('db');
 
-  const rows = db.prepare(
+  const decks = db.prepare(
     `SELECT d.id, d.name, d.created_at,
-            (SELECT COUNT(*) FROM deck_cards dc WHERE dc.deck_id = d.id) AS cardCount,
-            m.id AS preview_id, m.type AS preview_type, m.title AS preview_title
+            (SELECT COUNT(*) FROM deck_cards dc WHERE dc.deck_id = d.id) AS cardCount
      FROM decks d
-     LEFT JOIN deck_cards dc ON dc.deck_id = d.id
-       AND dc.id = (
-         SELECT dc2.id FROM deck_cards dc2
-         JOIN inventory i ON i.id = dc2.inventory_id
-         JOIN media med ON med.id = i.media_id
-         WHERE dc2.deck_id = d.id
-         ORDER BY dc2.id DESC LIMIT 1
-       )
-     LEFT JOIN inventory i ON i.id = dc.inventory_id
-     LEFT JOIN media m ON m.id = i.media_id
-     GROUP BY d.id
      ORDER BY d.created_at DESC`
   ).all();
-
-  const result = rows.map(d => ({
-    id: d.id,
-    name: d.name,
-    created_at: d.created_at,
-    cardCount: d.cardCount,
-    preview: d.preview_id ? { id: d.preview_id, type: d.preview_type, title: d.preview_title } : null,
-  }));
 
   const grouped = db.prepare('SELECT DISTINCT inventory_id FROM deck_cards').all();
   const groupedIds = grouped.map(r => r.inventory_id);
 
   /* Denormalized membership rows so the client can render any user deck
    * (DeckPage) entirely from the local IDB replica. Each row carries the
-   * joined inventory + media fields, mirroring listDeckCards. */
+   * joined inventory + media fields, mirroring listDeckCards. `deck_card_id`
+   * is dc.id — the client uses it to pick the most-recent-first preview. */
   const cards = db.prepare(
-    `SELECT dc.deck_id, i.id AS inventory_id, i.acquired_at, m.*
+    `SELECT dc.id AS deck_card_id, dc.deck_id, i.id AS inventory_id, i.acquired_at, m.*
      FROM deck_cards dc
      JOIN inventory i ON i.id = dc.inventory_id
      JOIN media m ON m.id = i.media_id
      ORDER BY dc.deck_id, dc.id`
   ).all();
 
-  return { decks: result, groupedIds, cards };
+  return { decks, groupedIds, cards };
 }

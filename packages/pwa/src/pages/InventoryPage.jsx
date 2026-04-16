@@ -32,9 +32,9 @@ function useDropTarget(onDropId) {
   return { over, handlers };
 }
 
-function DeckCard({ deck, serverUrl, onOpen, onDropCard }) {
+function DeckCard({ deck, preview, serverUrl, onOpen, onDropCard }) {
   const { over, handlers } = useDropTarget((invId) => onDropCard(deck.id, invId));
-  const previewUrl = deck.preview ? mediaUrl(serverUrl, deck.preview) : null;
+  const previewUrl = preview ? mediaUrl(serverUrl, preview) : null;
 
   return (
     <div className={`drop-target ${over ? 'drop-target--over' : ''}`} {...handlers}>
@@ -144,6 +144,18 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
   const questDecks = ungrouped.filter(it => it.card_type === CARD_TYPE.QUEST_DECK);
   const otherItems = ungrouped.filter(it => it.card_type !== CARD_TYPE.QUEST_DECK);
 
+  /* Per-deck preview = most recently added row (highest deck_card_id).
+   * Server returns `deck_card_id` (dc.id); optimistic writes use Date.now()
+   * so they rank above any server-assigned id until the next resync.
+   * All deck_cards rows carry the joined media fields (id + type), so
+   * every row is a valid preview candidate. */
+  const previewByDeck = new Map();
+  for (const dc of deckCards) {
+    if (!dc.id || !dc.type) continue;
+    const prev = previewByDeck.get(dc.deck_id);
+    if (!prev || (dc.deck_card_id || 0) > (prev.deck_card_id || 0)) previewByDeck.set(dc.deck_id, dc);
+  }
+
   if (!decks.length && !ungrouped.length) {
     if (sync?.phase === 'idle' || sync?.phase === 'syncing') {
       return <Spinner label="Loading inventory…" />;
@@ -166,6 +178,7 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
         <DeckCard
           key={`d-${deck.id}`}
           deck={deck}
+          preview={previewByDeck.get(deck.id) || null}
           serverUrl={server.url}
           onOpen={() => onOpenDeck(deck.id)}
           onDropCard={handleDropCard}
