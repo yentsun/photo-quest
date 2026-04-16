@@ -11,7 +11,7 @@
 /* LAW 5.1: exactly three card sizes. Every attribute that varies by
  * size (width, art aspect, header / footer padding and text) lives
  * here so sub-components only pass `size` and everything follows. */
-.card--small  { width:  5rem; }
+.card--small  { width:  6rem; }
 .card--normal { width: 11rem; }
 .card--large  { width: min(24rem, 90vw); }
 
