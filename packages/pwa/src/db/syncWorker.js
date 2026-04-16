@@ -16,6 +16,7 @@
 import { STORES, clearStore, putRows } from './localDb.js';
 
 const PAGE_SIZE = 100;
+const PAGE_CONCURRENCY = 4;
 
 async function fetchJson(url) {
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -33,17 +34,23 @@ async function syncInventory(serverUrl) {
   let count = first.items.length;
   self.postMessage({ type: 'progress', store, count, total });
 
-  while (count < total) {
-    const page = await fetchJson(`${serverUrl}/inventory?limit=${PAGE_SIZE}&offset=${count}`);
-    if (!page.items.length) break;
-    await putRows(store, page.items);
-    count += page.items.length;
+  const offsets = [];
+  for (let o = count; o < total; o += PAGE_SIZE) offsets.push(o);
+
+  /* Cap concurrency so we don't saturate the server when there are many pages. */
+  for (let i = 0; i < offsets.length; i += PAGE_CONCURRENCY) {
+    const batch = offsets.slice(i, i + PAGE_CONCURRENCY);
+    const pages = await Promise.all(
+      batch.map(o => fetchJson(`${serverUrl}/inventory?limit=${PAGE_SIZE}&offset=${o}`)),
+    );
+    for (const page of pages) {
+      if (!page.items?.length) continue;
+      await putRows(store, page.items);
+      count += page.items.length;
+    }
     self.postMessage({ type: 'progress', store, count, total });
   }
 }
-
-/* Decks are PWA-owned: users build them locally, server never dictates
- * membership. No syncDecks — mutations stay in IDB. */
 
 const TABLE_SYNCERS = {
   inventory: syncInventory,

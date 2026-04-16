@@ -7,10 +7,9 @@
  */
 
 import { useEffect, useState, useRef } from 'react';
-import { getAll, getByKey, subscribe, STORES } from './localDb.js';
+import { getAll, getByKey, getAllByIndex, subscribe, STORES } from './localDb.js';
 
-/* Stable references for hooks that subscribe to multiple stores —
- * avoids re-subscribing on every render. */
+/* Module-scoped so useEffect deps don't see a fresh array each render. */
 const DECKS_STORES = [STORES.DECKS, STORES.META];
 const DECK_PAGE_STORES = [STORES.DECKS, STORES.DECK_CARDS];
 const QUEST_STORES = [STORES.QUEST_DECKS, STORES.QUEST_CARDS, STORES.INVENTORY, STORES.PLAYER_STATS];
@@ -29,9 +28,6 @@ const QUEST_STORES = [STORES.QUEST_DECKS, STORES.QUEST_CARDS, STORES.INVENTORY, 
 function useLocal(stores, queryFn, initial) {
   const [data, setData] = useState(initial);
   const queryRef = useRef(queryFn);
-  /* Pin queryFn via ref so the effect's deps stay tied to `stores` only.
-   * Updated in an effect (not during render) to stay safe under
-   * Concurrent Mode and StrictMode double-invocation. */
   useEffect(() => { queryRef.current = queryFn; });
 
   useEffect(() => {
@@ -98,12 +94,11 @@ export function useDeckCards(deckId) {
     async () => {
       if (deckId == null) return null;
       const id = Number(deckId);
-      const [deck, allCards] = await Promise.all([
+      const [deck, cards] = await Promise.all([
         getByKey(STORES.DECKS, id),
-        getAll(STORES.DECK_CARDS),
+        getAllByIndex(STORES.DECK_CARDS, 'deck_id', id),
       ]);
       if (!deck) return null;
-      const cards = allCards.filter(c => c.deck_id === id);
       return { name: deck.name, cards };
     },
     null,
@@ -143,9 +138,10 @@ export function useQuestDeck(deckId) {
     QUEST_STORES,
     async () => {
       if (deckId == null) return null;
-      const [deck, allCards, inventory, stats] = await Promise.all([
-        getByKey(STORES.QUEST_DECKS, Number(deckId)),
-        getAll(STORES.QUEST_CARDS),
+      const id = Number(deckId);
+      const [deck, cards, inventory, stats] = await Promise.all([
+        getByKey(STORES.QUEST_DECKS, id),
+        getAllByIndex(STORES.QUEST_CARDS, 'deck_id', id),
         getAll(STORES.INVENTORY),
         getByKey(STORES.PLAYER_STATS, 1),
       ]);
@@ -154,9 +150,7 @@ export function useQuestDeck(deckId) {
       const ownedMediaIds = new Set(
         inventory.filter(i => i.media_id != null).map(i => i.media_id),
       );
-      const cards = allCards
-        .filter(c => c.deck_id === deck.id)
-        .sort((a, b) => a.position - b.position);
+      cards.sort((a, b) => a.position - b.position);
 
       const findNextUnowned = (fromPos) =>
         cards.find(c => c.position >= fromPos && !ownedMediaIds.has(c.media_id)) || null;

@@ -7,7 +7,6 @@ import { NavLink, Link } from 'react-router-dom';
 import { clientRoutes } from '@photo-quest/shared';
 import { fetchNetworkInfo } from '../../utils/api.js';
 import { usePlayerStats } from '../../db/hooks.js';
-import { syncTable } from '../../db/sync.js';
 import { Button, DustBadge, Icon } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
 
@@ -23,11 +22,6 @@ export default function Header() {
     fetchNetworkInfo()
       .then(info => setNetworkUrl(info.network))
       .catch(err => console.error('Failed to fetch network info:', err));
-
-    // dust-changed fires from pages that still mutate via utils/api.js.
-    const onDustChanged = () => syncTable('player_stats');
-    window.addEventListener('dust-changed', onDustChanged);
-    return () => window.removeEventListener('dust-changed', onDustChanged);
   }, []);
 
   const handleCopyUrl = () => {

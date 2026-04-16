@@ -44,13 +44,14 @@ export function useSync(serverUrl) {
    * user sees feedback even when the server isn't involved. */
   useEffect(() => {
     let timer = null;
-    return onMutation(() => {
+    const unsub = onMutation(() => {
       setStatus(prev => prev.phase === 'syncing' ? prev : { ...prev, phase: 'syncing' });
       clearTimeout(timer);
       timer = setTimeout(() => {
         setStatus(prev => prev.phase === 'syncing' ? { ...prev, phase: 'done' } : prev);
       }, LOCAL_PULSE_MS);
     });
+    return () => { clearTimeout(timer); unsub(); };
   }, []);
 
   const toggle = () => {
