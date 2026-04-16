@@ -11,7 +11,7 @@ export default function DeckPage({ deckId, server, sync, onBack }) {
   const decks     = useLocalStore(STORES.DECKS,      sync?.phase);
   const deckCards = useLocalStore(STORES.DECK_CARDS, sync?.phase);
 
-  const deck = decks?.find(d => !d.__meta && d.id === deckId);
+  const deck = decks?.find(d => d.id === deckId);
   const cards = deckCards?.filter(c => c.deck_id === deckId) || [];
 
   return (

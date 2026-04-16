@@ -15,10 +15,11 @@ import { emitMutation } from './events.js';
  *   - decks[__meta].groupedIds: add inventory_id so it's filtered from inventory
  */
 export async function addToDeck(deckId, inventoryId) {
-  await tx([STORES.CARDS, STORES.DECKS, STORES.DECK_CARDS], 'readwrite', async (t) => {
+  await tx([STORES.CARDS, STORES.DECKS, STORES.DECK_CARDS, STORES.META], 'readwrite', async (t) => {
     const cardsOS     = t.objectStore(STORES.CARDS);
     const decksOS     = t.objectStore(STORES.DECKS);
     const deckCardsOS = t.objectStore(STORES.DECK_CARDS);
+    const metaOS      = t.objectStore(STORES.META);
 
     const card = await req(cardsOS.get(inventoryId));
     if (!card) throw new Error(`Card ${inventoryId} not found`);
@@ -54,11 +55,10 @@ export async function addToDeck(deckId, inventoryId) {
       if (prevDeck) decksOS.put({ ...prevDeck, cardCount: Math.max(0, (prevDeck.cardCount || 1) - 1) });
     }
 
-    /* Update groupedIds meta so InventoryPage filters this card out. */
-    const meta = (await req(decksOS.get(0))) || { id: 0, __meta: true, groupedIds: [] };
-    const grouped = new Set(meta.groupedIds || []);
+    const meta = await req(metaOS.get('groupedIds'));
+    const grouped = new Set(meta?.value || []);
     grouped.add(inventoryId);
-    decksOS.put({ ...meta, groupedIds: [...grouped] });
+    metaOS.put({ key: 'groupedIds', value: [...grouped] });
   });
   emitMutation();
 }

@@ -103,8 +103,9 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
   const [version, setVersion] = useState(0);
   const [selected, setSelected] = useState(null);
   const refreshKey = `${sync?.phase}-${version}`;
-  const items    = useLocalStore(STORES.CARDS, refreshKey);
-  const decksRaw = useLocalStore(STORES.DECKS, refreshKey);
+  const items = useLocalStore(STORES.CARDS, refreshKey);
+  const decks = useLocalStore(STORES.DECKS, refreshKey);
+  const metaRows = useLocalStore(STORES.META, refreshKey);
 
   const handleDropCard = async (deckId, invId) => {
     await addToDeck(deckId, invId);
@@ -136,13 +137,12 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
     );
   }
 
-  if (items === null || decksRaw === null) {
+  if (items === null || decks === null || metaRows === null) {
     return <Spinner label="Loading inventory…" />;
   }
 
-  const decks = decksRaw.filter(d => !d.__meta);
-  const meta = decksRaw.find(d => d.__meta);
-  const groupedIds = new Set(meta?.groupedIds || []);
+  const grouped = metaRows.find(r => r.key === 'groupedIds');
+  const groupedIds = new Set(grouped?.value || []);
   const ungrouped = items.filter(it => !groupedIds.has(it.inventory_id));
   const questDecks = ungrouped.filter(it => it.card_type === CARD_TYPE.QUEST_DECK);
   const otherItems = ungrouped.filter(it => it.card_type !== CARD_TYPE.QUEST_DECK);
