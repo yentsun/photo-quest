@@ -16,8 +16,8 @@ import { patchMemoryState, claimMemoryPick, endMemory } from '../db/actions.js';
 import { mediaUrl as buildMediaUrl } from '../utils/mediaUrl.js';
 import './MemoryPage.css';
 
-const STAR_THRESHOLDS = [15, 11, 8];     /* 1★/2★/3★ move caps */
-const PICKS_PER_STAR  = { 0: 0, 1: 1, 2: 2, 3: 8 };
+const STAR_THRESHOLDS = [15, 11, 8];  /* 1★/2★/3★ move caps — for prestige only */
+const PICKS_PER_WIN   = 1;            /* winning earns exactly one reward card, regardless of stars */
 const FLIP_BACK_MS    = 800;
 
 function starsFromMoves(moves) {
@@ -106,7 +106,7 @@ export default function MemoryPage({ server, onBack }) {
   const moves   = state.moves || 0;
   const won     = matched.size === (state.pairCount || 8);
   const stars   = won ? starsFromMoves(moves) : 0;
-  const picksAllowed = won ? (PICKS_PER_STAR[stars] || 0) : 0;
+  const picksAllowed = won ? PICKS_PER_WIN : 0;
   const picksRemaining = picksAllowed - picks.length;
   const picking = won && picksRemaining > 0;
 

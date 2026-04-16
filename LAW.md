@@ -153,9 +153,9 @@ The governing rules of the photo-quest project. This document is the source of t
 **4.22** Memory game mechanics:
 - The board has **8 pairs** (16 cards), dealt face-down, drawn from the player's library using infusion-weighted random selection (a card with infusion N has weight N+1).
 - The player flips two cards per move; matching pairs stay face-up, non-matching pairs flip back after a brief reveal.
-- Moves are counted. Rating: **3 stars** at ≤8 moves, **2 stars** at ≤11 moves, **1 star** at ≤15 moves, otherwise 0 stars.
-- After all pairs are matched, the player picks reward cards from the matched pairs: **1 star → 1 pick, 2 stars → 2 picks, 3 stars → all 8 picks**. Each picked card is added to inventory with **+10 dust infusion** (per 4.17).
-- Starting the game consumes **one ticket card** from inventory. The ticket is consumed on the first card flip, not on page load — abandoning before the first flip does not cost a ticket.
+- Moves are counted. Rating: **3 stars** at ≤8 moves, **2 stars** at ≤11 moves, **1 star** at ≤15 moves, otherwise 0 stars. Stars are prestige only — they do not change the reward.
+- After all pairs are matched, the player picks **exactly one** reward card from the matched pairs. The picked card is added to inventory with **+10 dust infusion** (per 4.17).
+- Starting the game consumes **one ticket card** from inventory. The ticket is consumed at game start.
 
 **4.24** The current quest card's infusion value must be visible in the card UI and update live as passive infusion (4.13) accrues. The take cost shown on the take button must reflect the live infusion value.
 
