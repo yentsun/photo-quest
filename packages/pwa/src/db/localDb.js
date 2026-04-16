@@ -25,11 +25,11 @@ let dbPromise = null;
 export function openDb() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
-    req.onupgradeneeded = () => {
-      const db = req.result;
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = () => {
+      const db = request.result;
       for (const { name, keyPath } of SCHEMA) {
         if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
         db.createObjectStore(name, { keyPath });
@@ -39,50 +39,55 @@ export function openDb() {
   return dbPromise;
 }
 
-export async function countRows(store) {
+/** Promisify a single IDBRequest. Use inside a `tx` callback to await reads. */
+export function req(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * Run a transaction and resolve with whatever the callback returns once the
+ * txn commits. `stores` may be a name or an array. The callback receives the
+ * IDBTransaction and can await IDB requests (via `req`) across continuations
+ * as long as it only does IDB work.
+ */
+export async function tx(stores, mode, fn) {
   const db = await openDb();
-  return await request(db.transaction(store, 'readonly').objectStore(store).count());
+  const list = Array.isArray(stores) ? stores : [stores];
+  let result;
+  await new Promise((resolve, reject) => {
+    const t = db.transaction(list, mode);
+    t.oncomplete = () => resolve();
+    t.onerror    = () => reject(t.error);
+    t.onabort    = () => reject(t.error);
+    Promise.resolve(fn(t)).then(v => { result = v; }).catch(reject);
+  });
+  return result;
+}
+
+export function countRows(store) {
+  return tx(store, 'readonly', (t) => req(t.objectStore(store).count()));
 }
 
 /** Replace a store's contents with `rows` in one transaction. */
-export async function snapshotReplace(store, rows) {
-  const db = await openDb();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(store, 'readwrite');
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-    const os = tx.objectStore(store);
+export function snapshotReplace(store, rows) {
+  return tx(store, 'readwrite', (t) => {
+    const os = t.objectStore(store);
     os.clear();
     for (const row of rows) os.put(row);
   });
 }
 
-export async function clearStore(store) {
-  const db = await openDb();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(store, 'readwrite');
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-    tx.objectStore(store).clear();
-  });
+export function clearStore(store) {
+  return tx(store, 'readwrite', (t) => t.objectStore(store).clear());
 }
 
-export async function putRows(store, rows) {
-  if (!rows.length) return;
-  const db = await openDb();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(store, 'readwrite');
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-    const os = tx.objectStore(store);
+export function putRows(store, rows) {
+  if (!rows.length) return Promise.resolve();
+  return tx(store, 'readwrite', (t) => {
+    const os = t.objectStore(store);
     for (const row of rows) os.put(row);
-  });
-}
-
-function request(req) {
-  return new Promise((resolve, reject) => {
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
   });
 }

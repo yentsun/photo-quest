@@ -5,26 +5,8 @@
  */
 
 import { CARD_TYPE } from '@photo-quest/shared';
-import { openDb, STORES } from './localDb.js';
+import { tx, req, STORES } from './localDb.js';
 import { emitMutation } from './events.js';
-
-function txn(db, stores, mode, fn) {
-  return new Promise((resolve, reject) => {
-    const t = db.transaction(stores, mode);
-    let result;
-    t.oncomplete = () => resolve(result);
-    t.onerror    = () => reject(t.error);
-    t.onabort    = () => reject(t.error);
-    Promise.resolve(fn(t)).then(v => { result = v; }).catch(reject);
-  });
-}
-
-function req(r) {
-  return new Promise((resolve, reject) => {
-    r.onsuccess = () => resolve(r.result);
-    r.onerror   = () => reject(r.error);
-  });
-}
 
 /**
  * Add an inventory card to a deck. Writes:
@@ -33,8 +15,7 @@ function req(r) {
  *   - decks[__meta].groupedIds: add inventory_id so it's filtered from inventory
  */
 export async function addToDeck(deckId, inventoryId) {
-  const db = await openDb();
-  await txn(db, [STORES.CARDS, STORES.DECKS, STORES.DECK_CARDS], 'readwrite', async (t) => {
+  await tx([STORES.CARDS, STORES.DECKS, STORES.DECK_CARDS], 'readwrite', async (t) => {
     const cardsOS     = t.objectStore(STORES.CARDS);
     const decksOS     = t.objectStore(STORES.DECKS);
     const deckCardsOS = t.objectStore(STORES.DECK_CARDS);
@@ -87,8 +68,7 @@ export async function addToDeck(deckId, inventoryId) {
  * navigates to the quest view with the returned row (ref_id = quest_deck id).
  */
 export async function consumeQuestDeck() {
-  const db = await openDb();
-  const target = await txn(db, [STORES.CARDS], 'readwrite', async (t) => {
+  const target = await tx(STORES.CARDS, 'readwrite', async (t) => {
     const all = await req(t.objectStore(STORES.CARDS).getAll());
     const questDecks = all
       .filter(r => r.card_type === CARD_TYPE.QUEST_DECK)
