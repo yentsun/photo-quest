@@ -6,12 +6,13 @@
  */
 
 const DB_NAME = 'photo-quest';
-const DB_VERSION = 10;
+const DB_VERSION = 11;
 
 export const STORES = {
   CARDS:              'cards',
   DECKS:              'decks',
   DECK_CARDS:         'deckCards',
+  FOLDERS:            'folders',
   PLAYER_STATS:       'playerStats',
   QUEST_STATE:        'questState',
   MEMORY_STATE:       'memoryState',
@@ -22,6 +23,7 @@ const SCHEMA = [
   { name: STORES.CARDS,             keyPath: 'inventory_id' },
   { name: STORES.DECKS,             keyPath: 'id' },
   { name: STORES.DECK_CARDS,        keyPath: 'inventory_id' },
+  { name: STORES.FOLDERS,           keyPath: 'id' },
   { name: STORES.PLAYER_STATS,      keyPath: 'id' },
   { name: STORES.QUEST_STATE,       keyPath: 'id' },
   { name: STORES.MEMORY_STATE,      keyPath: 'id' },

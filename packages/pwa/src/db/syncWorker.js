@@ -107,10 +107,19 @@ async function syncPlayer(serverUrl) {
   await snapshotReplace(STORES.PLAYER_STATS, [{ id: 1, ...row }]);
 }
 
+async function syncFolders(serverUrl) {
+  const folders = await fetchJson(`${serverUrl}/folders`);
+  await snapshotReplace(STORES.FOLDERS, folders);
+  self.postMessage({ type: 'progress', store: STORES.FOLDERS, count: folders.length, total: folders.length });
+}
+
+/* Folder counts & previews derive from the media table, so resync folders
+ * whenever the server bumps the `media` channel (scan, delete). */
 const TABLE_SYNCERS = {
   inventory: syncInventory,
   decks:     syncDecks,
   player:    syncPlayer,
+  media:     syncFolders,
 };
 
 async function syncTable(serverUrl, table) {
@@ -136,6 +145,7 @@ async function syncAll(serverUrl) {
       syncInventory(serverUrl),
       syncDecks(serverUrl),
       syncPlayer(serverUrl),
+      syncFolders(serverUrl),
     ]);
     self.postMessage({ type: 'done' });
   } catch (err) {
