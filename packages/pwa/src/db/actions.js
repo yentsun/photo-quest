@@ -124,38 +124,32 @@ async function optimisticCard(card) {
 }
 
 export async function buyQuestDeck() {
-  const optimisticId = -Date.now();
   await adjustDust(-MARKET_PRICES.questDeck);
   await optimisticCard({
-    inventory_id: optimisticId,
+    inventory_id: -Date.now(),
     card_type:    CARD_TYPE.QUEST_DECK,
     ref_id:       null,
     acquired_at:  new Date().toISOString(),
     _pending:     true,
   });
   emitMutation();
-  /* Player is waiting on this to become playable — bypass the tick. */
-  return mutate({
-    method: 'POST', path: '/market/buy-deck', flush: true,
-    deleteOptimistic: { store: STORES.CARDS, key: optimisticId },
-  });
+  /* Player is waiting on this to become playable — bypass the tick.
+   * The optimistic row is pruned by the post-drain sync in the same
+   * atomic tx that puts the real server row (see syncPaged). */
+  return mutate({ method: 'POST', path: '/market/buy-deck', flush: true });
 }
 
 export async function buyTicket() {
-  const optimisticId = -Date.now();
   await adjustDust(-MARKET_PRICES.memoryTicket);
   await optimisticCard({
-    inventory_id: optimisticId,
+    inventory_id: -Date.now(),
     card_type:    CARD_TYPE.MEMORY_TICKET,
     ref_id:       null,
     acquired_at:  new Date().toISOString(),
     _pending:     true,
   });
   emitMutation();
-  return mutate({
-    method: 'POST', path: '/market/buy-ticket', flush: true,
-    deleteOptimistic: { store: STORES.CARDS, key: optimisticId },
-  });
+  return mutate({ method: 'POST', path: '/market/buy-ticket', flush: true });
 }
 
 /* ── Quests ────────────────────────────────────────────────────── */
@@ -403,15 +397,13 @@ export async function endMemory() {
  * bonus per LAW 4.17.
  */
 export async function claimMemoryPick(mediaId, card) {
-  const optimisticId = -Date.now() - Math.floor(Math.random() * 1000);
   const db = await openDb();
-  let inserted = false;
   await txn(db, [STORES.CARDS], 'readwrite', async (t) => {
     const cards = t.objectStore(STORES.CARDS);
     const all = await req(cards.getAll());
     if (all.some(r => r.id === mediaId && r.card_type === CARD_TYPE.MEDIA)) return;
     cards.put({
-      inventory_id: optimisticId,
+      inventory_id: -Date.now() - Math.floor(Math.random() * 1000),
       card_type:    CARD_TYPE.MEDIA,
       id:           mediaId,
       type:         card.type,
@@ -420,7 +412,6 @@ export async function claimMemoryPick(mediaId, card) {
       acquired_at:  new Date().toISOString(),
       _pending:     true,
     });
-    inserted = true;
   });
   emitMutation();
   return mutate({
@@ -428,7 +419,6 @@ export async function claimMemoryPick(mediaId, card) {
     path:   '/inventory',
     body:   { mediaId, infuseBonus: 10 },
     flush:  true,
-    deleteOptimistic: inserted ? { store: STORES.CARDS, key: optimisticId } : undefined,
   });
 }
 

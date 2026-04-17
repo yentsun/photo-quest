@@ -94,17 +94,27 @@ export function countRows(store) {
   return tx(store, 'readonly', (t) => req(t.objectStore(store).count()));
 }
 
-/** Replace a store's contents with `rows` in one transaction. */
-export function snapshotReplace(store, rows) {
-  return tx(store, 'readwrite', (t) => {
+/**
+ * LAW 1.40: reconcile a store's contents with `rows` by writing only
+ * the minimal delta — put added or changed rows, delete rows the
+ * server no longer returns. Identical rows are skipped entirely so
+ * readers don't observe a no-op churn.
+ */
+export function syncReplace(store, rows) {
+  return tx(store, 'readwrite', async (t) => {
     const os = t.objectStore(store);
-    os.clear();
-    for (const row of rows) os.put(row);
+    const kp = os.keyPath;
+    const existing = await req(os.getAll());
+    const prevJson = new Map(existing.map(r => [r[kp], JSON.stringify(r)]));
+    const seen = new Set();
+    for (const row of rows) {
+      const key = row[kp];
+      seen.add(key);
+      const nextJson = JSON.stringify(row);
+      if (prevJson.get(key) !== nextJson) os.put(row);
+    }
+    for (const key of prevJson.keys()) if (!seen.has(key)) os.delete(key);
   });
-}
-
-export function clearStore(store) {
-  return tx(store, 'readwrite', (t) => t.objectStore(store).clear());
 }
 
 export function putRows(store, rows) {

@@ -9,7 +9,7 @@
  * reconnect or tab close. GETs bypass the queue.
  */
 
-import { openDb, STORES, tx } from './localDb.js';
+import { openDb, STORES } from './localDb.js';
 import { emitMutation } from './events.js';
 
 const TICK_MS = 30_000;
@@ -100,12 +100,11 @@ export const request = sendDirect;
  * @param {boolean} [req.flush] — force immediate drain without a refetch.
  *   Use for actions that require server-side work the player is waiting
  *   on (e.g. forming a quest deck) but don't care about a specific reply.
- * @param {{ store:string, key:any }} [req.deleteOptimistic] — IDB row
- *   to delete once the POST succeeds. Closes the gap where both the
- *   optimistic (negative temp id) row and the server-assigned real row
- *   could be visible at the same time (LAW 1.38).
+ *   Optimistic rows left behind by such mutations are pruned atomically
+ *   by the post-drain sync (see syncPaged), so the UI swaps from
+ *   forming→ready in one commit (LAW 1.38).
  */
-export async function mutate({ method, path, body, then, flush, deleteOptimistic }) {
+export async function mutate({ method, path, body, then, flush }) {
   if (method === 'GET') return sendDirect({ method, path });
   console.debug('[mutate] queueing', method, path);
   const db = await openDb();
@@ -113,7 +112,7 @@ export async function mutate({ method, path, body, then, flush, deleteOptimistic
     const t = db.transaction(STORES.PENDING_MUTATIONS, 'readwrite');
     t.oncomplete = resolve;
     t.onerror    = () => reject(t.error);
-    t.objectStore(STORES.PENDING_MUTATIONS).add({ method, path, body, then, deleteOptimistic, createdAt: Date.now() });
+    t.objectStore(STORES.PENDING_MUTATIONS).add({ method, path, body, then, createdAt: Date.now() });
   });
   dirty = true;
   console.debug('[mutate] queued, dirty=true');
@@ -147,14 +146,6 @@ export async function drainQueue() {
       if (!head) break;
       try {
         await sendDirect({ method: head.method, path: head.path, body: head.body });
-        if (head.deleteOptimistic) {
-          /* Wipe the placeholder row in the same event loop pass as the
-           * successful POST so the user can't glimpse both it and the
-           * server-assigned row side-by-side (LAW 1.38). */
-          await tx(head.deleteOptimistic.store, 'readwrite', (t) => {
-            t.objectStore(head.deleteOptimistic.store).delete(head.deleteOptimistic.key);
-          });
-        }
         if (head.then) {
           const fresh = await sendDirect({ method: head.then.method, path: head.then.path });
           if (fresh) await putIntoStore(head.then.store, fresh);

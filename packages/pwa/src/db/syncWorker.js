@@ -15,7 +15,7 @@
  *                  { type: 'mutate-result', id, ok, status, data?, message? }
  */
 
-import { openDb, STORES, clearStore, putRows, snapshotReplace, tx, req } from './localDb.js';
+import { openDb, STORES, syncReplace, tx, req } from './localDb.js';
 
 const PAGE_SIZE = 100;
 const PAGE_CONCURRENCY = 4;
@@ -43,18 +43,33 @@ async function fetchJson(url) {
 }
 
 /**
- * Upsert server rows and prune any local rows the server no longer has.
- * Reads never see a cleared store mid-sync — unrelated emits (passive
- * infusion ticks, local mutations) that re-read during a big inventory
- * refresh won't observe a transient empty state (LAW 1.38).
+ * Paginated, diff-only sync (LAW 1.40). Loads the current store state
+ * once, fetches all server pages to build the diff in memory, then
+ * applies puts + prune in a single atomic transaction. Readers never
+ * see a partial update — optimistic rows and their server counterparts
+ * swap in one commit, so no gap is visible (LAW 1.38).
  */
 async function syncPaged(serverUrl, path, store) {
+  const snap = await readKeyedJson(store);
+  const seenKeys = new Set();
+  const changedRows = [];
+
+  function diffPage(items) {
+    if (!items?.length) return;
+    for (const row of items) {
+      const key = row[snap.keyPath];
+      seenKeys.add(key);
+      const j = JSON.stringify(row);
+      if (snap.map.get(key) !== j) {
+        changedRows.push(row);
+        snap.map.set(key, j);
+      }
+    }
+  }
+
   const first = await fetchJson(`${serverUrl}${path}?limit=${PAGE_SIZE}&offset=0`);
   const total = first.total ?? first.items.length;
-
-  const seenKeys = new Set();
-  await putRows(store, first.items);
-  for (const row of first.items) seenKeys.add(row.inventory_id);
+  diffPage(first.items);
   let count = first.items.length;
   self.postMessage({ type: 'progress', store, count, total });
 
@@ -69,24 +84,30 @@ async function syncPaged(serverUrl, path, store) {
     );
     for (const page of pages) {
       if (!page.items?.length) continue;
-      await putRows(store, page.items);
-      for (const row of page.items) seenKeys.add(row.inventory_id);
+      diffPage(page.items);
       count += page.items.length;
     }
     self.postMessage({ type: 'progress', store, count, total });
   }
 
-  /* Prune: drop any local row the server didn't return. The hasPendingMutations
-   * gate above ensures we never run this while optimistic writes are in flight,
-   * so any stale `_pending` row here belongs to a drained (or dropped) mutation
-   * whose server counterpart either just arrived in `seenKeys` or never will. */
+  /* Atomic commit: changed puts + prune in one tx. A buy's optimistic
+   * "forming" row (negative key, not in seenKeys) is deleted in the
+   * same commit that puts its real server counterpart, so the UI flips
+   * from forming→ready without a gap. */
   await tx(store, 'readwrite', async (t) => {
     const os = t.objectStore(store);
+    for (const row of changedRows) os.put(row);
     const keys = await req(os.getAllKeys());
-    for (const key of keys) {
-      if (seenKeys.has(key)) continue;
-      os.delete(key);
-    }
+    for (const key of keys) if (!seenKeys.has(key)) os.delete(key);
+  });
+}
+
+async function readKeyedJson(store) {
+  return tx(store, 'readonly', async (t) => {
+    const os = t.objectStore(store);
+    const kp = os.keyPath;
+    const rows = await req(os.getAll());
+    return { keyPath: kp, map: new Map(rows.map(r => [r[kp], JSON.stringify(r)])) };
   });
 }
 
@@ -94,22 +115,22 @@ const syncInventory = (serverUrl) => syncPaged(serverUrl, '/inventory', STORES.C
 
 async function syncDecks(serverUrl) {
   const { decks = [], cards = [] } = await fetchJson(`${serverUrl}/decks`);
-  console.debug('[worker] syncDecks replacing stores:', decks.length, 'decks,', cards.length, 'deckCards');
+  console.debug('[worker] syncDecks diffing:', decks.length, 'decks,', cards.length, 'deckCards');
   await Promise.all([
-    snapshotReplace(STORES.DECKS,      decks),
-    snapshotReplace(STORES.DECK_CARDS, cards),
+    syncReplace(STORES.DECKS,      decks),
+    syncReplace(STORES.DECK_CARDS, cards),
   ]);
   self.postMessage({ type: 'progress', store: STORES.DECKS, count: decks.length, total: decks.length });
 }
 
 async function syncPlayer(serverUrl) {
   const row = await fetchJson(`${serverUrl}/player`);
-  await snapshotReplace(STORES.PLAYER_STATS, [{ id: 1, ...row }]);
+  await syncReplace(STORES.PLAYER_STATS, [{ id: 1, ...row }]);
 }
 
 async function syncFolders(serverUrl) {
   const folders = await fetchJson(`${serverUrl}/folders`);
-  await snapshotReplace(STORES.FOLDERS, folders);
+  await syncReplace(STORES.FOLDERS, folders);
   self.postMessage({ type: 'progress', store: STORES.FOLDERS, count: folders.length, total: folders.length });
 }
 

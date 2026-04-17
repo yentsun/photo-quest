@@ -76,6 +76,8 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.39** The PWA is self-sufficient. All gameplay, navigation, and inventory interaction must work purely against the local IndexedDB replica. Server sync is optional — a background replication concern, not a prerequisite for any UI action. A disconnected or unavailable server must never block the player from playing.
 
+**1.40** On sync, only changed rows may be written to the PWA's local IndexedDB. A store must never be cleared and refilled. Each syncer must diff server state against local state and emit only the minimal delta — put added or changed rows, delete rows the server no longer returns. This protects in-flight UI state (card positions, open overlays, focus) from the churn of wholesale snapshot replacement.
+
 ---
 
 ## Section 2 — Server
