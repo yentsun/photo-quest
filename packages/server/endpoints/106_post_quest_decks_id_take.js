@@ -22,6 +22,8 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: result.error });
     }
 
+    kojo.ops.bumpVersion('inventory');
+    kojo.ops.bumpVersion('player');
     json(res, 200, result.deck);
   });
 };

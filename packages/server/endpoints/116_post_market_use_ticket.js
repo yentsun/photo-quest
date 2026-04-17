@@ -21,6 +21,7 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: 'No tickets available' });
     }
 
+    kojo.ops.bumpVersion('inventory');
     json(res, 200, result);
   });
 };

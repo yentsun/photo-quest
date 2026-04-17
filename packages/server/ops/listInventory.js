@@ -41,5 +41,30 @@ export default function ({ limit, offset } = {}) {
 
   const items = db.prepare(sql).all(...params);
 
+  /* Attach the 8 image-pair rows to each memory ticket so the client can
+   * play offline once the ticket syncs. One grouping pass beats N queries. */
+  const ticketGameIds = items
+    .filter(it => it.card_type === CARD_TYPE.MEMORY_TICKET && it.ref_id)
+    .map(it => it.ref_id);
+  if (ticketGameIds.length > 0) {
+    const placeholders = ticketGameIds.map(() => '?').join(',');
+    const gameCards = db.prepare(
+      `SELECT mgc.game_id, m.id, m.type, m.title, m.infusion
+       FROM memory_game_cards mgc
+       JOIN media m ON m.id = mgc.media_id
+       WHERE mgc.game_id IN (${placeholders})`
+    ).all(...ticketGameIds);
+    const byGame = new Map();
+    for (const c of gameCards) {
+      if (!byGame.has(c.game_id)) byGame.set(c.game_id, []);
+      byGame.get(c.game_id).push({ id: c.id, type: c.type, title: c.title, infusion: c.infusion });
+    }
+    for (const it of items) {
+      if (it.card_type === CARD_TYPE.MEMORY_TICKET && it.ref_id) {
+        it.game_cards = byGame.get(it.ref_id) || [];
+      }
+    }
+  }
+
   return { items, total };
 }

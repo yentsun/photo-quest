@@ -59,6 +59,7 @@ function makeDb() {
 function makeContext(db) {
   const kojo = {
     get(key) { if (key === 'db') return db; },
+    ops: { bumpVersion: () => {} },
   };
   const logger = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} };
   return { kojo, logger, ctx: [kojo, logger] };

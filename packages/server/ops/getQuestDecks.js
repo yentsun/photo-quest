@@ -25,12 +25,23 @@ export default function () {
   ).all(today);
 
   if (existing.length === 0) {
+    /* Purge stale quest_deck inventory rows from prior days before
+     * generating today's. Only runs on the first call of the day since
+     * once cleaned, no new stale rows can appear until tomorrow. */
+    db.prepare(
+      `DELETE FROM inventory
+       WHERE card_type = ?
+         AND ref_id NOT IN (
+           SELECT id FROM quest_decks WHERE date = ? AND exhausted = 0
+         )`
+    ).run(CARD_TYPE.QUEST_DECK, today);
+
     generateDecks(db, today);
   }
 
-  const result = db.prepare(
-    `SELECT d.id, d.deck_index AS deckIndex, d.current_position AS currentPosition,
-            COUNT(qc.id) AS totalCards
+  const decks = db.prepare(
+    `SELECT d.id, d.deck_index, d.current_position, d.exhausted, d.free_take_used,
+            COUNT(qc.id) AS total_cards
      FROM quest_decks d
      LEFT JOIN quest_cards qc ON qc.deck_id = d.id
      WHERE d.date = ? AND d.exhausted = 0
@@ -38,9 +49,21 @@ export default function () {
      ORDER BY d.deck_index`
   ).all(today);
 
+  /* Denormalized cards: each row carries the joined media fields so the
+   * client can drive QuestPage entirely from local IDB without a separate
+   * media-table sync. */
+  const cards = db.prepare(
+    `SELECT qc.id AS card_id, qc.deck_id, qc.position, qc.media_id, m.*
+     FROM quest_cards qc
+     JOIN media m ON m.id = qc.media_id
+     JOIN quest_decks d ON d.id = qc.deck_id
+     WHERE d.date = ? AND d.exhausted = 0
+     ORDER BY qc.deck_id, qc.position`
+  ).all(today);
+
   const { dust } = kojo.ops.getPlayerStats();
 
-  return { decks: result, dust };
+  return { decks, cards, dust };
 }
 
 function generateDecks(db, date) {

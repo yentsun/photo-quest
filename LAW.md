@@ -14,14 +14,6 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.4** If the user has media in their library, they must be able to launch a slideshow (optionally shuffled). Slideshow is manual — no auto-advance, only prev/next controls.
 
-**1.5** _(removed)_
-
-**1.6** _(removed)_
-
-**1.7** _(removed — replaced by dust infusion, see 4.8)_
-
-**1.8** _(removed — replaced by dust infusion, see 4.8)_
-
 **1.9** The user must be able to launch a slideshow from the folder containing a media item, in either random or sequential order.
 
 **1.10** Items loaded into the PWA must remain available even when offline.
@@ -80,6 +72,12 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **1.37** The user must be able to enter fullscreen mode where media occupies all visible space with only minimal controls shown. F key must toggle fullscreen on/off.
 
+**1.38** Nothing may interrupt the user's in-progress UI or game flow. Background work — sync ticks, queue drains, server refetches, snapshot replacements, SSE-triggered resyncs — must never close a view, bounce a page, cancel a modal, reset focus, or cause a card/transition to jump. Sync happens around the user, not through them.
+
+**1.39** The PWA is self-sufficient. All gameplay, navigation, and inventory interaction must work purely against the local IndexedDB replica. Server sync is optional — a background replication concern, not a prerequisite for any UI action. A disconnected or unavailable server must never block the player from playing.
+
+**1.40** On sync, only changed rows may be written to the PWA's local IndexedDB. A store must never be cleared and refilled. Each syncer must diff server state against local state and emit only the minimal delta — put added or changed rows, delete rows the server no longer returns. This protects in-flight UI state (card positions, open overlays, focus) from the churn of wholesale snapshot replacement.
+
 ---
 
 ## Section 2 — Server
@@ -124,13 +122,11 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.4** The inventory must support shuffle/slideshow browsing, reusing the existing viewer and navigation controls.
 
-**4.5** Each day, 10 **quest deck cards** are generated and placed in the player's inventory. Each deck contains 10 cards from the media library, weighted by infusion. The player opens a quest deck card from inventory to browse its cards one at a time. Once all cards have been viewed, the deck card is consumed (removed from inventory).
+**4.5** A **quest deck card** is an inventory item that contains 10 cards sampled from the media library, weighted by infusion. The player opens a quest deck card from inventory to browse its cards one at a time. Once all cards have been viewed, the deck card is consumed (removed from inventory).
 
 **4.6** The player's magic dust balance must be visible in the app header at all times.
 
 **4.7** The player's starting magic dust balance is **50**.
-
-**4.8** Each media item has a **dust infusion** value (starts at 0). While browsing quest decks, the player can **infuse** the current card by spending 1 magic dust per click — this replaces the old "like" mechanic. Infusion is cumulative and persists. Higher infusion increases the chance of appearing in future quest decks.
 
 **4.9** While browsing quest decks, the player can **take** the current card into their inventory. Each deck allows **one free take** of a 0-infusion card. After that, 0-infusion cards cannot be taken. Infused cards cost **infusion × 2** magic dust to take.
 
@@ -138,9 +134,9 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.13** Viewing a quest deck card passively infuses it **for free**: **1 infusion per 5 seconds**, capped at **2 minutes**. Same rate as inventory card view.
 
-**4.12** The app must have a **Market** page. The player can buy extra quest deck cards (**5 Đ** each) and memory game ticket cards (**1 Đ** each). Purchased cards appear in inventory. The 10 free daily quest deck cards still generate; market decks are added on top. Memory game requires a ticket card to play (consumed on first card flip).
+**4.12** The app must have a **Market** page. The player can buy quest deck cards (**5 Đ** each) and memory game ticket cards (**1 Đ** each). Purchased cards appear in inventory. Quest decks are acquired solely through market purchase — there is no daily auto-generation. Memory game requires a ticket card to play (consumed on first card flip).
 
-**4.14** The player must be able to organize inventory cards into **decks** (like playlists). There are no "piles" — only decks. A card can belong to multiple decks. Decks are created by dragging a card onto another card. Decks can be named. Inventory view shows decks as stacked card groups and ungrouped cards. Each deck has its own URL (`/deck/:id`) with a back button to return to inventory.
+**4.14** The player must be able to organize inventory cards into **decks** (like playlists). There are no "piles" — only decks. A card belongs to **at most one** deck — adding it to a new deck removes it from its previous deck. Decks are created by dragging a card onto another card. Decks can be named. Inventory view shows decks as stacked card groups and ungrouped cards. Each deck has its own URL (`/deck/:id`) with a back button to return to inventory.
 
 **4.15** The player can **sell** an inventory card back to the media library. The card is removed from inventory but the media file stays on disk. The player receives **infusion × 1 Đ**. Selling a 0-infusion card returns 0 Đ.
 
@@ -151,6 +147,21 @@ The governing rules of the photo-quest project. This document is the source of t
 **4.17** When a card is picked as a reward from the memory game, it receives **+10 dust infusion** on top of its current infusion value.
 
 **4.18** When a card is placed into a user deck, it receives **+10 dust infusion** as a reward for organization. The bonus is applied once per deck placement — re-adding the same card to the same deck does not grant additional infusion.
+
+**4.21** Quest action inputs must be idempotent under rapid repeat input. While a take, skip, or destroy action is in flight, the UI must reject further invocations of any quest action for that deck (button disabled, key ignored) until the action settles. One click equals one action — a held `ArrowRight` key or fast double-click must not stack multiple advances.
+
+**4.22** Memory game mechanics:
+- The board has **8 pairs** (16 cards), dealt face-down, drawn from the player's library using infusion-weighted random selection (a card with infusion N has weight N+1).
+- The player flips two cards per move; matching pairs stay face-up, non-matching pairs flip back after a brief reveal.
+- Moves are counted. Rating: **3 stars** at ≤8 moves, **2 stars** at ≤11 moves, **1 star** at ≤15 moves, otherwise 0 stars. Stars are prestige only — they do not change the reward.
+- After all pairs are matched, the player picks **exactly one** reward card from the matched pairs. The picked card is added to inventory with **+10 dust infusion** (per 4.17).
+- Starting the game consumes **one ticket card** from inventory. The ticket is consumed at game start.
+
+**4.24** The current quest card's infusion value must be visible in the card UI and update live as passive infusion (4.13) accrues. The take cost shown on the take button must reflect the live infusion value.
+
+**4.25** Inventory listings (inventory page, "open quest deck" shortcut, etc.) must present items **newest-first** (most recently acquired at the top) regardless of the underlying storage order.
+
+**4.26** Quest decks and memory game tickets are instruments of **discovery**. Their sampling pool is restricted to library media the player does not currently own. A freshly formed quest deck or memory ticket must never contain a card whose media already sits in the player's inventory. If the non-owned pool is too small to form the full complement (10 cards for a quest deck, 8 pairs for a memory ticket), the market purchase is refused — no partial decks, no undersized tickets.
 
 ---
 

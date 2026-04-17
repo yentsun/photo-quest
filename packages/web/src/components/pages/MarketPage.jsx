@@ -4,11 +4,10 @@
 
 import { useState } from 'react';
 import { MARKET_PRICES, words } from '@photo-quest/shared';
-import { buyQuestDeck, buyMemoryTicket } from '../../utils/api.js';
+import { buyQuestDeck, buyMemoryTicket } from '../../db/actions.js';
 import { CARD_GRID, Deck, Icon, ConsumableCard, TicketCard } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
 import { showToast } from '../ToasterMessage.jsx';
-import { notifyDustChanged } from '../../utils/events.js';
 
 export default function MarketPage() {
   const [buying, setBuying] = useState(null);
@@ -19,9 +18,8 @@ export default function MarketPage() {
     try {
       await buyQuestDeck();
       showToast('Quest deck added!', 'success');
-      notifyDustChanged();
-    } catch {
-      showToast('Not enough dust', 'error');
+    } catch (err) {
+      showToast(err.message || 'Not enough dust', 'error');
     } finally {
       setBuying(null);
     }
@@ -33,9 +31,8 @@ export default function MarketPage() {
     try {
       await buyMemoryTicket();
       showToast('Memory ticket added to inventory!', 'success');
-      notifyDustChanged();
-    } catch {
-      showToast('Not enough dust', 'error');
+    } catch (err) {
+      showToast(err.message || 'Not enough dust', 'error');
     } finally {
       setBuying(null);
     }

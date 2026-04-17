@@ -19,6 +19,9 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Media not found' });
     }
 
+    kojo.ops.bumpVersion('inventory');
+    kojo.ops.bumpVersion('decks');
+    kojo.ops.bumpVersion('media');
     json(res, 200, result);
   });
 };

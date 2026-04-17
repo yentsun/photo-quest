@@ -1,0 +1,17 @@
+.empty-state { text-align: center; max-width: 28rem; }
+
+.empty-state__icon {
+  width: 6rem;
+  height: 6rem;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #4338ca, #6b21a8);
+  box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.5);
+}
+
+.empty-state__title { font-size: 1.5rem; margin-bottom: 0.5rem; }
+.empty-state__text { color: var(--text-muted); margin: 0 0 2rem; }

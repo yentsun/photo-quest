@@ -1,0 +1,50 @@
+.quest-page { padding: 1.5rem; }
+
+.quest-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.quest-page__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.quest-page__placeholder {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.quest-page__viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
+.quest-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.quest-page__error {
+  background: rgba(127, 29, 29, 0.3);
+  border: 1px solid rgba(185, 28, 28, 0.5);
+  color: #fca5a5;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}

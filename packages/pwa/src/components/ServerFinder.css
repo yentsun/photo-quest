@@ -1,0 +1,36 @@
+.finder__status {
+  color: var(--text-muted);
+  text-align: center;
+  margin: 0.5rem 0 1rem;
+}
+
+.finder__list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.finder__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #1f2937;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+.finder__item:hover { background: #273244; border-color: var(--accent); }
+
+.finder__host { font-weight: 600; }
+.finder__url { color: var(--text-muted); font-size: 0.875rem; font-family: ui-monospace, monospace; }
+
+.finder__actions { display: flex; justify-content: flex-end; }

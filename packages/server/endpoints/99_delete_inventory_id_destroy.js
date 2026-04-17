@@ -18,6 +18,9 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Inventory item not found' });
     }
 
+    kojo.ops.bumpVersion('inventory');
+    kojo.ops.bumpVersion('decks');
+    kojo.ops.bumpVersion('player');
     json(res, 200, result);
   });
 };
