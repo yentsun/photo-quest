@@ -10,18 +10,25 @@
 import { MARKET_PRICES, CARD_TYPE } from '@photo-quest/shared';
 import { weightedSample } from '../src/weightedSample.js';
 
+const CARDS_PER_DECK = 10;
+
 export default function () {
   const [kojo] = this;
   const db = kojo.get('db');
 
-  const allMedia = db.prepare('SELECT id, infusion FROM media WHERE hidden = 0').all();
-  if (allMedia.length === 0) return null;
+  /* LAW 4.26: sample only from non-owned library media; refuse
+   * the purchase if the pool can't form a full deck. */
+  const pool = db.prepare(
+    `SELECT id, infusion FROM media
+     WHERE hidden = 0
+       AND id NOT IN (SELECT media_id FROM inventory WHERE media_id IS NOT NULL)`
+  ).all();
+  if (pool.length < CARDS_PER_DECK) return null;
 
   const dustResult = kojo.ops.updateDust(-MARKET_PRICES.questDeck);
   if (!dustResult) return null;
 
   const today = new Date().toISOString().slice(0, 10);
-  const CARDS_PER_DECK = 10;
 
   db.exec('BEGIN');
   try {
@@ -34,7 +41,7 @@ export default function () {
     ).run(today, nextIndex);
     const deckId = Number(result.lastInsertRowid);
 
-    const picked = weightedSample(allMedia, Math.min(CARDS_PER_DECK, allMedia.length));
+    const picked = weightedSample(pool, CARDS_PER_DECK);
     const stmt = db.prepare('INSERT INTO quest_cards (deck_id, position, media_id) VALUES (?, ?, ?)');
     for (let p = 0; p < picked.length; p++) {
       stmt.run(deckId, p, picked[p].id);

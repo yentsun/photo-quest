@@ -146,8 +146,6 @@ The governing rules of the photo-quest project. This document is the source of t
 
 **4.18** When a card is placed into a user deck, it receives **+10 dust infusion** as a reward for organization. The bonus is applied once per deck placement — re-adding the same card to the same deck does not grant additional infusion.
 
-**4.20** While browsing a quest deck, any card whose media is already in the player's inventory is silently skipped (never displayed). Skipping, taking, or destroying the current card advances the deck to the next non-owned card. When no non-owned card remains, the deck is exhausted and its inventory card is consumed.
-
 **4.21** Quest action inputs must be idempotent under rapid repeat input. While a take, skip, or destroy action is in flight, the UI must reject further invocations of any quest action for that deck (button disabled, key ignored) until the action settles. One click equals one action — a held `ArrowRight` key or fast double-click must not stack multiple advances.
 
 **4.22** Memory game mechanics:
@@ -160,6 +158,8 @@ The governing rules of the photo-quest project. This document is the source of t
 **4.24** The current quest card's infusion value must be visible in the card UI and update live as passive infusion (4.13) accrues. The take cost shown on the take button must reflect the live infusion value.
 
 **4.25** Inventory listings (inventory page, "open quest deck" shortcut, etc.) must present items **newest-first** (most recently acquired at the top) regardless of the underlying storage order.
+
+**4.26** Quest decks and memory game tickets are instruments of **discovery**. Their sampling pool is restricted to library media the player does not currently own. A freshly formed quest deck or memory ticket must never contain a card whose media already sits in the player's inventory. If the non-owned pool is too small to form the full complement (10 cards for a quest deck, 8 pairs for a memory ticket), the market purchase is refused — no partial decks, no undersized tickets.
 
 ---
 

@@ -12,7 +12,7 @@ export default async (kojo, logger) => {
     const result = kojo.ops.buyMemoryTicket();
 
     if (!result) {
-      return json(res, 400, { error: 'Insufficient magic dust' });
+      return json(res, 400, { error: 'Insufficient magic dust or library exhausted' });
     }
 
     kojo.ops.bumpVersion('inventory');

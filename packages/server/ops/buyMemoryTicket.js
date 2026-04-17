@@ -37,9 +37,12 @@ export default function () {
   const [kojo] = this;
   const db = kojo.get('db');
 
+  /* LAW 4.26: sample only from non-owned library images; refuse the
+   * purchase if the pool can't fill all 8 pairs. */
   const images = db.prepare(
     `SELECT id, infusion FROM media
-     WHERE type = ? AND (hidden IS NULL OR hidden = 0)`
+     WHERE type = ? AND (hidden IS NULL OR hidden = 0)
+       AND id NOT IN (SELECT media_id FROM inventory WHERE media_id IS NOT NULL)`
   ).all(MEDIA_TYPE.IMAGE);
   if (images.length < PAIR_COUNT) return null;
 

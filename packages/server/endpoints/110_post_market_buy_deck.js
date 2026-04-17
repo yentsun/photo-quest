@@ -12,7 +12,7 @@ export default async (kojo, logger) => {
     const result = kojo.ops.buyQuestDeck();
 
     if (!result) {
-      return json(res, 400, { error: 'Insufficient magic dust or no media available' });
+      return json(res, 400, { error: 'Insufficient magic dust or library exhausted' });
     }
 
     kojo.ops.bumpVersion('inventory');
