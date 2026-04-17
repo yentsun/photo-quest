@@ -90,15 +90,21 @@ async function syncPaged(serverUrl, path, store) {
     self.postMessage({ type: 'progress', store, count, total });
   }
 
-  /* Atomic commit: changed puts + prune in one tx. A buy's optimistic
-   * "forming" row (negative key, not in seenKeys) is deleted in the
-   * same commit that puts its real server counterpart, so the UI flips
-   * from forming→ready without a gap. */
-  await tx(store, 'readwrite', async (t) => {
+  /* Prune targets are computed from the snapshot we already have —
+   * no read inside the write tx, so no `await` that could let IDB
+   * auto-commit between puts and deletes. A buy's optimistic row
+   * (in snap.map, not in seenKeys) is deleted in the same commit
+   * that puts its real server counterpart, so the UI flips
+   * forming→ready in one atomic step. */
+  const keysToPrune = [];
+  for (const key of snap.map.keys()) if (!seenKeys.has(key)) keysToPrune.push(key);
+
+  if (!changedRows.length && !keysToPrune.length) return;
+
+  await tx(store, 'readwrite', (t) => {
     const os = t.objectStore(store);
     for (const row of changedRows) os.put(row);
-    const keys = await req(os.getAllKeys());
-    for (const key of keys) if (!seenKeys.has(key)) os.delete(key);
+    for (const key of keysToPrune) os.delete(key);
   });
 }
 
@@ -218,6 +224,22 @@ function startEvents(serverUrl) {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
     if (msg.type === 'snapshot') return; /* initial versions; ignored */
+    if (msg.type === 'import_started' || msg.type === 'import_progress' || msg.type === 'import_complete') {
+      /* Flip the pill to 'syncing' while the scan runs; surface progress
+       * as a virtual '__scan' store so the existing percentage logic
+       * applies. syncFolders will fire separately once the scan bumps
+       * `media` at completion — that ends the 'syncing' phase. */
+      if (msg.type === 'import_started') {
+        self.postMessage({ type: 'change', table: '__scan' });
+      }
+      self.postMessage({
+        type: 'progress',
+        store: '__scan',
+        count: msg.processed ?? 0,
+        total: msg.total ?? 0,
+      });
+      return;
+    }
     if (msg.table && msg.version) {
       self.postMessage({ type: 'change', table: msg.table, version: msg.version });
       scheduleResync(serverUrl, msg.table);

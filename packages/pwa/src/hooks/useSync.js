@@ -31,7 +31,9 @@ export function useSync(serverUrl) {
           ...prev,
           progress: { ...prev.progress, [msg.store]: { count: msg.count, total: msg.total } },
         };
-        if (msg.type === 'change') return { ...prev, phase: 'syncing' };
+        /* Reset progress on change so the pill shows the new resync
+         * in isolation, not stale percentages from a previous run. */
+        if (msg.type === 'change') return { ...prev, phase: 'syncing', progress: {} };
         if (msg.type === 'done')   return { ...prev, phase: 'done' };
         if (msg.type === 'error')  return { ...prev, phase: 'error', error: msg.message };
         return prev;

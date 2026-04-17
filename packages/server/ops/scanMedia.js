@@ -22,6 +22,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, JOB_TYPE, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
 import { broadcastSse } from '../src/sse.js';
+import { broadcastChangeEvent } from '../src/changes.js';
 
 /**
  * Compute a content hash for a file.
@@ -156,7 +157,12 @@ async function processQueue(kojo, scanId, logger) {
     /* Get final counts for the broadcast. */
     const scan = db.prepare('SELECT total, processed FROM scans WHERE id = ?').get(scanId);
 
-    broadcastSse({ type: 'import_complete', scanId, total: scan.total, processed: scan.processed });
+    const completePayload = { type: 'import_complete', scanId, total: scan.total, processed: scan.processed };
+    broadcastSse(completePayload);
+    broadcastChangeEvent(completePayload);
+    /* Folder counts and previews derive from media; nudge the PWA to
+     * resync folders once the scan settles. */
+    kojo.ops.bumpVersion('media');
     logger.info(`Scan ${scanId} complete: ${scan.processed}/${scan.total} files imported`);
     return;
   }
@@ -177,12 +183,14 @@ async function processQueue(kojo, scanId, logger) {
 
   logger.debug(`[scan ${scanId}] ${progress.processed}/${progress.total} ${item.path}`);
 
-  broadcastSse({
+  const progressPayload = {
     type: 'import_progress',
     scanId,
     total: progress.total,
-    processed: progress.processed
-  });
+    processed: progress.processed,
+  };
+  broadcastSse(progressPayload);
+  broadcastChangeEvent(progressPayload);
 
   /* Schedule next item — small delay keeps the API responsive during large imports. */
   setTimeout(() => processQueue(kojo, scanId, logger), 5);
@@ -270,12 +278,9 @@ export default function (dirPath) {
 
   logger.info(`Scan ${scanId}: discovered ${files.length} files, starting import`);
 
-  broadcastSse({
-    type: 'import_started',
-    scanId,
-    total: files.length,
-    processed: 0
-  });
+  const startedPayload = { type: 'import_started', scanId, total: files.length, processed: 0 };
+  broadcastSse(startedPayload);
+  broadcastChangeEvent(startedPayload);
 
   /* Phase 2: Async queue processing. */
   setTimeout(() => processQueue(kojo, scanId, logger), 0);

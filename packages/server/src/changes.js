@@ -30,6 +30,14 @@ export function bumpTableVersion(table) {
   return versions[table];
 }
 
+/** Broadcast an arbitrary event on the change stream. Used for non-table
+ *  signals (e.g. scan progress) that the PWA needs to surface in the UI
+ *  without polling a separate endpoint. */
+export function broadcastChangeEvent(event) {
+  const payload = `data: ${JSON.stringify(event)}\n\n`;
+  for (const c of clients) c.write(payload);
+}
+
 export function destroyAllChangeClients() {
   for (const c of clients) { c.end(); c.destroy(); }
   clients.clear();

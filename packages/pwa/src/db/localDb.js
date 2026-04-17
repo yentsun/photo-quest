@@ -99,21 +99,32 @@ export function countRows(store) {
  * the minimal delta — put added or changed rows, delete rows the
  * server no longer returns. Identical rows are skipped entirely so
  * readers don't observe a no-op churn.
+ *
+ * The diff is computed in a readonly pre-pass so the readwrite tx
+ * contains only synchronous puts and deletes — no `await` inside it,
+ * so IDB can't auto-commit between operations.
  */
-export function syncReplace(store, rows) {
-  return tx(store, 'readwrite', async (t) => {
+export async function syncReplace(store, rows) {
+  const snap = await tx(store, 'readonly', async (t) => {
     const os = t.objectStore(store);
-    const kp = os.keyPath;
-    const existing = await req(os.getAll());
-    const prevJson = new Map(existing.map(r => [r[kp], JSON.stringify(r)]));
-    const seen = new Set();
-    for (const row of rows) {
-      const key = row[kp];
-      seen.add(key);
-      const nextJson = JSON.stringify(row);
-      if (prevJson.get(key) !== nextJson) os.put(row);
-    }
-    for (const key of prevJson.keys()) if (!seen.has(key)) os.delete(key);
+    return { keyPath: os.keyPath, existing: await req(os.getAll()) };
+  });
+  const prevJson = new Map(snap.existing.map(r => [r[snap.keyPath], JSON.stringify(r)]));
+  const seen = new Set();
+  const toPut = [];
+  for (const row of rows) {
+    const key = row[snap.keyPath];
+    seen.add(key);
+    const nextJson = JSON.stringify(row);
+    if (prevJson.get(key) !== nextJson) toPut.push(row);
+  }
+  const toDelete = [];
+  for (const key of prevJson.keys()) if (!seen.has(key)) toDelete.push(key);
+  if (!toPut.length && !toDelete.length) return;
+  await tx(store, 'readwrite', (t) => {
+    const os = t.objectStore(store);
+    for (const row of toPut) os.put(row);
+    for (const key of toDelete) os.delete(key);
   });
 }
 

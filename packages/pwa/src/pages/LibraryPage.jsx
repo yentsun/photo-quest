@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
+import FolderOverlay from '../components/ui/FolderOverlay.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
@@ -41,6 +43,7 @@ function FolderCard({ folder, serverUrl, onClick }) {
 
 export default function LibraryPage({ onLookForServer, server, sync }) {
   const folders = useLocalStore(STORES.FOLDERS);
+  const [selectedId, setSelectedId] = useState(null);
 
   if (!server) {
     return (
@@ -74,11 +77,25 @@ export default function LibraryPage({ onLookForServer, server, sync }) {
     );
   }
 
+  const selected = selectedId != null ? folders.find(f => f.id === selectedId) : null;
+
   return (
     <div className="library">
       {rootFolders.map(folder => (
-        <FolderCard key={folder.id} folder={folder} serverUrl={server.url} />
+        <FolderCard
+          key={folder.id}
+          folder={folder}
+          serverUrl={server.url}
+          onClick={(f) => setSelectedId(f.id)}
+        />
       ))}
+      {selected && (
+        <FolderOverlay
+          folder={selected}
+          serverUrl={server.url}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </div>
   );
 }

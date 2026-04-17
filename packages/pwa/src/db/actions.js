@@ -474,3 +474,10 @@ export async function freeInfuseQuest(deckId, mediaId, amount = 1) {
   }
   mutate({ method: 'PATCH', path: `/media/${mediaId}/free-infuse`, body: { amount } });
 }
+
+/** Trigger a server-side rescan of a folder. The server bumps the
+ *  `media` channel when the scan advances, which re-pulls folders
+ *  via the SSE-driven resync. Nothing to do locally. */
+export async function refreshFolder(path) {
+  return mutate({ method: 'POST', path: '/media/scan', body: { path }, flush: true });
+}
