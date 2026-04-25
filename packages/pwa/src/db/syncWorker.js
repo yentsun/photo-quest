@@ -101,6 +101,12 @@ async function syncPaged(serverUrl, path, store) {
 
   if (!changedRows.length && !keysToPrune.length) return;
 
+  /* Re-check just before write: a mutation queued mid-fetch means the
+   * server response is now stale relative to the optimistic IDB row.
+   * Applying the diff would clobber the user's typed value with the
+   * pre-rename server data. Bail; the post-drain sync will reconcile. */
+  if (await hasPendingMutations()) return;
+
   await tx(store, 'readwrite', (t) => {
     const os = t.objectStore(store);
     for (const row of changedRows) os.put(row);
@@ -122,6 +128,7 @@ const syncInventory = (serverUrl) => syncPaged(serverUrl, '/inventory', STORES.C
 async function syncDecks(serverUrl) {
   const { decks = [], cards = [] } = await fetchJson(`${serverUrl}/decks`);
   console.debug('[worker] syncDecks diffing:', decks.length, 'decks,', cards.length, 'deckCards');
+  if (await hasPendingMutations()) return;
   await Promise.all([
     syncReplace(STORES.DECKS,      decks),
     syncReplace(STORES.DECK_CARDS, cards),
@@ -131,11 +138,13 @@ async function syncDecks(serverUrl) {
 
 async function syncPlayer(serverUrl) {
   const row = await fetchJson(`${serverUrl}/player`);
+  if (await hasPendingMutations()) return;
   await syncReplace(STORES.PLAYER_STATS, [{ id: 1, ...row }]);
 }
 
 async function syncFolders(serverUrl) {
   const folders = await fetchJson(`${serverUrl}/folders`);
+  if (await hasPendingMutations()) return;
   await syncReplace(STORES.FOLDERS, folders);
   self.postMessage({ type: 'progress', store: STORES.FOLDERS, count: folders.length, total: folders.length });
 }
