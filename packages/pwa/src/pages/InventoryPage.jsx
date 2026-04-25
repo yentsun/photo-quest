@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { CARD_TYPE, MARKET_PRICES, words } from '@photo-quest/shared';
+import { CARD_TYPE, MARKET_PRICES, MEDIA_TYPE, words } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import MediaCard from '../components/ui/MediaCard.jsx';
@@ -34,6 +34,7 @@ function useDropTarget(onDropId) {
 function DeckCard({ deck, preview, serverUrl, onOpen, onDropCard }) {
   const { over, handlers } = useDropTarget((invId) => onDropCard(deck.id, invId));
   const previewUrl = preview ? mediaUrl(serverUrl, preview) : null;
+  const isVideo = preview?.type === MEDIA_TYPE.VIDEO;
 
   return (
     <div className={`drop-target ${over ? 'drop-target--over' : ''}`} {...handlers}>
@@ -43,7 +44,9 @@ function DeckCard({ deck, preview, serverUrl, onOpen, onDropCard }) {
         header={deck.name || 'Untitled deck'}
         art={
           previewUrl
-            ? <img src={previewUrl} alt={deck.name} loading="lazy" draggable={false} />
+            ? (isVideo
+                ? <video src={previewUrl} preload="metadata" muted draggable={false} />
+                : <img src={previewUrl} alt={deck.name} loading="lazy" draggable={false} />)
             : <div style={{ width: '100%', height: '100%', background: '#000', display: 'flex',
                             alignItems: 'center', justifyContent: 'center', color: '#4b5563', fontSize: '2rem' }}>?</div>
         }
