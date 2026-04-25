@@ -12,8 +12,7 @@
     "@photo-quest/shared": "workspace:*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.1",
-    "react-window": "^2.2.7"
+    "react-router-dom": "^6.21.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

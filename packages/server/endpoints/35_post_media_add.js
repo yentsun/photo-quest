@@ -22,6 +22,7 @@ export default async (kojo, logger) => {
 
     try {
       const result = kojo.ops.addMedia(body.folderId, body.folderName, body.files);
+      kojo.ops.bumpVersion('inventory');
       json(res, 200, result);
     } catch (err) {
       json(res, 500, { error: err.message });

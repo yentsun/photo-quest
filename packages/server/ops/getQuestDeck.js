@@ -4,24 +4,17 @@
  * Kojo op: accessed as `kojo.ops.getQuestDeck(deckId)`.
  * Must use `function()` syntax (not arrow) to receive kojo context via `this`.
  *
- * Auto-skips cards that are already in the player's inventory.
- *
  * @param {number} deckId
  * @returns {object|null} Deck info with current card media, or null if not found.
  */
 
-import { CARD_TYPE } from '@photo-quest/shared';
-
-function findNextUnownedCard(db, deckId, startPos, totalCards) {
+function getCardAt(db, deckId, position) {
   return db.prepare(
     `SELECT qc.id AS card_id, qc.position, m.*
      FROM quest_cards qc
      JOIN media m ON m.id = qc.media_id
-     LEFT JOIN inventory inv ON inv.media_id = m.id
-     WHERE qc.deck_id = ? AND qc.position >= ? AND inv.id IS NULL
-     ORDER BY qc.position ASC
-     LIMIT 1`
-  ).get(deckId, startPos) || null;
+     WHERE qc.deck_id = ? AND qc.position = ?`
+  ).get(deckId, position) || null;
 }
 
 export default function (deckId) {
@@ -35,18 +28,8 @@ export default function (deckId) {
     'SELECT COUNT(*) AS count FROM quest_cards WHERE deck_id = ?'
   ).get(deck.id).count;
 
-  const currentCard = findNextUnownedCard(db, deck.id, deck.current_position, totalCards);
-  const position = currentCard ? currentCard.position : totalCards;
-
-  // If we skipped ahead, persist the new position
-  if (position !== deck.current_position) {
-    if (position >= totalCards) {
-      db.prepare('UPDATE quest_decks SET current_position = ?, exhausted = 1 WHERE id = ?').run(position, deck.id);
-      db.prepare('DELETE FROM inventory WHERE card_type = ? AND ref_id = ?').run(CARD_TYPE.QUEST_DECK, deck.id);
-    } else {
-      db.prepare('UPDATE quest_decks SET current_position = ? WHERE id = ?').run(position, deck.id);
-    }
-  }
+  const position = deck.current_position;
+  const currentCard = position < totalCards ? getCardAt(db, deck.id, position) : null;
 
   const { dust } = kojo.ops.getPlayerStats();
 
@@ -62,9 +45,7 @@ export default function (deckId) {
     }
   }
 
-  const nextCard = currentCard
-    ? findNextUnownedCard(db, deck.id, position + 1, totalCards)
-    : null;
+  const nextCard = position + 1 < totalCards ? getCardAt(db, deck.id, position + 1) : null;
 
   return {
     id: deck.id,
@@ -72,7 +53,7 @@ export default function (deckId) {
     currentPosition: position,
     totalCards,
     exhausted: position >= totalCards,
-    currentCard: currentCard || null,
+    currentCard,
     nextCard,
     takeCost,
     canTake,

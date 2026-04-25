@@ -274,6 +274,30 @@ export const CREATE_MEMORY_TICKETS_TABLE = `
   )
 `;
 
+/**
+ * A memory-game instance. Created server-side at ticket purchase so the
+ * 8 image pairs are pre-sampled — the ticket is the game, not a ticket
+ * that later forms a game. Each inventory row with card_type='memory_ticket'
+ * has its `ref_id` pointing to this table.
+ */
+export const CREATE_MEMORY_GAMES_TABLE = `
+  CREATE TABLE IF NOT EXISTS memory_games (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`;
+
+/** 8 rows per game — one media id per pair. */
+export const CREATE_MEMORY_GAME_CARDS_TABLE = `
+  CREATE TABLE IF NOT EXISTS memory_game_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id INTEGER NOT NULL,
+    media_id INTEGER NOT NULL,
+    FOREIGN KEY (game_id) REFERENCES memory_games(id) ON DELETE CASCADE,
+    FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
+  )
+`;
+
 export const CREATE_IMPORT_QUEUE_TABLE = `
   CREATE TABLE IF NOT EXISTS import_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

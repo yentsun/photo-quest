@@ -18,6 +18,9 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Deck not found or already exhausted' });
     }
 
+    kojo.ops.bumpVersion('inventory');
+    kojo.ops.bumpVersion('player');
+    kojo.ops.bumpVersion('media');
     json(res, 200, result);
   });
 };

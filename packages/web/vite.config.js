@@ -17,6 +17,56 @@ import config from '@photo-quest/shared/config.js';
 
 const API_TARGET = `http://127.0.0.1:${config.serverPort}`;
 
+/* Shared between `server.proxy` (pnpm dev) and `preview.proxy` (vite
+ * preview), so the production build can be tested offline against the
+ * same API server. */
+const apiProxy = {
+  '/media': {
+    target: API_TARGET,
+    bypass(req) {
+      if (req.method === 'GET' && /^\/media\/\d+$/.test(req.url)
+          && !req.headers.accept?.includes('application/json')) {
+        return req.url;
+      }
+    },
+  },
+  '/inventory': {
+    target: API_TARGET,
+    bypass(req) {
+      if (req.method === 'GET' && req.url === '/inventory'
+          && !req.headers.accept?.includes('application/json')) {
+        return req.url;
+      }
+    },
+  },
+  '/quest': {
+    target: API_TARGET,
+    bypass(req) {
+      if (req.method === 'GET' && req.url === '/quest'
+          && !req.headers.accept?.includes('application/json')) {
+        return req.url;
+      }
+    },
+  },
+  '/market': {
+    target: API_TARGET,
+    bypass(req) {
+      if (req.method === 'GET' && req.url === '/market'
+          && !req.headers.accept?.includes('application/json')) {
+        return req.url;
+      }
+    },
+  },
+  '/decks': API_TARGET,
+  '/player': API_TARGET,
+  '/stream': API_TARGET,
+  '/image': API_TARGET,
+  '/jobs': API_TARGET,
+  '/folders': API_TARGET,
+  '/network': API_TARGET,
+  '/scans': API_TARGET,
+};
+
 export default defineConfig({
   plugins: [
     react(),
@@ -131,59 +181,12 @@ export default defineConfig({
   server: {
     host: true,
     port: config.webappPort,
-    proxy: {
-      /* Proxy /media requests to the API, but skip /media/:id (digits only)
-       * which is a client route for the unified viewer. */
-      '/media': {
-        target: API_TARGET,
-        bypass(req) {
-          /* Bypass GET /media/:id for browser navigation (client route).
-           * Fetch/XHR requests (Accept: application/json) go to the API. */
-          if (req.method === 'GET' && /^\/media\/\d+$/.test(req.url)
-              && !req.headers.accept?.includes('application/json')) {
-            return req.url;
-          }
-        },
-      },
-      '/inventory': {
-        target: API_TARGET,
-        bypass(req) {
-          /* Bypass GET /inventory (no subpath) for browser navigation.
-           * Fetch/XHR requests (Accept: application/json) go to the API. */
-          if (req.method === 'GET' && req.url === '/inventory'
-              && !req.headers.accept?.includes('application/json')) {
-            return req.url;
-          }
-        },
-      },
-      '/quest': {
-        target: API_TARGET,
-        bypass(req) {
-          /* Bypass GET /quest (no subpath) for browser navigation.
-           * Fetch/XHR and API subpaths (/quest/decks/*) go to the API. */
-          if (req.method === 'GET' && req.url === '/quest'
-              && !req.headers.accept?.includes('application/json')) {
-            return req.url;
-          }
-        },
-      },
-      '/market': {
-        target: API_TARGET,
-        bypass(req) {
-          if (req.method === 'GET' && req.url === '/market'
-              && !req.headers.accept?.includes('application/json')) {
-            return req.url;
-          }
-        },
-      },
-      '/decks': API_TARGET,
-      '/player': API_TARGET,
-      '/stream': API_TARGET,
-      '/image': API_TARGET,
-      '/jobs': API_TARGET,
-      '/folders': API_TARGET,
-      '/network': API_TARGET,
-      '/scans': API_TARGET,
-    },
+    proxy: apiProxy,
+  },
+
+  preview: {
+    host: true,
+    port: config.webappPort,
+    proxy: apiProxy,
   },
 });

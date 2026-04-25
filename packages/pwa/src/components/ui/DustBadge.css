@@ -1,0 +1,14 @@
+.dust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  background: var(--purple-bg);
+  border: 1px solid var(--purple-border);
+  border-radius: 9999px;
+  color: var(--purple-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.dust-badge__symbol { color: var(--dust); }

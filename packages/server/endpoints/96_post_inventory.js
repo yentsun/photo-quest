@@ -29,6 +29,7 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Media not found' });
     }
 
+    if (result.added) kojo.ops.bumpVersion('inventory');
     json(res, result.added ? 201 : 200, result.item);
   });
 };

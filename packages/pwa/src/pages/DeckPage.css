@@ -1,0 +1,27 @@
+.deck-page { padding: 1.5rem; }
+
+.deck-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.deck-page__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.deck-page__count {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0.25rem 0 0;
+}
+
+.deck-page__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2.5rem;
+}

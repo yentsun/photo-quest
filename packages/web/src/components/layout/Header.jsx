@@ -5,7 +5,8 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo, fetchPlayerStats } from '../../utils/api.js';
+import { fetchNetworkInfo } from '../../utils/api.js';
+import { usePlayerStats } from '../../db/hooks.js';
 import { Button, DustBadge, Icon } from '../ui/index.js';
 import { ICON_CLASS } from '../ui/Icon.jsx';
 
@@ -15,23 +16,12 @@ import { ICON_CLASS } from '../ui/Icon.jsx';
 export default function Header() {
   const [networkUrl, setNetworkUrl] = useState(null);
   const [copied, setCopied] = useState(false);
-  const [dust, setDust] = useState(null);
-
-  const refreshDust = () => {
-    fetchPlayerStats()
-      .then(stats => setDust(stats.dust))
-      .catch(() => {});
-  };
+  const dust = usePlayerStats()?.dust ?? null;
 
   useEffect(() => {
     fetchNetworkInfo()
       .then(info => setNetworkUrl(info.network))
       .catch(err => console.error('Failed to fetch network info:', err));
-    refreshDust();
-
-    const onDustChanged = () => refreshDust();
-    window.addEventListener('dust-changed', onDustChanged);
-    return () => window.removeEventListener('dust-changed', onDustChanged);
   }, []);
 
   const handleCopyUrl = () => {

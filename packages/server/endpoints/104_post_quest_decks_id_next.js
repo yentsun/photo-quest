@@ -18,6 +18,7 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Deck not found or already exhausted' });
     }
 
+    if (result.exhausted) kojo.ops.bumpVersion('inventory');
     json(res, 200, result);
   });
 };
