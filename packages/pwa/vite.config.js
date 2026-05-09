@@ -42,35 +42,17 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         navigateFallback: '/index.html',
-        runtimeCaching: [
-          {
-            /* Match by pathname so cross-origin LAN-server URLs hit too. */
-            urlPattern: ({ url }) => url.pathname.startsWith('/image/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'media-images',
-              expiration: {
-                maxEntries: 500,
-                maxAgeSeconds: 60 * 60 * 24 * 30,
-                purgeOnQuotaError: true,
-              },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/stream/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'media-videos',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30,
-                purgeOnQuotaError: true,
-              },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
+        /* Drop the previous `media-images` / `media-videos` runtime caches
+         * the moment the new SW activates, so users transitioning from the
+         * CacheFirst-on-/image/ build don't keep hitting stale entries. */
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+        /* Media (`/image/`, `/stream/`) is intentionally NOT runtime-cached
+         * here — IDB blobs (see localDb.js) are the offline cache. A SW
+         * CacheFirst layer on top would double-cache, and its `Failed to
+         * fetch` no-response wrapping masks legitimate online fetches
+         * after a transient offline period. */
       },
     }),
   ],

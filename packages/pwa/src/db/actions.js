@@ -154,21 +154,49 @@ export async function buyTicket() {
 
 /* ── Quests ────────────────────────────────────────────────────── */
 
-/** Drop the current card, promote `nextCard`. Recomputes takeCost + canTake.
- *  Doesn't touch `exhausted` — only the server's refetch can confirm the
- *  deck is empty. A locally-null nextCard just means "next card unknown
- *  until refetch"; treating it as exhausted would prematurely bounce the
- *  user out (violates LAW 1.38). */
-function advancedState(state, { consumedFreeTake = false } = {}) {
-  const nextCard = state.nextCard || null;
+/** Read the full deck array from the inventory row so local advances can
+ *  promote the upcoming card without waiting on a server refetch. The
+ *  array is a snapshot from the last sync; positions stay stable for
+ *  skip/take, and destroy advances past the same media slot the server
+ *  reaches via its position-shift, so cards[N] is correct in either op. */
+async function readQuestDeckCards(deckId) {
+  const db = await openDb();
+  return txn(db, [STORES.CARDS], 'readonly', async (t) => {
+    const all = await req(t.objectStore(STORES.CARDS).getAll());
+    const row = all.find(r =>
+      r.card_type === CARD_TYPE.QUEST_DECK && r.ref_id === deckId
+    );
+    return row?.quest_cards || null;
+  });
+}
+
+/** Drop the current card, promote the upcoming one. Recomputes takeCost +
+ *  canTake. With `cards` in hand we can keep promoting offline AND
+ *  confirm exhaustion locally (the array is the deck's authoritative
+ *  contents from the last sync). Without `cards` we fall back to the
+ *  old shape — preserving the prior behaviour that defers exhaustion
+ *  to the server (LAW 1.38). */
+function advancedState(state, cards, { consumedFreeTake = false } = {}) {
+  const nextPosition = state.currentPosition + 1;
+  const haveCards = Array.isArray(cards);
+  const currentCard = haveCards
+    ? (nextPosition < cards.length ? cards[nextPosition] : null)
+    : (state.nextCard || null);
+  const nextCard = haveCards && nextPosition + 1 < cards.length
+    ? cards[nextPosition + 1]
+    : null;
+  const exhausted = haveCards
+    ? nextPosition >= cards.length
+    : !!state.exhausted;
   const freeTakeUsed = state.freeTakeUsed || consumedFreeTake;
-  const infusion = nextCard?.infusion || 0;
+  const infusion = currentCard?.infusion || 0;
   const isFree   = infusion === 0;
   return {
     ...state,
-    currentPosition: state.currentPosition + 1,
-    currentCard:     nextCard,
-    nextCard:        null,
+    currentPosition: nextPosition,
+    currentCard,
+    nextCard,
+    exhausted,
     takeCost:        isFree ? 0 : infusion * 2,
     canTake:         !isFree || !freeTakeUsed,
     freeTakeUsed,
@@ -224,15 +252,23 @@ export async function startQuest() {
   const deckId = row.ref_id;
 
   const existing = await readRow(STORES.QUEST_STATE, deckId);
-  if (!existing) {
+  /* Re-seed when we have a row but `currentCard` is null while a card
+   * still sits at `currentPosition` in the deck array. This recovers
+   * sessions left in the old broken offline state (advance set
+   * nextCard=null, second advance promoted null into currentCard). */
+  const isStale = existing
+    && !existing.exhausted
+    && !existing.currentCard
+    && existing.currentPosition < row.quest_cards.length;
+  if (!existing || isStale) {
     const cards = row.quest_cards;
     const total = cards.length;
-    const position = Math.min(row.current_position || 0, total);
+    const position = Math.min(existing?.currentPosition ?? row.current_position ?? 0, total);
     const currentCard  = position < total ? cards[position] : null;
     const nextCard     = position + 1 < total ? cards[position + 1] : null;
     const infusion     = currentCard?.infusion || 0;
     const isFree       = infusion === 0;
-    const freeTakeUsed = !!row.free_take_used;
+    const freeTakeUsed = existing?.freeTakeUsed ?? !!row.free_take_used;
     await putRow(STORES.QUEST_STATE, {
       id:              deckId,
       deckIndex:       row.deck_index,
@@ -253,7 +289,8 @@ export async function startQuest() {
 export async function advanceQuest(deckId) {
   const prev = await readRow(STORES.QUEST_STATE, deckId);
   if (!prev) throw new Error('Quest deck not found');
-  await putRow(STORES.QUEST_STATE, advancedState(prev));
+  const cards = await readQuestDeckCards(deckId);
+  await putRow(STORES.QUEST_STATE, advancedState(prev, cards));
   emitMutation();
   return mutate({
     method: 'POST',
@@ -270,12 +307,13 @@ export async function takeQuest(deckId) {
   const infusion = prev.currentCard.infusion || 0;
   const cost = infusion === 0 ? 0 : infusion * 2;
   const consumedFreeTake = cost === 0 && !prev.freeTakeUsed;
+  const cards = await readQuestDeckCards(deckId);
   const db = await openDb();
   await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE], 'readwrite', async (t) => {
     const ps  = t.objectStore(STORES.PLAYER_STATS);
     const row = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
     ps.put({ ...row, dust: Math.max(0, (row.dust || 0) - cost) });
-    t.objectStore(STORES.QUEST_STATE).put(advancedState(prev, { consumedFreeTake }));
+    t.objectStore(STORES.QUEST_STATE).put(advancedState(prev, cards, { consumedFreeTake }));
   });
   emitMutation();
   return mutate({
@@ -285,16 +323,66 @@ export async function takeQuest(deckId) {
   });
 }
 
+/** Destroy mirrors the server's model: the destroyed card is removed
+ *  from the deck array AND `currentPosition` stays put — the card that
+ *  was at N+1 is now at N. Using `advancedState` here would increment
+ *  the position locally while the server keeps it, so the `then`
+ *  refetch would jump the UI back by one and the displayed count would
+ *  flicker (LAW 1.38). */
+function destroyedState(state, newCards) {
+  const position = state.currentPosition;
+  const total = newCards.length;
+  const exhausted = position >= total;
+  const currentCard = position < total ? newCards[position] : null;
+  const nextCard    = position + 1 < total ? newCards[position + 1] : null;
+  const infusion = currentCard?.infusion || 0;
+  const isFree   = infusion === 0;
+  return {
+    ...state,
+    currentPosition: position,
+    totalCards:      total,
+    exhausted,
+    currentCard,
+    nextCard,
+    takeCost:        isFree ? 0 : infusion * 2,
+    canTake:         !isFree || !state.freeTakeUsed,
+  };
+}
+
 export async function destroyQuest(deckId) {
   const prev = await readRow(STORES.QUEST_STATE, deckId);
   if (!prev?.currentCard) throw new Error('Quest deck exhausted');
   const reward = Math.max(2, (prev.currentCard.infusion || 0) * 2);
+  const destroyedMediaId = prev.currentCard.id;
   const db = await openDb();
-  await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE], 'readwrite', async (t) => {
+  await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE, STORES.CARDS], 'readwrite', async (t) => {
     const ps  = t.objectStore(STORES.PLAYER_STATS);
     const row = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
     ps.put({ ...row, dust: (row.dust || 0) + reward });
-    t.objectStore(STORES.QUEST_STATE).put(advancedState(prev));
+
+    /* Mirror the server's `DELETE FROM quest_cards` + position reindex
+     * by rewriting the inventory row's deck array. Keeps cards.length
+     * authoritative for the next destroy and for advance/exhaustion
+     * checks until syncInventory catches up. */
+    const cardsOS = t.objectStore(STORES.CARDS);
+    const all = await req(cardsOS.getAll());
+    const invRow = all.find(r =>
+      r.card_type === CARD_TYPE.QUEST_DECK && r.ref_id === deckId
+    );
+    let newCards = Array.isArray(invRow?.quest_cards) ? invRow.quest_cards : [];
+    /* Remove only the first match — defensive against a duplicate id
+     * sneaking in; the server's delete-by-row-id is unambiguous. */
+    const idx = newCards.findIndex(c => c.id === destroyedMediaId);
+    if (idx >= 0) newCards = [...newCards.slice(0, idx), ...newCards.slice(idx + 1)];
+    if (invRow) {
+      cardsOS.put({
+        ...invRow,
+        quest_cards: newCards,
+        total_cards: newCards.length,
+      });
+    }
+
+    t.objectStore(STORES.QUEST_STATE).put(destroyedState(prev, newCards));
   });
   emitMutation();
   return mutate({

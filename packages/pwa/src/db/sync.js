@@ -140,16 +140,21 @@ export async function drainQueue() {
   if (draining || !activeWorker) return;
   draining = true;
   let drained = 0;
+  /* Collect each unique `then` refetch and run it only ONCE after the
+   * batch drains. Running every queued mutation's refetch in turn made
+   * the UI jump back: each refetch returned the server state at that
+   * drain step (e.g. position N), but the user had already optimistically
+   * advanced past it. The final refetch reflects everything that drained,
+   * so a single end-of-batch refetch matches the local view. */
+  const pendingThens = new Map();
+  const thenKey = (then) => `${then.method} ${then.path} → ${then.store}`;
   try {
     while (activeWorker) {
       const head = await peekHead();
       if (!head) break;
       try {
         await sendDirect({ method: head.method, path: head.path, body: head.body });
-        if (head.then) {
-          const fresh = await sendDirect({ method: head.then.method, path: head.then.path });
-          if (fresh) await putIntoStore(head.then.store, fresh);
-        }
+        if (head.then) pendingThens.set(thenKey(head.then), head.then);
         await deleteHead(head.id);
         drained++;
       } catch (err) {
@@ -157,6 +162,14 @@ export async function drainQueue() {
         await deleteHead(head.id);   /* 4xx/5xx — can't retry, drop */
         drained++;
         console.warn(`mutation ${head.method} ${head.path} dropped:`, err.message);
+      }
+    }
+    for (const then of pendingThens.values()) {
+      try {
+        const fresh = await sendDirect({ method: then.method, path: then.path });
+        if (fresh) await putIntoStore(then.store, fresh);
+      } catch (err) {
+        if (err.status === 0) break; /* lost connection — drop the rest */
       }
     }
   } finally {

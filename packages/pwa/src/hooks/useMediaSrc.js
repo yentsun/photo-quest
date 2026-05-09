@@ -19,7 +19,7 @@
  *     video data.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getMediaBlob } from '../db/localDb.js';
 import { onMutation } from '../db/events.js';
@@ -34,14 +34,30 @@ import { mediaUrl } from '../utils/mediaUrl.js';
 export function useMediaSrc(serverUrl, item, options = {}) {
   const { thumbnail = false } = options;
   const [blobUrl, setBlobUrl] = useState(null);
+  const blobItemIdRef = useRef(null);
+  const blobLoadedRef = useRef(false);
 
   /* Blobs are only meaningful when the consumer wants a still image.
    * For video playback the blob would be a JPEG, which a <video> can't
    * use — fall through to the network /stream/ URL instead. */
   const useBlob = thumbnail || item?.type === MEDIA_TYPE.IMAGE;
 
+  /* When the item changes, the blob URL in state still belongs to the
+   * previous item until the async loader below replaces it — and the
+   * cleanup is about to revoke it. Returning that stale URL into <img>
+   * makes the browser fire `onError` on a revoked blob: URL.
+   * Treat the cached `blobUrl` as valid only when it belongs to the
+   * currently requested item; otherwise fall through to the network URL. */
+  const isBlobCurrent = blobItemIdRef.current === item?.id;
+
   useEffect(() => {
-    if (!useBlob || !item?.id) { setBlobUrl(null); return; }
+    if (!useBlob || !item?.id) {
+      blobItemIdRef.current = null;
+      blobLoadedRef.current = false;
+      setBlobUrl(null);
+      return;
+    }
+    blobLoadedRef.current = false;
     let cancelled = false;
     let createdUrl = null;
 
@@ -49,17 +65,34 @@ export function useMediaSrc(serverUrl, item, options = {}) {
       try {
         const row = await getMediaBlob(item.id);
         if (cancelled) return;
-        if (!row?.blob) { setBlobUrl(null); return; }
-        createdUrl = URL.createObjectURL(row.blob);
-        setBlobUrl(createdUrl);
+        if (!row?.blob) {
+          blobItemIdRef.current = item.id;
+          setBlobUrl(null);
+          return;
+        }
+        const next = URL.createObjectURL(row.blob);
+        if (createdUrl) URL.revokeObjectURL(createdUrl);
+        createdUrl = next;
+        blobItemIdRef.current = item.id;
+        blobLoadedRef.current = true;
+        setBlobUrl(next);
       } catch {
-        if (!cancelled) setBlobUrl(null);
+        if (!cancelled) {
+          blobItemIdRef.current = item.id;
+          setBlobUrl(null);
+        }
       }
     };
 
     load();
-    /* Re-check after sync so a fresh blob flips the <img> from network to local. */
-    const unsub = onMutation(load);
+    /* Re-check after sync ONLY until we've successfully loaded the blob
+     * for the current item. Otherwise every emitMutation (sync-all
+     * fires several — inventory, decks, player, folders, plus the
+     * post-drain refetch) would call createObjectURL again, producing
+     * a fresh URL string, swapping <img src>, and forcing a reload.
+     * The user sees that as the loader flashing repeatedly during sync. */
+    const recheck = () => { if (!blobLoadedRef.current) load(); };
+    const unsub = onMutation(recheck);
 
     return () => {
       cancelled = true;
@@ -69,5 +102,5 @@ export function useMediaSrc(serverUrl, item, options = {}) {
   }, [item?.id, useBlob]);
 
   if (!item) return null;
-  return blobUrl || mediaUrl(serverUrl, item, { thumbnail });
+  return (isBlobCurrent && blobUrl) || mediaUrl(serverUrl, item, { thumbnail });
 }

@@ -25,7 +25,8 @@ function NextCardPreload({ server, card }) {
 function CardViewer({ state, dust, server, busy, onTake, onSkip, onDestroy }) {
   const card = state.currentCard;
   const [mediaLoaded, setMediaLoaded] = useState(false);
-  useEffect(() => { setMediaLoaded(false); }, [card?.id]);
+  const [mediaError,  setMediaError]  = useState(false);
+  useEffect(() => { setMediaLoaded(false); setMediaError(false); }, [card?.id]);
 
   useEffect(() => {
     if (!card) return;
@@ -64,18 +65,33 @@ function CardViewer({ state, dust, server, busy, onTake, onSkip, onDestroy }) {
         headerRight={<span style={{ color: '#d8b4fe' }}>{words.dustSymbol} {card.infusion || 0}</span>}
         art={
           <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
-            {!mediaLoaded && <Spinner />}
+            {!mediaLoaded && !mediaError && <Spinner />}
+            {mediaError && (
+              <div style={{
+                position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                color: '#9ca3af', textAlign: 'center', padding: '1rem',
+              }}>
+                <div style={{ fontSize: '2rem' }}>⚠️</div>
+                <div>Image not available offline</div>
+                <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+                  Use Skip to move on, or come back online to load it.
+                </div>
+              </div>
+            )}
             {isImage ? (
               <img
-                src={mediaUrl} alt={card.title} crossOrigin="anonymous"
-                onLoad={() => setMediaLoaded(true)}
+                key={card.id} src={mediaUrl} alt={card.title} crossOrigin="anonymous"
+                onLoad={() => { setMediaLoaded(true); setMediaError(false); }}
+                onError={() => setMediaError(true)}
                 style={{ width: '100%', height: '100%', objectFit: 'cover',
                          opacity: mediaLoaded ? 1 : 0, transition: 'opacity .2s' }}
               />
             ) : (
               <video
-                src={mediaUrl} controls muted playsInline crossOrigin="anonymous"
-                onLoadedData={() => setMediaLoaded(true)}
+                key={card.id} src={mediaUrl} controls muted playsInline crossOrigin="anonymous"
+                onLoadedData={() => { setMediaLoaded(true); setMediaError(false); }}
+                onError={() => setMediaError(true)}
                 style={{ width: '100%', height: '100%', objectFit: 'cover',
                          opacity: mediaLoaded ? 1 : 0, transition: 'opacity .2s' }}
               />
