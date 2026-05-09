@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { CARD_TYPE, MARKET_PRICES, MEDIA_TYPE, words } from '@photo-quest/shared';
+import { CARD_TYPE, MARKET_PRICES, words } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import MediaCard from '../components/ui/MediaCard.jsx';
@@ -9,7 +9,7 @@ import CardOverlay from '../components/ui/CardOverlay.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
 import { STORES } from '../db/localDb.js';
 import { addToDeck, startQuest, startMemory } from '../db/actions.js';
-import { mediaUrl } from '../utils/mediaUrl.js';
+import { useMediaSrc } from '../hooks/useMediaSrc.js';
 import './InventoryPage.css';
 
 const DND_TYPE = 'application/x-inventory-id';
@@ -33,8 +33,8 @@ function useDropTarget(onDropId) {
 
 function DeckCard({ deck, preview, serverUrl, onOpen, onDropCard }) {
   const { over, handlers } = useDropTarget((invId) => onDropCard(deck.id, invId));
-  const previewUrl = preview ? mediaUrl(serverUrl, preview) : null;
-  const isVideo = preview?.type === MEDIA_TYPE.VIDEO;
+  /* Thumbnail mode — videos render as their server-extracted first frame. */
+  const previewUrl = useMediaSrc(serverUrl, preview, { thumbnail: true });
 
   return (
     <div className={`drop-target ${over ? 'drop-target--over' : ''}`} {...handlers}>
@@ -44,9 +44,7 @@ function DeckCard({ deck, preview, serverUrl, onOpen, onDropCard }) {
         header={deck.name || 'Untitled deck'}
         art={
           previewUrl
-            ? (isVideo
-                ? <video src={previewUrl} preload="metadata" muted draggable={false} />
-                : <img src={previewUrl} alt={deck.name} loading="lazy" draggable={false} />)
+            ? <img src={previewUrl} alt={deck.name} loading="lazy" draggable={false} crossOrigin="anonymous" />
             : <div style={{ width: '100%', height: '100%', background: '#000', display: 'flex',
                             alignItems: 'center', justifyContent: 'center', color: '#4b5563', fontSize: '2rem' }}>?</div>
         }

@@ -5,6 +5,7 @@ import FolderOverlay from '../components/ui/FolderOverlay.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
+import { useMediaSrc } from '../hooks/useMediaSrc.js';
 import { STORES } from '../db/localDb.js';
 import './LibraryPage.css';
 
@@ -16,7 +17,10 @@ function FolderCard({ folder, serverUrl, onClick }) {
   const name = folderName(folder.path);
   const images = folder.subtreeImageCount ?? folder.imageCount ?? 0;
   const videos = folder.subtreeVideoCount ?? folder.videoCount ?? 0;
-  const previewUrl = folder.previewMediaId ? `${serverUrl}/image/${folder.previewMediaId}` : null;
+  const previewUrl = useMediaSrc(
+    serverUrl,
+    folder.previewMediaId ? { id: folder.previewMediaId, type: 'image' } : null,
+  );
 
   return (
     <Card
@@ -24,7 +28,7 @@ function FolderCard({ folder, serverUrl, onClick }) {
       header={name}
       art={
         previewUrl
-          ? <img src={previewUrl} alt={name} loading="lazy" draggable={false} />
+          ? <img src={previewUrl} alt={name} loading="lazy" draggable={false} crossOrigin="anonymous" />
           : <div className="library__folder-placeholder">📁</div>
       }
       footer={

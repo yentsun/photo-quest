@@ -6,7 +6,7 @@
  */
 
 const DB_NAME = 'photo-quest';
-const DB_VERSION = 11;
+const DB_VERSION = 13;
 
 export const STORES = {
   CARDS:              'cards',
@@ -17,6 +17,8 @@ export const STORES = {
   QUEST_STATE:        'questState',
   MEMORY_STATE:       'memoryState',
   PENDING_MUTATIONS:  'pendingMutations',
+  MEDIA_BLOBS:        'mediaBlobs',
+  MEDIA_BLOB_FAILS:   'mediaBlobFails',
 };
 
 const SCHEMA = [
@@ -28,6 +30,15 @@ const SCHEMA = [
   { name: STORES.QUEST_STATE,       keyPath: 'id' },
   { name: STORES.MEMORY_STATE,      keyPath: 'id' },
   { name: STORES.PENDING_MUTATIONS, keyPath: 'id', autoIncrement: true },
+  /* Media binaries kept here (not Cache API) because Chrome pads opaque
+   * cross-origin responses to ~7 MB each in quota — even with CORS+
+   * crossorigin attributes, the cache is unreliable for large libraries.
+   * Blobs in IDB are byte-accurate and survive across sessions. */
+  { name: STORES.MEDIA_BLOBS,       keyPath: 'id', indexes: [{ name: 'lastUsed', keyPath: 'lastUsed' }] },
+  /* Tombstones for media ids that returned 404 / corrupt / unreadable.
+   * Keeps the worker from re-fetching the same broken ids on every sync
+   * and logging server errors. Cleared by an explicit user retry. */
+  { name: STORES.MEDIA_BLOB_FAILS,  keyPath: 'id' },
 ];
 
 /* Stores that existed in earlier versions and should be cleaned up. */
@@ -49,9 +60,17 @@ export function openDb() {
       if (db.objectStoreNames.contains(STORES.PENDING_MUTATIONS)) {
         db.deleteObjectStore(STORES.PENDING_MUTATIONS);
       }
-      for (const { name, keyPath, autoIncrement } of SCHEMA) {
+      for (const { name, keyPath, autoIncrement, indexes } of SCHEMA) {
+        let os;
         if (!db.objectStoreNames.contains(name)) {
-          db.createObjectStore(name, { keyPath, autoIncrement });
+          os = db.createObjectStore(name, { keyPath, autoIncrement });
+        } else {
+          os = request.transaction.objectStore(name);
+        }
+        if (indexes) {
+          for (const ix of indexes) {
+            if (!os.indexNames.contains(ix.name)) os.createIndex(ix.name, ix.keyPath);
+          }
         }
       }
       for (const name of OBSOLETE_STORES) {
@@ -134,4 +153,70 @@ export function putRows(store, rows) {
     const os = t.objectStore(store);
     for (const row of rows) os.put(row);
   });
+}
+
+/* ── Media blob helpers ───────────────────────────────────────────── */
+
+const MEDIA_BLOB_BUDGET = 1500;
+
+export function getMediaBlob(id) {
+  return tx(STORES.MEDIA_BLOBS, 'readonly', (t) =>
+    req(t.objectStore(STORES.MEDIA_BLOBS).get(id)),
+  );
+}
+
+export async function hasMediaBlob(id) {
+  const row = await tx(STORES.MEDIA_BLOBS, 'readonly', (t) =>
+    req(t.objectStore(STORES.MEDIA_BLOBS).getKey(id)),
+  );
+  return row != null;
+}
+
+export async function putMediaBlob(id, blob) {
+  await tx(STORES.MEDIA_BLOBS, 'readwrite', (t) => {
+    t.objectStore(STORES.MEDIA_BLOBS).put({ id, blob, size: blob.size, lastUsed: Date.now() });
+  });
+  /* Best-effort LRU prune outside the write tx. */
+  evictMediaBlobs().catch(() => {});
+}
+
+async function evictMediaBlobs() {
+  const count = await tx(STORES.MEDIA_BLOBS, 'readonly', (t) =>
+    req(t.objectStore(STORES.MEDIA_BLOBS).count()),
+  );
+  if (count <= MEDIA_BLOB_BUDGET) return;
+  const drop = count - MEDIA_BLOB_BUDGET;
+  await tx(STORES.MEDIA_BLOBS, 'readwrite', async (t) => {
+    const ix = t.objectStore(STORES.MEDIA_BLOBS).index('lastUsed');
+    const cursor = ix.openKeyCursor();
+    let removed = 0;
+    cursor.onsuccess = () => {
+      const c = cursor.result;
+      if (!c || removed >= drop) return;
+      t.objectStore(STORES.MEDIA_BLOBS).delete(c.primaryKey);
+      removed++;
+      c.continue();
+    };
+  });
+}
+
+export async function touchMediaBlob(id) {
+  await tx(STORES.MEDIA_BLOBS, 'readwrite', async (t) => {
+    const os = t.objectStore(STORES.MEDIA_BLOBS);
+    const row = await req(os.get(id));
+    if (row) os.put({ ...row, lastUsed: Date.now() });
+  });
+}
+
+export async function markMediaBlobFailed(id, status) {
+  await tx(STORES.MEDIA_BLOB_FAILS, 'readwrite', (t) => {
+    t.objectStore(STORES.MEDIA_BLOB_FAILS).put({ id, status, at: Date.now() });
+  });
+}
+
+export async function hasMediaBlobFailed(id) {
+  const key = await tx(STORES.MEDIA_BLOB_FAILS, 'readonly', (t) =>
+    req(t.objectStore(STORES.MEDIA_BLOB_FAILS).getKey(id)),
+  );
+  return key != null;
 }

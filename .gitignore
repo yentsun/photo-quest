@@ -12,6 +12,9 @@ dev-dist/
 # Transcoded media output
 transcoded/
 
+# Server-side video first-frame cache
+thumbs/
+
 # Environment
 .env
 .env.local

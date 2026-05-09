@@ -78,7 +78,12 @@ export default async (kojo, logger) => {
         'Content-Type': contentType,
       });
 
-      fs.createReadStream(filePath, { start, end }).pipe(res);
+      const stream = fs.createReadStream(filePath, { start, end });
+      stream.on('error', (err) => {
+        logger.error(`Stream error for ${filePath}: ${err.message}`);
+        res.destroy(err);
+      });
+      stream.pipe(res);
     } else {
       /* No Range header -- send the entire file. */
       res.writeHead(200, {
@@ -87,7 +92,12 @@ export default async (kojo, logger) => {
         'Accept-Ranges': 'bytes',
       });
 
-      fs.createReadStream(filePath).pipe(res);
+      const stream = fs.createReadStream(filePath);
+      stream.on('error', (err) => {
+        logger.error(`Stream error for ${filePath}: ${err.message}`);
+        res.destroy(err);
+      });
+      stream.pipe(res);
     }
   });
 };

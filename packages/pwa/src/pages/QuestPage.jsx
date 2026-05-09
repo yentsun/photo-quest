@@ -5,12 +5,22 @@ import Card from '../components/ui/Card.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
+import { useMediaSrc } from '../hooks/useMediaSrc.js';
 import { STORES } from '../db/localDb.js';
 import { advanceQuest, takeQuest, destroyQuest, freeInfuseQuest, consumeExhaustedQuestDeck } from '../db/actions.js';
 import './QuestPage.css';
 
 const PASSIVE_TICK_MS = 5_000;
 const PASSIVE_CAP_MS  = 120_000;
+
+/* Hidden preload so the upcoming card's blob is in IDB / object URL ready
+ * before the user advances. Hook lives in its own component so its
+ * lifecycle is tied to the next-card identity, not the page render. */
+function NextCardPreload({ server, card }) {
+  const src = useMediaSrc(server?.url, card);
+  if (!src) return null;
+  return <img src={src} alt="" aria-hidden crossOrigin="anonymous" style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} />;
+}
 
 function CardViewer({ state, dust, server, busy, onTake, onSkip, onDestroy }) {
   const card = state.currentCard;
@@ -27,10 +37,11 @@ function CardViewer({ state, dust, server, busy, onTake, onSkip, onDestroy }) {
     return () => clearInterval(t);
   }, [card?.id, state.id]);
 
+  const mediaUrl = useMediaSrc(server?.url, card);
+
   if (!card) return null;
 
   const isImage = card.type === MEDIA_TYPE.IMAGE;
-  const mediaUrl = isImage ? `${server.url}/image/${card.id}` : `${server.url}/stream/${card.id}`;
 
   /* Derive cost from the live infusion (including passive ticks), not
    * from state.takeCost which froze at the last server response. */
@@ -56,14 +67,14 @@ function CardViewer({ state, dust, server, busy, onTake, onSkip, onDestroy }) {
             {!mediaLoaded && <Spinner />}
             {isImage ? (
               <img
-                src={mediaUrl} alt={card.title}
+                src={mediaUrl} alt={card.title} crossOrigin="anonymous"
                 onLoad={() => setMediaLoaded(true)}
                 style={{ width: '100%', height: '100%', objectFit: 'cover',
                          opacity: mediaLoaded ? 1 : 0, transition: 'opacity .2s' }}
               />
             ) : (
               <video
-                src={mediaUrl} controls muted playsInline
+                src={mediaUrl} controls muted playsInline crossOrigin="anonymous"
                 onLoadedData={() => setMediaLoaded(true)}
                 style={{ width: '100%', height: '100%', objectFit: 'cover',
                          opacity: mediaLoaded ? 1 : 0, transition: 'opacity .2s' }}
@@ -169,7 +180,7 @@ export default function QuestPage({ questDeckId, server, onBack }) {
       )}
 
       {state.nextCard?.type === MEDIA_TYPE.IMAGE && (
-        <img src={`${server.url}/image/${state.nextCard.id}`} alt="" aria-hidden style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} />
+        <NextCardPreload server={server} card={state.nextCard} />
       )}
 
       <Modal open={!!confirmDestroy} title="Destroy this card?" onClose={() => setConfirmDestroy(null)}>

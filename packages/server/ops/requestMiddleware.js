@@ -181,6 +181,8 @@ function serveStatic(pathname, res) {
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
   res.writeHead(200, { 'Content-Type': contentType });
-  fs.createReadStream(filePath).pipe(res);
+  const stream = fs.createReadStream(filePath);
+  stream.on('error', () => res.destroy());
+  stream.pipe(res);
   return true;
 }

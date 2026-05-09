@@ -30,6 +30,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: { enabled: true, type: 'module' },
       manifest: {
         short_name: 'Photo Quest',
         name: 'Photo Quest',
@@ -43,20 +44,29 @@ export default defineConfig({
         navigateFallback: '/index.html',
         runtimeCaching: [
           {
-            urlPattern: /^\/image\//,
+            /* Match by pathname so cross-origin LAN-server URLs hit too. */
+            urlPattern: ({ url }) => url.pathname.startsWith('/image/'),
             handler: 'CacheFirst',
             options: {
               cacheName: 'media-images',
-              expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+                purgeOnQuotaError: true,
+              },
               cacheableResponse: { statuses: [0, 200] },
             },
           },
           {
-            urlPattern: /^\/stream\//,
+            urlPattern: ({ url }) => url.pathname.startsWith('/stream/'),
             handler: 'CacheFirst',
             options: {
               cacheName: 'media-videos',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+                purgeOnQuotaError: true,
+              },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

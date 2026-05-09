@@ -21,7 +21,7 @@ export default function ({ limit, offset } = {}) {
   let sql = `
     SELECT i.id AS inventory_id, i.card_type, i.ref_id, i.acquired_at,
            m.*,
-           d.deck_index, d.current_position, d.exhausted,
+           d.deck_index, d.current_position, d.exhausted, d.free_take_used,
            (SELECT COUNT(*) FROM quest_cards qc WHERE qc.deck_id = d.id) AS total_cards
     FROM inventory i
     LEFT JOIN media m ON m.id = i.media_id
@@ -62,6 +62,33 @@ export default function ({ limit, offset } = {}) {
     for (const it of items) {
       if (it.card_type === CARD_TYPE.MEMORY_TICKET && it.ref_id) {
         it.game_cards = byGame.get(it.ref_id) || [];
+      }
+    }
+  }
+
+  /* Attach each quest deck's cards (in position order) so the client can
+   * open and play the deck offline once the inventory has synced. Mirrors
+   * the memory-ticket pattern above. */
+  const questDeckIds = items
+    .filter(it => it.card_type === CARD_TYPE.QUEST_DECK && it.ref_id)
+    .map(it => it.ref_id);
+  if (questDeckIds.length > 0) {
+    const placeholders = questDeckIds.map(() => '?').join(',');
+    const deckCards = db.prepare(
+      `SELECT qc.deck_id, qc.position, m.id, m.type, m.title, m.infusion
+       FROM quest_cards qc
+       JOIN media m ON m.id = qc.media_id
+       WHERE qc.deck_id IN (${placeholders})
+       ORDER BY qc.deck_id, qc.position`
+    ).all(...questDeckIds);
+    const byDeck = new Map();
+    for (const c of deckCards) {
+      if (!byDeck.has(c.deck_id)) byDeck.set(c.deck_id, []);
+      byDeck.get(c.deck_id).push({ id: c.id, type: c.type, title: c.title, infusion: c.infusion });
+    }
+    for (const it of items) {
+      if (it.card_type === CARD_TYPE.QUEST_DECK && it.ref_id) {
+        it.quest_cards = byDeck.get(it.ref_id) || [];
       }
     }
   }

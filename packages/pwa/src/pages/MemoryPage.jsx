@@ -11,9 +11,10 @@ import { words } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
+import { useMediaSrc } from '../hooks/useMediaSrc.js';
 import { STORES } from '../db/localDb.js';
 import { patchMemoryState, claimMemoryPick, endMemory } from '../db/actions.js';
-import { mediaUrl as buildMediaUrl } from '../utils/mediaUrl.js';
+import { mediaUrl } from '../utils/mediaUrl.js';
 import './MemoryPage.css';
 
 const STAR_THRESHOLDS = [15, 11, 8];  /* 1★/2★/3★ move caps — for prestige only */
@@ -35,6 +36,8 @@ function Stars({ count }) {
 }
 
 function MemoryCard({ card, revealed, matched, picking, pickable, picked, serverUrl, onClick }) {
+  /* Always still-image — the matching face is a thumbnail, even for video media. */
+  const src = useMediaSrc(serverUrl, { id: card.mediaId, type: card.type }, { thumbnail: true });
   const classes = [
     'memory__card',
     revealed || matched ? 'memory__card--face' : 'memory__card--back',
@@ -45,7 +48,7 @@ function MemoryCard({ card, revealed, matched, picking, pickable, picked, server
   return (
     <button className={classes} onClick={onClick} type="button">
       {revealed || matched
-        ? <img src={buildMediaUrl(serverUrl, { id: card.mediaId, type: card.type })} alt="" draggable={false} />
+        ? <img src={src} alt="" draggable={false} crossOrigin="anonymous" />
         : <span className="memory__back">?</span>}
     </button>
   );
@@ -69,7 +72,7 @@ export default function MemoryPage({ server, onBack }) {
       if (seen.has(c.mediaId)) continue;
       seen.add(c.mediaId);
       const img = new Image();
-      img.src = buildMediaUrl(server.url, { id: c.mediaId, type: c.type });
+      img.src = mediaUrl(server.url, { id: c.mediaId, type: c.type }, { thumbnail: true });
     }
   }, [state?.cards, server]);
 

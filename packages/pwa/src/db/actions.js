@@ -198,20 +198,55 @@ export async function consumeExhaustedQuestDeck(questDeckId) {
   emitMutation();
 }
 
+/**
+ * Open the oldest ready quest deck. Fully local (LAW 1.39) — quest decks
+ * form server-side at purchase and the formed cards ship with the
+ * inventory row (see listInventory's `quest_cards` attach), so no
+ * network call is needed. If a QUEST_STATE row already exists for this
+ * deck (player resumed mid-deck) we keep it; otherwise we seed from the
+ * inventory row's `quest_cards` + `current_position` + `free_take_used`.
+ */
 export async function startQuest() {
   const db = await openDb();
   const row = await txn(db, [STORES.CARDS], 'readonly', async (t) => {
     const all = await req(t.objectStore(STORES.CARDS).getAll());
     return all
-      .filter(r => r.card_type === CARD_TYPE.QUEST_DECK && !r._pending && r.ref_id)
+      .filter(r =>
+        r.card_type === CARD_TYPE.QUEST_DECK &&
+        !r._pending &&
+        r.ref_id &&
+        Array.isArray(r.quest_cards) &&
+        r.quest_cards.length > 0,
+      )
       .sort((a, b) => (a.acquired_at || '').localeCompare(b.acquired_at || ''))[0];
   });
   if (!row) throw new Error('No quest decks to open');
   const deckId = row.ref_id;
 
-  const state = await mutate({ method: 'GET', path: `/quest/decks/${deckId}` });
-  await putRow(STORES.QUEST_STATE, state);
-  emitMutation();
+  const existing = await readRow(STORES.QUEST_STATE, deckId);
+  if (!existing) {
+    const cards = row.quest_cards;
+    const total = cards.length;
+    const position = Math.min(row.current_position || 0, total);
+    const currentCard  = position < total ? cards[position] : null;
+    const nextCard     = position + 1 < total ? cards[position + 1] : null;
+    const infusion     = currentCard?.infusion || 0;
+    const isFree       = infusion === 0;
+    const freeTakeUsed = !!row.free_take_used;
+    await putRow(STORES.QUEST_STATE, {
+      id:              deckId,
+      deckIndex:       row.deck_index,
+      currentPosition: position,
+      totalCards:      total,
+      exhausted:       position >= total,
+      currentCard,
+      nextCard,
+      takeCost:        isFree ? 0 : infusion * 2,
+      canTake:         !isFree || !freeTakeUsed,
+      freeTakeUsed,
+    });
+    emitMutation();
+  }
   return deckId;
 }
 

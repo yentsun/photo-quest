@@ -8,9 +8,9 @@ import Input from './Input.jsx';
 import Modal from './Modal.jsx';
 import { useKeydown } from '../../hooks/useKeydown.js';
 import { useLocalStore } from '../../hooks/useLocalStore.js';
+import { useMediaSrc } from '../../hooks/useMediaSrc.js';
 import { STORES } from '../../db/localDb.js';
 import { destroyCard, freeInfuseCard, renameCard, sellCard } from '../../db/actions.js';
-import { mediaUrl as buildMediaUrl } from '../../utils/mediaUrl.js';
 import './CardOverlay.css';
 
 const PASSIVE_TICK_MS = 5_000;
@@ -49,17 +49,18 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
     return () => clearInterval(t);
   }, [item?.inventory_id, fullMedia]);
 
+  const mediaUrl = useMediaSrc(serverUrl, item);
+
   if (!item) return null;
   const isImage = item.type === MEDIA_TYPE.IMAGE;
-  const mediaUrl = buildMediaUrl(serverUrl, item);
   const infusion = item.infusion || 0;
 
   if (fullMedia) {
     return (
       <div className="overlay overlay--full" onClick={() => setFullMedia(false)}>
         {isImage
-          ? <img src={mediaUrl} alt={item.title} className="overlay__fullmedia" />
-          : <video src={mediaUrl} controls autoPlay muted playsInline
+          ? <img src={mediaUrl} alt={item.title} className="overlay__fullmedia" crossOrigin="anonymous" />
+          : <video src={mediaUrl} controls autoPlay muted playsInline crossOrigin="anonymous"
                    className="overlay__fullmedia" onClick={(e) => e.stopPropagation()} />}
       </div>
     );
@@ -93,8 +94,8 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
           art={
             <div className="overlay__art">
               {isImage
-                ? <img src={mediaUrl} alt={item.title} />
-                : <video src={mediaUrl} autoPlay loop muted playsInline
+                ? <img src={mediaUrl} alt={item.title} crossOrigin="anonymous" />
+                : <video src={mediaUrl} autoPlay loop muted playsInline crossOrigin="anonymous"
                          onClick={(e) => e.stopPropagation()} />}
               <button className="overlay__fs-btn" onClick={() => setFullMedia(true)} title="Fullscreen (F)">F</button>
             </div>

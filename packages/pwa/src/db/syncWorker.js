@@ -15,7 +15,10 @@
  *                  { type: 'mutate-result', id, ok, status, data?, message? }
  */
 
-import { openDb, STORES, syncReplace, tx, req } from './localDb.js';
+import {
+  openDb, STORES, syncReplace, tx, req,
+  hasMediaBlob, putMediaBlob, hasMediaBlobFailed, markMediaBlobFailed,
+} from './localDb.js';
 
 const PAGE_SIZE = 100;
 const PAGE_CONCURRENCY = 4;
@@ -40,6 +43,67 @@ async function fetchJson(url) {
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`${url} → ${res.status}`);
   return res.json();
+}
+
+/**
+ * Fetch image binaries and store them as Blobs in IndexedDB so the UI can
+ * render media offline regardless of what's been displayed before. Skips
+ * ids already present so re-syncs are cheap. Best-effort; per-id errors
+ * are swallowed so one bad row doesn't poison the batch.
+ *
+ * `inFlightBlobIds` deduplicates concurrent fetches across sync paths
+ * (inventory + decks + folders fire in parallel) so the same broken id
+ * isn't requested four times before the first tombstone lands.
+ */
+const inFlightBlobIds = new Set();
+
+async function cacheImageBlobs(serverUrl, ids, concurrency = 4) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const queue = [];
+  for (const id of unique) {
+    if (inFlightBlobIds.has(id)) continue;
+    if (await hasMediaBlob(id)) continue;
+    if (await hasMediaBlobFailed(id)) continue;
+    inFlightBlobIds.add(id);
+    queue.push(id);
+  }
+  if (!queue.length) return;
+  console.debug('[worker] cacheImageBlobs:', queue.length, 'new blobs');
+
+  for (let i = 0; i < queue.length; i += concurrency) {
+    const batch = queue.slice(i, i + concurrency);
+    await Promise.all(batch.map(async id => {
+      try {
+        let res;
+        try { res = await fetch(`${serverUrl}/image/${id}`, { mode: 'cors' }); }
+        catch { return; } /* network — retry next sync */
+
+        /* Only tombstone on definitive "this id will never work" responses:
+         *  - 404: media row doesn't exist on the server.
+         *  - 410: explicitly gone.
+         * Body-mid-stream errors and 5xx are most often a flaky drive on
+         * the server (UNKNOWN read errors on D:\) — those should retry on
+         * the next sync once the drive recovers, not be tombstoned. */
+        if (res.status === 404 || res.status === 410) {
+          await markMediaBlobFailed(id, res.status);
+          return;
+        }
+        if (!res.ok) return; /* transient — retry next sync */
+
+        let blob;
+        try { blob = await res.blob(); }
+        catch { return; } /* body interrupted — retry next sync */
+
+        if (!blob.size) return;
+        await putMediaBlob(id, blob);
+      } finally {
+        inFlightBlobIds.delete(id);
+      }
+    }));
+  }
+  /* Notify the UI so any <img> still showing the network fallback can flip
+   * to the freshly-cached blob. */
+  self.postMessage({ type: 'change', table: 'mediaBlobs' });
 }
 
 /**
@@ -123,7 +187,27 @@ async function readKeyedJson(store) {
   });
 }
 
-const syncInventory = (serverUrl) => syncPaged(serverUrl, '/inventory', STORES.CARDS);
+async function syncInventory(serverUrl) {
+  await syncPaged(serverUrl, '/inventory', STORES.CARDS);
+  /* Cache thumbnail blobs for every inventory item plus the cards bundled
+   * inside quest decks (`quest_cards`) and memory tickets (`game_cards`).
+   * Videos are included — /image/:id serves the extracted first frame
+   * for video media, so a video card's thumbnail renders offline too. */
+  const cards = await tx(STORES.CARDS, 'readonly', (t) =>
+    req(t.objectStore(STORES.CARDS).getAll()),
+  );
+  const ids = [];
+  for (const c of cards) {
+    if (c.id) ids.push(c.id);
+    if (Array.isArray(c.quest_cards)) {
+      for (const qc of c.quest_cards) if (qc.id) ids.push(qc.id);
+    }
+    if (Array.isArray(c.game_cards)) {
+      for (const gc of c.game_cards) if (gc.id) ids.push(gc.id);
+    }
+  }
+  cacheImageBlobs(serverUrl, ids);
+}
 
 async function syncDecks(serverUrl) {
   const { decks = [], cards = [] } = await fetchJson(`${serverUrl}/decks`);
@@ -134,6 +218,13 @@ async function syncDecks(serverUrl) {
     syncReplace(STORES.DECK_CARDS, cards),
   ]);
   self.postMessage({ type: 'progress', store: STORES.DECKS, count: decks.length, total: decks.length });
+
+  /* Cache thumbnail blobs for every card across all decks (image and
+   * video — /image/:id returns the extracted first frame for video media)
+   * so the contents render offline. Full-res video bytes are still
+   * fetched on demand via /stream/. */
+  const ids = cards.filter(dc => dc.id).map(dc => dc.id);
+  cacheImageBlobs(serverUrl, ids);
 }
 
 async function syncPlayer(serverUrl) {
@@ -147,6 +238,12 @@ async function syncFolders(serverUrl) {
   if (await hasPendingMutations()) return;
   await syncReplace(STORES.FOLDERS, folders);
   self.postMessage({ type: 'progress', store: STORES.FOLDERS, count: folders.length, total: folders.length });
+
+  /* Cache folder preview thumbs as blobs. /image/:id serves the extracted
+   * first frame for video previews, so video-typed folder previews work
+   * offline too. */
+  const ids = folders.filter(f => f.previewMediaId).map(f => f.previewMediaId);
+  cacheImageBlobs(serverUrl, ids);
 }
 
 /* Folder counts & previews derive from the media table, so resync folders

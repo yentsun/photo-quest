@@ -1,6 +1,7 @@
 import Button from './Button.jsx';
 import Card from './Card.jsx';
 import { useKeydown } from '../../hooks/useKeydown.js';
+import { useMediaSrc } from '../../hooks/useMediaSrc.js';
 import { refreshFolder } from '../../db/actions.js';
 import './CardOverlay.css';
 
@@ -11,12 +12,16 @@ function folderName(folderPath) {
 export default function FolderOverlay({ folder, serverUrl, onClose }) {
   useKeydown((e) => { if (e.key === 'Escape') onClose(); }, !!folder, [onClose]);
 
+  const previewUrl = useMediaSrc(
+    serverUrl,
+    folder?.previewMediaId ? { id: folder.previewMediaId, type: 'image' } : null,
+  );
+
   if (!folder) return null;
 
   const name = folderName(folder.path);
   const images = folder.subtreeImageCount ?? folder.imageCount ?? 0;
   const videos = folder.subtreeVideoCount ?? folder.videoCount ?? 0;
-  const previewUrl = folder.previewMediaId ? `${serverUrl}/image/${folder.previewMediaId}` : null;
 
   const handleRefresh = () => {
     refreshFolder(folder.path);
@@ -31,7 +36,7 @@ export default function FolderOverlay({ folder, serverUrl, onClose }) {
           header={name}
           art={
             previewUrl
-              ? <img src={previewUrl} alt={name} />
+              ? <img src={previewUrl} alt={name} crossOrigin="anonymous" />
               : <div style={{ width: '100%', height: '100%', background: '#1f2937',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               color: '#4b5563', fontSize: '4rem' }}>📁</div>
