@@ -15,6 +15,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Reference `F:\Projects\SimpleCrew\mono\packages\backend\` for correct kojo setup patterns.
 - **Use modular components** — Never use raw HTML elements (`<button>`, `<input>`, etc.) in page components. Always use the reusable UI components from `components/ui/` (Button, IconButton, Modal, etc.).
 
+### Domain naming
+- The concept is **decks**, not piles. Treat any leftover `pile`/`piles` in code, routes, or UI as a rename miss and fix it as part of the change you're making.
+- Magic dust currency renders with the **Đ** symbol in the UI.
+
+### PWA & sync
+- PWA components, hooks, actions, and pages **never** call `fetch` / make HTTP requests. All network I/O lives in the sync worker; the UI reads/writes IndexedDB only.
+- Sync only what the current view needs. Never bulk-sync the media library or other large server tables into IDB.
+- Mutations are optimistic by default: write IDB first, enqueue the server call in background, roll back the IDB write if the server rejects. Never await the network before updating UI state.
+- Sync writes must re-read the pending-mutations queue **inside the same IDB write transaction** before applying server data, and skip rows with outstanding optimistic mutations. This prevents stale server data from clobbering an optimistic row (see commit 884e5a5).
+
+### Git workflow
+- **Never push** to a remote unless explicitly asked.
+- After a merge, delete the local source branch without asking. Remote deletion is still gated by the no-push rule above.
+
 ## Commands
 
 - `pnpm install` — Install all workspace dependencies
