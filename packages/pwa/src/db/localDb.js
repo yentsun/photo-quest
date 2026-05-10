@@ -6,7 +6,7 @@
  */
 
 const DB_NAME = 'photo-quest';
-const DB_VERSION = 13;
+const DB_VERSION = 14;
 
 export const STORES = {
   CARDS:              'cards',
@@ -16,6 +16,7 @@ export const STORES = {
   PLAYER_STATS:       'playerStats',
   QUEST_STATE:        'questState',
   MEMORY_STATE:       'memoryState',
+  SEEN_MEDIA:         'seenMedia',
   PENDING_MUTATIONS:  'pendingMutations',
   MEDIA_BLOBS:        'mediaBlobs',
   MEDIA_BLOB_FAILS:   'mediaBlobFails',
@@ -29,6 +30,11 @@ const SCHEMA = [
   { name: STORES.PLAYER_STATS,      keyPath: 'id' },
   { name: STORES.QUEST_STATE,       keyPath: 'id' },
   { name: STORES.MEMORY_STATE,      keyPath: 'id' },
+  /* Media the player has actually been shown (current quest card on
+   * each step + every memory game card on game start). The market
+   * lists these minus what's already in inventory, so unopened decks
+   * and unused tickets don't leak into the market. */
+  { name: STORES.SEEN_MEDIA,        keyPath: 'id' },
   { name: STORES.PENDING_MUTATIONS, keyPath: 'id', autoIncrement: true },
   /* Media binaries kept here (not Cache API) because Chrome pads opaque
    * cross-origin responses to ~7 MB each in quota — even with CORS+

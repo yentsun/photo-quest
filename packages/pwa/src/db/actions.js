@@ -6,7 +6,7 @@
 
 import { CARD_TYPE, MARKET_PRICES } from '@photo-quest/shared';
 import { openDb, STORES } from './localDb.js';
-import { mutate } from './sync.js';
+import { mutate, request } from './sync.js';
 import { emitMutation } from './events.js';
 
 const PLAYER_STATS_KEY = 1;
@@ -44,6 +44,32 @@ async function adjustDust(delta) {
     const os = t.objectStore(STORES.PLAYER_STATS);
     const row = (await req(os.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
     os.put({ ...row, dust: Math.max(0, (row.dust || 0) + delta) });
+  });
+}
+
+/** Record media the player has been shown so it can later appear in the
+ *  market. Called from quest start/advance/take/destroy and memory start.
+ *  Stores only the fields MarketPage needs to render and price. */
+async function markSeen(cards) {
+  const list = (Array.isArray(cards) ? cards : [cards]).filter(c => c?.id);
+  if (!list.length) return;
+  const db = await openDb();
+  await txn(db, [STORES.SEEN_MEDIA], 'readwrite', (t) => {
+    const os = t.objectStore(STORES.SEEN_MEDIA);
+    for (const c of list) {
+      os.put({ id: c.id, type: c.type, title: c.title, infusion: c.infusion || 0 });
+    }
+  });
+}
+
+/** Remove media from the market pool — call when the player has made a
+ *  final decision about it (sold, destroyed, or destroyed mid-quest), so
+ *  the card doesn't pop back into the market after they get rid of it. */
+async function unmarkSeen(mediaId) {
+  if (!mediaId) return;
+  const db = await openDb();
+  await txn(db, [STORES.SEEN_MEDIA], 'readwrite', (t) => {
+    t.objectStore(STORES.SEEN_MEDIA).delete(mediaId);
   });
 }
 
@@ -150,6 +176,43 @@ export async function buyTicket() {
   });
   emitMutation();
   return mutate({ method: 'POST', path: '/market/buy-ticket', flush: true });
+}
+
+/**
+ * Buy an individual media card from the market (cards previously exposed
+ * via quest decks / memory games but not yet owned). Cost mirrors the
+ * server: `max(2, infusion * 2)`.
+ *
+ * Bypasses the queue and waits for the server response so the new
+ * inventory row lands locally with its REAL positive inventory_id.
+ * The optimistic-negative-id pattern doesn't work here because the
+ * very next user action (drag to deck) sends the inventory_id to the
+ * server — a negative id means the server silently no-ops the addToDeck
+ * (FK miss on `INSERT OR IGNORE`) and the card falls out of the deck on
+ * the next sync. Requires network: rejects with status 0 if offline.
+ */
+export async function buyMarketCard(card) {
+  if (!card?.id) throw new Error('Bad card');
+  const cost = Math.max(2, (card.infusion || 0) * 2);
+  await adjustDust(-cost);
+  emitMutation();
+  let response;
+  try {
+    response = await request({ method: 'POST', path: `/market/cards/${card.id}` });
+  } catch (err) {
+    await adjustDust(cost);
+    emitMutation();
+    throw err;
+  }
+  if (response?.item) {
+    await optimisticCard({
+      ...response.item,
+      card_type: CARD_TYPE.MEDIA,
+      ref_id:    null,
+    });
+    emitMutation();
+  }
+  return response;
 }
 
 /* ── Quests ────────────────────────────────────────────────────── */
@@ -275,6 +338,7 @@ export async function startQuest() {
       canTake:         !isFree || !freeTakeUsed,
       freeTakeUsed,
     });
+    if (currentCard) await markSeen(currentCard);
     emitMutation();
   }
   return deckId;
@@ -290,7 +354,9 @@ export async function advanceQuest(deckId) {
   const prev = await readRow(STORES.QUEST_STATE, deckId);
   if (!prev) throw new Error('Quest deck not found');
   const cards = await readQuestDeckCards(deckId);
-  await putRow(STORES.QUEST_STATE, advancedState(prev, cards));
+  const next = advancedState(prev, cards);
+  await putRow(STORES.QUEST_STATE, next);
+  if (next.currentCard) await markSeen(next.currentCard);
   emitMutation();
   return mutate({
     method: 'POST',
@@ -324,14 +390,16 @@ export async function takeQuest(deckId) {
     title:        taken.title,
     infusion:     taken.infusion || 0,
   };
+  const next = advancedState(prev, cards, { consumedFreeTake });
   const db = await openDb();
   await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE, STORES.CARDS], 'readwrite', async (t) => {
     const ps  = t.objectStore(STORES.PLAYER_STATS);
     const row = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
     ps.put({ ...row, dust: Math.max(0, (row.dust || 0) - cost) });
-    t.objectStore(STORES.QUEST_STATE).put(advancedState(prev, cards, { consumedFreeTake }));
+    t.objectStore(STORES.QUEST_STATE).put(next);
     t.objectStore(STORES.CARDS).put(optimistic);
   });
+  if (next.currentCard) await markSeen(next.currentCard);
   emitMutation();
   return mutate({
     method: 'POST',
@@ -368,6 +436,7 @@ export async function destroyQuest(deckId) {
   if (!prev?.currentCard) throw new Error('Quest deck exhausted');
   const reward = Math.max(2, (prev.currentCard.infusion || 0) * 2);
   const destroyedMediaId = prev.currentCard.id;
+  let nextCurrent = null;
   const db = await openDb();
   await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE, STORES.CARDS], 'readwrite', async (t) => {
     const ps  = t.objectStore(STORES.PLAYER_STATS);
@@ -396,8 +465,12 @@ export async function destroyQuest(deckId) {
       });
     }
 
-    t.objectStore(STORES.QUEST_STATE).put(destroyedState(prev, newCards));
+    const next = destroyedState(prev, newCards);
+    t.objectStore(STORES.QUEST_STATE).put(next);
+    nextCurrent = next.currentCard;
   });
+  await unmarkSeen(destroyedMediaId);
+  if (nextCurrent) await markSeen(nextCurrent);
   emitMutation();
   return mutate({
     method: 'POST',
@@ -421,6 +494,7 @@ export async function sellCard(inventoryId) {
     return row.id;
   });
   if (!mediaId) return;
+  await unmarkSeen(mediaId);
   emitMutation();
   return mutate({ method: 'POST', path: `/inventory/${inventoryId}/sell` });
 }
@@ -428,19 +502,20 @@ export async function sellCard(inventoryId) {
 /** Destroy a card: remove from inventory + delete file from disk. Reward = max(2, infusion*2) (LAW 4.10). */
 export async function destroyCard(inventoryId) {
   const db = await openDb();
-  const deleted = await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.PLAYER_STATS], 'readwrite', async (t) => {
+  const mediaId = await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.PLAYER_STATS], 'readwrite', async (t) => {
     const cards = t.objectStore(STORES.CARDS);
     const row = await req(cards.get(inventoryId));
-    if (!row) return false;
+    if (!row) return null;
     const reward = Math.max(2, (row.infusion || 0) * 2);
     cards.delete(inventoryId);
     t.objectStore(STORES.DECK_CARDS).delete(inventoryId);
     const ps = t.objectStore(STORES.PLAYER_STATS);
     const pl = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
     ps.put({ ...pl, dust: (pl.dust || 0) + reward });
-    return true;
+    return row.id || null;
   });
-  if (!deleted) return;
+  if (mediaId == null) return;
+  await unmarkSeen(mediaId);
   emitMutation();
   return mutate({ method: 'DELETE', path: `/inventory/${inventoryId}/destroy` });
 }
@@ -484,7 +559,8 @@ export async function startMemory() {
   });
   if (!ticket) throw new Error('No ready memory tickets to play');
 
-  const deck = buildMemoryDeck(ticket.game_cards.slice(0, PAIR_COUNT));
+  const gameCards = ticket.game_cards.slice(0, PAIR_COUNT);
+  const deck = buildMemoryDeck(gameCards);
 
   await txn(db, [STORES.CARDS, STORES.MEMORY_STATE], 'readwrite', (t) => {
     t.objectStore(STORES.CARDS).delete(ticket.inventory_id);
@@ -498,6 +574,7 @@ export async function startMemory() {
       startedAt: Date.now(),
     });
   });
+  await markSeen(gameCards);
   emitMutation();
 
   /* Tell the server the ticket is spent. Queued so play stays online-agnostic. */
