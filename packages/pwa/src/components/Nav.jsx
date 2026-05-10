@@ -7,14 +7,6 @@ const TABS = [
   { id: 'library',   label: 'Library' },
 ];
 
-const SYNC_LABELS = {
-  syncing: 'Syncing…',
-  paused:  'Paused',
-  error:   'Sync failed',
-  done:    'Synced',
-  idle:    '',
-};
-
 const PILL_TITLES = {
   syncing: 'Click to pause sync',
   paused:  'Click to resume sync',
@@ -62,11 +54,6 @@ export default function Nav({ page, onNavigate, dust, server, sync }) {
             )}
             <span className="nav__server-dot" />
             <span className="nav__server-host">{server.host}</span>
-            {SYNC_LABELS[sync.phase] && (
-              <span className="nav__server-status">
-                {sync.phase === 'syncing' ? `${pct}%` : SYNC_LABELS[sync.phase]}
-              </span>
-            )}
           </button>
         )}
         <DustBadge dust={dust} />
