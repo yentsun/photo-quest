@@ -146,9 +146,9 @@ export default function QuestPage({ questDeckId, server, onBack }) {
     await runLocked(() => destroyQuest(questDeckId));
   }, [questDeckId, runLocked]);
 
-  /* Auto-return to inventory only on server-confirmed exhaustion.
-   * Local optimistic advance never sets `exhausted`, so this won't fire
-   * mid-interaction while the refetch is still in flight.
+  /* Auto-return to inventory once the local quest state reports the
+   * deck exhausted. advancedState/destroyedState set this when the
+   * position runs past the local cards array.
    * Wipe the inventory row first so the user doesn't see a stale quest
    * deck card on bounce-back (sync-all would clear it, but not instantly). */
   useEffect(() => {

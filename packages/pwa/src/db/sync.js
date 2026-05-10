@@ -182,6 +182,10 @@ export async function drainQueue() {
      * empty (or we bailed on network) kick a fresh sync so server truth
      * converges with whatever just drained. */
     if (drained > 0 && activeWorker) activeWorker.postMessage({ type: 'sync-all' });
+    /* Mutations queued mid-drain (or a putIntoStore that skipped its
+     * write because of one) marked dirty=true — drain those now rather
+     * than waiting on the next 30 s tick. */
+    flushNow();
   }
 }
 
@@ -205,14 +209,25 @@ async function deleteHead(id) {
   });
 }
 
+/* Same-tx pending check (CLAUDE.md PWA & sync rule): if a mutation
+ * queued while the GET was in flight, the server response we're about
+ * to write is older than local truth — writing it would clobber the
+ * user's optimistic state (e.g. a quest skip mid-drain). Skip; the
+ * post-drain flushNow re-runs the GET once the queue is empty. */
 async function putIntoStore(store, row) {
   const db = await openDb();
+  let skipped = false;
   await new Promise((resolve, reject) => {
-    const tx = db.transaction(store, 'readwrite');
+    const tx = db.transaction([store, STORES.PENDING_MUTATIONS], 'readwrite');
     tx.oncomplete = resolve;
     tx.onerror    = () => reject(tx.error);
-    tx.objectStore(store).put(row);
+    const countReq = tx.objectStore(STORES.PENDING_MUTATIONS).count();
+    countReq.onsuccess = () => {
+      if (countReq.result > 0) { skipped = true; return; }
+      tx.objectStore(store).put(row);
+    };
   });
+  if (skipped) { dirty = true; return; }
   emitMutation();
 }
 

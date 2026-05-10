@@ -203,12 +203,6 @@ function advancedState(state, cards, { consumedFreeTake = false } = {}) {
   };
 }
 
-const questRefetch = (deckId) => ({
-  method: 'GET',
-  path:   `/quest/decks/${deckId}`,
-  store:  STORES.QUEST_STATE,
-});
-
 /** Remove the consumed quest-deck inventory card after server-confirmed
  *  exhaustion — mirrors server-side `DELETE FROM inventory WHERE ref_id = ?`
  *  so the user doesn't briefly see the stale card on bounce-back. */
@@ -286,6 +280,12 @@ export async function startQuest() {
   return deckId;
 }
 
+/* Quest actions are FULLY local — the deck's quest_cards array is the
+ * authoritative card list (loaded once with the inventory row), so we
+ * compute next/take/destroy state without a server refetch. The POST
+ * is fire-and-forget; the server reconciles via its own change stream
+ * and the periodic syncInventory will catch any divergence on its own
+ * terms — without a refetch racing the user's clicks. */
 export async function advanceQuest(deckId) {
   const prev = await readRow(STORES.QUEST_STATE, deckId);
   if (!prev) throw new Error('Quest deck not found');
@@ -295,7 +295,6 @@ export async function advanceQuest(deckId) {
   return mutate({
     method: 'POST',
     path:   `/quest/decks/${deckId}/next`,
-    then:   questRefetch(deckId),
   });
 }
 
@@ -308,27 +307,42 @@ export async function takeQuest(deckId) {
   const cost = infusion === 0 ? 0 : infusion * 2;
   const consumedFreeTake = cost === 0 && !prev.freeTakeUsed;
   const cards = await readQuestDeckCards(deckId);
+  const taken = prev.currentCard;
+  /* Optimistic inventory row for the taken card. Without this the card
+   * only appears whenever the SSE-triggered syncInventory eventually
+   * runs — which can be long after the player has moved on, making the
+   * card seem to "appear from nowhere". Negative inventory_id can't
+   * collide with server ids; syncPaged prunes it atomically when the
+   * real positive-id row arrives. */
+  const optimistic = {
+    inventory_id: -Date.now(),
+    card_type:    CARD_TYPE.MEDIA,
+    ref_id:       null,
+    acquired_at:  new Date().toISOString(),
+    id:           taken.id,
+    type:         taken.type,
+    title:        taken.title,
+    infusion:     taken.infusion || 0,
+  };
   const db = await openDb();
-  await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE], 'readwrite', async (t) => {
+  await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE, STORES.CARDS], 'readwrite', async (t) => {
     const ps  = t.objectStore(STORES.PLAYER_STATS);
     const row = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
     ps.put({ ...row, dust: Math.max(0, (row.dust || 0) - cost) });
     t.objectStore(STORES.QUEST_STATE).put(advancedState(prev, cards, { consumedFreeTake }));
+    t.objectStore(STORES.CARDS).put(optimistic);
   });
   emitMutation();
   return mutate({
     method: 'POST',
     path:   `/quest/decks/${deckId}/take`,
-    then:   questRefetch(deckId),
   });
 }
 
 /** Destroy mirrors the server's model: the destroyed card is removed
  *  from the deck array AND `currentPosition` stays put — the card that
  *  was at N+1 is now at N. Using `advancedState` here would increment
- *  the position locally while the server keeps it, so the `then`
- *  refetch would jump the UI back by one and the displayed count would
- *  flicker (LAW 1.38). */
+ *  the position locally while the server keeps it (LAW 1.38). */
 function destroyedState(state, newCards) {
   const position = state.currentPosition;
   const total = newCards.length;
@@ -388,7 +402,6 @@ export async function destroyQuest(deckId) {
   return mutate({
     method: 'POST',
     path:   `/quest/decks/${deckId}/destroy`,
-    then:   questRefetch(deckId),
   });
 }
 
