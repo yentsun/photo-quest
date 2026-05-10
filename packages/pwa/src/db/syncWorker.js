@@ -102,8 +102,10 @@ async function cacheImageBlobs(serverUrl, ids, concurrency = 4) {
     }));
   }
   /* Notify the UI so any <img> still showing the network fallback can flip
-   * to the freshly-cached blob. */
-  self.postMessage({ type: 'change', table: 'mediaBlobs' });
+   * to the freshly-cached blob. Distinct from 'change' on purpose: blob
+   * caching runs in the background after every sync, so a 'change' here
+   * would flip the pill back to 'syncing' without any matching 'done'. */
+  self.postMessage({ type: 'media-cached' });
 }
 
 /**

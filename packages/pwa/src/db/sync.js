@@ -34,6 +34,9 @@ export function startSync(serverUrl, onStatus) {
       else         p.reject(Object.assign(new Error(data.message || `HTTP ${data.status}`), { status: data.status }));
       return;
     }
+    /* Background blob caches refresh <img> sources but aren't a sync
+     * cycle — fire mutation listeners only, don't flip the pill. */
+    if (data.type === 'media-cached') { emitMutation(); return; }
     /* Emit before onStatus so useSync's pulse listener observes the
      * pre-update phase ('syncing') and doesn't flash on completion. */
     if (data.type === 'done' || data.type === 'change') emitMutation();
