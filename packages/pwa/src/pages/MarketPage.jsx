@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { CARD_TYPE, MARKET_PRICES, words } from '@photo-quest/shared';
+import { useMemo, useState } from 'react';
+import { CARD_TYPE, MARKET_PRICES, cardCost, words } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import ConsumableCard from '../components/ui/ConsumableCard.jsx';
 import MediaCard from '../components/ui/MediaCard.jsx';
@@ -45,12 +45,8 @@ function MarketEntry({ item, busy, canAfford, onBuy }) {
   );
 }
 
-function cardPrice(card) {
-  return Math.max(2, (card.infusion || 0) * 2);
-}
-
 function MarketCard({ card, serverUrl, busy, canAfford, onBuy }) {
-  const price = cardPrice(card);
+  const price = cardCost(card.infusion);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
       <MediaCard item={card} serverUrl={serverUrl} />
@@ -90,7 +86,7 @@ export default function MarketPage({ onLookForServer, server, sync }) {
   };
 
   const handleBuyCard = async (card) => {
-    const price = cardPrice(card);
+    const price = cardCost(card.infusion);
     if (busy) return;
     if (dust < price) { setError(`Need ${price} ${words.dustSymbol} — you have ${dust}`); return; }
     setBusy(`card-${card.id}`); setError(null);
@@ -99,7 +95,7 @@ export default function MarketPage({ onLookForServer, server, sync }) {
     finally { setBusy(null); }
   };
 
-  const marketCards = collectMarketCards(seen, items);
+  const marketCards = useMemo(() => collectMarketCards(seen, items), [seen, items]);
 
   return (
     <div className="inventory">
@@ -119,7 +115,7 @@ export default function MarketPage({ onLookForServer, server, sync }) {
           card={card}
           serverUrl={server.url}
           busy={busy === `card-${card.id}`}
-          canAfford={dust >= cardPrice(card)}
+          canAfford={dust >= cardCost(card.infusion)}
           onBuy={() => handleBuyCard(card)}
         />
       ))}

@@ -11,7 +11,7 @@
  * @returns {object|null} { dustAwarded, deck } or null if not found/exhausted.
  */
 
-import { CARD_TYPE } from '@photo-quest/shared';
+import { CARD_TYPE, cardCost } from '@photo-quest/shared';
 
 export default function (deckId) {
   const [kojo] = this;
@@ -29,8 +29,7 @@ export default function (deckId) {
 
   if (!currentCard) return null;
 
-  const infusion = currentCard.infusion || 0;
-  const dustAwarded = Math.max(2, infusion * 2);
+  const dustAwarded = cardCost(currentCard.infusion);
 
   db.prepare('DELETE FROM quest_cards WHERE id = ?').run(currentCard.card_id);
   db.prepare('DELETE FROM inventory WHERE media_id = ?').run(currentCard.media_id);

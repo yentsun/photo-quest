@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MEDIA_TYPE, words } from '@photo-quest/shared';
+import { MEDIA_TYPE, cardCost, words } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Modal from '../components/ui/Modal.jsx';
@@ -138,7 +138,7 @@ export default function QuestPage({ questDeckId, server, onBack }) {
 
   const handleDestroy = useCallback(() => {
     const infusion = state?.currentCard?.infusion || 0;
-    setConfirmDestroy({ reward: Math.max(2, infusion * 2) });
+    setConfirmDestroy({ reward: cardCost(infusion) });
   }, [state?.currentCard?.infusion]);
 
   const confirmDestroyNow = useCallback(async () => {

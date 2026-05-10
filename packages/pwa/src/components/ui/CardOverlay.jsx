@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CARD_TYPE, MEDIA_TYPE, words } from '@photo-quest/shared';
+import { CARD_TYPE, MEDIA_TYPE, cardCost, words } from '@photo-quest/shared';
 import Button from './Button.jsx';
 import Card from './Card.jsx';
 import DeckDropdown from './DeckDropdown.jsx';
@@ -120,12 +120,12 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
               style={{ color: '#f87171' }}
               onClick={() => setConfirm({
                 kind: 'destroy',
-                title: `Destroy (+${Math.max(2, infusion * 2)} ${words.dustSymbol})`,
+                title: `Destroy (+${cardCost(infusion)} ${words.dustSymbol})`,
                 message: 'Destroy this card? The file is deleted from disk.',
                 run: () => destroyCard(item.inventory_id),
               })}
             >
-              Destroy (+{Math.max(2, infusion * 2)} {words.dustSymbol})
+              Destroy (+{cardCost(infusion)} {words.dustSymbol})
             </Button>
           </div>
         )}

@@ -11,6 +11,8 @@
  * @returns {{ dustAwarded: number, dust: number }|null} null if not found.
  */
 
+import { cardCost } from '@photo-quest/shared';
+
 export default function (inventoryId) {
   const [kojo] = this;
   const db = kojo.get('db');
@@ -23,8 +25,7 @@ export default function (inventoryId) {
 
   if (!inv) return null;
 
-  const infusion = inv.infusion || 0;
-  const dustAwarded = Math.max(2, infusion * 2);
+  const dustAwarded = cardCost(inv.infusion);
 
   // Remove from inventory first (FK constraint)
   db.prepare('DELETE FROM inventory WHERE id = ?').run(inv.id);
