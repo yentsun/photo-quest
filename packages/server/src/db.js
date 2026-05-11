@@ -110,6 +110,7 @@ function migrateDb() {
     'ALTER TABLE media ADD COLUMN infusion INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE quest_decks ADD COLUMN free_take_used INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE media ADD COLUMN title_edited INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE decks ADD COLUMN parent_id INTEGER REFERENCES decks(id) ON DELETE SET NULL',
   ];
 
   for (const sql of migrations) {

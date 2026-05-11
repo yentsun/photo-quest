@@ -12,7 +12,7 @@ export default function () {
   const db = kojo.get('db');
 
   const decks = db.prepare(
-    `SELECT d.id, d.name, d.created_at,
+    `SELECT d.id, d.name, d.parent_id, d.created_at,
             (SELECT COUNT(*) FROM deck_cards dc WHERE dc.deck_id = d.id) AS cardCount
      FROM decks d
      ORDER BY d.created_at DESC`

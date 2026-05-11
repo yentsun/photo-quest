@@ -77,6 +77,7 @@ export default function App() {
             deckId={view.id}
             server={server}
             onBack={closeView}
+            onOpenDeck={(id) => openView({ kind: 'deck', id })}
           />
         ) : view?.kind === 'quest' ? (
           <QuestPage

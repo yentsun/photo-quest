@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { CARD_TYPE, MARKET_PRICES, words } from '@photo-quest/shared';
 import Button from '../components/ui/Button.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -7,29 +7,11 @@ import Deck from '../components/ui/Deck.jsx';
 import Spinner from '../components/ui/Spinner.jsx';
 import CardOverlay from '../components/ui/CardOverlay.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
+import { useDropTarget, DND_TYPE } from '../hooks/useDropTarget.js';
 import { STORES } from '../db/localDb.js';
-import { addToDeck, startQuest, startMemory } from '../db/actions.js';
+import { addToDeck, createDeckWithCards, startQuest, startMemory } from '../db/actions.js';
 import { useMediaSrc } from '../hooks/useMediaSrc.js';
 import './InventoryPage.css';
-
-const DND_TYPE = 'application/x-inventory-id';
-
-function useDropTarget(onDropId) {
-  const [over, setOver] = useState(false);
-  const depth = useRef(0);
-  const handlers = {
-    onDragOver:  (e) => { if (e.dataTransfer.types.includes(DND_TYPE)) e.preventDefault(); },
-    onDragEnter: (e) => { if (!e.dataTransfer.types.includes(DND_TYPE)) return; e.preventDefault(); depth.current++; setOver(true); },
-    onDragLeave: () => { depth.current--; if (depth.current <= 0) { depth.current = 0; setOver(false); } },
-    onDrop:      (e) => {
-      e.preventDefault();
-      depth.current = 0; setOver(false);
-      const id = Number(e.dataTransfer.getData(DND_TYPE));
-      if (id) onDropId(id);
-    },
-  };
-  return { over, handlers };
-}
 
 function DeckCard({ deck, preview, serverUrl, onOpen, onDropCard }) {
   const { over, handlers } = useDropTarget((invId) => onDropCard(deck.id, invId));
@@ -54,20 +36,34 @@ function DeckCard({ deck, preview, serverUrl, onOpen, onDropCard }) {
   );
 }
 
-function DraggableMedia({ item, serverUrl, onClick }) {
+function DraggableMedia({ item, serverUrl, onClick, onDropOnto }) {
+  /* Dragging another card onto this one spawns a new deck containing
+   * both. Ignored when the drag is the card onto itself. */
+  const { over, handlers } = useDropTarget((invId) => {
+    if (invId !== item.inventory_id) onDropOnto(invId, item.inventory_id);
+  });
   return (
     <div
       draggable
       onDragStart={(e) => e.dataTransfer.setData(DND_TYPE, String(item.inventory_id))}
+      className={`drop-target ${over ? 'drop-target--over' : ''}`}
+      {...handlers}
     >
       <MediaCard item={item} serverUrl={serverUrl} onClick={onClick} />
     </div>
   );
 }
 
-function InventoryItem({ item, serverUrl, onClick }) {
+function InventoryItem({ item, serverUrl, onClick, onDropOnto }) {
   if (item.card_type === CARD_TYPE.MEDIA) {
-    return <DraggableMedia item={item} serverUrl={serverUrl} onClick={onClick} />;
+    return (
+      <DraggableMedia
+        item={item}
+        serverUrl={serverUrl}
+        onClick={onClick}
+        onDropOnto={onDropOnto}
+      />
+    );
   }
   return null;
 }
@@ -152,6 +148,8 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
   const deckCards = useLocalStore(STORES.DECK_CARDS);
 
   const handleDropCard = (deckId, invId) => addToDeck(deckId, invId);
+  const handleDropOnCard = (draggedId, targetId) =>
+    createDeckWithCards('New Deck', [targetId, draggedId]);
 
   const handleStartQuest = async () => {
     try {
@@ -249,7 +247,7 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
           onDoubleClick={handlePlayMemory}
         />
       )}
-      {decks.map(deck => (
+      {decks.filter(d => d.parent_id == null).map(deck => (
         <DeckCard
           key={`d-${deck.id}`}
           deck={deck}
@@ -265,6 +263,7 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
           item={item}
           serverUrl={server.url}
           onClick={() => setSelectedId(item.inventory_id)}
+          onDropOnto={handleDropOnCard}
         />
       ))}
       {selectedId != null && (() => {

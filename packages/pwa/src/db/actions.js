@@ -133,6 +133,38 @@ export async function createDeck(name, inventoryIds = []) {
   return mutate({ method: 'POST', path: '/decks', body: { name, inventoryIds } });
 }
 
+/**
+ * Create a deck and move one or more cards into it. Bypasses the queue
+ * so we get the new deck's real positive id back — needed because the
+ * next user action references it (opening the deck, dropping more cards
+ * on it). Optimistically inserts the deck row, then delegates each card
+ * move to addToDeck so deck-count bookkeeping and the move-from-prior-deck
+ * flow stay in one place. `parentId` is the id of an enclosing deck when
+ * spawning a child deck from inside DeckPage; null/omitted for top-level.
+ */
+export async function createDeckWithCards(name, inventoryIds = [], parentId = null) {
+  const result = await request({
+    method: 'POST',
+    path:   '/decks',
+    body:   { name, parentId },
+  });
+  if (!result?.id) throw new Error('createDeck: no id returned');
+  const db = await openDb();
+  await txn(db, [STORES.DECKS], 'readwrite', (t) => {
+    t.objectStore(STORES.DECKS).put({
+      id:        result.id,
+      name:      result.name,
+      parent_id: result.parent_id ?? null,
+      cardCount: 0,
+    });
+  });
+  emitMutation();
+  for (const id of inventoryIds) {
+    if (id) await addToDeck(result.id, id);
+  }
+  return result;
+}
+
 /* ── Market ────────────────────────────────────────────────────── */
 
 /**

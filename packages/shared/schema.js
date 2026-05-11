@@ -243,6 +243,7 @@ export const CREATE_DECKS_TABLE = `
   CREATE TABLE IF NOT EXISTS decks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL DEFAULT 'New Deck',
+    parent_id INTEGER REFERENCES decks(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `;
