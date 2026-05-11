@@ -133,6 +133,24 @@ export async function createDeck(name, inventoryIds = []) {
   return mutate({ method: 'POST', path: '/decks', body: { name, inventoryIds } });
 }
 
+/** Rename a deck. Optimistic IDB write, server PATCH goes through the queue. */
+export async function renameDeck(deckId, name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return;
+  const db = await openDb();
+  await txn(db, [STORES.DECKS], 'readwrite', async (t) => {
+    const os = t.objectStore(STORES.DECKS);
+    const row = await new Promise((resolve, reject) => {
+      const r = os.get(deckId);
+      r.onsuccess = () => resolve(r.result);
+      r.onerror   = () => reject(r.error);
+    });
+    if (row) os.put({ ...row, name: trimmed });
+  });
+  emitMutation();
+  return mutate({ method: 'PATCH', path: `/decks/${deckId}`, body: { name: trimmed } });
+}
+
 /**
  * Create a deck and move one or more cards into it. Bypasses the queue
  * so we get the new deck's real positive id back — needed because the
