@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Button from '../components/ui/Button.jsx';
+import EditableTitle from '../components/ui/EditableTitle.jsx';
 import MediaCard from '../components/ui/MediaCard.jsx';
 import Deck from '../components/ui/Deck.jsx';
 import CardOverlay from '../components/ui/CardOverlay.jsx';
@@ -26,7 +27,7 @@ function DraggableMedia({ item, serverUrl, onClick, onDropOnto }) {
   );
 }
 
-function ChildDeckCard({ deck, preview, serverUrl, onOpen, onDropCard, onRename }) {
+function ChildDeckCard({ deck, preview, serverUrl, onOpen, onDropCard }) {
   const { over, handlers } = useDropTarget((invId) => onDropCard(deck.id, invId));
   const previewUrl = useMediaSrc(serverUrl, preview, { thumbnail: true });
   return (
@@ -34,7 +35,6 @@ function ChildDeckCard({ deck, preview, serverUrl, onOpen, onDropCard, onRename 
       <Deck
         count={deck.cardCount}
         onClick={onOpen}
-        onDoubleClick={() => onRename(deck)}
         header={deck.name || 'Untitled deck'}
         art={
           previewUrl
@@ -71,22 +71,22 @@ export default function DeckPage({ deckId, server, onBack, onOpenDeck }) {
   const handleDropOnCard = (draggedId, targetId) =>
     createDeckWithCards('New Deck', [targetId, draggedId], deckId);
   const handleDropOnChildDeck = (childId, invId) => addToDeck(childId, invId);
-  const handleRename = (d) => {
-    const next = window.prompt('Rename deck', d.name || '');
-    if (next != null) renameDeck(d.id, next);
-  };
 
   return (
     <div className="deck-page">
       <header className="deck-page__header">
         <div>
-          <h1
-            className="deck-page__title"
-            title="Click to rename"
-            onClick={() => deck && handleRename(deck)}
-          >
-            {deck?.name || 'Deck'}
-          </h1>
+          {deck ? (
+            <EditableTitle
+              as="h1"
+              className="deck-page__title"
+              value={deck.name}
+              placeholder="Untitled deck"
+              onSave={(name) => renameDeck(deck.id, name)}
+            />
+          ) : (
+            <h1 className="deck-page__title">Deck</h1>
+          )}
           <p className="deck-page__count">
             {cards.length} card{cards.length !== 1 ? 's' : ''}
           </p>
@@ -103,7 +103,6 @@ export default function DeckPage({ deckId, server, onBack, onOpenDeck }) {
             serverUrl={server.url}
             onOpen={() => onOpenDeck?.(child.id)}
             onDropCard={handleDropOnChildDeck}
-            onRename={handleRename}
           />
         ))}
         {cards.map(item => (

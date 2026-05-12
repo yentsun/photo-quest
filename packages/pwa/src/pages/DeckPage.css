@@ -12,7 +12,6 @@
   font-weight: 700;
   color: var(--text);
   margin: 0;
-  cursor: pointer;
 }
 
 .deck-page__count {

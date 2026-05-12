@@ -3,8 +3,8 @@ import { CARD_TYPE, MEDIA_TYPE, cardCost, words } from '@photo-quest/shared';
 import Button from './Button.jsx';
 import Card from './Card.jsx';
 import DeckDropdown from './DeckDropdown.jsx';
+import EditableTitle from './EditableTitle.jsx';
 import InfusionBadge from './InfusionBadge.jsx';
-import Input from './Input.jsx';
 import Modal from './Modal.jsx';
 import { useKeydown } from '../../hooks/useKeydown.js';
 import { useLocalStore } from '../../hooks/useLocalStore.js';
@@ -18,19 +18,9 @@ const PASSIVE_CAP_MS  = 120_000;
 
 export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
   const [fullMedia, setFullMedia] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draftTitle, setDraftTitle] = useState('');
   const [confirm, setConfirm] = useState(null);
   const items = useLocalStore(STORES.CARDS);
   const item = items?.find(it => it.inventory_id === initialItem?.inventory_id) || initialItem;
-
-  useEffect(() => { setEditing(false); }, [item?.inventory_id]);
-
-  const saveTitle = () => {
-    const trimmed = draftTitle.trim();
-    if (trimmed && trimmed !== item.title) renameCard(item.inventory_id, trimmed);
-    setEditing(false);
-  };
 
   useKeydown((e) => {
     if (e.key === 'Escape') fullMedia ? setFullMedia(false) : onClose();
@@ -71,25 +61,12 @@ export default function CardOverlay({ item: initialItem, serverUrl, onClose }) {
       <div className="overlay__card" onClick={(e) => e.stopPropagation()}>
         <Card
           size="large"
-          header={editing ? (
-            <Input
-              value={draftTitle}
-              autoFocus
-              onChange={(e) => setDraftTitle(e.target.value)}
-              onBlur={saveTitle}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter')  saveTitle();
-                if (e.key === 'Escape') setEditing(false);
-              }}
+          header={
+            <EditableTitle
+              value={item.title}
+              onSave={(name) => renameCard(item.inventory_id, name)}
             />
-          ) : (
-            <span
-              onClick={() => { setDraftTitle(item.title || ''); setEditing(true); }}
-              style={{ cursor: 'text' }}
-            >
-              {item.title || 'Untitled'}
-            </span>
-          )}
+          }
           headerRight={<InfusionBadge amount={infusion} />}
           art={
             <div className="overlay__art">

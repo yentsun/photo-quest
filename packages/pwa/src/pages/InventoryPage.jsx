@@ -9,11 +9,11 @@ import CardOverlay from '../components/ui/CardOverlay.jsx';
 import { useLocalStore } from '../hooks/useLocalStore.js';
 import { useDropTarget, DND_TYPE } from '../hooks/useDropTarget.js';
 import { STORES } from '../db/localDb.js';
-import { addToDeck, createDeckWithCards, renameDeck, startQuest, startMemory } from '../db/actions.js';
+import { addToDeck, createDeckWithCards, startQuest, startMemory } from '../db/actions.js';
 import { useMediaSrc } from '../hooks/useMediaSrc.js';
 import './InventoryPage.css';
 
-function DeckCard({ deck, preview, serverUrl, onOpen, onDropCard, onRename }) {
+function DeckCard({ deck, preview, serverUrl, onOpen, onDropCard }) {
   const { over, handlers } = useDropTarget((invId) => onDropCard(deck.id, invId));
   /* Thumbnail mode — videos render as their server-extracted first frame. */
   const previewUrl = useMediaSrc(serverUrl, preview, { thumbnail: true });
@@ -23,7 +23,6 @@ function DeckCard({ deck, preview, serverUrl, onOpen, onDropCard, onRename }) {
       <Deck
         count={deck.cardCount}
         onClick={onOpen}
-        onDoubleClick={() => onRename(deck)}
         header={deck.name || 'Untitled deck'}
         art={
           previewUrl
@@ -151,10 +150,6 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
   const handleDropCard = (deckId, invId) => addToDeck(deckId, invId);
   const handleDropOnCard = (draggedId, targetId) =>
     createDeckWithCards('New Deck', [targetId, draggedId]);
-  const handleRename = (d) => {
-    const next = window.prompt('Rename deck', d.name || '');
-    if (next != null) renameDeck(d.id, next);
-  };
 
   const handleStartQuest = async () => {
     try {
@@ -260,7 +255,6 @@ export default function InventoryPage({ onLookForServer, server, sync, onOpenDec
           serverUrl={server.url}
           onOpen={() => onOpenDeck(deck.id)}
           onDropCard={handleDropCard}
-          onRename={handleRename}
         />
       ))}
       {otherItems.map(item => (
