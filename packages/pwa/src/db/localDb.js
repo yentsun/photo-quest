@@ -146,10 +146,22 @@ export async function syncReplace(store, rows) {
   const toDelete = [];
   for (const key of prevJson.keys()) if (!seen.has(key)) toDelete.push(key);
   if (!toPut.length && !toDelete.length) return;
-  await tx(store, 'readwrite', (t) => {
-    const os = t.objectStore(store);
-    for (const row of toPut) os.put(row);
-    for (const key of toDelete) os.delete(key);
+  /* In-tx pending check (CLAUDE.md PWA & sync rule): a mutation queued
+   * between the readonly snapshot and the write tx makes the server
+   * response stale relative to the optimistic IDB row. Skip the write;
+   * the post-drain sync re-runs once the queue is empty. */
+  const db = await openDb();
+  await new Promise((resolve, reject) => {
+    const t = db.transaction([store, STORES.PENDING_MUTATIONS], 'readwrite');
+    t.oncomplete = resolve;
+    t.onerror    = () => reject(t.error);
+    const countReq = t.objectStore(STORES.PENDING_MUTATIONS).count();
+    countReq.onsuccess = () => {
+      if (countReq.result > 0) return;
+      const os = t.objectStore(store);
+      for (const row of toPut) os.put(row);
+      for (const key of toDelete) os.delete(key);
+    };
   });
 }
 

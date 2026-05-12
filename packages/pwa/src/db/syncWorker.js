@@ -167,16 +167,22 @@ async function syncPaged(serverUrl, path, store) {
 
   if (!changedRows.length && !keysToPrune.length) return;
 
-  /* Re-check just before write: a mutation queued mid-fetch means the
-   * server response is now stale relative to the optimistic IDB row.
-   * Applying the diff would clobber the user's typed value with the
-   * pre-rename server data. Bail; the post-drain sync will reconcile. */
-  if (await hasPendingMutations()) return;
-
-  await tx(store, 'readwrite', (t) => {
-    const os = t.objectStore(store);
-    for (const row of changedRows) os.put(row);
-    for (const key of keysToPrune) os.delete(key);
+  /* In-tx pending check (CLAUDE.md PWA & sync rule): a mutation queued
+   * mid-fetch makes the server response stale relative to the optimistic
+   * IDB row. Atomically count pending mutations inside the same write tx
+   * and skip writes if any exist. The post-drain sync reconciles. */
+  const db = await openDb();
+  await new Promise((resolve, reject) => {
+    const t = db.transaction([store, STORES.PENDING_MUTATIONS], 'readwrite');
+    t.oncomplete = resolve;
+    t.onerror    = () => reject(t.error);
+    const countReq = t.objectStore(STORES.PENDING_MUTATIONS).count();
+    countReq.onsuccess = () => {
+      if (countReq.result > 0) return;
+      const os = t.objectStore(store);
+      for (const row of changedRows) os.put(row);
+      for (const key of keysToPrune) os.delete(key);
+    };
   });
 }
 

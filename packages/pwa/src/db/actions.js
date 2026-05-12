@@ -6,7 +6,7 @@
 
 import { CARD_TYPE, MARKET_PRICES, cardCost } from '@photo-quest/shared';
 import { openDb, STORES } from './localDb.js';
-import { mutate, request } from './sync.js';
+import { mutate, request, enqueueInTx, markPendingDirty } from './sync.js';
 import { emitMutation } from './events.js';
 
 const PLAYER_STATS_KEY = 1;
@@ -84,8 +84,9 @@ function unmarkSeen(t, mediaId) {
 export async function addToDeck(deckId, inventoryId) {
   console.debug('[addToDeck] start', { deckId, inventoryId });
   const db = await openDb();
+  let queued = false;
   try {
-    await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.DECKS], 'readwrite', async (t) => {
+    await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.DECKS, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
       const cardsOS     = t.objectStore(STORES.CARDS);
       const decksOS     = t.objectStore(STORES.DECKS);
       const deckCardsOS = t.objectStore(STORES.DECK_CARDS);
@@ -115,6 +116,13 @@ export async function addToDeck(deckId, inventoryId) {
           decksOS.put({ ...prevDeck, cardCount: Math.max(0, (prevDeck.cardCount || 1) - 1) });
         }
       }
+
+      enqueueInTx(t, {
+        method: 'POST',
+        path:   `/decks/${deckId}/cards`,
+        body:   { inventoryIds: [inventoryId] },
+      });
+      queued = true;
     });
     console.debug('[addToDeck] txn committed');
   } catch (err) {
@@ -122,33 +130,29 @@ export async function addToDeck(deckId, inventoryId) {
     throw err;
   }
   emitMutation();
-  return mutate({
-    method: 'POST',
-    path:   `/decks/${deckId}/cards`,
-    body:   { inventoryIds: [inventoryId] },
-  });
+  if (queued) markPendingDirty();
 }
 
 export async function createDeck(name, inventoryIds = []) {
   return mutate({ method: 'POST', path: '/decks', body: { name, inventoryIds } });
 }
 
-/** Rename a deck. Optimistic IDB write, server PATCH goes through the queue. */
+/** Rename a deck. Optimistic IDB write + server PATCH queued atomically. */
 export async function renameDeck(deckId, name) {
   const trimmed = (name || '').trim();
   if (!trimmed) return;
   const db = await openDb();
-  await txn(db, [STORES.DECKS], 'readwrite', async (t) => {
+  let queued = false;
+  await txn(db, [STORES.DECKS, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
     const os = t.objectStore(STORES.DECKS);
-    const row = await new Promise((resolve, reject) => {
-      const r = os.get(deckId);
-      r.onsuccess = () => resolve(r.result);
-      r.onerror   = () => reject(r.error);
-    });
-    if (row) os.put({ ...row, name: trimmed });
+    const row = await req(os.get(deckId));
+    if (!row) return;
+    os.put({ ...row, name: trimmed });
+    enqueueInTx(t, { method: 'PATCH', path: `/decks/${deckId}`, body: { name: trimmed } });
+    queued = true;
   });
   emitMutation();
-  return mutate({ method: 'PATCH', path: `/decks/${deckId}`, body: { name: trimmed } });
+  if (queued) markPendingDirty();
 }
 
 /**
@@ -186,46 +190,50 @@ export async function createDeckWithCards(name, inventoryIds = [], parentId = nu
 /* ── Market ────────────────────────────────────────────────────── */
 
 /**
- * Optimistic inventory insert for market buys. Uses a negative temp
- * inventory_id so it never collides with server-assigned positive ids.
- * `_pending: true` signals UI that the row is awaiting server-side
- * construction (quest decks need cards sampled); `ref_id: null` is the
- * cue startQuest uses to refuse to open the deck yet.
+ * Optimistic inventory insert for market buys + atomic POST queue. Uses
+ * a negative temp inventory_id so it never collides with server-assigned
+ * positive ids. `_pending: true` signals UI that the row is awaiting
+ * server-side construction (quest decks need cards sampled); `ref_id:
+ * null` is the cue startQuest uses to refuse to open the deck yet.
+ *
+ * Optimistic write + queue commit in a single tx so a sync racing in
+ * between can't prune the optimistic row before the POST is queued.
  */
-async function optimisticCard(card) {
+async function optimisticBuy(card, mutation) {
   const db = await openDb();
-  await txn(db, [STORES.CARDS], 'readwrite', (t) => {
+  await txn(db, [STORES.CARDS, STORES.PENDING_MUTATIONS], 'readwrite', (t) => {
     t.objectStore(STORES.CARDS).put(card);
+    enqueueInTx(t, mutation);
   });
 }
 
 export async function buyQuestDeck() {
   await adjustDust(-MARKET_PRICES.questDeck);
-  await optimisticCard({
+  await optimisticBuy({
     inventory_id: -Date.now(),
     card_type:    CARD_TYPE.QUEST_DECK,
     ref_id:       null,
     acquired_at:  new Date().toISOString(),
     _pending:     true,
-  });
+  }, { method: 'POST', path: '/market/buy-deck' });
   emitMutation();
   /* Player is waiting on this to become playable — bypass the tick.
    * The optimistic row is pruned by the post-drain sync in the same
    * atomic tx that puts the real server row (see syncPaged). */
-  return mutate({ method: 'POST', path: '/market/buy-deck', flush: true });
+  markPendingDirty({ flush: true });
 }
 
 export async function buyTicket() {
   await adjustDust(-MARKET_PRICES.memoryTicket);
-  await optimisticCard({
+  await optimisticBuy({
     inventory_id: -Date.now(),
     card_type:    CARD_TYPE.MEMORY_TICKET,
     ref_id:       null,
     acquired_at:  new Date().toISOString(),
     _pending:     true,
-  });
+  }, { method: 'POST', path: '/market/buy-ticket' });
   emitMutation();
-  return mutate({ method: 'POST', path: '/market/buy-ticket', flush: true });
+  markPendingDirty({ flush: true });
 }
 
 /**
@@ -408,15 +416,13 @@ export async function advanceQuest(deckId) {
   const cards = await readQuestDeckCards(deckId);
   const next = advancedState(prev, cards);
   const db = await openDb();
-  await txn(db, [STORES.QUEST_STATE, STORES.SEEN_MEDIA], 'readwrite', async (t) => {
+  await txn(db, [STORES.QUEST_STATE, STORES.SEEN_MEDIA, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
     t.objectStore(STORES.QUEST_STATE).put(next);
     if (next.currentCard) markSeen(t, next.currentCard);
+    enqueueInTx(t, { method: 'POST', path: `/quest/decks/${deckId}/next` });
   });
   emitMutation();
-  return mutate({
-    method: 'POST',
-    path:   `/quest/decks/${deckId}/next`,
-  });
+  markPendingDirty();
 }
 
 export async function takeQuest(deckId) {
@@ -447,19 +453,17 @@ export async function takeQuest(deckId) {
   };
   const next = advancedState(prev, cards, { consumedFreeTake });
   const db = await openDb();
-  await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE, STORES.CARDS, STORES.SEEN_MEDIA], 'readwrite', async (t) => {
+  await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE, STORES.CARDS, STORES.SEEN_MEDIA, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
     const ps  = t.objectStore(STORES.PLAYER_STATS);
     const row = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
     ps.put({ ...row, dust: Math.max(0, (row.dust || 0) - cost) });
     t.objectStore(STORES.QUEST_STATE).put(next);
     t.objectStore(STORES.CARDS).put(optimistic);
     if (next.currentCard) markSeen(t, next.currentCard);
+    enqueueInTx(t, { method: 'POST', path: `/quest/decks/${deckId}/take` });
   });
   emitMutation();
-  return mutate({
-    method: 'POST',
-    path:   `/quest/decks/${deckId}/take`,
-  });
+  markPendingDirty();
 }
 
 /** Destroy mirrors the server's model: the destroyed card is removed
@@ -492,7 +496,7 @@ export async function destroyQuest(deckId) {
   const reward = cardCost(prev.currentCard.infusion);
   const destroyedMediaId = prev.currentCard.id;
   const db = await openDb();
-  await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE, STORES.CARDS, STORES.SEEN_MEDIA], 'readwrite', async (t) => {
+  await txn(db, [STORES.PLAYER_STATS, STORES.QUEST_STATE, STORES.CARDS, STORES.SEEN_MEDIA, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
     const ps  = t.objectStore(STORES.PLAYER_STATS);
     const row = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
     ps.put({ ...row, dust: (row.dust || 0) + reward });
@@ -523,21 +527,20 @@ export async function destroyQuest(deckId) {
     t.objectStore(STORES.QUEST_STATE).put(next);
     unmarkSeen(t, destroyedMediaId);
     if (next.currentCard) markSeen(t, next.currentCard);
+
+    enqueueInTx(t, { method: 'POST', path: `/quest/decks/${deckId}/destroy` });
   });
   emitMutation();
-  return mutate({
-    method: 'POST',
-    path:   `/quest/decks/${deckId}/destroy`,
-  });
+  markPendingDirty();
 }
 
 /** Sell a card back to the library. Reward = infusion (LAW 4.15). */
 export async function sellCard(inventoryId) {
   const db = await openDb();
-  const mediaId = await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.PLAYER_STATS, STORES.SEEN_MEDIA], 'readwrite', async (t) => {
+  const queued = await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.PLAYER_STATS, STORES.SEEN_MEDIA, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
     const cards = t.objectStore(STORES.CARDS);
     const row = await req(cards.get(inventoryId));
-    if (!row) return null;
+    if (!row) return false;
     const reward = row.infusion || 0;
     cards.delete(inventoryId);
     t.objectStore(STORES.DECK_CARDS).delete(inventoryId);
@@ -545,20 +548,21 @@ export async function sellCard(inventoryId) {
     const pl  = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
     ps.put({ ...pl, dust: (pl.dust || 0) + reward });
     unmarkSeen(t, row.id);
-    return row.id;
+    enqueueInTx(t, { method: 'POST', path: `/inventory/${inventoryId}/sell` });
+    return true;
   });
-  if (!mediaId) return;
+  if (!queued) return;
   emitMutation();
-  return mutate({ method: 'POST', path: `/inventory/${inventoryId}/sell` });
+  markPendingDirty();
 }
 
 /** Destroy a card: remove from inventory + delete file from disk. Reward = max(2, infusion*2) (LAW 4.10). */
 export async function destroyCard(inventoryId) {
   const db = await openDb();
-  const mediaId = await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.PLAYER_STATS, STORES.SEEN_MEDIA], 'readwrite', async (t) => {
+  const queued = await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.PLAYER_STATS, STORES.SEEN_MEDIA, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
     const cards = t.objectStore(STORES.CARDS);
     const row = await req(cards.get(inventoryId));
-    if (!row) return null;
+    if (!row) return false;
     const reward = cardCost(row.infusion);
     cards.delete(inventoryId);
     t.objectStore(STORES.DECK_CARDS).delete(inventoryId);
@@ -566,11 +570,12 @@ export async function destroyCard(inventoryId) {
     const pl = (await req(ps.get(PLAYER_STATS_KEY))) || { id: PLAYER_STATS_KEY, dust: 0 };
     ps.put({ ...pl, dust: (pl.dust || 0) + reward });
     unmarkSeen(t, row.id);
-    return row.id || null;
+    enqueueInTx(t, { method: 'DELETE', path: `/inventory/${inventoryId}/destroy` });
+    return true;
   });
-  if (mediaId == null) return;
+  if (!queued) return;
   emitMutation();
-  return mutate({ method: 'DELETE', path: `/inventory/${inventoryId}/destroy` });
+  markPendingDirty();
 }
 
 /* ── Memory game ───────────────────────────────────────────────── */
@@ -615,7 +620,7 @@ export async function startMemory() {
   const gameCards = ticket.game_cards.slice(0, PAIR_COUNT);
   const deck = buildMemoryDeck(gameCards);
 
-  await txn(db, [STORES.CARDS, STORES.MEMORY_STATE, STORES.SEEN_MEDIA], 'readwrite', async (t) => {
+  await txn(db, [STORES.CARDS, STORES.MEMORY_STATE, STORES.SEEN_MEDIA, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
     t.objectStore(STORES.CARDS).delete(ticket.inventory_id);
     t.objectStore(STORES.MEMORY_STATE).put({
       id:        1,
@@ -627,15 +632,15 @@ export async function startMemory() {
       startedAt: Date.now(),
     });
     markSeen(t, gameCards);
+    /* Tell the server the ticket is spent. Queued so play stays online-agnostic. */
+    enqueueInTx(t, {
+      method: 'POST',
+      path:   '/market/use-ticket',
+      body:   ticket.inventory_id > 0 ? { inventoryId: ticket.inventory_id } : {},
+    });
   });
   emitMutation();
-
-  /* Tell the server the ticket is spent. Queued so play stays online-agnostic. */
-  mutate({
-    method: 'POST',
-    path:   '/market/use-ticket',
-    body:   ticket.inventory_id > 0 ? { inventoryId: ticket.inventory_id } : {},
-  });
+  markPendingDirty();
 
   return 1;
 }
@@ -664,7 +669,8 @@ export async function endMemory() {
  */
 export async function claimMemoryPick(mediaId, card) {
   const db = await openDb();
-  await txn(db, [STORES.CARDS], 'readwrite', async (t) => {
+  let queued = false;
+  await txn(db, [STORES.CARDS, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
     const cards = t.objectStore(STORES.CARDS);
     const all = await req(cards.getAll());
     if (all.some(r => r.id === mediaId && r.card_type === CARD_TYPE.MEDIA)) return;
@@ -678,67 +684,81 @@ export async function claimMemoryPick(mediaId, card) {
       acquired_at:  new Date().toISOString(),
       _pending:     true,
     });
+    enqueueInTx(t, {
+      method: 'POST',
+      path:   '/inventory',
+      body:   { mediaId, infuseBonus: 10 },
+    });
+    queued = true;
   });
+  if (!queued) return;
   emitMutation();
-  return mutate({
-    method: 'POST',
-    path:   '/inventory',
-    body:   { mediaId, infuseBonus: 10 },
-    flush:  true,
-  });
+  markPendingDirty({ flush: true });
 }
 
 export async function renameCard(inventoryId, title) {
   const clean = (title || '').trim();
   if (!clean) return;
   const db = await openDb();
-  const mediaId = await txn(db, [STORES.CARDS, STORES.DECK_CARDS], 'readwrite', async (t) => {
+  const queued = await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
     const cards = t.objectStore(STORES.CARDS);
     const row = await req(cards.get(inventoryId));
-    if (!row?.id) return null;
-    if (row.title === clean) return row.id;
+    if (!row?.id) return false;
+    if (row.title === clean) return false;
     cards.put({ ...row, title: clean });
 
     const deckRow = await req(t.objectStore(STORES.DECK_CARDS).get(inventoryId));
     if (deckRow) t.objectStore(STORES.DECK_CARDS).put({ ...deckRow, title: clean });
-    return row.id;
+
+    enqueueInTx(t, { method: 'PATCH', path: `/media/${row.id}/rename`, body: { title: clean } });
+    return true;
   });
-  if (!mediaId) return;
+  if (!queued) return;
   emitMutation();
-  return mutate({ method: 'PATCH', path: `/media/${mediaId}/rename`, body: { title: clean } });
+  markPendingDirty();
 }
 
 /* Free-infuse fires very often (5 s ticks); don't version-bump server
  * side, so per-tick writes don't trigger resyncs. */
 export async function freeInfuseCard(inventoryId, amount = 1) {
   const db = await openDb();
-  const mediaId = await txn(db, [STORES.CARDS, STORES.DECK_CARDS], 'readwrite', async (t) => {
+  const queued = await txn(db, [STORES.CARDS, STORES.DECK_CARDS, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
     const cards = t.objectStore(STORES.CARDS);
     const row = await req(cards.get(inventoryId));
-    if (!row?.id) return null;
+    if (!row?.id) return false;
     cards.put({ ...row, infusion: (row.infusion || 0) + amount });
 
     const deckRow = await req(t.objectStore(STORES.DECK_CARDS).get(inventoryId));
     if (deckRow) {
       t.objectStore(STORES.DECK_CARDS).put({ ...deckRow, infusion: (deckRow.infusion || 0) + amount });
     }
-    return row.id;
+
+    enqueueInTx(t, { method: 'PATCH', path: `/media/${row.id}/free-infuse`, body: { amount } });
+    return true;
   });
-  if (!mediaId) return;
+  if (!queued) return;
   emitMutation();
-  mutate({ method: 'PATCH', path: `/media/${mediaId}/free-infuse`, body: { amount } });
+  markPendingDirty();
 }
 
 export async function freeInfuseQuest(deckId, mediaId, amount = 1) {
-  const state = await readRow(STORES.QUEST_STATE, deckId);
-  if (state?.currentCard?.id === mediaId) {
-    await putRow(STORES.QUEST_STATE, {
+  const db = await openDb();
+  let queued = false;
+  await txn(db, [STORES.QUEST_STATE, STORES.PENDING_MUTATIONS], 'readwrite', async (t) => {
+    const os = t.objectStore(STORES.QUEST_STATE);
+    const state = await req(os.get(deckId));
+    if (state?.currentCard?.id !== mediaId) return;
+    os.put({
       ...state,
       currentCard: { ...state.currentCard, infusion: (state.currentCard.infusion || 0) + amount },
     });
+    enqueueInTx(t, { method: 'PATCH', path: `/media/${mediaId}/free-infuse`, body: { amount } });
+    queued = true;
+  });
+  if (queued) {
     emitMutation();
+    markPendingDirty();
   }
-  mutate({ method: 'PATCH', path: `/media/${mediaId}/free-infuse`, body: { amount } });
 }
 
 /** Trigger a server-side rescan of a folder. The server bumps the

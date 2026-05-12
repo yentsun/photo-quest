@@ -84,9 +84,37 @@ function sendDirect({ method, path, body }) {
 export const request = sendDirect;
 
 /**
- * Queue a mutation and mark the queue dirty. Returns `{ __queued: true }`
- * immediately — callers rely on optimistic IDB writes for UI and the
- * drain's `then` refetch or SSE resync for authoritative reconciliation.
+ * Queue a mutation INSIDE an existing IDB write transaction so the
+ * optimistic data write and the pending-queue write commit atomically.
+ * Without this, a sync that runs in the gap between optimistic-write
+ * commit and queue-write commit sees the new IDB row but no pending
+ * mutation, then prunes the row when the diff says the server doesn't
+ * have it yet (CLAUDE.md PWA & sync rule).
+ *
+ * Caller is responsible for adding STORES.PENDING_MUTATIONS to the tx
+ * scope and for calling `markPendingDirty()` after the tx commits.
+ */
+export function enqueueInTx(t, { method, path, body, then } = {}) {
+  t.objectStore(STORES.PENDING_MUTATIONS).add({
+    method, path, body, then, createdAt: Date.now(),
+  });
+}
+
+/** Mark the queue dirty so the next tick (or `flush:true`) drains it. */
+export function markPendingDirty({ flush = false } = {}) {
+  dirty = true;
+  if (flush) flushNow();
+}
+
+/**
+ * Queue a mutation in its own tx and mark the queue dirty. Returns
+ * `{ __queued: true }` immediately — callers rely on optimistic IDB
+ * writes for UI and the drain's `then` refetch or SSE resync for
+ * authoritative reconciliation.
+ *
+ * Prefer `enqueueInTx` + `markPendingDirty` for new code so the
+ * optimistic write and the queue add commit atomically. Use this only
+ * for fire-and-forget mutations with no local state to mirror.
  *
  * The server push happens on the next 30 s tick (or sooner on online /
  * pagehide / sync-done). GETs bypass the queue and resolve with the
