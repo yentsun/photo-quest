@@ -189,10 +189,14 @@ export async function drainQueue() {
         await deleteHead(head.id);
         drained++;
       } catch (err) {
-        if (err.status === 0) break; /* network — retry on next online */
-        await deleteHead(head.id);   /* 4xx/5xx — can't retry, drop */
-        drained++;
-        console.warn(`mutation ${head.method} ${head.path} dropped:`, err.message);
+        /* Local-authoritative rule (CLAUDE.md PWA & sync): the user's
+         * action is already truth in IDB. Server failure does not roll
+         * back local state. Keep the POST in the queue and break the
+         * drain — the next tick / online / pagehide event retries.
+         * A persistently-failing POST blocks subsequent mutations from
+         * draining; that's the cost of preserving user state. */
+        console.warn(`mutation ${head.method} ${head.path} blocked (status ${err.status}):`, err.message);
+        break;
       }
     }
     for (const then of pendingThens.values()) {

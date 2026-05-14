@@ -263,10 +263,13 @@ export async function buyMarketCard(card) {
     throw err;
   }
   if (response?.item) {
-    await optimisticCard({
-      ...response.item,
-      card_type: CARD_TYPE.MEDIA,
-      ref_id:    null,
+    const db = await openDb();
+    await txn(db, [STORES.CARDS], 'readwrite', (t) => {
+      t.objectStore(STORES.CARDS).put({
+        ...response.item,
+        card_type: CARD_TYPE.MEDIA,
+        ref_id:    null,
+      });
     });
     emitMutation();
   }

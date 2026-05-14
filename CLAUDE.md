@@ -22,8 +22,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### PWA & sync
 - PWA components, hooks, actions, and pages **never** call `fetch` / make HTTP requests. All network I/O lives in the sync worker; the UI reads/writes IndexedDB only.
 - Sync only what the current view needs. Never bulk-sync the media library or other large server tables into IDB.
-- Mutations are optimistic by default: write IDB first, enqueue the server call in background, roll back the IDB write if the server rejects. Never await the network before updating UI state.
-- Sync writes must re-read the pending-mutations queue **inside the same IDB write transaction** before applying server data, and skip rows with outstanding optimistic mutations. This prevents stale server data from clobbering an optimistic row (see commit 884e5a5).
+- The PWA is **local-authoritative**. The user's action is truth the moment it commits to IDB. The server is a sync target, not a gatekeeper — it cannot reject a user action. Write IDB first and enqueue the server call atomically in the same tx; never await the network before updating UI state. If the server returns 4xx/5xx, that is a server-side reconciliation problem — do **not** roll back local state, do **not** undo the user's action.
+- Sync brings server state TO the client. It must never erase a row the user authored locally. The in-tx pending-mutations check (next bullet) is one mechanism; failed-mutation handling that drops queued POSTs without preserving the local row is another gap to watch for.
+- Sync writes must re-read the pending-mutations queue **inside the same IDB write transaction** before applying server data, and skip rows with outstanding optimistic mutations. This prevents stale server data from clobbering a local-authoritative row (see commit 884e5a5).
 
 ### Git workflow
 - **Never push** to a remote unless explicitly asked.
