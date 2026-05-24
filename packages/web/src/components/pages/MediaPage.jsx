@@ -195,8 +195,10 @@ export default function MediaPage() {
   }, [item, folderMedia]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Optimistic: show arrows whenever item is in a folder.
-     If siblings are already loaded, refine based on actual position. */
-  const folderIndex = folderMedia.length > 0 ? folderMedia.findIndex(m => m.id === Number(id)) : -1;
+     If siblings are already loaded, refine based on actual position.
+     Use item.id (not the URL id) so the arrows update correctly right after
+     setItem() is called in goFolderPrev/Next — before the URL changes. */
+  const folderIndex = folderMedia.length > 0 && item ? folderMedia.findIndex(m => m.id === item.id) : -1;
   const hasFolderPrev = inSlideshow && !!item?.folder && (folderIndex < 0 || folderIndex > 0);
   const hasFolderNext = inSlideshow && !!item?.folder && (folderIndex < 0 || folderIndex < folderMedia.length - 1);
 
@@ -204,14 +206,20 @@ export default function MediaPage() {
     if (!hasFolderPrev) return;
     const siblings = await ensureFolderSiblings();
     const idx = siblings.findIndex(m => m.id === Number(id));
-    if (idx > 0) navigate(`/media/${siblings[idx - 1].id}`);
+    if (idx > 0) {
+      setItem(siblings[idx - 1]);  // update display immediately — mirror effect won't fire (slideshow.current unchanged)
+      navigate(`/media/${siblings[idx - 1].id}`);
+    }
   }, [hasFolderPrev, ensureFolderSiblings, id, navigate]);
 
   const goFolderNext = useCallback(async () => {
     if (!hasFolderNext) return;
     const siblings = await ensureFolderSiblings();
     const idx = siblings.findIndex(m => m.id === Number(id));
-    if (idx >= 0 && idx < siblings.length - 1) navigate(`/media/${siblings[idx + 1].id}`);
+    if (idx >= 0 && idx < siblings.length - 1) {
+      setItem(siblings[idx + 1]);  // update display immediately
+      navigate(`/media/${siblings[idx + 1].id}`);
+    }
   }, [hasFolderNext, ensureFolderSiblings, id, navigate]);
 
   /* Fullscreen toggle (LAW 1.37) */
