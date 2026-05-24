@@ -11,7 +11,7 @@
  *              (parentId, subtreeCounts, previewMediaId)
  */
 
-const DB_NAME = 'photo-quest';
+const DB_NAME = 'media-browser';
 const DB_VERSION = 1;
 
 /** Singleton DB connection, initialised on first call to openDB(). */
