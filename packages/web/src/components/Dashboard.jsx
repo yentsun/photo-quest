@@ -7,7 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../hooks/useMedia.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
-import { fetchFolders, fetchMedia, cancelScan } from '../utils/api.js';
+import { useScan } from '../contexts/ScanContext.jsx';
+import { fetchFolders, fetchMedia } from '../utils/api.js';
 import { FolderCard } from './media/index.js';
 import { EmptyState } from './layout/index.js';
 import { Button, Icon, Input, Modal, Spinner } from './ui/index.js';
@@ -74,21 +75,17 @@ export default function Dashboard() {
   const { addFolderWithPath, removeFolder, refreshLibrary } = useMediaActions();
   const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
+  const { isScanning } = useScan();
   const pendingShuffle = useRef(false);
 
   /* Clear slideshow when returning to dashboard. */
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(null);
   const [importProgress, setImportProgress] = useState(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
   const pathRef = useRef(null);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
-
-  /* Track the active scan so the Stop button can cancel it. */
-  const activeScanIdRef = useRef(null);
-  const abortedRef = useRef(false);
 
   /* Fetch folders on mount and when refresh signal changes. */
   const [folders, setFolders] = useState([]);
@@ -112,21 +109,6 @@ export default function Dashboard() {
   useEffect(() => {
     if (!showAddFolder) reset();
   }, [showAddFolder, reset]);
-
-  /**
-   * Cancel whatever scan is currently running.
-   * Works for both Add Folder imports and Refresh scans.
-   */
-  const handleStopScan = useCallback(async () => {
-    abortedRef.current = true;
-    if (activeScanIdRef.current != null) {
-      try {
-        await cancelScan(activeScanIdRef.current);
-      } catch (err) {
-        console.warn('Stop scan request failed:', err);
-      }
-    }
-  }, []);
 
   const handleShuffle = async () => {
     if (totalMedia === 0) return;
@@ -154,34 +136,17 @@ export default function Dashboard() {
       return;
     }
 
-    abortedRef.current = false;
-    activeScanIdRef.current = null;
-    setScanning(true);
     setScanProgress('Refreshing library...');
 
     try {
-      const result = await refreshLibrary(
-        folders,
-        (progress) => setScanProgress(progress),
-        (scanId) => { activeScanIdRef.current = scanId; },
-        () => abortedRef.current,
-      );
-
-      if (abortedRef.current) {
-        setScanProgress('Scan stopped.');
-      } else {
-        const totalFolders = result.serverFolders + result.clientFolders;
-        setScanProgress(`Refreshed ${totalFolders} folder${totalFolders !== 1 ? 's' : ''}. Found ${result.newFiles} file${result.newFiles !== 1 ? 's' : ''}.`);
-      }
+      const result = await refreshLibrary(folders, (progress) => setScanProgress(progress));
+      const totalFolders = result.serverFolders + result.clientFolders;
+      setScanProgress(`Refreshed ${totalFolders} folder${totalFolders !== 1 ? 's' : ''}. Found ${result.newFiles} file${result.newFiles !== 1 ? 's' : ''}.`);
       setTimeout(() => setScanProgress(null), 3000);
     } catch (err) {
       console.error('Failed to refresh library:', err);
       setScanProgress('Refresh failed: ' + err.message);
       setTimeout(() => setScanProgress(null), 5000);
-    } finally {
-      setScanning(false);
-      activeScanIdRef.current = null;
-      abortedRef.current = false;
     }
   };
 
@@ -190,18 +155,14 @@ export default function Dashboard() {
     const folderPath = pathRef.current?.value?.trim();
     if (!folderPath || !pathValid) return;
 
-    abortedRef.current = false;
-    activeScanIdRef.current = null;
-    setScanning(true);
     setImportProgress(null);
 
     try {
       const { scanId, total } = await addFolderWithPath(folderPath);
-      activeScanIdRef.current = scanId;
       setImportProgress({ total, processed: 0 });
 
       /* Listen to SSE for import progress. */
-      await new Promise((resolve, reject) => {
+      const { cancelled } = await new Promise((resolve, reject) => {
         const es = new EventSource('/jobs/events');
         es.onmessage = (event) => {
           try {
@@ -223,27 +184,18 @@ export default function Dashboard() {
           } catch { /* ignore parse errors */ }
         };
         es.onerror = () => { es.close(); reject(new Error('Lost connection')); };
-      }).then(({ cancelled }) => {
-        bump();
-        if (cancelled) {
-          setScanProgress('Scan stopped.');
-        } else {
-          setScanProgress(`Imported ${total} files.`);
-        }
-        setShowAddFolder(false);
-        setImportProgress(null);
-        setTimeout(() => setScanProgress(null), 3000);
       });
 
+      bump();
+      setScanProgress(cancelled ? 'Scan stopped.' : `Imported ${total} files.`);
+      setShowAddFolder(false);
+      setImportProgress(null);
+      setTimeout(() => setScanProgress(null), 3000);
     } catch (err) {
       console.error('Failed to scan folder:', err);
       setScanProgress('Failed: ' + err.message);
       setImportProgress(null);
       setTimeout(() => setScanProgress(null), 5000);
-    } finally {
-      setScanning(false);
-      activeScanIdRef.current = null;
-      abortedRef.current = false;
     }
   };
 
@@ -285,30 +237,23 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-2">
           {totalMedia > 0 && (
-            <Button variant="secondary" onClick={handleShuffle}>
+            <Button variant="secondary" onClick={handleShuffle} disabled={isScanning}>
               Shuffle
             </Button>
           )}
-          {scanning ? (
-            <Button variant="danger" onClick={handleStopScan}>
-              Stop
+          {rootFolders.length > 0 && (
+            <Button
+              variant="ghost"
+              onClick={handleRefresh}
+              disabled={isScanning}
+              title="Rescan folders for new files"
+            >
+              Refresh
             </Button>
-          ) : (
-            <>
-              {rootFolders.length > 0 && (
-                <Button
-                  variant="ghost"
-                  onClick={handleRefresh}
-                  title="Rescan folders for new files"
-                >
-                  Refresh
-                </Button>
-              )}
-              <Button onClick={() => setShowAddFolder(true)}>
-                Add Folder
-              </Button>
-            </>
           )}
+          <Button onClick={() => setShowAddFolder(true)} disabled={isScanning}>
+            Add Folder
+          </Button>
         </div>
       </div>
 
@@ -316,7 +261,6 @@ export default function Dashboard() {
       {scanProgress && (
         <div className="mb-6 p-4 bg-blue-900/30 border border-blue-700/50 rounded-lg">
           <div className="flex items-center gap-3">
-            {scanning && <Spinner size="sm" />}
             <p className="text-blue-300">{scanProgress}</p>
           </div>
         </div>
@@ -374,7 +318,7 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-            {!scanning && (
+            {!isScanning && (
               <Button type="submit" disabled={!pathValid}>
                 Add
               </Button>

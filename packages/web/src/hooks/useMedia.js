@@ -44,27 +44,16 @@ export function useMediaActions() {
     return result;
   }, [bump]);
 
-  /**
-   * Rescan all known folders for new files.
-   *
-   * @param {Object[]} folders       - Current folder list.
-   * @param {Function} [onProgress]  - Called with a status string before each folder.
-   * @param {Function} [onScanStart] - Called with scanId each time a scan begins.
-   * @param {Function} [isAborted]   - If it returns true the loop stops early.
-   */
-  const refreshLibrary = useCallback(async (folders, onProgress, onScanStart, isAborted) => {
+  const refreshLibrary = useCallback(async (folders, onProgress) => {
     let scannedFolders = 0;
     let newFiles = 0;
 
     const folderPaths = [...new Set(folders.map(f => f.path))];
 
     for (const folderPath of folderPaths) {
-      if (isAborted?.()) break;
-
       try {
         onProgress?.(`Scanning ${folderPath.split(/[/\\]/).pop()}...`);
         const result = await scanMediaApi(folderPath);
-        onScanStart?.(result.scanId);
         newFiles += result.added || 0;
         scannedFolders++;
       } catch (err) {

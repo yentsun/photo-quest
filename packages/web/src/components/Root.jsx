@@ -13,17 +13,21 @@ import { Outlet } from 'react-router-dom';
 import { Header } from './layout/index.js';
 import { IconButton, Icon } from './ui/index.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
+import { useScan } from '../contexts/ScanContext.jsx';
 import { cancelScan } from '../utils/api.js';
 
 /**
  * Global import progress bar that listens to SSE for any active imports.
+ * Also keeps ScanContext in sync so other components (e.g. Dashboard) know
+ * whether a scan is running without having to duplicate SSE logic.
  * LAW 1.33: import progress must always be visible.
  */
 function ImportProgressBar() {
   const [progress, setProgress] = useState(null); // { total, processed, scanId }
   const { bump } = useRefresh();
+  const { setIsScanning } = useScan();
 
-  /* Check for active imports on mount. */
+  /* Check for active imports on mount (covers server-resumed scans). */
   useEffect(() => {
     fetch('/scans')
       .then(r => r.json())
@@ -31,10 +35,11 @@ function ImportProgressBar() {
         const active = scans.find(s => s.status === 'importing' || s.status === 'discovering');
         if (active) {
           setProgress({ total: active.total, processed: active.processed, scanId: active.id });
+          setIsScanning(true);
         }
       })
       .catch(() => {});
-  }, []);
+  }, [setIsScanning]);
 
   /* Always listen to SSE for import events. */
   useEffect(() => {
@@ -46,6 +51,7 @@ function ImportProgressBar() {
         const data = JSON.parse(event.data);
         if (data.type === 'import_started' || data.type === 'import_progress') {
           setProgress({ total: data.total, processed: data.processed, scanId: data.scanId });
+          setIsScanning(true);
           /* Bump refresh signal every 50 items so pages re-fetch during import. */
           if (data.processed - lastBump >= 50) {
             lastBump = data.processed;
@@ -54,6 +60,7 @@ function ImportProgressBar() {
         }
         if (data.type === 'import_complete' || data.type === 'import_cancelled') {
           setProgress(null);
+          setIsScanning(false);
           /* Small delay to ensure server has saved DB before pages re-fetch. */
           setTimeout(bump, 500);
         }
@@ -65,7 +72,7 @@ function ImportProgressBar() {
     };
 
     return () => es.close();
-  }, []);
+  }, [bump, setIsScanning]);
 
   const handleCancel = useCallback(async () => {
     if (!progress?.scanId) return;
@@ -95,7 +102,7 @@ function ImportProgressBar() {
         </div>
         <IconButton
           icon={<Icon name="close" />}
-          label="Cancel import"
+          label="Stop import"
           size="sm"
           onClick={handleCancel}
           className="!bg-transparent !text-blue-300 hover:!text-white"
