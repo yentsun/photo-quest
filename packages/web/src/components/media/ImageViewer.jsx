@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import Spinner from '../ui/Spinner.jsx';
 
 /**
  * Image viewer for slideshow and full-screen display.
@@ -24,11 +25,14 @@ export default function ImageViewer({
     setStatus('loading');
   }, [src]);
 
+  const label = alt ? `Loading "${alt}"…` : 'Loading image…';
+
   return (
     <>
       {status === 'loading' && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-gray-600 border-t-white rounded-full animate-spin" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+          <Spinner size="lg" />
+          <p className="text-gray-200 text-sm font-medium tracking-wide">{label}</p>
         </div>
       )}
       {status === 'error' && (

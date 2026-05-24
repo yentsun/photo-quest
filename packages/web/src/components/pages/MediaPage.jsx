@@ -266,7 +266,7 @@ export default function MediaPage() {
         {isImage ? (
           <ImageViewer src={mediaUrl} alt={item.title} />
         ) : (
-          <MediaPlayer ref={playerRef} src={mediaUrl} />
+          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} />
         )}
 
         {/* Left arrow */}
