@@ -1,11 +1,32 @@
 /**
  * @file API fetch wrappers for server endpoints.
+ *
+ * Read functions (fetchMedia, fetchMediaById, fetchFolders) follow a
+ * network-first / IDB-fallback pattern:
+ *   1. Try the server.
+ *   2. On success — write results to IndexedDB and return them.
+ *   3. On failure — return whatever IDB has from a previous load.
+ *
+ * Write operations (like, delete, scan, …) stay server-only; they have no
+ * meaningful offline equivalent.
  */
 
 import { apiRoutes, MEDIA_TYPE } from '@photo-quest/shared';
+import {
+  idbGetMedia,
+  idbGetMediaById,
+  idbGetFolders,
+  idbPutMedia,
+  idbPutManyMedia,
+  idbPutManyFolders,
+} from '../services/idb.js';
 
 /**
- * Fetch media items from the server (supports filtering and pagination).
+ * Fetch media items — network first, IDB fallback.
+ *
+ * On a successful server response the results are upserted into IndexedDB so
+ * future offline loads can show the same data.  On any network/server error
+ * the IDB snapshot is returned instead (applying the same filters in JS).
  *
  * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean, liked?: boolean }} [opts]
  * @returns {Promise<{ items: Array, total: number }>}
@@ -18,27 +39,40 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked } = {})
   if (subtree) url.searchParams.set('subtree', '1');
   if (liked) url.searchParams.set('liked', '1');
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error('Failed to fetch media');
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Failed to fetch media');
+    const data = await response.json();
+    /* Write to IDB in the background — don't block the caller. */
+    idbPutManyMedia(data.items).catch(err => console.warn('[idb] putManyMedia failed:', err));
+    return data;
+  } catch (err) {
+    console.warn('[api] fetchMedia falling back to IDB:', err.message);
+    return idbGetMedia({ folder, subtree, liked, limit, offset });
   }
-  return response.json();
 }
 
 /**
- * Fetch a single media item by ID.
+ * Fetch a single media item by ID — network first, IDB fallback.
  *
  * @param {number} id
  * @returns {Promise<Object>}
  */
 export async function fetchMediaById(id) {
-  const response = await fetch(`${apiRoutes.media}/${id}`, {
-    headers: { 'Accept': 'application/json' },
-  });
-  if (!response.ok) {
-    throw new Error('Failed to fetch media item');
+  try {
+    const response = await fetch(`${apiRoutes.media}/${id}`, {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!response.ok) throw new Error('Failed to fetch media item');
+    const item = await response.json();
+    idbPutMedia(item).catch(err => console.warn('[idb] putMedia failed:', err));
+    return item;
+  } catch (err) {
+    console.warn('[api] fetchMediaById falling back to IDB:', err.message);
+    const item = await idbGetMediaById(Number(id));
+    if (!item) throw new Error('Media not found');
+    return item;
   }
-  return response.json();
 }
 
 /**
@@ -153,16 +187,24 @@ export async function fetchNetworkInfo() {
 }
 
 /**
- * Fetch all folders with their IDs.
+ * Fetch all folders with hierarchy metadata — network first, IDB fallback.
  *
- * @returns {Promise<Array<{id: number, path: string}>>}
+ * The server computes parentId, subtreeCounts, and previewMediaId; those
+ * computed fields are stored as-is so offline reads return identical shapes.
+ *
+ * @returns {Promise<Object[]>}
  */
 export async function fetchFolders() {
-  const response = await fetch(apiRoutes.folders);
-  if (!response.ok) {
-    throw new Error('Failed to fetch folders');
+  try {
+    const response = await fetch(apiRoutes.folders);
+    if (!response.ok) throw new Error('Failed to fetch folders');
+    const folders = await response.json();
+    idbPutManyFolders(folders).catch(err => console.warn('[idb] putManyFolders failed:', err));
+    return folders;
+  } catch (err) {
+    console.warn('[api] fetchFolders falling back to IDB:', err.message);
+    return idbGetFolders();
   }
-  return response.json();
 }
 
 /**
