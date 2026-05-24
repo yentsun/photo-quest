@@ -14,7 +14,7 @@ import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, IconButton, Modal, Spinner } from '../ui/index.js';
+import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
 import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi } from '../../utils/api.js';
 
 export default function MediaPage() {
@@ -33,6 +33,7 @@ export default function MediaPage() {
   const [folderMedia, setFolderMedia] = useState([]);
   const [folder, setFolder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Fetching media item…');
 
   /* Fetch the media item and its folder siblings. */
   useEffect(() => {
@@ -41,11 +42,13 @@ export default function MediaPage() {
 
     const load = async () => {
       try {
+        setLoadingMessage('Fetching media item…');
         const mediaItem = await fetchMediaById(mediaId);
         if (cancelled) return;
         setItem(mediaItem);
 
         /* Fetch folder media for navigation + folder record for link back. */
+        setLoadingMessage('Loading folder context…');
         const [folderResult, allFolders] = await Promise.all([
           mediaItem.folder ? fetchMedia({ folder: mediaItem.folder }) : { items: [] },
           fetchFolders(),
@@ -205,12 +208,7 @@ export default function MediaPage() {
   }, [showInfo, item]);
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <Spinner size="lg" />
-        <p className="text-gray-400 text-sm">Loading media...</p>
-      </div>
-    );
+    return <PageLoader message={loadingMessage} />;
   }
 
   if (!item) {

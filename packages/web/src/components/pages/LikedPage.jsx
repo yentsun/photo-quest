@@ -10,7 +10,7 @@ import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchMedia } from '../../utils/api.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, Spinner } from '../ui/index.js';
+import { Button, Icon, PageLoader } from '../ui/index.js';
 
 /**
  * Page showing all liked media items.
@@ -55,12 +55,7 @@ export default function LikedPage() {
   }, [slideshow.active, slideshow.current, navigate]);
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <Spinner size="lg" />
-        <p className="text-gray-400 text-sm">Loading liked items...</p>
-      </div>
-    );
+    return <PageLoader message="Fetching your liked media…" />;
   }
 
   const heartIcon = <Icon name="heart" className="w-16 h-16" />;

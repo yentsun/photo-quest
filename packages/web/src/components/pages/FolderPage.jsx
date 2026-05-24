@@ -1,9 +1,13 @@
 /**
  * @file Folder view page - shows subfolders and media for a folder ID.
  * LAW 2.7: maintains folder hierarchy with breadcrumb navigation.
+ *
+ * Media is fetched in pages of PAGE_SIZE. Scrolling to within 3 rows of the
+ * end of the grid triggers the next page (same lazy-load pattern as the
+ * slideshow).  The server returns the total count so we know when to stop.
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
@@ -12,7 +16,9 @@ import { fetchFolders, fetchMedia } from '../../utils/api.js';
 import { FolderCard } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, Spinner } from '../ui/index.js';
+import { Button, Icon, PageLoader, Spinner } from '../ui/index.js';
+
+const PAGE_SIZE = 200;
 
 export default function FolderPage() {
   const { id } = useParams();
@@ -27,14 +33,26 @@ export default function FolderPage() {
 
   const [folders, setFolders] = useState([]);
   const [directMedia, setDirectMedia] = useState([]);
+  const [mediaTotal, setMediaTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Fetching folder list…');
+  const [loadingMore, setLoadingMore] = useState(false);
+  /* Stable refs so handleLoadMore doesn't need to be recreated on every append. */
+  const loadingMoreRef = useRef(false);
+  const offsetRef = useRef(0);       // items currently loaded (next fetch offset)
+  const mediaTotalRef = useRef(0);   // mirrors mediaTotal for use in stable callback
+  const folderRef = useRef(null);    // mirrors folder for use in stable callback
 
   const folderId = Number(id);
 
-  /* Fetch folders + direct media for this folder on mount / signal change. */
+  /* Fetch folders + first page of direct media on mount / signal change. */
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadingMessage('Fetching folder list…');
+    setDirectMedia([]);
+    setMediaTotal(0);
+    offsetRef.current = 0;
 
     const load = async () => {
       try {
@@ -42,10 +60,22 @@ export default function FolderPage() {
         if (cancelled) return;
         setFolders(allFolders);
 
-        const folder = allFolders.find(f => f.id === folderId);
-        if (folder) {
-          const { items } = await fetchMedia({ folder: folder.path });
-          if (!cancelled) setDirectMedia(items);
+        const found = allFolders.find(f => f.id === folderId);
+        if (found) {
+          folderRef.current = found;
+          const folderName = found.path.split(/[/\\]/).filter(Boolean).pop() || 'folder';
+          setLoadingMessage(`Loading '${folderName}'…`);
+          const { items, total } = await fetchMedia({
+            folder: found.path,
+            limit: PAGE_SIZE,
+            offset: 0,
+          });
+          if (!cancelled) {
+            setDirectMedia(items);
+            setMediaTotal(total);
+            mediaTotalRef.current = total;
+            offsetRef.current = items.length;
+          }
         }
       } catch (err) {
         console.error('Failed to load folder data:', err);
@@ -71,17 +101,59 @@ export default function FolderPage() {
     return crumbs;
   }, [folders, folderId]);
 
+  /** Fetch and append the next page of items. Uses stable refs to avoid stale closures. */
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMoreRef.current) return;
+    if (offsetRef.current >= mediaTotalRef.current) return;
+    if (!folderRef.current) return;
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const { items: more } = await fetchMedia({
+        folder: folderRef.current.path,
+        limit: PAGE_SIZE,
+        offset: offsetRef.current,
+      });
+      if (more.length > 0) {
+        offsetRef.current += more.length;
+        setDirectMedia(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          return [...prev, ...more.filter(m => !existingIds.has(m.id))];
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load more media:', err);
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, []); // stable — reads from refs, no deps needed
+
   const handleMediaClick = (clickedMedia) => {
     navigate(`/media/${clickedMedia.id}`);
   };
 
+  /* Shuffle: server randomises, we load 200 items then lazy-append more. */
   const handleShuffle = async () => {
-    if (!folder) return;
+    const f = folderRef.current;
+    if (!f) return;
     try {
-      const { items } = await fetchMedia({ folder: folder.path, subtree: true });
+      const { items, total } = await fetchMedia({
+        folder: f.path,
+        subtree: true,
+        limit: PAGE_SIZE,
+        random: true,
+      });
       if (items.length === 0) return;
       pendingShuffle.current = true;
-      slideshow.start(items, { order: 'random' });
+      slideshow.start(items, {
+        order: 'sequential', // already randomised server-side
+        total,
+        loadMore: () =>
+          fetchMedia({ folder: f.path, subtree: true, limit: PAGE_SIZE, random: true })
+            .then(d => d.items),
+      });
     } catch (err) {
       console.error('Failed to fetch subtree media for shuffle:', err);
     }
@@ -96,12 +168,7 @@ export default function FolderPage() {
   }, [slideshow.active, slideshow.current, navigate]);
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <Spinner size="lg" />
-        <p className="text-gray-400 text-sm">Loading folder...</p>
-      </div>
-    );
+    return <PageLoader message={loadingMessage} />;
   }
 
   const folderIcon = <Icon name="folder" className="w-16 h-16" />;
@@ -111,6 +178,15 @@ export default function FolderPage() {
     : 'Folder';
 
   const subtreeTotal = folder?.subtreeMediaCount || 0;
+
+  /* Subtitle: "3 folders, 200 of 31 450 items" */
+  const itemLabel = (() => {
+    if (mediaTotal === 0) return null;
+    const showing = directMedia.length;
+    return showing < mediaTotal
+      ? `${showing.toLocaleString()} of ${mediaTotal.toLocaleString()} items`
+      : `${mediaTotal.toLocaleString()} item${mediaTotal !== 1 ? 's' : ''}`;
+  })();
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -151,9 +227,9 @@ export default function FolderPage() {
           <h1 className="text-2xl font-bold text-white">{folderName}</h1>
           <p className="text-gray-400 text-sm">
             {subfolders.length > 0 && `${subfolders.length} folder${subfolders.length !== 1 ? 's' : ''}`}
-            {subfolders.length > 0 && directMedia.length > 0 && ', '}
-            {directMedia.length > 0 && `${directMedia.length} item${directMedia.length !== 1 ? 's' : ''}`}
-            {subfolders.length === 0 && directMedia.length === 0 && '0 items'}
+            {subfolders.length > 0 && itemLabel && ', '}
+            {itemLabel}
+            {subfolders.length === 0 && !itemLabel && '0 items'}
           </p>
         </div>
         {subtreeTotal > 0 && (
@@ -179,11 +255,20 @@ export default function FolderPage() {
 
       {/* Media Grid or Empty State */}
       {directMedia.length > 0 ? (
-        <MediaGrid
-          items={directMedia}
-          onItemClick={handleMediaClick}
-          onItemLike={likeMedia}
-        />
+        <>
+          <MediaGrid
+            items={directMedia}
+            onItemClick={handleMediaClick}
+            onItemLike={likeMedia}
+            onNearEnd={directMedia.length < mediaTotal ? handleLoadMore : undefined}
+          />
+          {loadingMore && (
+            <div className="flex items-center justify-center gap-2 py-4">
+              <Spinner size="sm" />
+              <span className="text-gray-400 text-sm">Loading more items…</span>
+            </div>
+          )}
+        </>
       ) : subfolders.length === 0 ? (
         <EmptyState
           icon={folderIcon}

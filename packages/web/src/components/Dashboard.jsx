@@ -11,7 +11,7 @@ import { useScan } from '../contexts/ScanContext.jsx';
 import { fetchFolders, fetchMedia } from '../utils/api.js';
 import { FolderCard } from './media/index.js';
 import { EmptyState } from './layout/index.js';
-import { Button, Icon, Input, Modal, Spinner } from './ui/index.js';
+import { Button, Icon, Input, Modal, PageLoader } from './ui/index.js';
 
 /**
  * Debounced path validation against the server.
@@ -220,12 +220,7 @@ export default function Dashboard() {
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <Spinner size="lg" />
-        <p className="text-gray-400 text-sm">Loading library...</p>
-      </div>
-    );
+    return <PageLoader message="Fetching your media folders…" />;
   }
 
   const folderIcon = <Icon name="folder" className="w-16 h-16" />;

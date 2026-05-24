@@ -5,7 +5,7 @@
  * keeping memory usage constant regardless of library size.
  */
 
-import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { Grid } from 'react-window';
 import MediaCard from './MediaCard.jsx';
 
@@ -59,15 +59,19 @@ function Cell({ columnIndex, rowIndex, style, items, columnCount, onItemClick, o
  * @param {Function} [props.onItemClick] - Called when a card is clicked
  * @param {Function} [props.onItemLike] - Called when like button is clicked
  * @param {React.ReactNode} [props.emptyState] - Content to show when items is empty
+ * @param {Function} [props.onNearEnd] - Called when the user scrolls within ~3 rows of the last item
  */
 export default function MediaGrid({
   items = [],
   onItemClick,
   onItemLike,
   emptyState,
+  onNearEnd,
 }) {
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  /* nearEndRef prevents firing onNearEnd on every scroll tick when already near the end. */
+  const nearEndRef = useRef(false);
 
   const measure = useCallback(() => {
     if (!containerRef.current) return;
@@ -81,6 +85,27 @@ export default function MediaGrid({
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, [measure]);
+
+  const { width, height } = dimensions;
+  const columnCount = getColumnCount(width);
+  const rowCount = Math.ceil(items.length / columnCount);
+  const columnWidth = width > 0 ? (width + GAP) / columnCount : 200;
+  const rowHeight = columnWidth; // aspect-square cards
+
+  /* Fire onNearEnd when user scrolls within 3 rows of the last item. */
+  const handleScroll = useCallback((e) => {
+    if (!onNearEnd) return;
+    const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+    const distanceFromEnd = scrollHeight - scrollTop - clientHeight;
+    if (distanceFromEnd < rowHeight * 3) {
+      if (!nearEndRef.current) {
+        nearEndRef.current = true;
+        onNearEnd();
+      }
+    } else {
+      nearEndRef.current = false;
+    }
+  }, [onNearEnd, rowHeight]);
 
   if (items.length === 0 && emptyState) {
     return emptyState;
@@ -102,12 +127,6 @@ export default function MediaGrid({
     );
   }
 
-  const { width, height } = dimensions;
-  const columnCount = getColumnCount(width);
-  const rowCount = Math.ceil(items.length / columnCount);
-  const columnWidth = width > 0 ? (width + GAP) / columnCount : 200;
-  const rowHeight = columnWidth; // aspect-square cards
-
   return (
     <div ref={containerRef} className="w-full">
       {width > 0 && (
@@ -122,6 +141,7 @@ export default function MediaGrid({
           rowHeight={rowHeight}
           overscanCount={2}
           style={{ overflowX: 'hidden' }}
+          onScroll={handleScroll}
         />
       )}
     </div>

@@ -11,6 +11,12 @@ build/
 # Transcoded media output
 transcoded/
 
+# Generated thumbnails
+thumbs/
+
+# Vite PWA dev build artifacts
+dev-dist/
+
 # Environment
 .env
 .env.local
