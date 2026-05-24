@@ -6,7 +6,7 @@
  * Button component with primary, secondary, and ghost variants.
  *
  * @param {Object} props
- * @param {'primary' | 'secondary' | 'ghost'} [props.variant='primary'] - Visual style
+ * @param {'primary' | 'secondary' | 'ghost' | 'danger'} [props.variant='primary'] - Visual style
  * @param {'sm' | 'md' | 'lg'} [props.size='md'] - Size variant
  * @param {React.ReactNode} [props.icon] - Optional icon to display before text
  * @param {React.ReactNode} props.children - Button content
@@ -30,6 +30,7 @@ export default function Button({
     primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
     secondary: 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-gray-500',
     ghost: 'bg-transparent text-gray-300 hover:bg-gray-800 focus:ring-gray-500',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
   };
 
   const sizes = {
