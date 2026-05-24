@@ -29,14 +29,29 @@ export default function MediaPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const viewerRef = useRef(null);
 
-  const [item, setItem] = useState(null);
+  /* In slideshow mode the current item is already in context — no fetch needed.
+     Initialise from there so there is no flash of the page loader on slide changes. */
+  const inSlideshow = slideshow.active;
+
+  const [item, setItem] = useState(() => inSlideshow ? slideshow.current : null);
   const [folderMedia, setFolderMedia] = useState([]);
   const [folder, setFolder] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!inSlideshow);
   const [loadingMessage, setLoadingMessage] = useState('Fetching media item…');
 
-  /* Fetch the media item and its folder siblings. */
+  /* ── Slideshow mode: mirror slideshow.current into local state. ─────────────────────
+     The URL is driven by slideshow.currentIndex (see effect below); `id` updates on
+     every slide but the data is already in the slideshow context. */
   useEffect(() => {
+    if (!inSlideshow) return;
+    setItem(slideshow.current);
+  }, [inSlideshow, slideshow.current]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Folder-browse mode: fetch item + siblings by URL id. ──────────────────────────
+     Only runs when NOT in slideshow. */
+  useEffect(() => {
+    if (inSlideshow) return;
+
     let cancelled = false;
     const mediaId = Number(id);
 
@@ -47,7 +62,6 @@ export default function MediaPage() {
         if (cancelled) return;
         setItem(mediaItem);
 
-        /* Fetch folder media for navigation + folder record for link back. */
         setLoadingMessage('Loading folder context…');
         const [folderResult, allFolders] = await Promise.all([
           mediaItem.folder ? fetchMedia({ folder: mediaItem.folder }) : { items: [] },
@@ -67,11 +81,30 @@ export default function MediaPage() {
     setLoading(true);
     load();
     return () => { cancelled = true; };
-  }, [id, signal]);
+  }, [id, inSlideshow, signal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Slideshow mode: reload folder siblings only when the folder changes. ──────────
+     Needed for up/down navigation (LAW 1.30). Runs at most once per unique folder,
+     not once per slide. */
+  useEffect(() => {
+    if (!inSlideshow) return;
+    const folderPath = slideshow.current?.folder;
+    if (!folderPath) { setFolderMedia([]); setFolder(null); return; }
+
+    let cancelled = false;
+    Promise.all([
+      fetchMedia({ folder: folderPath }),
+      fetchFolders(),
+    ]).then(([{ items }, allFolders]) => {
+      if (cancelled) return;
+      setFolderMedia(items);
+      setFolder(allFolders.find(f => f.path === folderPath) || null);
+    }).catch(err => console.error('Failed to load folder context:', err));
+
+    return () => { cancelled = true; };
+  }, [inSlideshow, slideshow.current?.folder, signal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Determine navigation list: slideshow items or folder media */
-  const inSlideshow = slideshow.active;
-
   const navItems = inSlideshow ? slideshow.items : folderMedia;
   const currentIndex = navItems.findIndex(m => m.id === Number(id));
 
