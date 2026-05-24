@@ -51,6 +51,9 @@ function openDB() {
 
     req.onsuccess = () => {
       _db = req.result;
+      /* Reset singleton if the connection is closed (e.g. during page navigation)
+         so the next openDB() call gets a fresh connection instead of a stale one. */
+      _db.onclose = () => { _db = null; };
       resolve(_db);
     };
     req.onerror = () => reject(req.error);
