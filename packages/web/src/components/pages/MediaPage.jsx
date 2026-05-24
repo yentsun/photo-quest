@@ -83,6 +83,16 @@ export default function MediaPage() {
     navigate(`/media/${slideshow.current.id}`, { replace: true });
   }, [inSlideshow, slideshow.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Lazy-load next page when approaching the end of the current batch. */
+  useEffect(() => {
+    if (!inSlideshow) return;
+    const remaining = slideshow.items.length - slideshow.currentIndex;
+    const hasMore = slideshow.items.length < slideshow.total;
+    if (hasMore && remaining <= 40) {
+      slideshow.loadMore();
+    }
+  }, [inSlideshow, slideshow.currentIndex, slideshow.items.length, slideshow.total]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const goPrev = useCallback(() => {
     if (!hasPrev) return;
     if (inSlideshow) {

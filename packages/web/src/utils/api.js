@@ -28,16 +28,17 @@ import {
  * future offline loads can show the same data.  On any network/server error
  * the IDB snapshot is returned instead (applying the same filters in JS).
  *
- * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean, liked?: boolean }} [opts]
+ * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean, liked?: boolean, random?: boolean }} [opts]
  * @returns {Promise<{ items: Array, total: number }>}
  */
-export async function fetchMedia({ limit, offset, folder, subtree, liked } = {}) {
+export async function fetchMedia({ limit, offset, folder, subtree, liked, random } = {}) {
   const url = new URL(apiRoutes.media, window.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
   if (folder != null) url.searchParams.set('folder', folder);
   if (subtree) url.searchParams.set('subtree', '1');
   if (liked) url.searchParams.set('liked', '1');
+  if (random) url.searchParams.set('random', '1');
 
   try {
     const response = await fetch(url);

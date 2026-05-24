@@ -3,7 +3,7 @@
  * LAW 1.27: slideshow is manual (no auto-advance), uses the unified MediaPage viewer.
  */
 
-import { createContext, useContext, useReducer, useCallback } from 'react';
+import { createContext, useContext, useReducer, useCallback, useRef } from 'react';
 import { shuffle } from '../utils/shuffle.js';
 
 const SlideshowContext = createContext();
@@ -14,6 +14,7 @@ const initialState = {
   currentIndex: 0,
   order: 'random',
   history: [],
+  total: 0, // total items available in the source (may exceed items.length for lazy loading)
 };
 
 function reducer(state, action) {
@@ -26,6 +27,7 @@ function reducer(state, action) {
         currentIndex: action.startIndex || 0,
         order: action.order || 'random',
         history: [],
+        total: action.total ?? action.items.length,
       };
 
     case 'STOP':
@@ -51,12 +53,17 @@ function reducer(state, action) {
     case 'SET_INDEX':
       return { ...state, currentIndex: action.index };
 
+    /* Append a new page of items, deduplicating by id. */
+    case 'APPEND_ITEMS': {
+      const existingIds = new Set(state.items.map(m => m.id));
+      const fresh = action.items.filter(m => !existingIds.has(m.id));
+      return { ...state, items: [...state.items, ...fresh] };
+    }
+
     case 'REMOVE_ITEM': {
       const removedIdx = state.items.findIndex(m => m.id === action.id);
       const newItems = state.items.filter(m => m.id !== action.id);
       if (newItems.length === 0) return { ...initialState };
-      /* Remap history indices: drop entries pointing at the removed item,
-         shift down entries that pointed after it. */
       const newHistory = state.history
         .filter(i => i !== removedIdx)
         .map(i => i > removedIdx ? i - 1 : i);
@@ -88,29 +95,35 @@ function reducer(state, action) {
 
 export function SlideshowProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  /* loadMoreRef holds an async fn () => Item[] set by whoever starts the slideshow.
+     Stored in a ref so it never triggers re-renders or effect re-runs. */
+  const loadMoreRef = useRef(null);
 
   return (
-    <SlideshowContext.Provider value={{ state, dispatch }}>
+    <SlideshowContext.Provider value={{ state, dispatch, loadMoreRef }}>
       {children}
     </SlideshowContext.Provider>
   );
 }
 
 export function useSlideshow() {
-  const { state, dispatch } = useContext(SlideshowContext);
+  const { state, dispatch, loadMoreRef } = useContext(SlideshowContext);
 
   const start = useCallback((items, options = {}) => {
+    loadMoreRef.current = options.loadMore ?? null;
     dispatch({
       type: 'START',
       items,
       startIndex: options.startIndex,
       order: options.order || 'random',
+      total: options.total,
     });
-  }, [dispatch]);
+  }, [dispatch, loadMoreRef]);
 
   const stop = useCallback(() => {
+    loadMoreRef.current = null;
     dispatch({ type: 'STOP' });
-  }, [dispatch]);
+  }, [dispatch, loadMoreRef]);
 
   const next = useCallback(() => {
     dispatch({ type: 'NEXT' });
@@ -132,6 +145,13 @@ export function useSlideshow() {
     dispatch({ type: 'SET_ORDER', order });
   }, [dispatch]);
 
+  /** Fetch the next page and append it to the slideshow. No-op if no loader set. */
+  const loadMore = useCallback(async () => {
+    if (!loadMoreRef.current) return;
+    const items = await loadMoreRef.current();
+    if (items?.length) dispatch({ type: 'APPEND_ITEMS', items });
+  }, [dispatch, loadMoreRef]);
+
   const current = state.items[state.currentIndex] || null;
 
   return {
@@ -140,6 +160,7 @@ export function useSlideshow() {
     currentIndex: state.currentIndex,
     order: state.order,
     history: state.history,
+    total: state.total,
     current,
     start,
     stop,
@@ -148,6 +169,7 @@ export function useSlideshow() {
     setIndex,
     setOrder,
     removeItem,
+    loadMore,
   };
 }
 

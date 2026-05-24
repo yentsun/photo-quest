@@ -5,7 +5,7 @@
  * Must use `function()` syntax (not arrow) to receive kojo context via `this`.
  */
 
-export default function ({ limit, offset, folder, subtree, liked } = {}) {
+export default function ({ limit, offset, folder, subtree, liked, random } = {}) {
   const [kojo] = this;
   const db = kojo.get('db');
 
@@ -31,7 +31,10 @@ export default function ({ limit, offset, folder, subtree, liked } = {}) {
   // Get total count for pagination metadata
   const { total } = db.prepare(`SELECT COUNT(*) AS total FROM media WHERE ${where}`).get(...params);
 
-  const orderBy = liked ? 'likes DESC' : 'created_at DESC';
+  /* random=true → ORDER BY RANDOM() so SQLite does the shuffle server-side.
+     Each paginated fetch of 200 pulls a fresh random slice without loading
+     the entire library into JS. */
+  const orderBy = random ? 'RANDOM()' : liked ? 'likes DESC' : 'created_at DESC';
   let sql = `SELECT * FROM media WHERE ${where} ORDER BY ${orderBy}`;
   const queryParams = [...params];
 
