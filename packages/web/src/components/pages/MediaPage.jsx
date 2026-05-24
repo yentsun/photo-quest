@@ -16,6 +16,7 @@ import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
 import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi } from '../../utils/api.js';
+import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 
 export default function MediaPage() {
   const { id } = useParams();
@@ -52,7 +53,9 @@ export default function MediaPage() {
   }, [inSlideshow, slideshow.current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Folder-browse mode: fetch item + siblings by URL id. ──────────────────────────
-     Only runs when NOT in slideshow. */
+     Only runs when NOT in slideshow.
+     IDB-first: show cached item immediately so the page loader never appears for
+     return visits. Server fetch then updates the displayed data silently. */
   useEffect(() => {
     if (inSlideshow) return;
 
@@ -61,19 +64,39 @@ export default function MediaPage() {
 
     const load = async () => {
       try {
+        /* 1. Serve item from IDB instantly — hides the page loader on return visits. */
+        const cachedItem = await idbGetMediaById(mediaId);
+        if (!cancelled && cachedItem) { setItem(cachedItem); setLoading(false); }
+
+        /* 2. Fetch fresh item from server (IDB is updated inside fetchMediaById). */
         setLoadingMessage('Fetching media item…');
         const mediaItem = await fetchMediaById(mediaId);
         if (cancelled) return;
         setItem(mediaItem);
+        setLoading(false);
 
-        setLoadingMessage('Loading folder context…');
-        const [folderResult, allFolders] = await Promise.all([
-          mediaItem.folder ? fetchMedia({ folder: mediaItem.folder }) : { items: [] },
-          fetchFolders(),
-        ]);
-        if (cancelled) return;
-        setFolderMedia(folderResult.items);
-        setFolder(allFolders.find(f => f.path === mediaItem.folder) || null);
+        /* 3. Load folder siblings — IDB-first, limited to 200 items.
+              fetchFolders is intentionally skipped here; `folder` (the record used
+              for the back-link) is loaded below after a cached pass. */
+        if (mediaItem.folder) {
+          /* IDB pass — show siblings immediately if cached. */
+          const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, limit: 200 });
+          if (!cancelled && cachedSiblings.length > 0) setFolderMedia(cachedSiblings);
+
+          /* IDB pass for folder record (for back-link / delete fallback). */
+          const cachedFolders = await idbGetFolders();
+          if (!cancelled) setFolder(cachedFolders.find(f => f.path === mediaItem.folder) || null);
+
+          /* Server refresh — update siblings and folder record. */
+          setLoadingMessage('Loading folder context…');
+          const [folderResult, allFolders] = await Promise.all([
+            fetchMedia({ folder: mediaItem.folder, limit: 200 }),
+            fetchFolders(),
+          ]);
+          if (cancelled) return;
+          setFolderMedia(folderResult.items);
+          setFolder(allFolders.find(f => f.path === mediaItem.folder) || null);
+        }
       } catch (err) {
         console.error('Failed to load media:', err);
         if (!cancelled) setItem(null);
