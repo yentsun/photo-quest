@@ -25,6 +25,14 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   const videoRef = useRef(null);
   const [buffering, setBuffering] = useState(true);
 
+  // Same race-condition fix as ImageViewer: reset buffering during render so
+  // it happens before the browser can fire onCanPlay for a cached/buffered src.
+  const [renderedSrc, setRenderedSrc] = useState(src);
+  if (src !== renderedSrc) {
+    setRenderedSrc(src);
+    setBuffering(true);
+  }
+
   useImperativeHandle(ref, () => ({
     togglePlay() {
       const v = videoRef.current;
@@ -32,11 +40,6 @@ const MediaPlayer = forwardRef(function MediaPlayer({
       v.paused ? v.play().catch(() => {}) : v.pause();
     },
   }));
-
-  /* Reset buffering indicator whenever the source changes. */
-  useEffect(() => {
-    setBuffering(true);
-  }, [src]);
 
   useEffect(() => {
     if (autoPlay && videoRef.current) {

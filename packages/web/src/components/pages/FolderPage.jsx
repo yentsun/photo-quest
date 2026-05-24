@@ -12,7 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { fetchFolders, fetchMedia } from '../../utils/api.js';
+import { fetchFolders, fetchMedia, getLastFolders } from '../../utils/api.js';
 import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
 import { FolderCard } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
@@ -32,10 +32,11 @@ export default function FolderPage() {
   /* Clear slideshow when entering folder browse mode. */
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [folders, setFolders] = useState([]);
+  /* Sync-cache first — no loading flash when returning from shuffle. */
+  const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [directMedia, setDirectMedia] = useState([]);
   const [mediaTotal, setMediaTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!getLastFolders());
   const [loadingMessage, setLoadingMessage] = useState('Fetching folder list…');
   const [loadingMore, setLoadingMore] = useState(false);
   /* Stable refs so handleLoadMore doesn't need to be recreated on every append. */
@@ -49,7 +50,10 @@ export default function FolderPage() {
   /* Fetch folders + first page of direct media — IDB-first, then refresh from server. */
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    /* Only show the full-page loader when we have nothing from the sync cache.
+       On return visits (e.g. browser-back from shuffle) the cache is already
+       warm so we skip the loader and update the data silently in the background. */
+    if (!getLastFolders()) setLoading(true);
     setLoadingMessage('Fetching folder list…');
     setDirectMedia([]);
     setMediaTotal(0);

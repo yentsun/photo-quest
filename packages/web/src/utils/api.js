@@ -21,6 +21,41 @@ import {
   idbPutManyFolders,
 } from '../services/idb.js';
 
+// ---------------------------------------------------------------------------
+// In-memory session cache
+// ---------------------------------------------------------------------------
+// Plain module-level variables that survive React component unmount/remount
+// within the same browser session (reset only on full page reload).
+//
+// Used in useState() initialisers so components can resolve to real data
+// synchronously — eliminating the loading flash when pressing the browser
+// back button (e.g. returning from shuffle mode to Dashboard / FolderPage).
+// ---------------------------------------------------------------------------
+
+/** @type {Object[]|null} Last successfully fetched folder list. */
+let _foldersCache = null;
+
+/** @type {Map<number, Object>} Last known version of each media item, keyed by id. */
+const _mediaCache = new Map();
+
+/**
+ * Returns the last successfully loaded folders array, or null if not yet
+ * fetched in this session.  Safe to call inside React useState initialisers
+ * (synchronous — no async needed).
+ *
+ * @returns {Object[]|null}
+ */
+export function getLastFolders() { return _foldersCache; }
+
+/**
+ * Returns the last loaded version of a media item by its numeric id, or null
+ * if this item hasn't been fetched yet in this session.
+ *
+ * @param {number} id
+ * @returns {Object|null}
+ */
+export function getLastMediaItem(id) { return _mediaCache.get(id) ?? null; }
+
 /**
  * Fetch media items — network first, IDB fallback.
  *
@@ -44,6 +79,8 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch media');
     const data = await response.json();
+    /* Warm the sync cache so return visits resolve instantly. */
+    for (const item of data.items) _mediaCache.set(item.id, item);
     /* Write to IDB in the background — don't block the caller. */
     idbPutManyMedia(data.items).catch(err => console.warn('[idb] putManyMedia failed:', err));
     return data;
@@ -66,6 +103,7 @@ export async function fetchMediaById(id) {
     });
     if (!response.ok) throw new Error('Failed to fetch media item');
     const item = await response.json();
+    _mediaCache.set(item.id, item);  // warm sync cache
     idbPutMedia(item).catch(err => console.warn('[idb] putMedia failed:', err));
     return item;
   } catch (err) {
@@ -201,6 +239,7 @@ export async function fetchFolders() {
     const response = await fetch(apiRoutes.folders);
     if (!response.ok) throw new Error('Failed to fetch folders');
     const folders = await response.json();
+    _foldersCache = folders;  // warm sync cache
     idbPutManyFolders(folders).catch(err => console.warn('[idb] putManyFolders failed:', err));
     return folders;
   } catch (err) {

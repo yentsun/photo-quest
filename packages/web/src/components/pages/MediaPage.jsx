@@ -15,7 +15,7 @@ import { MEDIA_TYPE } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
-import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi } from '../../utils/api.js';
+import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi, getLastMediaItem } from '../../utils/api.js';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 
 export default function MediaPage() {
@@ -31,13 +31,19 @@ export default function MediaPage() {
   const viewerRef = useRef(null);
 
   /* In slideshow mode the current item is already in context — no fetch needed.
-     Initialise from there so there is no flash of the page loader on slide changes. */
+     Initialise from there so there is no flash of the page loader on slide changes.
+     In folder-browse mode check the sync cache first: if the item was viewed in
+     this session (or loaded as part of a shuffle batch) it resolves synchronously
+     and the page renders without any loading state at all. */
   const inSlideshow = slideshow.active;
 
-  const [item, setItem] = useState(() => inSlideshow ? slideshow.current : null);
+  const [item, setItem] = useState(() => {
+    if (inSlideshow) return slideshow.current;
+    return getLastMediaItem(Number(id)) || null;
+  });
   const [folderMedia, setFolderMedia] = useState([]);
   const [folder, setFolder] = useState(null);
-  const [loading, setLoading] = useState(!inSlideshow);
+  const [loading, setLoading] = useState(!inSlideshow && !getLastMediaItem(Number(id)));
   const [loadingMessage, setLoadingMessage] = useState('Fetching media item…');
 
   /* ── Slideshow mode: mirror slideshow.current into local state. ─────────────────────
@@ -54,8 +60,9 @@ export default function MediaPage() {
 
   /* ── Folder-browse mode: fetch item + siblings by URL id. ──────────────────────────
      Only runs when NOT in slideshow.
-     IDB-first: show cached item immediately so the page loader never appears for
-     return visits. Server fetch then updates the displayed data silently. */
+     Priority: sync cache → IDB → server.
+     The full-page loader is only shown when nothing is cached — so pressing
+     browser back (e.g. from shuffle) feels instant for previously viewed items. */
   useEffect(() => {
     if (inSlideshow) return;
 
@@ -64,20 +71,25 @@ export default function MediaPage() {
 
     const load = async () => {
       try {
-        /* 1. Serve item from IDB instantly — hides the page loader on return visits. */
-        const cachedItem = await idbGetMediaById(mediaId);
-        if (!cancelled && cachedItem) { setItem(cachedItem); setLoading(false); }
+        /* 1. Sync cache (module-level, zero-latency). */
+        const syncHit = getLastMediaItem(mediaId);
+        if (syncHit) {
+          if (!cancelled) { setItem(syncHit); setLoading(false); }
+        } else {
+          /* 2. IDB fallback — still fast but async; show loader while waiting. */
+          if (!cancelled) setLoading(true);
+          const cachedItem = await idbGetMediaById(mediaId);
+          if (!cancelled && cachedItem) { setItem(cachedItem); setLoading(false); }
+        }
 
-        /* 2. Fetch fresh item from server (IDB is updated inside fetchMediaById). */
+        /* 3. Fetch fresh item from server (always — silently updates the display). */
         setLoadingMessage('Fetching media item…');
         const mediaItem = await fetchMediaById(mediaId);
         if (cancelled) return;
         setItem(mediaItem);
         setLoading(false);
 
-        /* 3. Load folder siblings — IDB-first, limited to 200 items.
-              fetchFolders is intentionally skipped here; `folder` (the record used
-              for the back-link) is loaded below after a cached pass. */
+        /* 4. Load folder siblings — IDB-first, limited to 200 items. */
         if (mediaItem.folder) {
           /* IDB pass — show siblings immediately if cached. */
           const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, limit: 200 });
@@ -105,7 +117,6 @@ export default function MediaPage() {
       }
     };
 
-    setLoading(true);
     load();
     return () => { cancelled = true; };
   }, [id, inSlideshow, signal]); // eslint-disable-line react-hooks/exhaustive-deps

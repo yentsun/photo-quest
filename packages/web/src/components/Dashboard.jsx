@@ -8,7 +8,7 @@ import { useMediaActions } from '../hooks/useMedia.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
-import { fetchFolders, fetchMedia } from '../utils/api.js';
+import { fetchFolders, fetchMedia, getLastFolders } from '../utils/api.js';
 import { idbGetFolders } from '../services/idb.js';
 import { FolderCard } from './media/index.js';
 import { EmptyState } from './layout/index.js';
@@ -79,6 +79,10 @@ export default function Dashboard() {
   const { isScanning } = useScan();
   const pendingShuffle = useRef(false);
 
+  /* Sync cache — populated by fetchFolders() on every successful load.
+     Lets the useState initialisers below resolve synchronously so there is
+     no loading flash when pressing browser back from shuffle mode. */
+
   /* Clear slideshow when returning to dashboard. */
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -88,19 +92,21 @@ export default function Dashboard() {
   const pathRef = useRef(null);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
 
-  /* Fetch folders — IDB-first so return visits are instant, then refresh from server. */
-  const [folders, setFolders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  /* Sync-cache first so there is no loading flash when returning from shuffle.
+     Falls back to empty / loading=true on first ever visit (cache is null). */
+  const [folders, setFolders] = useState(() => getLastFolders() || []);
+  const [loading, setLoading] = useState(!getLastFolders());
 
   useEffect(() => {
     let cancelled = false;
 
-    /* 1. Serve stale data from IDB immediately — hides the spinner on return visits. */
+    /* 1. Serve stale data from IDB immediately — hides the spinner on first visits
+          (sync cache already handled return visits via the useState initialiser). */
     idbGetFolders()
       .then(cached => { if (!cancelled && cached.length > 0) { setFolders(cached); setLoading(false); } })
       .catch(() => {}); // IDB miss is fine; server fetch below will cover it
 
-    /* 2. Refresh from server in the background; IDB is updated inside fetchFolders. */
+    /* 2. Refresh from server in the background; IDB + sync cache updated inside fetchFolders. */
     fetchFolders()
       .then(data => { if (!cancelled) { setFolders(data); setLoading(false); } })
       .catch(err => { console.error('Failed to fetch folders:', err); if (!cancelled) setLoading(false); });

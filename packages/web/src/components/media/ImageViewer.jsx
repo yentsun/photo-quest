@@ -2,7 +2,7 @@
  * @file Full-size image display component.
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Spinner from '../ui/Spinner.jsx';
 
 /**
@@ -21,9 +21,17 @@ export default function ImageViewer({
 }) {
   const [status, setStatus] = useState('loading'); // loading | loaded | error
 
-  useEffect(() => {
+  // Track which src the current status belongs to.  When src changes we reset
+  // status to 'loading' *during render* — before React commits the new img src
+  // to the DOM.  A useEffect-based reset would run after the DOM update, which
+  // means the browser can fire onLoad for a cached image first, setting status
+  // to 'loaded', and then the effect resets it to 'loading' with nothing left
+  // to bring it back → infinite spinner.
+  const [renderedSrc, setRenderedSrc] = useState(src);
+  if (src !== renderedSrc) {
+    setRenderedSrc(src);
     setStatus('loading');
-  }, [src]);
+  }
 
   const label = alt ? `Loading "${alt}"…` : 'Loading image…';
 
