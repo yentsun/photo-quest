@@ -87,27 +87,6 @@ export default function MediaPage() {
     return () => { cancelled = true; };
   }, [id, inSlideshow, signal]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Slideshow mode: reload folder siblings only when the folder changes. ──────────
-     Needed for up/down navigation (LAW 1.30). Runs at most once per unique folder,
-     not once per slide. */
-  useEffect(() => {
-    if (!inSlideshow) return;
-    const folderPath = slideshow.current?.folder;
-    if (!folderPath) { setFolderMedia([]); setFolder(null); return; }
-
-    let cancelled = false;
-    Promise.all([
-      fetchMedia({ folder: folderPath }),
-      fetchFolders(),
-    ]).then(([{ items }, allFolders]) => {
-      if (cancelled) return;
-      setFolderMedia(items);
-      setFolder(allFolders.find(f => f.path === folderPath) || null);
-    }).catch(err => console.error('Failed to load folder context:', err));
-
-    return () => { cancelled = true; };
-  }, [inSlideshow, slideshow.current?.folder, signal]); // eslint-disable-line react-hooks/exhaustive-deps
-
   /* Determine navigation list: slideshow items or folder media */
   const navItems = inSlideshow ? slideshow.items : folderMedia;
   const currentIndex = navItems.findIndex(m => m.id === Number(id));
@@ -151,20 +130,55 @@ export default function MediaPage() {
     }
   }, [hasNext, inSlideshow, slideshow, navigate, navItems, currentIndex]);
 
-  /* In slideshow mode, up/down navigate within the current folder (LAW 1.30) */
-  const folderIndex = folderMedia.findIndex(m => m.id === Number(id));
-  const hasFolderPrev = inSlideshow && folderIndex > 0;
-  const hasFolderNext = inSlideshow && folderIndex < folderMedia.length - 1;
+  /* ── Folder up/down navigation (LAW 1.30) — lazy, on-demand only. ──────────────────
+     In slideshow mode we do NOT pre-fetch folder siblings. They are loaded only when
+     the user actually presses up/down. The arrows are shown optimistically whenever
+     the item belongs to a folder; once siblings load the arrows refine to exact bounds.
+     In folder-browse mode folderMedia is already loaded by the browse effect above. */
+  const [folderNavLoading, setFolderNavLoading] = useState(false);
+  const folderNavInFlight = useRef(false);
 
-  const goFolderPrev = useCallback(() => {
+  /* Returns the cached sibling list, fetching it first if not yet loaded. */
+  const ensureFolderSiblings = useCallback(async () => {
+    if (!item?.folder) return [];
+    /* Cache hit — current item is present in the loaded list. */
+    if (folderMedia.length > 0 && folderMedia.some(m => m.id === item.id)) return folderMedia;
+    /* Guard against concurrent fetches triggered by rapid key presses. */
+    if (folderNavInFlight.current) return folderMedia;
+    folderNavInFlight.current = true;
+    setFolderNavLoading(true);
+    try {
+      const { items } = await fetchMedia({ folder: item.folder });
+      setFolderMedia(items);
+      return items;
+    } catch (err) {
+      console.error('Failed to load folder siblings:', err);
+      return [];
+    } finally {
+      folderNavInFlight.current = false;
+      setFolderNavLoading(false);
+    }
+  }, [item, folderMedia]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Optimistic: show arrows whenever item is in a folder.
+     If siblings are already loaded, refine based on actual position. */
+  const folderIndex = folderMedia.length > 0 ? folderMedia.findIndex(m => m.id === Number(id)) : -1;
+  const hasFolderPrev = inSlideshow && !!item?.folder && (folderIndex < 0 || folderIndex > 0);
+  const hasFolderNext = inSlideshow && !!item?.folder && (folderIndex < 0 || folderIndex < folderMedia.length - 1);
+
+  const goFolderPrev = useCallback(async () => {
     if (!hasFolderPrev) return;
-    navigate(`/media/${folderMedia[folderIndex - 1].id}`);
-  }, [hasFolderPrev, navigate, folderMedia, folderIndex]);
+    const siblings = await ensureFolderSiblings();
+    const idx = siblings.findIndex(m => m.id === Number(id));
+    if (idx > 0) navigate(`/media/${siblings[idx - 1].id}`);
+  }, [hasFolderPrev, ensureFolderSiblings, id, navigate]);
 
-  const goFolderNext = useCallback(() => {
+  const goFolderNext = useCallback(async () => {
     if (!hasFolderNext) return;
-    navigate(`/media/${folderMedia[folderIndex + 1].id}`);
-  }, [hasFolderNext, navigate, folderMedia, folderIndex]);
+    const siblings = await ensureFolderSiblings();
+    const idx = siblings.findIndex(m => m.id === Number(id));
+    if (idx >= 0 && idx < siblings.length - 1) navigate(`/media/${siblings[idx + 1].id}`);
+  }, [hasFolderNext, ensureFolderSiblings, id, navigate]);
 
   /* Fullscreen toggle (LAW 1.37) */
   const toggleFullscreen = useCallback(() => {
@@ -295,23 +309,26 @@ export default function MediaPage() {
           </button>
         )}
 
-        {/* Up/down arrows for in-folder navigation during slideshow (LAW 1.30) */}
+        {/* Up/down arrows for in-folder navigation during slideshow (LAW 1.30).
+            Show a spinner while folder siblings are being fetched on first press. */}
         {hasFolderPrev && (
           <button
             onClick={goFolderPrev}
+            disabled={folderNavLoading}
             className={`absolute top-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
             title="Previous in folder"
           >
-            <Icon name="up" className="w-8 h-8" />
+            {folderNavLoading ? <Spinner size="sm" /> : <Icon name="up" className="w-8 h-8" />}
           </button>
         )}
         {hasFolderNext && (
           <button
             onClick={goFolderNext}
+            disabled={folderNavLoading}
             className={`absolute bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
             title="Next in folder"
           >
-            <Icon name="down" className="w-8 h-8" />
+            {folderNavLoading ? <Spinner size="sm" /> : <Icon name="down" className="w-8 h-8" />}
           </button>
         )}
 
