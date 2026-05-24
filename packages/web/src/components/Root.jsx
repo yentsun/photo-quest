@@ -79,7 +79,10 @@ function ImportProgressBar() {
     try {
       await cancelScan(progress.scanId);
     } catch (err) {
-      console.error('Failed to cancel scan:', err);
+      /* 400 means the scan already finished — not a real error. */
+      if (!err.message?.includes('already')) {
+        console.error('Failed to cancel scan:', err);
+      }
     }
   }, [progress?.scanId]);
 

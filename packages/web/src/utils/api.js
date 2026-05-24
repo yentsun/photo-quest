@@ -137,7 +137,8 @@ export async function cancelScan(scanId) {
     method: 'POST',
   });
   if (!response.ok) {
-    throw new Error('Failed to cancel scan');
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to cancel scan');
   }
   return response.json();
 }
