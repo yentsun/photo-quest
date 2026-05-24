@@ -27,8 +27,12 @@ function ImportProgressBar() {
   const { bump } = useRefresh();
   const { setIsScanning } = useScan();
 
-  /* Check for active imports on mount (covers server-resumed scans). */
-  useEffect(() => {
+  /**
+   * Check /scans for any active import and sync state.
+   * Called on mount and after every SSE reconnect so stale progress
+   * is cleared if the scan finished while the connection was down.
+   */
+  const syncFromServer = useCallback(() => {
     fetch('/scans')
       .then(r => r.json())
       .then(scans => {
@@ -36,43 +40,69 @@ function ImportProgressBar() {
         if (active) {
           setProgress({ total: active.total, processed: active.processed, scanId: active.id });
           setIsScanning(true);
+        } else {
+          /* No active scan — clear any stale progress left from a dropped connection. */
+          setProgress(null);
+          setIsScanning(false);
         }
       })
       .catch(() => {});
   }, [setIsScanning]);
 
-  /* Always listen to SSE for import events. */
+  /* SSE listener with auto-reconnect. On every (re)connect we sync from
+     the server first so stale state is cleared if the scan finished while
+     the connection was down. */
   useEffect(() => {
-    const es = new EventSource('/jobs/events');
-
+    let es = null;
+    let reconnectTimer = null;
     let lastBump = 0;
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'import_started' || data.type === 'import_progress') {
-          setProgress({ total: data.total, processed: data.processed, scanId: data.scanId });
-          setIsScanning(true);
-          /* Bump refresh signal every 50 items so pages re-fetch during import. */
-          if (data.processed - lastBump >= 50) {
-            lastBump = data.processed;
-            bump();
+    let destroyed = false;
+
+    const connect = () => {
+      if (destroyed) return;
+
+      /* Sync current scan state before opening SSE — clears stale progress. */
+      syncFromServer();
+
+      es = new EventSource('/jobs/events');
+
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'import_started' || data.type === 'import_progress') {
+            setProgress({ total: data.total, processed: data.processed, scanId: data.scanId });
+            setIsScanning(true);
+            /* Bump refresh signal every 50 items so pages re-fetch during import. */
+            if (data.processed - lastBump >= 50) {
+              lastBump = data.processed;
+              bump();
+            }
           }
-        }
-        if (data.type === 'import_complete' || data.type === 'import_cancelled') {
-          setProgress(null);
-          setIsScanning(false);
-          /* Small delay to ensure server has saved DB before pages re-fetch. */
-          setTimeout(bump, 500);
-        }
-      } catch { /* ignore */ }
+          if (data.type === 'import_complete' || data.type === 'import_cancelled') {
+            setProgress(null);
+            setIsScanning(false);
+            lastBump = 0;
+            /* Small delay to ensure server has saved DB before pages re-fetch. */
+            setTimeout(bump, 500);
+          }
+        } catch { /* ignore parse errors */ }
+      };
+
+      es.onerror = () => {
+        es.close();
+        /* Reconnect after 3 s — also re-syncs state to clear stale progress. */
+        reconnectTimer = setTimeout(connect, 3000);
+      };
     };
 
-    es.onerror = () => {
-      es.close();
-    };
+    connect();
 
-    return () => es.close();
-  }, [bump, setIsScanning]);
+    return () => {
+      destroyed = true;
+      clearTimeout(reconnectTimer);
+      es?.close();
+    };
+  }, [bump, setIsScanning, syncFromServer]);
 
   const handleCancel = useCallback(async () => {
     if (!progress?.scanId) return;
