@@ -9,6 +9,7 @@ import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
 import { fetchFolders, fetchMedia } from '../utils/api.js';
+import { idbGetFolders } from '../services/idb.js';
 import { FolderCard } from './media/index.js';
 import { EmptyState } from './layout/index.js';
 import { Button, Icon, Input, Modal, PageLoader } from './ui/index.js';
@@ -87,15 +88,23 @@ export default function Dashboard() {
   const pathRef = useRef(null);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
 
-  /* Fetch folders on mount and when refresh signal changes. */
+  /* Fetch folders — IDB-first so return visits are instant, then refresh from server. */
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+
+    /* 1. Serve stale data from IDB immediately — hides the spinner on return visits. */
+    idbGetFolders()
+      .then(cached => { if (!cancelled && cached.length > 0) { setFolders(cached); setLoading(false); } })
+      .catch(() => {}); // IDB miss is fine; server fetch below will cover it
+
+    /* 2. Refresh from server in the background; IDB is updated inside fetchFolders. */
     fetchFolders()
       .then(data => { if (!cancelled) { setFolders(data); setLoading(false); } })
       .catch(err => { console.error('Failed to fetch folders:', err); if (!cancelled) setLoading(false); });
+
     return () => { cancelled = true; };
   }, [signal]);
 

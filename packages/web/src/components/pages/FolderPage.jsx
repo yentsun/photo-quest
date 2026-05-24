@@ -13,6 +13,7 @@ import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchFolders, fetchMedia } from '../../utils/api.js';
+import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
 import { FolderCard } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
@@ -45,7 +46,7 @@ export default function FolderPage() {
 
   const folderId = Number(id);
 
-  /* Fetch folders + first page of direct media on mount / signal change. */
+  /* Fetch folders + first page of direct media — IDB-first, then refresh from server. */
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -54,6 +55,23 @@ export default function FolderPage() {
     setMediaTotal(0);
     offsetRef.current = 0;
 
+    /* 1. Serve stale data from IDB immediately — hides the spinner on return visits. */
+    idbGetFolders().then(async (cachedFolders) => {
+      if (cancelled) return;
+      const found = cachedFolders.find(f => f.id === folderId);
+      if (!found) return;
+      const { items, total } = await idbGetMedia({ folder: found.path, limit: PAGE_SIZE });
+      if (cancelled || items.length === 0) return;
+      setFolders(cachedFolders);
+      folderRef.current = found;
+      mediaTotalRef.current = total;
+      offsetRef.current = items.length;
+      setDirectMedia(items);
+      setMediaTotal(total);
+      setLoading(false);
+    }).catch(() => {}); // IDB miss is fine; server fetch below will cover it
+
+    /* 2. Refresh from server; replaces IDB data with authoritative server state. */
     const load = async () => {
       try {
         const allFolders = await fetchFolders();
@@ -71,10 +89,10 @@ export default function FolderPage() {
             offset: 0,
           });
           if (!cancelled) {
+            offsetRef.current = items.length;
+            mediaTotalRef.current = total;
             setDirectMedia(items);
             setMediaTotal(total);
-            mediaTotalRef.current = total;
-            offsetRef.current = items.length;
           }
         }
       } catch (err) {

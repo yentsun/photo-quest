@@ -41,10 +41,14 @@ export default function MediaPage() {
 
   /* ── Slideshow mode: mirror slideshow.current into local state. ─────────────────────
      The URL is driven by slideshow.currentIndex (see effect below); `id` updates on
-     every slide but the data is already in the slideshow context. */
+     every slide but the data is already in the slideshow context.
+     Always clear loading here — if the user previously visited in folder-browse mode,
+     the folder-browse effect may have set loading=true and been cancelled before it
+     could reset it, leaving a stale loading state that would show the page loader. */
   useEffect(() => {
     if (!inSlideshow) return;
     setItem(slideshow.current);
+    setLoading(false);
   }, [inSlideshow, slideshow.current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Folder-browse mode: fetch item + siblings by URL id. ──────────────────────────

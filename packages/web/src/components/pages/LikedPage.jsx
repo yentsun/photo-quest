@@ -8,6 +8,7 @@ import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchMedia } from '../../utils/api.js';
+import { idbGetMedia } from '../../services/idb.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, PageLoader } from '../ui/index.js';
@@ -28,12 +29,18 @@ export default function LikedPage() {
   const [likedMedia, setLikedMedia] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  /* Fetch liked media on mount and when refresh signal changes. */
+  /* Fetch liked media — IDB-first so return visits are instant, then refresh from server. */
   useEffect(() => {
     let cancelled = false;
+
+    idbGetMedia({ liked: true })
+      .then(({ items }) => { if (!cancelled && items.length > 0) { setLikedMedia(items); setLoading(false); } })
+      .catch(() => {});
+
     fetchMedia({ liked: true })
       .then(({ items }) => { if (!cancelled) { setLikedMedia(items); setLoading(false); } })
       .catch(err => { console.error('Failed to fetch liked media:', err); if (!cancelled) setLoading(false); });
+
     return () => { cancelled = true; };
   }, [signal]);
 
