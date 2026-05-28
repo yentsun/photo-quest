@@ -274,10 +274,14 @@ export default function MediaPage() {
     touchStartY.current = null;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist < 10) { handleLike(); return; }
-    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
-    if (dx < 0) goNext();
-    else goPrev();
-  }, [goNext, goPrev, handleLike]);
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      if (Math.abs(dx) < 50) return;
+      if (dx < 0) goNext(); else goPrev();
+    } else {
+      if (Math.abs(dy) < 50) return;
+      if (dy < 0) goFolderNext(); else goFolderPrev();
+    }
+  }, [goNext, goPrev, goFolderNext, goFolderPrev, handleLike]);
 
   /* Delete current media and navigate to the next item (issue #4) */
   const { removeItem: removeSlideshowItem } = slideshow;
