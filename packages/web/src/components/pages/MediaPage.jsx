@@ -371,7 +371,7 @@ export default function MediaPage() {
         {hasPrev && (
           <button
             onClick={goPrev}
-            className={`absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+            className={`hidden sm:block absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
             title="Previous"
           >
             <Icon name="prev" className="w-8 h-8" />
@@ -382,7 +382,7 @@ export default function MediaPage() {
         {hasNext && (
           <button
             onClick={goNext}
-            className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+            className={`hidden sm:block absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
             title="Next"
           >
             <Icon name="next" className="w-8 h-8" />
@@ -395,7 +395,7 @@ export default function MediaPage() {
           <button
             onClick={goFolderPrev}
             disabled={folderNavLoading}
-            className={`absolute top-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+            className={`hidden sm:block absolute top-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
             title="Previous in folder"
           >
             {folderNavLoading ? <Spinner size="sm" /> : <Icon name="up" className="w-8 h-8" />}
@@ -405,7 +405,7 @@ export default function MediaPage() {
           <button
             onClick={goFolderNext}
             disabled={folderNavLoading}
-            className={`absolute bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+            className={`hidden sm:block absolute bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
             title="Next in folder"
           >
             {folderNavLoading ? <Spinner size="sm" /> : <Icon name="down" className="w-8 h-8" />}
