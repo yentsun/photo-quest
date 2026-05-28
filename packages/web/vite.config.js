@@ -129,6 +129,7 @@ export default defineConfig({
   ],
 
   server: {
+    host: true,
     port: config.webappPort,
     proxy: {
       /* Proxy /media requests to the API, but skip /media/:id (digits only)

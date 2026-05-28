@@ -22,6 +22,7 @@ const paths = {
   list: { d: 'M4 6h16M4 12h16M4 18h16', stroke: true },
   maximize: { d: 'M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4', stroke: true },
   minimize: { d: 'M8 4v4H4M16 4v4h4M8 20v-4H4M16 20v-4h4', stroke: true },
+  copy: { d: 'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z', stroke: true },
 };
 
 /**
