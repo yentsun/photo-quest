@@ -180,24 +180,6 @@ export default function MediaPage() {
     }
   }, [hasNext, inSlideshow, slideshow, navigate, navItems, currentIndex]);
 
-  const handleTouchStart = useCallback((e) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-  }, []);
-
-  const handleTouchEnd = useCallback((e) => {
-    if (touchStartX.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    const dy = e.changedTouches[0].clientY - touchStartY.current;
-    touchStartX.current = null;
-    touchStartY.current = null;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 10) { handleLike(); return; }
-    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
-    if (dx < 0) goNext();
-    else goPrev();
-  }, [goNext, goPrev, handleLike]);
-
   /* ── Folder up/down navigation (LAW 1.30) — lazy, on-demand only. ──────────────────
      In slideshow mode we do NOT pre-fetch folder siblings. They are loaded only when
      the user actually presses up/down. The arrows are shown optimistically whenever
@@ -278,6 +260,24 @@ export default function MediaPage() {
       setItem(prev => ({ ...prev, likes: originalLikes }));
     }
   }, [item]);
+
+  const handleTouchStart = useCallback((e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartX.current = null;
+    touchStartY.current = null;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 10) { handleLike(); return; }
+    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
+    if (dx < 0) goNext();
+    else goPrev();
+  }, [goNext, goPrev, handleLike]);
 
   /* Delete current media and navigate to the next item (issue #4) */
   const { removeItem: removeSlideshowItem } = slideshow;
