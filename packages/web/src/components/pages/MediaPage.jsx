@@ -15,7 +15,7 @@ import { MEDIA_TYPE } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
-import { getMediaUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi, getLastMediaItem } from '../../utils/api.js';
+import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi, getLastMediaItem } from '../../utils/api.js';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 
 export default function MediaPage() {
@@ -145,6 +145,20 @@ export default function MediaPage() {
       slideshow.loadMore();
     }
   }, [inSlideshow, slideshow.currentIndex, slideshow.items.length, slideshow.total]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Preload the next 2 images in slideshow mode so right-arrow nav feels instant.
+     Videos are skipped — preloading video streams is too expensive. */
+  const preloadRefs = useRef([]);
+  useEffect(() => {
+    if (!inSlideshow) return;
+    preloadRefs.current = [1, 2].flatMap(offset => {
+      const next = slideshow.items[slideshow.currentIndex + offset];
+      if (!next || next.type !== MEDIA_TYPE.IMAGE) return [];
+      const img = new Image();
+      img.src = getImageUrl(next.id);
+      return [img];
+    });
+  }, [inSlideshow, slideshow.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goPrev = useCallback(() => {
     if (!hasPrev) return;
