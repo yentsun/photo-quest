@@ -191,10 +191,12 @@ export default function MediaPage() {
     const dy = e.changedTouches[0].clientY - touchStartY.current;
     touchStartX.current = null;
     touchStartY.current = null;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 10) { handleLike(); return; }
     if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
     if (dx < 0) goNext();
     else goPrev();
-  }, [goNext, goPrev]);
+  }, [goNext, goPrev, handleLike]);
 
   /* ── Folder up/down navigation (LAW 1.30) — lazy, on-demand only. ──────────────────
      In slideshow mode we do NOT pre-fetch folder siblings. They are loaded only when
