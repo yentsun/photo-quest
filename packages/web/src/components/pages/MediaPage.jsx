@@ -29,6 +29,8 @@ export default function MediaPage() {
   const [fileStatus, setFileStatus] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const viewerRef = useRef(null);
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
 
   /* In slideshow mode the current item is already in context — no fetch needed.
      Initialise from there so there is no flash of the page loader on slide changes.
@@ -177,6 +179,22 @@ export default function MediaPage() {
       navigate(`/media/${navItems[currentIndex + 1].id}`);
     }
   }, [hasNext, inSlideshow, slideshow, navigate, navItems, currentIndex]);
+
+  const handleTouchStart = useCallback((e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartX.current = null;
+    touchStartY.current = null;
+    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
+    if (dx < 0) goNext();
+    else goPrev();
+  }, [goNext, goPrev]);
 
   /* ── Folder up/down navigation (LAW 1.30) — lazy, on-demand only. ──────────────────
      In slideshow mode we do NOT pre-fetch folder siblings. They are loaded only when
@@ -336,7 +354,11 @@ export default function MediaPage() {
   return (
     <div ref={viewerRef} className={`flex flex-col ${isFullscreen ? 'h-screen bg-black' : 'h-[calc(100vh-4rem)]'}`}>
       {/* Media display with nav arrows */}
-      <div className="flex-1 flex items-center justify-center bg-black overflow-hidden relative group/viewer">
+      <div
+        className="flex-1 flex items-center justify-center bg-black overflow-hidden relative group/viewer"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {isImage ? (
           <ImageViewer src={mediaUrl} alt={item.title} />
         ) : (
