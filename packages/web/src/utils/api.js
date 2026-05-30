@@ -66,7 +66,7 @@ export function getLastMediaItem(id) { return _mediaCache.get(id) ?? null; }
  * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean, liked?: boolean, random?: boolean }} [opts]
  * @returns {Promise<{ items: Array, total: number }>}
  */
-export async function fetchMedia({ limit, offset, folder, subtree, liked, random } = {}) {
+export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort } = {}) {
   const url = new URL(apiRoutes.media, window.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
@@ -74,6 +74,7 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   if (subtree) url.searchParams.set('subtree', '1');
   if (liked) url.searchParams.set('liked', '1');
   if (random) url.searchParams.set('random', '1');
+  if (sort != null) url.searchParams.set('sort', sort);
 
   try {
     const response = await fetch(url);
@@ -86,7 +87,7 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
     return data;
   } catch (err) {
     console.warn('[api] fetchMedia falling back to IDB:', err.message);
-    return idbGetMedia({ folder, subtree, liked, limit, offset });
+    return idbGetMedia({ folder, subtree, liked, limit, offset, sort });
   }
 }
 

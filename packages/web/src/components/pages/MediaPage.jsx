@@ -198,7 +198,7 @@ export default function MediaPage() {
     folderNavInFlight.current = true;
     setFolderNavLoading(true);
     try {
-      const { items } = await fetchMedia({ folder: item.folder });
+      const { items } = await fetchMedia({ folder: item.folder, sort: 'filename' });
       setFolderMedia(items);
       return items;
     } catch (err) {

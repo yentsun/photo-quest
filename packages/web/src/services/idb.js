@@ -147,7 +147,7 @@ export async function idbGetMediaById(id) {
  * @param {{ folder?: string, subtree?: boolean, liked?: boolean, limit?: number, offset?: number }} opts
  * @returns {Promise<{ items: Object[], total: number }>}
  */
-export async function idbGetMedia({ folder, subtree, liked, limit, offset } = {}) {
+export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort } = {}) {
   const db = await openDB();
   let items = await getAll(db, 'media');
 
@@ -174,7 +174,9 @@ export async function idbGetMedia({ folder, subtree, liked, limit, offset } = {}
   }
 
   /* Mirror server's ORDER BY */
-  if (liked) {
+  if (sort === 'filename') {
+    items.sort((a, b) => (a.path || '').localeCompare(b.path || ''));
+  } else if (liked) {
     items.sort((a, b) => b.likes - a.likes);
   } else {
     items.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));

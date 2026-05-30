@@ -19,6 +19,7 @@ export default async (kojo, logger) => {
     const subtree = url.searchParams.get('subtree');
     const liked = url.searchParams.get('liked');
     const random = url.searchParams.get('random');
+    const sort = url.searchParams.get('sort');
 
     const opts = {};
     if (limit != null) opts.limit = Number(limit);
@@ -27,6 +28,7 @@ export default async (kojo, logger) => {
     if (subtree === '1') opts.subtree = true;
     if (liked === '1') opts.liked = true;
     if (random === '1') opts.random = true;
+    if (sort != null) opts.sort = sort;
 
     const result = kojo.ops.listMedia(opts);
     json(res, 200, result);
