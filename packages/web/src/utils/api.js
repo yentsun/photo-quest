@@ -116,6 +116,25 @@ export async function fetchMediaById(id) {
 }
 
 /**
+ * Rename a media item.
+ *
+ * @param {number} id
+ * @param {string} title
+ * @returns {Promise<Object>} Updated media object
+ */
+export async function renameMedia(id, title) {
+  const response = await fetch(`/media/${id}/title`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+  if (!response.ok) throw new Error('Failed to rename media');
+  const item = await response.json();
+  _mediaCache.set(item.id, item);
+  return item;
+}
+
+/**
  * Like a media item (increment like count).
  *
  * @param {number} id - Media ID
@@ -201,6 +220,16 @@ export function getStreamUrl(id) {
  */
 export function getImageUrl(id) {
   return `/image/${id}`;
+}
+
+/**
+ * Get the thumbnail URL for any media item (first frame JPEG for videos).
+ *
+ * @param {number} id - Media ID
+ * @returns {string} Thumbnail URL
+ */
+export function getThumbUrl(id) {
+  return `/thumb/${id}`;
 }
 
 /**

@@ -15,7 +15,7 @@ import { MEDIA_TYPE } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi, getLastMediaItem } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi, renameMedia, getLastMediaItem } from '../../utils/api.js';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 
 export default function MediaPage() {
@@ -25,6 +25,9 @@ export default function MediaPage() {
   const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const [showInfo, setShowInfo] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const titleInputRef = useRef(null);
   const playerRef = useRef(null);
   const [fileStatus, setFileStatus] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -316,9 +319,30 @@ export default function MediaPage() {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
+  const handleTitleDoubleClick = useCallback(() => {
+    if (!item) return;
+    setTitleDraft(item.title);
+    setEditingTitle(true);
+    setTimeout(() => { titleInputRef.current?.select(); }, 0);
+  }, [item]);
+
+  const commitTitle = useCallback(async () => {
+    const trimmed = titleDraft.trim();
+    setEditingTitle(false);
+    if (!trimmed || trimmed === item?.title) return;
+    setItem(prev => ({ ...prev, title: trimmed }));
+    try {
+      await renameMedia(item.id, trimmed);
+    } catch (err) {
+      console.error('Failed to rename media:', err);
+      setItem(prev => ({ ...prev, title: item.title }));
+    }
+  }, [titleDraft, item]);
+
   /* Keyboard navigation */
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT') return;
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
@@ -485,7 +509,27 @@ export default function MediaPage() {
       {!isFullscreen && (
         <div className="bg-gray-900 border-t border-gray-800 px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
-            <h1 className="text-white font-medium truncate">{item.title}</h1>
+            {editingTitle ? (
+              <input
+                ref={titleInputRef}
+                className="bg-gray-800 text-white font-medium rounded px-1 w-full outline-none focus:ring-1 focus:ring-blue-500"
+                value={titleDraft}
+                onChange={e => setTitleDraft(e.target.value)}
+                onBlur={commitTitle}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitTitle(); }
+                  if (e.key === 'Escape') { e.preventDefault(); setEditingTitle(false); }
+                }}
+              />
+            ) : (
+              <h1
+                className="text-white font-medium truncate cursor-text select-none"
+                onDoubleClick={handleTitleDoubleClick}
+                title="Double-click to rename"
+              >
+                {item.title}
+              </h1>
+            )}
             <div className="flex items-center gap-2 text-sm text-gray-400">
               {inSlideshow && <span className="text-blue-400">Slideshow</span>}
               {navItems.length > 1 && (
