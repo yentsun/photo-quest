@@ -39,6 +39,8 @@ export default function FolderPage() {
   const [loading, setLoading] = useState(!getLastFolders());
   const [loadingMessage, setLoadingMessage] = useState('Fetching folder list…');
   const [loadingMore, setLoadingMore] = useState(false);
+  /* True until the first data fetch (IDB or server) settles for this folder. */
+  const [contentReady, setContentReady] = useState(false);
   /* Stable refs so handleLoadMore doesn't need to be recreated on every append. */
   const loadingMoreRef = useRef(false);
   const offsetRef = useRef(0);       // items currently loaded (next fetch offset)
@@ -57,6 +59,7 @@ export default function FolderPage() {
     setLoadingMessage('Fetching folder list…');
     setDirectMedia([]);
     setMediaTotal(0);
+    setContentReady(false);
     offsetRef.current = 0;
 
     /* 1. Serve stale data from IDB immediately — hides the spinner on return visits. */
@@ -73,6 +76,7 @@ export default function FolderPage() {
       setDirectMedia(items);
       setMediaTotal(total);
       setLoading(false);
+      setContentReady(true);
     }).catch(() => {}); // IDB miss is fine; server fetch below will cover it
 
     /* 2. Refresh from server; replaces IDB data with authoritative server state. */
@@ -102,7 +106,10 @@ export default function FolderPage() {
       } catch (err) {
         console.error('Failed to load folder data:', err);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setContentReady(true);
+        }
       }
     };
 
@@ -215,12 +222,13 @@ export default function FolderPage() {
       {/* Breadcrumbs */}
       {breadcrumbs.length > 0 && (
         <nav className="flex items-center gap-1 text-sm text-gray-400 mb-4 overflow-x-auto">
-          <button
+          <Button
+            variant="text"
             onClick={() => navigate('/dashboard')}
-            className="hover:text-white transition-colors shrink-0"
+            className="shrink-0"
           >
             Library
-          </button>
+          </Button>
           {breadcrumbs.map((crumb, i) => {
             const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
             const isLast = i === breadcrumbs.length - 1;
@@ -230,12 +238,12 @@ export default function FolderPage() {
                 {isLast ? (
                   <span className="text-white">{name}</span>
                 ) : (
-                  <button
+                  <Button
+                    variant="text"
                     onClick={() => navigate(`/folder/${crumb.id}`)}
-                    className="hover:text-white transition-colors"
                   >
                     {name}
-                  </button>
+                  </Button>
                 )}
               </span>
             );
@@ -276,7 +284,11 @@ export default function FolderPage() {
       )}
 
       {/* Media Grid or Empty State */}
-      {directMedia.length > 0 ? (
+      {!contentReady ? (
+        <div className="flex items-center justify-center py-16">
+          <Spinner size="lg" />
+        </div>
+      ) : directMedia.length > 0 ? (
         <>
           <MediaGrid
             items={directMedia}
