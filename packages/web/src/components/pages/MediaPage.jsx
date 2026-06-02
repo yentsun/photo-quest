@@ -6,7 +6,7 @@
  * LAW 1.30: in slideshow mode, left/right = shuffle nav, up/down = folder nav.
  */
 
-import { useEffect, useCallback, useState, useRef } from 'react';
+import { useEffect, useCallback, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
@@ -15,7 +15,7 @@ import { MEDIA_TYPE } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
-import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi, getLastMediaItem } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi, getLastMediaItem } from '../../utils/api.js';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 
 export default function MediaPage() {
@@ -45,6 +45,7 @@ export default function MediaPage() {
   });
   const [folderMedia, setFolderMedia] = useState([]);
   const [folder, setFolder] = useState(null);
+  const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(!inSlideshow && !getLastMediaItem(Number(id)));
   const [loadingMessage, setLoadingMessage] = useState('Fetching media item…');
 
@@ -99,7 +100,10 @@ export default function MediaPage() {
 
           /* IDB pass for folder record (for back-link / delete fallback). */
           const cachedFolders = await idbGetFolders();
-          if (!cancelled) setFolder(cachedFolders.find(f => f.path === mediaItem.folder) || null);
+          if (!cancelled) {
+            setFolders(cachedFolders);
+            setFolder(cachedFolders.find(f => f.path === mediaItem.folder) || null);
+          }
 
           /* Server refresh — update siblings and folder record. */
           setLoadingMessage('Loading folder context…');
@@ -109,6 +113,7 @@ export default function MediaPage() {
           ]);
           if (cancelled) return;
           setFolderMedia(folderResult.items);
+          setFolders(allFolders);
           setFolder(allFolders.find(f => f.path === mediaItem.folder) || null);
         }
       } catch (err) {
@@ -157,7 +162,7 @@ export default function MediaPage() {
       const next = slideshow.items[slideshow.currentIndex + offset];
       if (!next || next.type !== MEDIA_TYPE.IMAGE) return [];
       const img = new Image();
-      img.src = getImageUrl(next.id);
+      img.src = getThumbUrl(next.id);
       return [img];
     });
   }, [inSlideshow, slideshow.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -355,7 +360,17 @@ export default function MediaPage() {
 
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(item);
-  const folderName = item.folder?.split(/[/\\]/).filter(Boolean).pop();
+
+  const breadcrumbs = useMemo(() => {
+    if (!folder) return [];
+    const crumbs = [];
+    let current = folder;
+    while (current) {
+      crumbs.unshift(current);
+      current = current.parentId ? folders.find(f => f.id === current.parentId) : null;
+    }
+    return crumbs;
+  }, [folders, folder]);
 
   return (
     <div ref={viewerRef} className={`flex flex-col ${isFullscreen ? 'h-screen bg-black' : 'h-[calc(100vh-4rem)]'}`}>
@@ -373,57 +388,61 @@ export default function MediaPage() {
 
         {/* Left arrow */}
         {hasPrev && (
-          <button
+          <IconButton
+            variant="overlay"
+            icon={<Icon name="prev" className="w-8 h-8" />}
+            label="Previous"
+            size="lg"
             onClick={goPrev}
-            className={`hidden sm:block absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
-            title="Previous"
-          >
-            <Icon name="prev" className="w-8 h-8" />
-          </button>
+            className={`hidden sm:block absolute left-2 top-1/2 -translate-y-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+          />
         )}
 
         {/* Right arrow */}
         {hasNext && (
-          <button
+          <IconButton
+            variant="overlay"
+            icon={<Icon name="next" className="w-8 h-8" />}
+            label="Next"
+            size="lg"
             onClick={goNext}
-            className={`hidden sm:block absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
-            title="Next"
-          >
-            <Icon name="next" className="w-8 h-8" />
-          </button>
+            className={`hidden sm:block absolute right-2 top-1/2 -translate-y-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+          />
         )}
 
         {/* Up/down arrows for in-folder navigation during slideshow (LAW 1.30).
             Show a spinner while folder siblings are being fetched on first press. */}
         {hasFolderPrev && (
-          <button
-            onClick={goFolderPrev}
+          <IconButton
+            variant="overlay"
+            icon={folderNavLoading ? <Spinner size="sm" /> : <Icon name="up" className="w-8 h-8" />}
+            label="Previous in folder"
+            size="lg"
             disabled={folderNavLoading}
-            className={`hidden sm:block absolute top-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
-            title="Previous in folder"
-          >
-            {folderNavLoading ? <Spinner size="sm" /> : <Icon name="up" className="w-8 h-8" />}
-          </button>
+            onClick={goFolderPrev}
+            className={`hidden sm:block absolute top-2 left-1/2 -translate-x-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+          />
         )}
         {hasFolderNext && (
-          <button
-            onClick={goFolderNext}
+          <IconButton
+            variant="overlay"
+            icon={folderNavLoading ? <Spinner size="sm" /> : <Icon name="down" className="w-8 h-8" />}
+            label="Next in folder"
+            size="lg"
             disabled={folderNavLoading}
-            className={`hidden sm:block absolute bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
-            title="Next in folder"
-          >
-            {folderNavLoading ? <Spinner size="sm" /> : <Icon name="down" className="w-8 h-8" />}
-          </button>
+            onClick={goFolderNext}
+            className={`hidden sm:block absolute bottom-2 left-1/2 -translate-x-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+          />
         )}
 
         {/* Fullscreen toggle button */}
-        <button
+        <IconButton
+          variant="overlay"
+          icon={<Icon name={isFullscreen ? 'minimize' : 'maximize'} className="w-5 h-5" />}
+          label={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
           onClick={toggleFullscreen}
-          className={`absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-all ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
-          title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-        >
-          <Icon name={isFullscreen ? 'minimize' : 'maximize'} className="w-5 h-5" />
-        </button>
+          className={`absolute top-2 right-2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+        />
 
         {/* Minimal info overlay in fullscreen — position counter */}
         {isFullscreen && navItems.length > 1 && (
@@ -438,19 +457,26 @@ export default function MediaPage() {
         <div className="bg-gray-900 border-t border-gray-800 px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
             <h1 className="text-white font-medium truncate">{item.title}</h1>
-            <div className="flex items-center gap-2 text-sm text-gray-400">
-              {inSlideshow ? (
-                <span className="text-blue-400">Slideshow</span>
-              ) : folder ? (
-                <button
-                  onClick={() => navigate(`/folder/${folder.id}`)}
-                  className="hover:text-white transition-colors truncate"
-                >
-                  {folderName}
-                </button>
-              ) : null}
+            <div className="flex items-center gap-2 text-sm text-gray-400 overflow-x-auto">
+              {inSlideshow && <span className="text-blue-400 shrink-0">Slideshow</span>}
+              <nav className="flex items-center gap-1 shrink-0">
+                <Button variant="text" onClick={() => navigate('/dashboard')} className="shrink-0">
+                  Library
+                </Button>
+                {breadcrumbs.map((crumb) => {
+                  const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
+                  return (
+                    <span key={crumb.id} className="flex items-center gap-1 shrink-0">
+                      <span className="text-gray-600">/</span>
+                      <Button variant="text" onClick={() => navigate(`/folder/${crumb.id}`)}>
+                        {name}
+                      </Button>
+                    </span>
+                  );
+                })}
+              </nav>
               {navItems.length > 1 && (
-                <span>{currentIndex + 1} / {navItems.length}</span>
+                <span className="shrink-0">{currentIndex + 1} / {navItems.length}</span>
               )}
             </div>
           </div>
