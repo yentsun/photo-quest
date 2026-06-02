@@ -259,7 +259,7 @@ export default function FolderPage() {
             {subfolders.length > 0 && `${subfolders.length} folder${subfolders.length !== 1 ? 's' : ''}`}
             {subfolders.length > 0 && itemLabel && ', '}
             {itemLabel}
-            {subfolders.length === 0 && !itemLabel && '0 items'}
+            {contentReady && subfolders.length === 0 && !itemLabel && '0 items'}
           </p>
         </div>
         {subtreeTotal > 0 && (
