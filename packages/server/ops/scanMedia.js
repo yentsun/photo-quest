@@ -85,6 +85,13 @@ export async function processOneItem(db, itemId, filePath, logger) {
     return;
   }
 
+  /* Fast path — path already in library, no need to hash. */
+  const existing = db.prepare('SELECT id FROM media WHERE path = ? AND hidden = 0').get(filePath);
+  if (existing) {
+    db.prepare('UPDATE import_queue SET status = ? WHERE id = ?').run(IMPORT_STATUS.COMPLETED, itemId);
+    return;
+  }
+
   const hash = await computeFileHash(filePath);
 
   /* Ensure folder has a record in the folders table. */
