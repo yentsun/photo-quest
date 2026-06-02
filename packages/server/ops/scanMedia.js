@@ -20,8 +20,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { Worker } from 'node:worker_threads';
+import { fileURLToPath } from 'node:url';
 import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, JOB_TYPE, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
 import { broadcastSse } from '../src/sse.js';
+import { DB_PATH } from '../src/db.js';
+
+const WORKER_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/scanWorker.js');
 
 /**
  * Compute a content hash for a file.
@@ -135,64 +140,19 @@ export async function processOneItem(db, itemId, filePath, logger) {
 }
 
 /**
- * Process the import queue for a given scan, one item at a time.
- * Uses setTimeout to yield to the event loop between batches.
+ * Spawn a worker thread to process the import queue for the given scan.
+ * The worker owns its own DB connection and posts SSE events back here.
  */
-async function processQueue(kojo, scanId, logger) {
-  const db = kojo.get('db');
-
-  /* Check if scan was cancelled before processing next item. */
-  const scanRow = db.prepare('SELECT status FROM scans WHERE id = ?').get(scanId);
-
-  if (scanRow.status === SCAN_STATUS.CANCELLED) {
-    logger.info(`Scan ${scanId} was cancelled, stopping`);
-    return;
-  }
-
-  /* Claim next pending item for this scan. */
-  const item = db.prepare(
-    'SELECT id, path FROM import_queue WHERE scan_id = ? AND status = ? LIMIT 1'
-  ).get(scanId, IMPORT_STATUS.PENDING);
-
-  if (!item) {
-    /* All done — mark scan as completed. */
-    db.prepare(
-      'UPDATE scans SET status = ? WHERE id = ?'
-    ).run(SCAN_STATUS.COMPLETED, scanId);
-
-    /* Get final counts for the broadcast. */
-    const scan = db.prepare('SELECT total, processed FROM scans WHERE id = ?').get(scanId);
-
-    broadcastSse({ type: 'import_complete', scanId, total: scan.total, processed: scan.processed });
-    logger.info(`Scan ${scanId} complete: ${scan.processed}/${scan.total} files imported`);
-    return;
-  }
-
-  try {
-    await processOneItem(db, item.id, item.path, logger);
-  } catch (err) {
-    logger.warn(`Failed to import ${item.path}: ${err.message}`);
-    db.prepare(
-      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
-    ).run(IMPORT_STATUS.FAILED, err.message, item.id);
-  }
-
-  /* Increment processed count. */
-  db.prepare('UPDATE scans SET processed = processed + 1 WHERE id = ?').run(scanId);
-
-  const progress = db.prepare('SELECT total, processed FROM scans WHERE id = ?').get(scanId);
-
-  logger.debug(`[scan ${scanId}] ${progress.processed}/${progress.total} ${item.path}`);
-
-  broadcastSse({
-    type: 'import_progress',
-    scanId,
-    total: progress.total,
-    processed: progress.processed
+function spawnScanWorker(scanId, logger) {
+  const worker = new Worker(WORKER_PATH, { workerData: { dbPath: DB_PATH, scanId } });
+  worker.on('message', (msg) => {
+    if (msg.type === 'sse') broadcastSse(msg.event);
+    if (msg.type === 'log') logger[msg.level]?.(msg.msg);
   });
-
-  /* Schedule next item — small delay keeps the API responsive during large imports. */
-  setTimeout(() => processQueue(kojo, scanId, logger), 5);
+  worker.on('error', (err) => logger.warn(`Scan worker error: ${err.message}`));
+  worker.on('exit', (code) => {
+    if (code !== 0) logger.warn(`Scan worker exited with code ${code}`);
+  });
 }
 
 /**
@@ -208,7 +168,7 @@ export function resumeIncompleteScans(kojo, logger) {
   for (const scan of scans) {
     db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.IMPORTING, scan.id);
     logger.info(`Resuming incomplete scan ${scan.id}`);
-    setTimeout(() => processQueue(kojo, scan.id, logger), 0);
+    spawnScanWorker(scan.id, logger);
   }
 }
 
@@ -284,8 +244,8 @@ export default function (dirPath) {
     processed: 0
   });
 
-  /* Phase 2: Async queue processing. */
-  setTimeout(() => processQueue(kojo, scanId, logger), 0);
+  /* Phase 2: Process queue in a worker thread — keeps the HTTP loop free. */
+  spawnScanWorker(scanId, logger);
 
   return { scanId, total: files.length };
 }
