@@ -372,8 +372,37 @@ export default function MediaPage() {
     return crumbs;
   }, [folders, folder]);
 
+  const backTarget = folder ? `/folder/${folder.id}` : '/dashboard';
+
   return (
     <div ref={viewerRef} className={`flex flex-col ${isFullscreen ? 'h-screen bg-black' : 'h-[calc(100vh-4rem)]'}`}>
+      {/* Top bar — hidden in fullscreen */}
+      {!isFullscreen && (
+        <div className="bg-gray-900 border-b border-gray-800 px-3 py-2 flex items-center gap-2 shrink-0">
+          <IconButton
+            icon={<Icon name="prev" className="w-4 h-4" />}
+            label="Back"
+            onClick={() => navigate(backTarget)}
+          />
+          <nav className="flex items-center gap-1 text-sm text-gray-400 overflow-x-auto">
+            <Button variant="text" onClick={() => navigate('/dashboard')} className="shrink-0">
+              Library
+            </Button>
+            {breadcrumbs.map((crumb) => {
+              const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
+              return (
+                <span key={crumb.id} className="flex items-center gap-1 shrink-0">
+                  <span className="text-gray-600">/</span>
+                  <Button variant="text" onClick={() => navigate(`/folder/${crumb.id}`)}>
+                    {name}
+                  </Button>
+                </span>
+              );
+            })}
+          </nav>
+        </div>
+      )}
+
       {/* Media display with nav arrows */}
       <div
         className="flex-1 flex items-center justify-center bg-black overflow-hidden relative group/viewer"
@@ -457,26 +486,10 @@ export default function MediaPage() {
         <div className="bg-gray-900 border-t border-gray-800 px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
             <h1 className="text-white font-medium truncate">{item.title}</h1>
-            <div className="flex items-center gap-2 text-sm text-gray-400 overflow-x-auto">
-              {inSlideshow && <span className="text-blue-400 shrink-0">Slideshow</span>}
-              <nav className="flex items-center gap-1 shrink-0">
-                <Button variant="text" onClick={() => navigate('/dashboard')} className="shrink-0">
-                  Library
-                </Button>
-                {breadcrumbs.map((crumb) => {
-                  const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
-                  return (
-                    <span key={crumb.id} className="flex items-center gap-1 shrink-0">
-                      <span className="text-gray-600">/</span>
-                      <Button variant="text" onClick={() => navigate(`/folder/${crumb.id}`)}>
-                        {name}
-                      </Button>
-                    </span>
-                  );
-                })}
-              </nav>
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              {inSlideshow && <span className="text-blue-400">Slideshow</span>}
               {navItems.length > 1 && (
-                <span className="shrink-0">{currentIndex + 1} / {navItems.length}</span>
+                <span>{currentIndex + 1} / {navItems.length}</span>
               )}
             </div>
           </div>
