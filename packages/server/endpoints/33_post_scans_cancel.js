@@ -8,6 +8,7 @@
 import { SCAN_STATUS } from '@photo-quest/shared';
 import { broadcastSse } from '../src/sse.js';
 import { json } from '../src/http.js';
+import { terminateScanWorker } from '../ops/scanMedia.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -28,6 +29,7 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: `Scan is already ${scan.status}` });
     }
 
+    terminateScanWorker(scanId);
     db.prepare(
       'UPDATE scans SET status = ? WHERE id = ?'
     ).run(SCAN_STATUS.CANCELLED, scanId);

@@ -139,18 +139,35 @@ export async function processOneItem(db, itemId, filePath, logger) {
   ).run(IMPORT_STATUS.COMPLETED, itemId);
 }
 
+/** Active scan workers keyed by scanId — used for forced termination. */
+const activeWorkers = new Map();
+
+/**
+ * Terminate the worker for a scan and remove it from the active map.
+ * No-op if the scan is not running.
+ */
+export function terminateScanWorker(scanId) {
+  const worker = activeWorkers.get(scanId);
+  if (worker) {
+    worker.terminate();
+    activeWorkers.delete(scanId);
+  }
+}
+
 /**
  * Spawn a worker thread to process the import queue for the given scan.
  * The worker owns its own DB connection and posts SSE events back here.
  */
 function spawnScanWorker(scanId, logger) {
   const worker = new Worker(WORKER_PATH, { workerData: { dbPath: DB_PATH, scanId } });
+  activeWorkers.set(scanId, worker);
   worker.on('message', (msg) => {
     if (msg.type === 'sse') broadcastSse(msg.event);
     if (msg.type === 'log') logger[msg.level]?.(msg.msg);
   });
   worker.on('error', (err) => logger.warn(`Scan worker error: ${err.message}`));
   worker.on('exit', (code) => {
+    activeWorkers.delete(scanId);
     if (code !== 0) logger.warn(`Scan worker exited with code ${code}`);
   });
 }
@@ -165,11 +182,17 @@ export function resumeIncompleteScans(kojo, logger) {
     'SELECT id FROM scans WHERE status IN (?, ?)'
   ).all(SCAN_STATUS.DISCOVERING, SCAN_STATUS.IMPORTING);
 
+  if (scans.length === 0) return;
+
+  /* Cancel all stale scans rather than resuming them. With path-based
+     deduplication, rescans are fast — the user can re-trigger if needed.
+     Resuming accumulates workers on every restart and was the cause of
+     dozens of redundant workers spawning. */
+  const stmt = db.prepare('UPDATE scans SET status = ? WHERE id = ?');
   for (const scan of scans) {
-    db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.IMPORTING, scan.id);
-    logger.info(`Resuming incomplete scan ${scan.id}`);
-    spawnScanWorker(scan.id, logger);
+    stmt.run(SCAN_STATUS.CANCELLED, scan.id);
   }
+  logger.info(`Cancelled ${scans.length} incomplete scan(s) from previous session`);
 }
 
 /**
