@@ -367,6 +367,19 @@ export default function MediaPage() {
       .catch(() => setFileStatus({ ok: false, error: 'Could not check status' }));
   }, [showInfo, item]);
 
+  const breadcrumbs = useMemo(() => {
+    if (!folder) return [];
+    const crumbs = [];
+    let current = folder;
+    while (current) {
+      crumbs.unshift(current);
+      current = current.parentId ? folders.find(f => f.id === current.parentId) : null;
+    }
+    return crumbs;
+  }, [folders, folder]);
+
+  const backTarget = folder ? `/folder/${folder.id}` : '/dashboard';
+
   if (loading) {
     return <PageLoader message={loadingMessage} />;
   }
@@ -384,19 +397,6 @@ export default function MediaPage() {
 
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(item);
-
-  const breadcrumbs = useMemo(() => {
-    if (!folder) return [];
-    const crumbs = [];
-    let current = folder;
-    while (current) {
-      crumbs.unshift(current);
-      current = current.parentId ? folders.find(f => f.id === current.parentId) : null;
-    }
-    return crumbs;
-  }, [folders, folder]);
-
-  const backTarget = folder ? `/folder/${folder.id}` : '/dashboard';
 
   return (
     <div ref={viewerRef} className={`flex flex-col ${isFullscreen ? 'h-screen bg-black' : 'h-[calc(100vh-4rem)]'}`}>
