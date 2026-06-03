@@ -233,44 +233,50 @@ export default function (dirPath) {
     throw new Error(`Not a directory: ${dirPath}`);
   }
 
-  /* Phase 1: Discovery — walk directory and populate import queue. */
+  /* Phase 1: Discovery — walk directory. */
   const files = findMediaFiles(dirPath);
 
-  /* Create folder hierarchy — scan root + all intermediate directories. */
+  /* Always update the folder hierarchy (needed for navigation). */
   createFolderHierarchy(db, dirPath, files);
 
-  /* Create scan record. */
+  /* Filter to only files not already in the library — single indexed query,
+     no I/O. This avoids queueing, worker threads, and SSE noise for rescans
+     where everything is already imported. */
+  const existingPaths = new Set(
+    db.prepare('SELECT path FROM media WHERE hidden = 0').all().map(r => r.path)
+  );
+  const newFiles = files.filter(f => !existingPaths.has(f));
+
+  logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
+
+  if (newFiles.length === 0) {
+    return { scanId: null, total: 0 };
+  }
+
+  /* Create scan record with only the new-file count. */
   const scanResult = db.prepare(
     'INSERT INTO scans (dir_path, total, status) VALUES (?, ?, ?)'
-  ).run(dirPath, files.length, SCAN_STATUS.DISCOVERING);
+  ).run(dirPath, newFiles.length, SCAN_STATUS.DISCOVERING);
   const scanId = scanResult.lastInsertRowid;
 
-  /* Queue each file as an import task — wrapped in a transaction for speed. */
+  /* Queue only new files — wrapped in a transaction for speed. */
   const insertStmt = db.prepare(
     'INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)'
   );
   db.exec('BEGIN');
-  for (const filePath of files) {
+  for (const filePath of newFiles) {
     insertStmt.run(scanId, filePath, IMPORT_STATUS.PENDING);
   }
   db.exec('COMMIT');
 
-  /* Mark scan as ready for importing. */
   db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.IMPORTING, scanId);
 
-  logger.info(`Scan ${scanId}: discovered ${files.length} files, starting import`);
-
-  broadcastSse({
-    type: 'import_started',
-    scanId,
-    total: files.length,
-    processed: 0
-  });
+  broadcastSse({ type: 'import_started', scanId, total: newFiles.length, processed: 0 });
 
   /* Phase 2: Process queue in a worker thread — keeps the HTTP loop free. */
   spawnScanWorker(scanId, logger);
 
-  return { scanId, total: files.length };
+  return { scanId, total: newFiles.length };
 }
 
 /**
