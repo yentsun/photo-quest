@@ -12,53 +12,42 @@ import { fetchFolders, fetchMedia, getLastFolders } from '../utils/api.js';
 import { idbGetFolders } from '../services/idb.js';
 import { FolderCard } from './media/index.js';
 import { EmptyState } from './layout/index.js';
-import { Button, Icon, Input, Modal, PageLoader } from './ui/index.js';
+import { Button, Icon, Modal, PageLoader } from './ui/index.js';
 
 /**
- * Debounced path validation against the server.
+ * Validate a folder path against the server.
  */
 function usePathValidation() {
   const [pathValid, setPathValid] = useState(null);
   const [pathError, setPathError] = useState(null);
   const [pathInfo, setPathInfo] = useState(null); // { files, newEstimate }
   const [checking, setChecking] = useState(false);
-  const timerRef = useRef(null);
 
-  const validate = useCallback((value) => {
-    clearTimeout(timerRef.current);
-    const trimmed = value.trim();
-
-    if (!trimmed) {
-      setPathValid(null);
-      setPathError(null);
-      setPathInfo(null);
-      setChecking(false);
-      return;
-    }
-
+  const validate = useCallback(async (path) => {
+    if (!path) return;
     setChecking(true);
-    timerRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch('/media/check-path', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: trimmed }),
-        });
-        const data = await res.json();
-        setPathValid(data.valid);
-        setPathError(data.valid ? null : data.error);
-        setPathInfo(data.valid ? { files: data.files, newEstimate: data.newEstimate } : null);
-      } catch {
-        setPathValid(null);
-        setPathError('Could not reach server');
-      } finally {
-        setChecking(false);
-      }
-    }, 300);
+    setPathValid(null);
+    setPathError(null);
+    setPathInfo(null);
+    try {
+      const res = await fetch('/media/check-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      const data = await res.json();
+      setPathValid(data.valid);
+      setPathError(data.valid ? null : data.error);
+      setPathInfo(data.valid ? { files: data.files, newEstimate: data.newEstimate } : null);
+    } catch {
+      setPathValid(null);
+      setPathError('Could not reach server');
+    } finally {
+      setChecking(false);
+    }
   }, []);
 
   const reset = useCallback(() => {
-    clearTimeout(timerRef.current);
     setPathValid(null);
     setPathError(null);
     setPathInfo(null);
@@ -89,7 +78,8 @@ export default function Dashboard() {
   const [scanProgress, setScanProgress] = useState(null);
   const [importProgress, setImportProgress] = useState(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
-  const pathRef = useRef(null);
+  const [selectedPath, setSelectedPath] = useState(null);
+  const [browsing, setBrowsing] = useState(false);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
 
   /* Sync-cache first so there is no loading flash when returning from shuffle.
@@ -122,7 +112,11 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
-    if (!showAddFolder) reset();
+    if (!showAddFolder) {
+      setSelectedPath(null);
+      setBrowsing(false);
+      reset();
+    }
   }, [showAddFolder, reset]);
 
   const handleShuffle = async () => {
@@ -170,15 +164,28 @@ export default function Dashboard() {
     }
   };
 
-  const handleAddFolder = async (e) => {
-    e.preventDefault();
-    const folderPath = pathRef.current?.value?.trim();
-    if (!folderPath || !pathValid) return;
+  const handleBrowse = async () => {
+    setBrowsing(true);
+    try {
+      const res = await fetch('/open-folder', { method: 'POST' });
+      const data = await res.json();
+      if (data.cancelled || !data.path) return;
+      setSelectedPath(data.path);
+      validate(data.path);
+    } catch (err) {
+      console.error('Failed to open folder dialog:', err);
+    } finally {
+      setBrowsing(false);
+    }
+  };
+
+  const handleAddFolder = async () => {
+    if (!selectedPath || !pathValid) return;
 
     setImportProgress(null);
 
     try {
-      const { scanId, total } = await addFolderWithPath(folderPath);
+      const { scanId, total } = await addFolderWithPath(selectedPath);
       setImportProgress({ total, processed: 0 });
 
       /* Listen to SSE for import progress. */
@@ -240,8 +247,6 @@ export default function Dashboard() {
 
   const folderIcon = <Icon name="folder" className="w-16 h-16" />;
 
-  const inputVariant = pathValid === true ? 'success' : pathValid === false ? 'error' : 'default';
-
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       {/* Header */}
@@ -288,57 +293,51 @@ export default function Dashboard() {
         title="Add Folder"
       >
         <div className="space-y-4">
-          <p className="text-gray-300">
-            Paste the full folder path from File Explorer:
-          </p>
-          <form onSubmit={handleAddFolder} className="space-y-3">
-            <div>
-              <Input
-                ref={pathRef}
-                type="text"
-                placeholder="e.g. C:\Users\work\Pictures\Vacation"
-                variant={inputVariant}
-                autoFocus
-                onChange={(e) => {
-                  const cleaned = e.target.value.replace(/^["']+|["']+$/g, '').trim();
-                  if (cleaned !== e.target.value) e.target.value = cleaned;
-                  validate(cleaned);
-                }}
-              />
-              {checking && (
-                <p className="text-gray-400 text-xs mt-1">Checking path...</p>
-              )}
-              {pathError && (
-                <p className="text-red-400 text-xs mt-1">{pathError}</p>
-              )}
-              {pathValid && pathInfo && (
-                <p className="text-green-400 text-xs mt-1">
-                  {pathInfo.files} media file{pathInfo.files !== 1 ? 's' : ''} found
-                  {pathInfo.newEstimate > 0 && ` (${pathInfo.newEstimate} new)`}
-                  {pathInfo.newEstimate === 0 && pathInfo.files > 0 && ' (all already in library)'}
-                </p>
-              )}
+          <Button
+            variant="secondary"
+            onClick={handleBrowse}
+            disabled={browsing || !!importProgress}
+            className="w-full"
+          >
+            {browsing ? 'Opening dialog…' : selectedPath ? 'Browse again…' : 'Browse for folder…'}
+          </Button>
+
+          {selectedPath && (
+            <div className="p-3 rounded-lg bg-gray-700/50 text-sm text-gray-200 break-all">
+              {selectedPath}
             </div>
-            {importProgress && (
-              <div>
-                <div className="flex justify-between text-xs text-gray-400 mb-1">
-                  <span>Importing files...</span>
-                  <span>{importProgress.processed}/{importProgress.total}</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-200"
-                    style={{ width: `${importProgress.total ? (importProgress.processed / importProgress.total) * 100 : 0}%` }}
-                  />
-                </div>
+          )}
+
+          {checking && <p className="text-gray-400 text-xs">Checking path…</p>}
+          {pathError && <p className="text-red-400 text-xs">{pathError}</p>}
+          {pathValid && pathInfo && (
+            <p className="text-green-400 text-xs">
+              {pathInfo.files} media file{pathInfo.files !== 1 ? 's' : ''} found
+              {pathInfo.newEstimate > 0 && ` (${pathInfo.newEstimate} new)`}
+              {pathInfo.newEstimate === 0 && pathInfo.files > 0 && ' (all already in library)'}
+            </p>
+          )}
+
+          {importProgress && (
+            <div>
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Importing files…</span>
+                <span>{importProgress.processed}/{importProgress.total}</span>
               </div>
-            )}
-            {!isScanning && (
-              <Button type="submit" disabled={!pathValid}>
-                Add
-              </Button>
-            )}
-          </form>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-200"
+                  style={{ width: `${importProgress.total ? (importProgress.processed / importProgress.total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {selectedPath && !isScanning && (
+            <Button onClick={handleAddFolder} disabled={!pathValid || checking || browsing}>
+              Add
+            </Button>
+          )}
         </div>
       </Modal>
 

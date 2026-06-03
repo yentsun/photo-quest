@@ -35,8 +35,8 @@ export function initDb() {
   db = new DatabaseSync(DB_PATH);
 
   /* WAL mode for concurrent access with the server process. */
-  db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA busy_timeout = 5000');
+  db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
 
   db.exec(CREATE_MEDIA_TABLE);
@@ -45,7 +45,20 @@ export function initDb() {
   db.exec(CREATE_IMPORT_QUEUE_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
 
-  console.log('Worker database connected');
+  resetStalledJobs();
+  console.log('[queue] Database connected');
+}
+
+/**
+ * On startup: reset running jobs (worker crashed mid-job) and failed jobs
+ * (so they're retried with the current code) back to pending.
+ */
+function resetStalledJobs() {
+  const runningReset = db.prepare(
+    "UPDATE jobs SET status = 'pending', updated_at = datetime('now') WHERE status = 'running'"
+  ).run();
+
+  if (runningReset.changes > 0) console.log(`[queue] Reset ${runningReset.changes} stalled running job(s)`);
 }
 
 /**

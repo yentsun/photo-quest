@@ -14,6 +14,10 @@
  */
 
 import { spawn } from 'node:child_process';
+import ffprobeInstaller from '@ffprobe-installer/ffprobe';
+
+const FFPROBE_PATH = ffprobeInstaller.path;
+console.log('[probe] ffprobe binary:', FFPROBE_PATH);
 
 /**
  * Run ffprobe on a media file and return a normalised metadata object.
@@ -47,7 +51,7 @@ export function ffprobe(filePath) {
       filePath
     ];
 
-    const proc = spawn('ffprobe', args);
+    const proc = spawn(FFPROBE_PATH, args);
 
     /* Collect stdout chunks -- ffprobe writes its JSON output here. */
     const chunks = [];

@@ -24,6 +24,10 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Media not found' });
     }
 
+    if (row.type !== 'image') {
+      return json(res, 400, { error: 'Not an image' });
+    }
+
     const filePath = row.path;
 
     if (!fs.existsSync(filePath)) {

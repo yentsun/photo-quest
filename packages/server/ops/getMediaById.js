@@ -11,5 +11,15 @@ export default function (id) {
   const [kojo] = this;
   const db = kojo.get('db');
 
-  return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)) || null;
+  const media = db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id));
+  if (!media) return null;
+
+  if (media.status === 'error') {
+    const job = db.prepare(
+      "SELECT error FROM jobs WHERE media_id = ? AND status = 'failed' ORDER BY updated_at DESC LIMIT 1"
+    ).get(Number(id));
+    if (job?.error) media.job_error = job.error;
+  }
+
+  return media;
 }

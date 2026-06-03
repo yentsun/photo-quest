@@ -63,7 +63,7 @@ export default defineConfig({
 
         /* Don't cache API data endpoints -- they should always hit the server. */
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/media\/(?!\d+$)/, /^\/stream/, /^\/image/, /^\/jobs/, /^\/folders/],
+        navigateFallbackDenylist: [/^\/media\/(?!\d+$)/, /^\/stream/, /^\/image/, /^\/thumb/, /^\/jobs/, /^\/folders/],
 
         /* Runtime caching — serve previously viewed media offline (LAW 1.29). */
         runtimeCaching: [
@@ -74,6 +74,20 @@ export default defineConfig({
               cacheName: 'media-images',
               expiration: {
                 maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^\/thumb\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'media-thumbs',
+              expiration: {
+                maxEntries: 1000,
                 maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
               },
               cacheableResponse: {
@@ -147,10 +161,12 @@ export default defineConfig({
       },
       '/stream': API_TARGET,
       '/image': API_TARGET,
+      '/thumb': API_TARGET,
       '/jobs': API_TARGET,
       '/folders': API_TARGET,
       '/network': API_TARGET,
       '/scans': API_TARGET,
+      '/open-folder': API_TARGET,
     },
   },
 });

@@ -41,11 +41,11 @@ let db;
 export function initDb() {
   db = new DatabaseSync(DB_PATH);
 
+  /* Retry for up to 5 seconds if another process holds the DB. */
+  db.exec('PRAGMA busy_timeout = 5000');
+
   /* WAL mode allows concurrent reads from the worker process. */
   db.exec('PRAGMA journal_mode = WAL');
-
-  /* Retry for up to 5 seconds if the worker is writing. */
-  db.exec('PRAGMA busy_timeout = 5000');
 
   /* Enable foreign key enforcement (off by default in SQLite). */
   db.exec('PRAGMA foreign_keys = ON');

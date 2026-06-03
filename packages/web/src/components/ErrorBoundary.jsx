@@ -18,7 +18,6 @@
 import React from 'react';
 import { clientRoutes as r } from '@photo-quest/shared';
 import GlobalContext from '../globalContext';
-import { clearStorage } from '../keep';
 
 /**
  * Class-based error boundary component.
@@ -64,7 +63,7 @@ export default class ErrorBoundary extends React.Component {
     /* Wipe localStorage to eliminate corrupt cached state as a possible cause.
      * The user will need to log in again, but that is preferable to an
      * infinite crash loop. */
-    clearStorage();
+    localStorage.clear();
   }
 
   /**

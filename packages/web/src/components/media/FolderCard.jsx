@@ -4,7 +4,7 @@
 
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getImageUrl } from '../../utils/api.js';
+import { getThumbUrl } from '../../utils/api.js';
 import { Icon, IconButton } from '../ui/index.js';
 
 /**
@@ -15,7 +15,7 @@ export default memo(function FolderCard({ folder, onRemove }) {
   const navigate = useNavigate();
   const folderName = folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
 
-  const thumbnailUrl = folder.previewMediaId ? getImageUrl(folder.previewMediaId) : null;
+  const thumbnailUrl = folder.previewMediaId ? getThumbUrl(folder.previewMediaId) : null;
 
   const imageCount = folder.subtreeImageCount ?? folder.imageCount ?? 0;
   const videoCount = folder.subtreeVideoCount ?? folder.videoCount ?? 0;

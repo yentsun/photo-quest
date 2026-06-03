@@ -2,9 +2,9 @@
  * @file Card component for displaying a single media item in a grid.
  */
 
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { MEDIA_TYPE } from '@photo-quest/shared';
-import { getMediaUrl } from '../../utils/api.js';
+import { getThumbUrl } from '../../utils/api.js';
 import { Icon } from '../ui/index.js';
 import LikeButton from './LikeButton.jsx';
 
@@ -18,27 +18,25 @@ export default memo(function MediaCard({
   showLikes = true,
 }) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
-  const mediaUrl = getMediaUrl(media);
+  const [thumbFailed, setThumbFailed] = useState(false);
 
   return (
     <div
       className="relative aspect-square rounded-lg overflow-hidden bg-gray-800 cursor-pointer group"
       onClick={() => onClick?.(media)}
     >
-      {/* Thumbnail */}
-      {isImage ? (
+      {/* Thumbnail — /thumb/:id serves EXIF-rotated image or video first frame */}
+      {thumbFailed ? (
+        <div className="w-full h-full flex items-center justify-center">
+          <Icon name={isImage ? 'image' : 'video'} className="w-12 h-12 text-gray-600" />
+        </div>
+      ) : (
         <img
-          src={mediaUrl}
+          src={getThumbUrl(media.id)}
           alt={media.title}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
-        />
-      ) : (
-        <video
-          src={mediaUrl}
-          preload="metadata"
-          muted
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          onError={() => setThumbFailed(true)}
         />
       )}
 

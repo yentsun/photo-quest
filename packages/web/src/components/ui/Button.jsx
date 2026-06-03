@@ -31,6 +31,7 @@ export default function Button({
     secondary: 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-gray-500',
     ghost: 'bg-transparent text-gray-300 hover:bg-gray-800 focus:ring-gray-500',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+    text: 'bg-transparent text-gray-400 hover:text-white focus:ring-gray-500',
   };
 
   const sizes = {
@@ -39,9 +40,11 @@ export default function Button({
     lg: 'px-6 py-3 text-lg gap-2.5',
   };
 
+  const sizeClass = variant === 'text' ? '' : sizes[size];
+
   return (
     <button
-      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`${baseStyles} ${variants[variant]} ${sizeClass} ${className}`}
       disabled={disabled}
       onClick={onClick}
       {...rest}

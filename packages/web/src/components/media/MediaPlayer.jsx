@@ -49,14 +49,21 @@ const MediaPlayer = forwardRef(function MediaPlayer({
     }
   }, [src, autoPlay]);
 
+  const [error, setError] = useState(null);
+
   const label = title ? `Buffering "${title}"…` : 'Buffering video…';
 
   return (
     <div className="relative w-full h-full flex items-center justify-center">
-      {buffering && (
+      {buffering && !error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black z-10 pointer-events-none">
           <Spinner size="lg" />
           <p className="text-gray-200 text-sm font-medium tracking-wide">{label}</p>
+        </div>
+      )}
+      {error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black z-10 pointer-events-none">
+          <p className="text-red-400 text-sm font-medium">{error}</p>
         </div>
       )}
       <video
@@ -69,6 +76,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
         onCanPlay={() => setBuffering(false)}
         onWaiting={() => setBuffering(true)}
         onPlaying={() => setBuffering(false)}
+        onError={() => { setBuffering(false); setError('This video could not be played.'); }}
       />
     </div>
   );

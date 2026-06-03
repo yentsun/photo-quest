@@ -11,7 +11,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { MEDIA_TYPE } from '@photo-quest/shared';
+import { MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
@@ -435,6 +435,19 @@ export default function MediaPage() {
       >
         {isImage ? (
           <ImageViewer src={mediaUrl} alt={item.title} />
+        ) : item.status === MEDIA_STATUS.ERROR ? (
+          <div className="flex flex-col items-center justify-center gap-3 text-center px-8 max-w-xl">
+            <p className="text-red-400 font-medium">Processing failed</p>
+            {item.job_error && (
+              <p className="text-gray-400 text-sm font-mono bg-gray-900 rounded px-3 py-2 text-left w-full">{item.job_error}</p>
+            )}
+            <p className="text-gray-600 text-xs">{item.path}</p>
+          </div>
+        ) : item.status !== MEDIA_STATUS.READY ? (
+          <div className="flex flex-col items-center justify-center gap-2 text-center">
+            <p className="text-gray-300 font-medium capitalize">{item.status}…</p>
+            <p className="text-gray-500 text-sm">This video is still being processed</p>
+          </div>
         ) : (
           <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} />
         )}

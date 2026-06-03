@@ -33,6 +33,8 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import ffmpegPath from 'ffmpeg-static';
+console.log('[transcode] ffmpeg binary:', ffmpegPath);
 
 /**
  * Directory where transcoded MP4 files are stored.
@@ -41,30 +43,12 @@ import fs from 'node:fs';
  *
  * @type {string}
  */
-const TRANSCODED_DIR = process.env.TRANSCODED_DIR || path.join(process.cwd(), 'transcoded');
-
-/**
- * Transcode a media file to H.264/AAC MP4.
- *
- * @param {string}   filePath   - Absolute path to the source media file.
- * @param {number}   mediaId    - The media record's database ID (used to
- *   generate the output filename).
- * @param {function} onProgress - Callback invoked periodically with the
- *   current output position in seconds.  The pipeline uses this to update
- *   the job's progress field in the database.
- * @returns {Promise<string>} Resolves with the absolute path to the
- *   transcoded output file.
- * @throws {Error} If ffmpeg exits with a non-zero code or fails to spawn.
- */
 export function transcode(filePath, mediaId, onProgress) {
-  /* Ensure the output directory exists.  `recursive: true` means it works
-   * even if intermediate directories are missing. */
-  if (!fs.existsSync(TRANSCODED_DIR)) {
-    fs.mkdirSync(TRANSCODED_DIR, { recursive: true });
-  }
-
-  /** Output path, e.g. `/path/to/transcoded/42.mp4`. */
-  const outputPath = path.join(TRANSCODED_DIR, `${mediaId}.mp4`);
+  const dir = path.dirname(filePath);
+  const base = path.basename(filePath, path.extname(filePath));
+  /* If the source is already .mp4 (wrong codec), avoid clobbering it. */
+  const suffix = filePath.toLowerCase().endsWith('.mp4') ? '_h264' : '';
+  const outputPath = path.join(dir, `${base}${suffix}.mp4`);
 
   return new Promise((resolve, reject) => {
     const args = [
@@ -80,7 +64,7 @@ export function transcode(filePath, mediaId, onProgress) {
       outputPath
     ];
 
-    const proc = spawn('ffmpeg', args);
+    const proc = spawn(ffmpegPath, args);
 
     /**
      * Parse progress output from ffmpeg's `-progress pipe:1` mode.
