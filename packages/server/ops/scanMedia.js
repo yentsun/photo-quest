@@ -139,47 +139,37 @@ export async function processOneItem(db, itemId, filePath, logger) {
   ).run(IMPORT_STATUS.COMPLETED, itemId);
 }
 
-/** Active scan workers keyed by scanId — used for forced termination. */
-const activeWorkers = new Map();
+/** The single active scan worker, or null when idle. */
+let activeWorker = null;
 
-/**
- * Terminate the worker for a specific scan.
- * No-op if that scan is not running.
- */
-export function terminateScanWorker(scanId) {
-  const worker = activeWorkers.get(scanId);
-  if (worker) {
-    worker.terminate();
-    activeWorkers.delete(scanId);
+/** Terminate the worker immediately. No-op if idle. */
+export function terminateAllScanWorkers() {
+  if (activeWorker) {
+    activeWorker.terminate();
+    activeWorker = null;
   }
 }
 
 /**
- * Terminate ALL active scan workers.
- * Used when the user cancels — refreshLibrary spawns one worker per folder
- * so cancelling one scan must stop all of them.
+ * Ensure the single worker thread is running.
+ * If it is already running it will naturally pick up items from the new
+ * scan that were just added to import_queue — no second thread needed.
  */
-export function terminateAllScanWorkers() {
-  for (const [, worker] of activeWorkers) worker.terminate();
-  activeWorkers.clear();
-}
+function ensureScanWorker(logger) {
+  if (activeWorker) return;
 
-/**
- * Spawn a worker thread to process the import queue for the given scan.
- * The worker owns its own DB connection and posts SSE events back here.
- */
-function spawnScanWorker(scanId, logger) {
-  const worker = new Worker(WORKER_PATH, { workerData: { dbPath: DB_PATH, scanId } });
-  activeWorkers.set(scanId, worker);
+  const worker = new Worker(WORKER_PATH, { workerData: { dbPath: DB_PATH } });
+  activeWorker = worker;
+
   worker.on('message', (msg) => {
     if (msg.type === 'sse') broadcastSse(msg.event);
     if (msg.type === 'log') logger[msg.level]?.(msg.msg);
   });
-  worker.on('error', (err) => logger.warn(`Scan worker error: ${err.message}`));
-  worker.on('exit', (code) => {
-    activeWorkers.delete(scanId);
-    if (code !== 0) logger.warn(`Scan worker exited with code ${code}`);
+  worker.on('error', (err) => {
+    activeWorker = null;
+    logger.warn(`Scan worker error: ${err.message}`);
   });
+  worker.on('exit', () => { activeWorker = null; });
 }
 
 /**
@@ -283,8 +273,9 @@ export default function (dirPath) {
 
   broadcastSse({ type: 'import_started', scanId, total: newFiles.length, processed: 0 });
 
-  /* Phase 2: Process queue in a worker thread — keeps the HTTP loop free. */
-  spawnScanWorker(scanId, logger);
+  /* Phase 2: Ensure the single worker thread is running — it will pick up
+     the new scan's items along with any other queued work. */
+  ensureScanWorker(logger);
 
   return { scanId, total: newFiles.length };
 }
