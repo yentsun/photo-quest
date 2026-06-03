@@ -8,7 +8,7 @@
 import { SCAN_STATUS } from '@photo-quest/shared';
 import { broadcastSse } from '../src/sse.js';
 import { json } from '../src/http.js';
-import { terminateScanWorker } from '../ops/scanMedia.js';
+import { terminateAllScanWorkers } from '../ops/scanMedia.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -29,13 +29,16 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: `Scan is already ${scan.status}` });
     }
 
-    terminateScanWorker(scanId);
+    /* Kill all active workers — refreshLibrary spawns one per folder. */
+    terminateAllScanWorkers();
+
+    /* Mark every importing scan as cancelled in the DB. */
     db.prepare(
-      'UPDATE scans SET status = ? WHERE id = ?'
-    ).run(SCAN_STATUS.CANCELLED, scanId);
+      "UPDATE scans SET status = ? WHERE status IN ('importing', 'discovering')"
+    ).run(SCAN_STATUS.CANCELLED);
 
     broadcastSse({ type: 'import_cancelled', scanId });
-    logger.info(`Scan ${scanId} cancelled by user`);
+    logger.info(`Scan ${scanId} cancelled by user (all active scans stopped)`);
 
     json(res, 200, { scanId, status: SCAN_STATUS.CANCELLED });
   });

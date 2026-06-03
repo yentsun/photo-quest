@@ -143,8 +143,8 @@ export async function processOneItem(db, itemId, filePath, logger) {
 const activeWorkers = new Map();
 
 /**
- * Terminate the worker for a scan and remove it from the active map.
- * No-op if the scan is not running.
+ * Terminate the worker for a specific scan.
+ * No-op if that scan is not running.
  */
 export function terminateScanWorker(scanId) {
   const worker = activeWorkers.get(scanId);
@@ -152,6 +152,16 @@ export function terminateScanWorker(scanId) {
     worker.terminate();
     activeWorkers.delete(scanId);
   }
+}
+
+/**
+ * Terminate ALL active scan workers.
+ * Used when the user cancels — refreshLibrary spawns one worker per folder
+ * so cancelling one scan must stop all of them.
+ */
+export function terminateAllScanWorkers() {
+  for (const [, worker] of activeWorkers) worker.terminate();
+  activeWorkers.clear();
 }
 
 /**
