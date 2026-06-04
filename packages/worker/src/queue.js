@@ -45,6 +45,7 @@ export function initDb() {
   db.exec(CREATE_IMPORT_QUEUE_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
 
+  try { db.exec('ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0'); } catch {}
   resetStalledJobs();
   console.log('[queue] Database connected');
 }
@@ -84,7 +85,7 @@ export function claimNextJob() {
     FROM jobs j
     JOIN media m ON m.id = j.media_id
     WHERE j.status = 'pending'
-    ORDER BY j.created_at ASC
+    ORDER BY j.priority DESC, j.created_at ASC
     LIMIT 1
   `).get();
 

@@ -15,7 +15,7 @@ import { MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi, renameMedia, getLastMediaItem } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi, renameMedia, requestTranscode, getLastMediaItem } from '../../utils/api.js';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 
 export default function MediaPage() {
@@ -130,6 +130,21 @@ export default function MediaPage() {
     load();
     return () => { cancelled = true; };
   }, [id, inSlideshow, signal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* When a video needs processing, immediately prioritize it in the worker queue,
+     then poll every 3 s until it reaches a terminal state. */
+  const TERMINAL = [MEDIA_STATUS.READY, MEDIA_STATUS.ERROR];
+  useEffect(() => {
+    if (!item || item.type !== MEDIA_TYPE.VIDEO || TERMINAL.includes(item.status)) return;
+    requestTranscode(item.id);
+    const interval = setInterval(async () => {
+      try {
+        const fresh = await fetchMediaById(Number(id));
+        setItem(fresh);
+      } catch { /* ignore */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [id, item?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Determine navigation list: slideshow items or folder media */
   const navItems = inSlideshow ? slideshow.items : folderMedia;

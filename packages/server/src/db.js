@@ -95,6 +95,7 @@ function migrateDb() {
     'ALTER TABLE media ADD COLUMN orientation INTEGER',
     'ALTER TABLE media ADD COLUMN camera TEXT',
     'ALTER TABLE media ADD COLUMN date_taken TEXT',
+    'ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0',
   ];
 
   for (const sql of migrations) {

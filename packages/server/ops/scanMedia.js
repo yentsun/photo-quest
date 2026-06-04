@@ -124,12 +124,7 @@ export async function processOneItem(db, itemId, filePath, logger) {
          VALUES (?, ?, ?, ?, ?, ?)`
       ).run(filePath, title, mediaType, folder, status, hash);
 
-      /* Videos need a probe job. */
-      if (!isImage) {
-        db.prepare(
-          "INSERT INTO jobs (media_id, type, status) VALUES (?, ?, 'pending')"
-        ).run(result.lastInsertRowid, JOB_TYPE.PROBE);
-      }
+      /* Videos are processed on demand when the user views them. */
     }
   }
 

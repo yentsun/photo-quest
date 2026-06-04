@@ -122,6 +122,10 @@ export async function fetchMediaById(id) {
  * @param {string} title
  * @returns {Promise<Object>} Updated media object
  */
+export async function requestTranscode(id) {
+  await fetch(`/media/${id}/transcode`, { method: 'POST' });
+}
+
 export async function renameMedia(id, title) {
   const response = await fetch(`/media/${id}/title`, {
     method: 'PATCH',

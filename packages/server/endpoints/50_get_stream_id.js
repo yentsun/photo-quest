@@ -15,7 +15,7 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
+import path from 'node:path'; // still used for ext detection
 import { json } from '../src/http.js';
 
 export default async (kojo, logger) => {
@@ -29,13 +29,10 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Media not found' });
     }
 
-    /* Prefer the transcoded file if it exists, fall back to original. */
-    const transcodedPath = path.join(
-      path.dirname(row.path),
-      'transcoded',
-      path.basename(row.path, path.extname(row.path)) + '.mp4'
-    );
-    const filePath = fs.existsSync(transcodedPath) ? transcodedPath : row.path;
+    /* Prefer the transcoded file if recorded, fall back to original. */
+    const filePath = (row.transcoded_path && fs.existsSync(row.transcoded_path))
+      ? row.transcoded_path
+      : row.path;
 
     if (!fs.existsSync(filePath)) {
       return json(res, 404, { error: 'File not found on disk' });

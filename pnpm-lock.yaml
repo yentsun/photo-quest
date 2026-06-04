@@ -10,6 +10,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@ffprobe-installer/ffprobe':
+        specifier: ^2.1.2
+        version: 2.1.2
       '@photo-quest/shared':
         specifier: workspace:*
         version: link:../shared
