@@ -26,6 +26,7 @@
  *   worker from retrying the same broken job in an infinite loop.
  */
 
+import fs from 'node:fs';
 import { JOB_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import {
   claimNextJob, completeJob, failJob, createJob,
@@ -105,13 +106,23 @@ async function handleTranscode(job) {
     updateJobProgress(job.id, Math.min(99, seconds));
   });
 
+  /* Promote the transcoded file to primary path so path always points to a real file. */
   completeJob(job.id, {
     mediaUpdate: {
       mediaId: job.media_id,
       status: MEDIA_STATUS.READY,
-      transcoded_path: outputPath
+      path: outputPath,
+      transcoded_path: null,
     }
   });
+
+  /* Delete the original — best-effort, don't fail the job if it can't be removed. */
+  try {
+    fs.unlinkSync(job.media_path);
+    console.log(`[pipeline] Deleted original "${job.media_path}"`);
+  } catch (err) {
+    console.warn(`[pipeline] Could not delete original "${job.media_path}": ${err.message}`);
+  }
 
   console.log(`[pipeline] Transcoded "${job.media_title}" → ${outputPath}`);
 }

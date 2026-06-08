@@ -1,11 +1,12 @@
 /**
  * @file GET /thumb/:id -- Serve a thumbnail image for any media item.
  *
- * Images: redirect to /image/:id (already handled by that endpoint).
- * Videos: extract the first frame via ffmpeg, cache it as a JPEG, and serve it.
+ * Images: resize to 400 px wide via sharp (EXIF-rotated), cache as JPEG to disk.
+ * Videos: extract the first frame via ffmpeg, cache it as a JPEG to disk.
  *
- * The generated JPEG is written to packages/server/thumbs/<id>.jpg on the first
- * request and served from disk on all subsequent requests.
+ * In both cases the generated JPEG is written to packages/server/thumbs/<id>.jpg
+ * on the first request and served from disk on all subsequent requests, so
+ * neither sharp nor ffmpeg runs more than once per item.
  */
 
 import { spawn } from 'node:child_process';
@@ -13,13 +14,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ffmpegBin from 'ffmpeg-static';
+import sharp from 'sharp';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { json } from '../src/http.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const THUMBS_DIR = path.join(__dirname, '..', 'thumbs');
 
-/** In-flight generation promises keyed by media ID — prevents duplicate ffmpeg spawns. */
+/** In-flight generation promises keyed by media ID — prevents duplicate work on concurrent requests. */
 const inFlight = new Map();
 
 function extractFrame(videoPath, thumbPath) {
@@ -47,6 +49,14 @@ function extractFrame(videoPath, thumbPath) {
   });
 }
 
+function generateImageThumb(imagePath, thumbPath) {
+  return sharp(imagePath)
+    .rotate()                                  // EXIF auto-rotate
+    .resize({ width: 400, withoutEnlargement: true })
+    .jpeg({ quality: 80 })
+    .toFile(thumbPath);
+}
+
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
     method: 'GET',
@@ -57,23 +67,21 @@ export default async (kojo, logger) => {
 
     if (!row) return json(res, 404, { error: 'Media not found' });
 
-    if (row.type === MEDIA_TYPE.IMAGE) {
-      res.writeHead(302, { Location: `/image/${mediaId}` });
-      return res.end();
-    }
-
     if (!fs.existsSync(THUMBS_DIR)) fs.mkdirSync(THUMBS_DIR, { recursive: true });
 
     const thumbPath = path.join(THUMBS_DIR, `${mediaId}.jpg`);
 
     if (!fs.existsSync(thumbPath)) {
       if (!fs.existsSync(row.path)) {
-        return json(res, 404, { error: 'Video file not found' });
+        return json(res, 404, { error: 'File not found on disk' });
       }
 
       let gen = inFlight.get(mediaId);
       if (!gen) {
-        gen = extractFrame(row.path, thumbPath).finally(() => inFlight.delete(mediaId));
+        const work = row.type === MEDIA_TYPE.IMAGE
+          ? generateImageThumb(row.path, thumbPath)
+          : extractFrame(row.path, thumbPath);
+        gen = work.finally(() => inFlight.delete(mediaId));
         inFlight.set(mediaId, gen);
       }
       try {

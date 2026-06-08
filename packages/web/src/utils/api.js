@@ -38,6 +38,9 @@ let _foldersCache = null;
 /** @type {Map<number, Object>} Last known version of each media item, keyed by id. */
 const _mediaCache = new Map();
 
+/** @type {Map<string, { items: Object[], total: number }>} Last page-1 result per folder path. */
+const _folderMediaCache = new Map();
+
 /**
  * Returns the last successfully loaded folders array, or null if not yet
  * fetched in this session.  Safe to call inside React useState initialisers
@@ -55,6 +58,13 @@ export function getLastFolders() { return _foldersCache; }
  * @returns {Object|null}
  */
 export function getLastMediaItem(id) { return _mediaCache.get(id) ?? null; }
+
+/**
+ * Returns the last page-1 media result for a folder path, or null if not yet loaded.
+ * @param {string} folderPath
+ * @returns {{ items: Object[], total: number }|null}
+ */
+export function getLastFolderMedia(folderPath) { return _folderMediaCache.get(folderPath) ?? null; }
 
 /**
  * Fetch media items — network first, IDB fallback.
@@ -82,6 +92,9 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
     const data = await response.json();
     /* Warm the sync cache so return visits resolve instantly. */
     for (const item of data.items) _mediaCache.set(item.id, item);
+    if (folder != null && !random && !liked && (!offset || offset === 0)) {
+      _folderMediaCache.set(folder, { items: data.items, total: data.total });
+    }
     /* Write to IDB in the background — don't block the caller. */
     idbPutManyMedia(data.items).catch(err => console.warn('[idb] putManyMedia failed:', err));
     return data;

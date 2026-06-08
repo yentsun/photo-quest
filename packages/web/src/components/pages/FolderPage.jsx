@@ -12,7 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { fetchFolders, fetchMedia, getLastFolders } from '../../utils/api.js';
+import { fetchFolders, fetchMedia, getLastFolders, getLastFolderMedia } from '../../utils/api.js';
 import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
 import { FolderCard } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
@@ -32,35 +32,54 @@ export default function FolderPage() {
   /* Clear slideshow when entering folder browse mode. */
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* Sync-cache first — no loading flash when returning from shuffle. */
-  const [folders, setFolders] = useState(() => getLastFolders() || []);
-  const [directMedia, setDirectMedia] = useState([]);
-  const [mediaTotal, setMediaTotal] = useState(0);
-  const [loading, setLoading] = useState(!getLastFolders());
+  const folderId = Number(id);
+
+  /* Sync cache lookup — instant first render when returning to a visited folder. */
+  const _sc0Folders = getLastFolders();
+  const _sc0Folder  = _sc0Folders?.find(f => f.id === folderId) ?? null;
+  const _sc0Media   = _sc0Folder ? getLastFolderMedia(_sc0Folder.path) : null;
+
+  const [folders, setFolders] = useState(_sc0Folders || []);
+  const [directMedia, setDirectMedia] = useState(_sc0Media?.items ?? []);
+  const [mediaTotal, setMediaTotal] = useState(_sc0Media?.total ?? 0);
+  const [loading, setLoading] = useState(!_sc0Folders);
   const [loadingMessage, setLoadingMessage] = useState('Fetching folder list…');
   const [loadingMore, setLoadingMore] = useState(false);
-  /* True until the first data fetch (IDB or server) settles for this folder. */
-  const [contentReady, setContentReady] = useState(false);
-  /* Stable refs so handleLoadMore doesn't need to be recreated on every append. */
+  const [contentReady, setContentReady] = useState(!!_sc0Media);
   const loadingMoreRef = useRef(false);
-  const offsetRef = useRef(0);       // items currently loaded (next fetch offset)
-  const mediaTotalRef = useRef(0);   // mirrors mediaTotal for use in stable callback
-  const folderRef = useRef(null);    // mirrors folder for use in stable callback
-
-  const folderId = Number(id);
+  const offsetRef = useRef(_sc0Media?.items.length ?? 0);
+  const mediaTotalRef = useRef(_sc0Media?.total ?? 0);
+  const folderRef = useRef(_sc0Folder);
 
   /* Fetch folders + first page of direct media — IDB-first, then refresh from server. */
   useEffect(() => {
     let cancelled = false;
-    /* Only show the full-page loader when we have nothing from the sync cache.
-       On return visits (e.g. browser-back from shuffle) the cache is already
-       warm so we skip the loader and update the data silently in the background. */
-    if (!getLastFolders()) setLoading(true);
     setLoadingMessage('Fetching folder list…');
-    setDirectMedia([]);
-    setMediaTotal(0);
-    setContentReady(false);
-    offsetRef.current = 0;
+
+    /* Restore from sync cache (or clear for spinner) before async fetches begin.
+       This runs on every dep change (folderId, signal) so navigation between
+       folders shows the new folder's cached data instead of the previous one. */
+    const scFolders = getLastFolders();
+    const scFolder  = scFolders?.find(f => f.id === folderId);
+    const scMedia   = scFolder ? getLastFolderMedia(scFolder.path) : null;
+
+    if (!scFolders) setLoading(true);
+
+    if (scMedia) {
+      setDirectMedia(scMedia.items);
+      setMediaTotal(scMedia.total);
+      offsetRef.current = scMedia.items.length;
+      mediaTotalRef.current = scMedia.total;
+      if (scFolder) folderRef.current = scFolder;
+      setContentReady(true);
+      setLoading(false);
+    } else {
+      setDirectMedia([]);
+      setMediaTotal(0);
+      setContentReady(false);
+      offsetRef.current = 0;
+      mediaTotalRef.current = 0;
+    }
 
     /* 1. Serve stale data from IDB immediately — hides the spinner on return visits. */
     idbGetFolders().then(async (cachedFolders) => {

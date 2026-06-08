@@ -14,19 +14,22 @@ export default function (id) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  /* Get the file path before deleting the record. */
-  const row = db.prepare('SELECT path FROM media WHERE id = ?').get(Number(id));
+  /* Get file paths before deleting the record. */
+  const row = db.prepare('SELECT path, transcoded_path FROM media WHERE id = ?').get(Number(id));
   const filePath = row ? row.path : null;
+  const transcodedPath = row ? row.transcoded_path : null;
 
   const result = db.prepare('DELETE FROM media WHERE id = ?').run(Number(id));
 
-  /* Delete the file from disk. */
-  if (result.changes > 0 && filePath) {
-    try {
-      fs.unlinkSync(filePath);
-      logger.info(`Deleted file from disk: ${filePath}`);
-    } catch (err) {
-      logger.warn(`Could not delete file from disk: ${filePath} — ${err.message}`);
+  if (result.changes > 0) {
+    for (const p of [filePath, transcodedPath]) {
+      if (!p) continue;
+      try {
+        fs.unlinkSync(p);
+        logger.info(`Deleted file from disk: ${p}`);
+      } catch (err) {
+        logger.warn(`Could not delete file from disk: ${p} — ${err.message}`);
+      }
     }
   }
 
