@@ -32,8 +32,10 @@ export default function MediaPage() {
   const [fileStatus, setFileStatus] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const viewerRef = useRef(null);
+  const mediaViewportRef = useRef(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
+  const touchStartOnControl = useRef(false);
 
   /* In slideshow mode the current item is already in context — no fetch needed.
      Initialise from there so there is no flash of the page loader on slide changes.
@@ -285,22 +287,27 @@ export default function MediaPage() {
   }, [item]);
 
   const handleTouchStart = useCallback((e) => {
+    if (e.touches.length !== 1) return;
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
+    touchStartOnControl.current = !!e.target.closest('button');
   }, []);
 
   const handleTouchEnd = useCallback((e) => {
-    if (touchStartX.current === null) return;
+    if (e.changedTouches.length !== 1 || touchStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = e.changedTouches[0].clientY - touchStartY.current;
+    const onControl = touchStartOnControl.current;
     touchStartX.current = null;
     touchStartY.current = null;
+    touchStartOnControl.current = false;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist < 10) { handleLike(); return; }
     if (Math.abs(dx) >= Math.abs(dy)) {
       if (Math.abs(dx) < 50) return;
       if (dx < 0) goNext(); else goPrev();
     } else {
+      if (onControl) return;
       if (Math.abs(dy) < 50) return;
       if (dy < 0) goFolderNext(); else goFolderPrev();
     }
@@ -444,6 +451,7 @@ export default function MediaPage() {
 
       {/* Media display with nav arrows */}
       <div
+        ref={mediaViewportRef}
         className="flex-1 flex items-center justify-center bg-black overflow-hidden relative group/viewer"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}

@@ -97,6 +97,18 @@ packages/
 
 **Videos:** .mp4, .mkv, .avi, .mov, .wmv, .flv, .webm, .m4v, .mpg, .mpeg, .3gp, .ts
 
+## Troubleshooting
+
+### Can't reach the app from another device
+
+- **VPN active** — If WireGuard or any other VPN is running on the connecting device, it may route traffic away from the local network. Disconnect the VPN and try again.
+- **Wrong URL** — Use the network URL shown in the app header (e.g. `http://192.168.1.x:7838`), not `localhost`.
+- **Windows Firewall** — Windows may block inbound connections on first run. Add exceptions with (run as Administrator):
+  ```
+  netsh advfirewall firewall add rule name="Photo Quest Server" dir=in action=allow protocol=TCP localport=7837
+  netsh advfirewall firewall add rule name="Photo Quest Web" dir=in action=allow protocol=TCP localport=7838
+  ```
+
 ## License
 
 MIT

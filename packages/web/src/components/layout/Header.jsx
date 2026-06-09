@@ -19,7 +19,12 @@ export default function Header() {
 
   useEffect(() => {
     fetchNetworkInfo()
-      .then(info => setNetworkUrl(info.network))
+      .then(info => {
+        if (info.ip) {
+          const port = window.location.port;
+          setNetworkUrl(`http://${info.ip}${port ? `:${port}` : ''}`);
+        }
+      })
       .catch(err => console.error('Failed to fetch network info:', err));
   }, []);
 
