@@ -212,6 +212,8 @@ export default function MediaPage() {
      In folder-browse mode folderMedia is already loaded by the browse effect above. */
   const [folderNavLoading, setFolderNavLoading] = useState(false);
   const folderNavInFlight = useRef(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
+  const mobileNavTimer = useRef(null);
 
   /* Returns the cached sibling list, fetching it first if not yet loaded. */
   const ensureFolderSiblings = useCallback(async () => {
@@ -293,15 +295,24 @@ export default function MediaPage() {
     touchStartOnControl.current = !!e.target.closest('button');
   }, []);
 
+  const showMobileNavPanel = useCallback(() => {
+    setShowMobileNav(true);
+    clearTimeout(mobileNavTimer.current);
+    mobileNavTimer.current = setTimeout(() => setShowMobileNav(false), 2500);
+  }, []);
+
   const handleTouchEnd = useCallback((e) => {
     if (e.changedTouches.length !== 1 || touchStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
     touchStartX.current = null;
     touchStartY.current = null;
     touchStartOnControl.current = false;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 10) { showMobileNavPanel(); return; }
     if (Math.abs(dx) < 50) return;
     if (dx < 0) goNext(); else goPrev();
-  }, [goNext, goPrev]);
+  }, [goNext, goPrev, showMobileNavPanel]);
 
   /* Delete current media and navigate to the next item (issue #4) */
   const { removeItem: removeSlideshowItem } = slideshow;
@@ -499,7 +510,7 @@ export default function MediaPage() {
             size="lg"
             disabled={folderNavLoading}
             onClick={goFolderPrev}
-            className={`absolute top-2 left-1/2 -translate-x-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+            className={`hidden sm:block absolute top-2 left-1/2 -translate-x-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
           />
         )}
         {hasFolderNext && (
@@ -510,8 +521,26 @@ export default function MediaPage() {
             size="lg"
             disabled={folderNavLoading}
             onClick={goFolderNext}
-            className={`absolute bottom-2 left-1/2 -translate-x-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+            className={`hidden sm:block absolute bottom-2 left-1/2 -translate-x-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
           />
+        )}
+
+        {/* Mobile nav panel — shown on tap, auto-hides after 2.5s */}
+        {showMobileNav && (
+          <div className="sm:hidden absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/75 backdrop-blur-sm rounded-2xl px-3 py-2">
+            {hasPrev && (
+              <IconButton variant="overlay" icon={<Icon name="prev" className="w-6 h-6" />} label="Previous" onClick={goPrev} />
+            )}
+            {hasFolderPrev && (
+              <IconButton variant="overlay" icon={folderNavLoading ? <Spinner size="sm" /> : <Icon name="up" className="w-6 h-6" />} label="Previous in folder" disabled={folderNavLoading} onClick={goFolderPrev} />
+            )}
+            {hasFolderNext && (
+              <IconButton variant="overlay" icon={folderNavLoading ? <Spinner size="sm" /> : <Icon name="down" className="w-6 h-6" />} label="Next in folder" disabled={folderNavLoading} onClick={goFolderNext} />
+            )}
+            {hasNext && (
+              <IconButton variant="overlay" icon={<Icon name="next" className="w-6 h-6" />} label="Next" onClick={goNext} />
+            )}
+          </div>
         )}
 
         {/* Fullscreen toggle button */}
