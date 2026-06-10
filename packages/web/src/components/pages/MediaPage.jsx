@@ -528,7 +528,7 @@ export default function MediaPage() {
         {/* Mobile nav panel — shown on tap, auto-hides after 2.5s */}
         {showMobileNav && (
           <div className="sm:hidden absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/75 backdrop-blur-sm rounded-2xl px-3 py-2">
-            {hasPrev && (
+            {isImage && hasPrev && (
               <IconButton variant="overlay" icon={<Icon name="prev" className="w-6 h-6" />} label="Previous" onClick={goPrev} />
             )}
             {hasFolderPrev && (
@@ -537,7 +537,7 @@ export default function MediaPage() {
             {hasFolderNext && (
               <IconButton variant="overlay" icon={folderNavLoading ? <Spinner size="sm" /> : <Icon name="down" className="w-6 h-6" />} label="Next in folder" disabled={folderNavLoading} onClick={goFolderNext} />
             )}
-            {hasNext && (
+            {isImage && hasNext && (
               <IconButton variant="overlay" icon={<Icon name="next" className="w-6 h-6" />} label="Next" onClick={goNext} />
             )}
           </div>
