@@ -154,7 +154,7 @@ export default function Root() {
     <div className="min-h-screen bg-gray-900">
       <Header />
       <ImportProgressBar />
-      <main className="pb-16 sm:pb-0">
+      <main>
         <Outlet />
       </main>
     </div>
