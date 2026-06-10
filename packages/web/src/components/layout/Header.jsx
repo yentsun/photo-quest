@@ -43,7 +43,13 @@ export default function Header() {
         : 'text-gray-300 hover:bg-gray-800 hover:text-white'
     }`;
 
+  const mobileTabClass = ({ isActive }) =>
+    `flex-1 flex flex-col items-center justify-center gap-1 py-2 text-xs transition-colors ${
+      isActive ? 'text-blue-400' : 'text-gray-400'
+    }`;
+
   return (
+    <>
     <header className="bg-gray-900 border-b border-gray-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -54,8 +60,8 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex items-center gap-2">
+          {/* Navigation — desktop only */}
+          <nav className="hidden sm:flex items-center gap-2">
             <NavLink to={clientRoutes.dashboard} className={linkClass}>
               Library
             </NavLink>
@@ -99,5 +105,18 @@ export default function Header() {
         </div>
       </div>
     </header>
+
+    {/* Mobile bottom nav */}
+    <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 flex z-50">
+      <NavLink to={clientRoutes.dashboard} className={mobileTabClass}>
+        <Icon name="image" className="w-5 h-5" />
+        Library
+      </NavLink>
+      <NavLink to={clientRoutes.liked} className={mobileTabClass}>
+        <Icon name="heart" className="w-5 h-5" />
+        Liked
+      </NavLink>
+    </nav>
+    </>
   );
 }
