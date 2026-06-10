@@ -257,22 +257,17 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-2">
           {totalMedia > 0 && (
-            <Button variant="secondary" onClick={handleShuffle} disabled={isScanning}>
-              Shuffle
+            <Button variant="secondary" onClick={handleShuffle} disabled={isScanning} icon={<Icon name="shuffle" className="w-4 h-4" />}>
+              <span className="hidden sm:inline">Shuffle</span>
             </Button>
           )}
           {rootFolders.length > 0 && (
-            <Button
-              variant="ghost"
-              onClick={handleRefresh}
-              disabled={isScanning}
-              title="Rescan folders for new files"
-            >
-              Refresh
+            <Button variant="ghost" onClick={handleRefresh} disabled={isScanning} title="Rescan folders for new files" icon={<Icon name="refresh" className="w-4 h-4" />}>
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
           )}
-          <Button onClick={() => setShowAddFolder(true)} disabled={isScanning}>
-            Add Folder
+          <Button onClick={() => setShowAddFolder(true)} disabled={isScanning} icon={<Icon name="folder" className="w-4 h-4" />}>
+            <span className="hidden sm:inline">Add Folder</span>
           </Button>
         </div>
       </div>
