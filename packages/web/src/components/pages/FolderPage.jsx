@@ -12,7 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { fetchFolders, fetchMedia, getLastFolders, getLastFolderMedia } from '../../utils/api.js';
+import { fetchFolders, fetchMedia, getLastFolders, getLastFolderMedia, scanMedia as scanMediaApi } from '../../utils/api.js';
 import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
 import { FolderCard } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
@@ -25,9 +25,10 @@ export default function FolderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { likeMedia } = useMediaActions();
-  const { signal } = useRefresh();
+  const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   /* Clear slideshow when entering folder browse mode. */
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -182,6 +183,20 @@ export default function FolderPage() {
     navigate(`/media/${clickedMedia.id}`);
   };
 
+  const handleRefresh = async () => {
+    const f = folderRef.current;
+    if (!f || refreshing) return;
+    setRefreshing(true);
+    try {
+      await scanMediaApi(f.path);
+      bump();
+    } catch (err) {
+      console.error('Failed to refresh folder:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   /* Shuffle: server randomises, we load 200 items then lazy-append more. */
   const handleShuffle = async () => {
     const f = folderRef.current;
@@ -281,11 +296,18 @@ export default function FolderPage() {
             {contentReady && subfolders.length === 0 && !itemLabel && '0 items'}
           </p>
         </div>
-        {subtreeTotal > 0 && (
-          <Button variant="secondary" onClick={handleShuffle}>
-            Shuffle
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {subtreeTotal > 0 && (
+            <Button variant="secondary" onClick={handleShuffle} icon={<Icon name="shuffle" className="w-4 h-4" />}>
+              <span className="hidden sm:inline">Shuffle</span>
+            </Button>
+          )}
+          {folder && (
+            <Button variant="ghost" onClick={handleRefresh} disabled={refreshing} title="Rescan folder for new files" icon={<Icon name="refresh" className="w-4 h-4" />}>
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Subfolders */}
