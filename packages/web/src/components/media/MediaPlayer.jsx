@@ -18,7 +18,7 @@ import Spinner from '../ui/Spinner.jsx';
 const MediaPlayer = forwardRef(function MediaPlayer({
   src,
   title = '',
-  autoPlay = false,
+  autoPlay = true,
   onEnded,
   className = '',
 }, ref) {
@@ -71,6 +71,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
         src={src}
         className={`w-full h-full object-contain ${className}`}
         controls
+        loop
         onEnded={onEnded}
         playsInline
         onCanPlay={() => setBuffering(false)}
