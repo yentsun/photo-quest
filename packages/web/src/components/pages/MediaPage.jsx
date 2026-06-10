@@ -296,22 +296,12 @@ export default function MediaPage() {
   const handleTouchEnd = useCallback((e) => {
     if (e.changedTouches.length !== 1 || touchStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
-    const dy = e.changedTouches[0].clientY - touchStartY.current;
-    const onControl = touchStartOnControl.current;
     touchStartX.current = null;
     touchStartY.current = null;
     touchStartOnControl.current = false;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 10) { handleLike(); return; }
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      if (Math.abs(dx) < 50) return;
-      if (dx < 0) goNext(); else goPrev();
-    } else {
-      if (onControl) return;
-      if (Math.abs(dy) < 50) return;
-      if (dy < 0) goFolderNext(); else goFolderPrev();
-    }
-  }, [goNext, goPrev, goFolderNext, goFolderPrev, handleLike]);
+    if (Math.abs(dx) < 50) return;
+    if (dx < 0) goNext(); else goPrev();
+  }, [goNext, goPrev]);
 
   /* Delete current media and navigate to the next item (issue #4) */
   const { removeItem: removeSlideshowItem } = slideshow;
@@ -509,7 +499,7 @@ export default function MediaPage() {
             size="lg"
             disabled={folderNavLoading}
             onClick={goFolderPrev}
-            className={`hidden sm:block absolute top-2 left-1/2 -translate-x-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+            className={`absolute top-2 left-1/2 -translate-x-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
           />
         )}
         {hasFolderNext && (
@@ -520,7 +510,7 @@ export default function MediaPage() {
             size="lg"
             disabled={folderNavLoading}
             onClick={goFolderNext}
-            className={`hidden sm:block absolute bottom-2 left-1/2 -translate-x-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
+            className={`absolute bottom-2 left-1/2 -translate-x-1/2 ${isFullscreen ? 'opacity-0 group-hover/viewer:opacity-100' : ''}`}
           />
         )}
 
