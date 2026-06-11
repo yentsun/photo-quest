@@ -87,7 +87,7 @@ export default function FolderPage() {
       if (cancelled) return;
       const found = cachedFolders.find(f => f.id === folderId);
       if (!found) return;
-      const { items, total } = await idbGetMedia({ folder: found.path, limit: PAGE_SIZE });
+      const { items, total } = await idbGetMedia({ folder: found.path, limit: PAGE_SIZE, sort: 'filename' });
       if (cancelled || items.length === 0) return;
       setFolders(cachedFolders);
       folderRef.current = found;
@@ -115,6 +115,7 @@ export default function FolderPage() {
             folder: found.path,
             limit: PAGE_SIZE,
             offset: 0,
+            sort: 'filename',
           });
           if (!cancelled) {
             offsetRef.current = items.length;
@@ -163,6 +164,7 @@ export default function FolderPage() {
         folder: folderRef.current.path,
         limit: PAGE_SIZE,
         offset: offsetRef.current,
+        sort: 'filename',
       });
       if (more.length > 0) {
         offsetRef.current += more.length;

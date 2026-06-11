@@ -42,12 +42,26 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   }));
 
   useEffect(() => {
-    if (autoPlay && videoRef.current) {
-      videoRef.current.play().catch(() => {
-        // Auto-play blocked by browser, ignore
-      });
+    const v = videoRef.current;
+    if (!v) return;
+    const saved = localStorage.getItem('player_volume');
+    if (saved !== null) {
+      try {
+        const { volume, muted } = JSON.parse(saved);
+        v.volume = volume ?? 1;
+        v.muted = muted ?? false;
+      } catch {}
+    }
+    if (autoPlay) {
+      v.play().catch(() => {});
     }
   }, [src, autoPlay]);
+
+  const handleVolumeChange = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    localStorage.setItem('player_volume', JSON.stringify({ volume: v.volume, muted: v.muted }));
+  };
 
   const [error, setError] = useState(null);
 
@@ -77,6 +91,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
         onCanPlay={() => setBuffering(false)}
         onWaiting={() => setBuffering(true)}
         onPlaying={() => setBuffering(false)}
+        onVolumeChange={handleVolumeChange}
         onError={() => { setBuffering(false); setError('This video could not be played.'); }}
       />
     </div>
