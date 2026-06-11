@@ -9,7 +9,9 @@
     "dev:worker": "pnpm --filter @photo-quest/worker dev",
     "build": "pnpm --filter @photo-quest/web build",
     "start": "pnpm --parallel --filter @photo-quest/server --filter @photo-quest/worker start",
-    "test": "pnpm --filter @photo-quest/server test"
+    "test": "pnpm --filter @photo-quest/server test",
+    "electron:dev": "pnpm --filter @photo-quest/electron start",
+    "electron:build": "pnpm build && pnpm --filter @photo-quest/electron build"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
