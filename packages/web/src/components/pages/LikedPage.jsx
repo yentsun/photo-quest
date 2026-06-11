@@ -33,8 +33,11 @@ export default function LikedPage() {
   useEffect(() => {
     let cancelled = false;
 
+    /* IDB sort order (key order) differs from server sort (likes DESC) and would
+       cause a visible jump on every signal bump. Only use IDB on the first load
+       (when likedMedia is empty) to avoid the spinner; skip on subsequent fetches. */
     idbGetMedia({ liked: true })
-      .then(({ items }) => { if (!cancelled && items.length > 0) { setLikedMedia(items); setLoading(false); } })
+      .then(({ items }) => { if (!cancelled && items.length > 0 && likedMedia.length === 0) { setLikedMedia(items); setLoading(false); } })
       .catch(() => {});
 
     fetchMedia({ liked: true })

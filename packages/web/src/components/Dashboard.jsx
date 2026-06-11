@@ -91,9 +91,11 @@ export default function Dashboard() {
     let cancelled = false;
 
     /* 1. Serve stale data from IDB immediately — hides the spinner on first visits
-          (sync cache already handled return visits via the useState initialiser). */
+          (sync cache already handled return visits via the useState initialiser).
+          Skip when sync cache has data to avoid a visible jump if IDB and server
+          sort folders in a different order. */
     idbGetFolders()
-      .then(cached => { if (!cancelled && cached.length > 0) { setFolders(cached); setLoading(false); } })
+      .then(cached => { if (!cancelled && cached.length > 0 && !getLastFolders()) { setFolders(cached); setLoading(false); } })
       .catch(() => {}); // IDB miss is fine; server fetch below will cover it
 
     /* 2. Refresh from server in the background; IDB + sync cache updated inside fetchFolders. */

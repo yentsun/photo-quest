@@ -173,9 +173,15 @@ export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort 
     items = items.filter(m => m.likes > 0);
   }
 
-  /* Mirror server's ORDER BY */
+  /* Mirror server's ORDER BY.
+     'filename' uses binary string comparison (</>), matching SQLite's default
+     binary collation for `path ASC`, rather than locale-aware localeCompare
+     which produces different orderings for Cyrillic/Unicode paths. */
   if (sort === 'filename') {
-    items.sort((a, b) => (a.path || '').localeCompare(b.path || ''));
+    items.sort((a, b) => {
+      const pa = a.path || '', pb = b.path || '';
+      return pa < pb ? -1 : pa > pb ? 1 : 0;
+    });
   } else if (liked) {
     items.sort((a, b) => b.likes - a.likes);
   } else {

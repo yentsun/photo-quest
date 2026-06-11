@@ -82,13 +82,17 @@ export default function FolderPage() {
       mediaTotalRef.current = 0;
     }
 
-    /* 1. Serve stale data from IDB immediately — hides the spinner on return visits. */
+    /* 1. Serve stale data from IDB immediately — hides the spinner on return visits.
+          Skip when sync cache already has data: IDB uses localeCompare while the
+          server uses SQLite binary ASC, so on Cyrillic/Unicode paths they produce
+          different orderings and the IDB render causes a visible jump before the
+          server response arrives. */
     idbGetFolders().then(async (cachedFolders) => {
       if (cancelled) return;
       const found = cachedFolders.find(f => f.id === folderId);
       if (!found) return;
       const { items, total } = await idbGetMedia({ folder: found.path, limit: PAGE_SIZE, sort: 'filename' });
-      if (cancelled || items.length === 0) return;
+      if (cancelled || items.length === 0 || scMedia) return;
       setFolders(cachedFolders);
       folderRef.current = found;
       mediaTotalRef.current = total;
