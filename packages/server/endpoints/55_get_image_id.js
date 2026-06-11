@@ -48,6 +48,18 @@ export default async (kojo, logger) => {
     };
     const contentType = mimeTypes[ext] || 'image/jpeg';
 
+    /* GIFs have no EXIF rotation and sharp strips animation to a single frame,
+     * so serve them raw to preserve animation. */
+    if (ext === '.gif') {
+      const stat = fs.statSync(filePath);
+      res.writeHead(200, {
+        'Content-Length': stat.size,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000',
+      });
+      return fs.createReadStream(filePath).pipe(res);
+    }
+
     /* Always run through sharp.rotate() which auto-rotates based on EXIF.
      * It's a no-op when no rotation is needed, and avoids relying on the
      * stored orientation value which may be stale or incorrect. */

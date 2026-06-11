@@ -67,6 +67,18 @@ export default async (kojo, logger) => {
 
     if (!row) return json(res, 404, { error: 'Media not found' });
 
+    /* GIFs: serve raw so animation is preserved — no JPEG conversion. */
+    if (path.extname(row.path).toLowerCase() === '.gif') {
+      if (!fs.existsSync(row.path)) return json(res, 404, { error: 'File not found on disk' });
+      const stat = fs.statSync(row.path);
+      res.writeHead(200, {
+        'Content-Type': 'image/gif',
+        'Content-Length': stat.size,
+        'Cache-Control': 'public, max-age=31536000',
+      });
+      return fs.createReadStream(row.path).pipe(res);
+    }
+
     if (!fs.existsSync(THUMBS_DIR)) fs.mkdirSync(THUMBS_DIR, { recursive: true });
 
     const thumbPath = path.join(THUMBS_DIR, `${mediaId}.jpg`);
