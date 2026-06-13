@@ -17,7 +17,7 @@ import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
 import { FolderCard } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, PageLoader, Spinner } from '../ui/index.js';
+import { Button, Icon, Input, Modal, PageLoader, Spinner } from '../ui/index.js';
 
 const PAGE_SIZE = 200;
 
@@ -29,11 +29,31 @@ export default function FolderPage() {
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchRef = useRef('');
+
+  const folderId = Number(id);
 
   /* Clear slideshow when entering folder browse mode. */
   useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const folderId = Number(id);
+  /* Reset search when navigating to a different folder. */
+  useEffect(() => {
+    setSearchQuery('');
+    setDebouncedSearch('');
+    searchRef.current = '';
+  }, [folderId]);
+
+  /* Debounce search input by 300ms. */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      searchRef.current = searchQuery;
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   /* Sync cache lookup — instant first render when returning to a visited folder. */
   const _sc0Folders = getLastFolders();
@@ -57,12 +77,15 @@ export default function FolderPage() {
     let cancelled = false;
     setLoadingMessage('Fetching folder list…');
 
+    const isSearching = Boolean(debouncedSearch);
+
     /* Restore from sync cache (or clear for spinner) before async fetches begin.
-       This runs on every dep change (folderId, signal) so navigation between
-       folders shows the new folder's cached data instead of the previous one. */
+       This runs on every dep change (folderId, signal, debouncedSearch) so navigation
+       between folders shows the new folder's cached data instead of the previous one.
+       Skip sync/IDB caches when a search query is active. */
     const scFolders = getLastFolders();
     const scFolder  = scFolders?.find(f => f.id === folderId);
-    const scMedia   = scFolder ? getLastFolderMedia(scFolder.path) : null;
+    const scMedia   = !isSearching && scFolder ? getLastFolderMedia(scFolder.path) : null;
 
     if (!scFolders) setLoading(true);
 
@@ -86,22 +109,25 @@ export default function FolderPage() {
           Skip when sync cache already has data: IDB uses localeCompare while the
           server uses SQLite binary ASC, so on Cyrillic/Unicode paths they produce
           different orderings and the IDB render causes a visible jump before the
-          server response arrives. */
-    idbGetFolders().then(async (cachedFolders) => {
-      if (cancelled) return;
-      const found = cachedFolders.find(f => f.id === folderId);
-      if (!found) return;
-      const { items, total } = await idbGetMedia({ folder: found.path, limit: PAGE_SIZE, sort: 'filename' });
-      if (cancelled || items.length === 0 || scMedia) return;
-      setFolders(cachedFolders);
-      folderRef.current = found;
-      mediaTotalRef.current = total;
-      offsetRef.current = items.length;
-      setDirectMedia(items);
-      setMediaTotal(total);
-      setLoading(false);
-      setContentReady(true);
-    }).catch(() => {}); // IDB miss is fine; server fetch below will cover it
+          server response arrives.
+          Also skip when a search is active — IDB has no search index. */
+    if (!isSearching) {
+      idbGetFolders().then(async (cachedFolders) => {
+        if (cancelled) return;
+        const found = cachedFolders.find(f => f.id === folderId);
+        if (!found) return;
+        const { items, total } = await idbGetMedia({ folder: found.path, limit: PAGE_SIZE, sort: 'filename' });
+        if (cancelled || items.length === 0 || scMedia) return;
+        setFolders(cachedFolders);
+        folderRef.current = found;
+        mediaTotalRef.current = total;
+        offsetRef.current = items.length;
+        setDirectMedia(items);
+        setMediaTotal(total);
+        setLoading(false);
+        setContentReady(true);
+      }).catch(() => {}); // IDB miss is fine; server fetch below will cover it
+    }
 
     /* 2. Refresh from server; replaces IDB data with authoritative server state. */
     const load = async () => {
@@ -115,12 +141,9 @@ export default function FolderPage() {
           folderRef.current = found;
           const folderName = found.path.split(/[/\\]/).filter(Boolean).pop() || 'folder';
           setLoadingMessage(`Loading '${folderName}'…`);
-          const { items, total } = await fetchMedia({
-            folder: found.path,
-            limit: PAGE_SIZE,
-            offset: 0,
-            sort: 'filename',
-          });
+          const fetchOpts = { folder: found.path, limit: PAGE_SIZE, offset: 0, sort: 'filename' };
+          if (debouncedSearch) fetchOpts.search = debouncedSearch;
+          const { items, total } = await fetchMedia(fetchOpts);
           if (!cancelled) {
             offsetRef.current = items.length;
             mediaTotalRef.current = total;
@@ -140,7 +163,7 @@ export default function FolderPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [folderId, signal]);
+  }, [folderId, signal, debouncedSearch]);
 
   const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
   const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId), [folders, folderId]);
@@ -164,12 +187,9 @@ export default function FolderPage() {
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const { items: more } = await fetchMedia({
-        folder: folderRef.current.path,
-        limit: PAGE_SIZE,
-        offset: offsetRef.current,
-        sort: 'filename',
-      });
+      const loadMoreOpts = { folder: folderRef.current.path, limit: PAGE_SIZE, offset: offsetRef.current, sort: 'filename' };
+      if (searchRef.current) loadMoreOpts.search = searchRef.current;
+      const { items: more } = await fetchMedia(loadMoreOpts);
       if (more.length > 0) {
         offsetRef.current += more.length;
         setDirectMedia(prev => {
@@ -313,11 +333,19 @@ export default function FolderPage() {
               <span className="hidden sm:inline">Refresh</span>
             </Button>
           )}
+          <Button
+            variant={debouncedSearch ? 'secondary' : 'ghost'}
+            onClick={() => setSearchOpen(true)}
+            title="Search by title"
+            icon={<Icon name="search" className="w-4 h-4" />}
+          >
+            <span className="hidden sm:inline">Search</span>
+          </Button>
         </div>
       </div>
 
       {/* Subfolders */}
-      {subfolders.length > 0 && (
+      {subfolders.length > 0 && !(debouncedSearch) && (
         <div className="mb-6">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {subfolders.map(sub => (
@@ -350,6 +378,12 @@ export default function FolderPage() {
             </div>
           )}
         </>
+      ) : debouncedSearch ? (
+        <EmptyState
+          icon={<Icon name="search" className="w-16 h-16" />}
+          title="No results"
+          description={`No media matching "${debouncedSearch}".`}
+        />
       ) : subfolders.length === 0 ? (
         <EmptyState
           icon={folderIcon}
@@ -357,6 +391,33 @@ export default function FolderPage() {
           description="This folder doesn't exist or contains no media."
         />
       ) : null}
+      {/* Search modal */}
+      <Modal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        title="Search"
+      >
+        <div className="relative">
+          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          <Input
+            type="search"
+            placeholder="Search by title…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="pl-9"
+            autoFocus
+          />
+        </div>
+        {debouncedSearch && (
+          <Button
+            variant="text"
+            className="mt-3 text-sm"
+            onClick={() => { setSearchQuery(''); setDebouncedSearch(''); searchRef.current = ''; }}
+          >
+            Clear search
+          </Button>
+        )}
+      </Modal>
     </div>
   );
 }

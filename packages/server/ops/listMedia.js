@@ -5,7 +5,7 @@
  * Must use `function()` syntax (not arrow) to receive kojo context via `this`.
  */
 
-export default function ({ limit, offset, folder, subtree, liked, random, sort } = {}) {
+export default function ({ limit, offset, folder, subtree, liked, random, sort, search } = {}) {
   const [kojo] = this;
   const db = kojo.get('db');
 
@@ -24,6 +24,11 @@ export default function ({ limit, offset, folder, subtree, liked, random, sort }
 
   if (liked) {
     conditions.push('likes > 0');
+  }
+
+  if (search != null && search.trim() !== '') {
+    conditions.push('title LIKE ?');
+    params.push(`%${search.trim()}%`);
   }
 
   const where = conditions.join(' AND ');

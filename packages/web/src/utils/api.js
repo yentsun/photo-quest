@@ -76,7 +76,7 @@ export function getLastFolderMedia(folderPath) { return _folderMediaCache.get(fo
  * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean, liked?: boolean, random?: boolean }} [opts]
  * @returns {Promise<{ items: Array, total: number }>}
  */
-export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort } = {}) {
+export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search } = {}) {
   const url = new URL(apiRoutes.media, window.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
@@ -85,6 +85,7 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   if (liked) url.searchParams.set('liked', '1');
   if (random) url.searchParams.set('random', '1');
   if (sort != null) url.searchParams.set('sort', sort);
+  if (search != null) url.searchParams.set('search', search);
 
   try {
     const response = await fetch(url);
@@ -92,7 +93,7 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
     const data = await response.json();
     /* Warm the sync cache so return visits resolve instantly. */
     for (const item of data.items) _mediaCache.set(item.id, item);
-    if (folder != null && !random && !liked && (!offset || offset === 0)) {
+    if (folder != null && !random && !liked && !search && (!offset || offset === 0)) {
       _folderMediaCache.set(folder, { items: data.items, total: data.total });
     }
     /* Write to IDB in the background — don't block the caller. */

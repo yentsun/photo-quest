@@ -10,9 +10,9 @@ import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
 import { fetchFolders, fetchMedia, getLastFolders } from '../utils/api.js';
 import { idbGetFolders } from '../services/idb.js';
-import { FolderCard } from './media/index.js';
+import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
-import { Button, Icon, Modal, PageLoader } from './ui/index.js';
+import { Button, Icon, Input, Modal, PageLoader, Spinner } from './ui/index.js';
 
 /**
  * Validate a folder path against the server.
@@ -62,7 +62,7 @@ function usePathValidation() {
  */
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { addFolderWithPath, removeFolder, refreshLibrary } = useMediaActions();
+  const { addFolderWithPath, removeFolder, refreshLibrary, likeMedia } = useMediaActions();
   const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
   const { isScanning } = useScan();
@@ -87,6 +87,18 @@ export default function Dashboard() {
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [loading, setLoading] = useState(!getLastFolders());
 
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchLoadingMore, setSearchLoadingMore] = useState(false);
+  const searchRef = useRef('');
+  const searchOffsetRef = useRef(0);
+  const searchTotalRef = useRef(0);
+  const searchLoadingMoreRef = useRef(false);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -105,6 +117,64 @@ export default function Dashboard() {
 
     return () => { cancelled = true; };
   }, [signal]);
+
+  /* Debounce search input by 300ms. */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      searchRef.current = searchQuery;
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  /* Fetch search results whenever the debounced query changes. */
+  useEffect(() => {
+    if (!debouncedSearch) {
+      setSearchResults([]);
+      setSearchTotal(0);
+      searchOffsetRef.current = 0;
+      searchTotalRef.current = 0;
+      return;
+    }
+    let cancelled = false;
+    setSearchLoading(true);
+    setSearchResults([]);
+    searchOffsetRef.current = 0;
+    fetchMedia({ search: debouncedSearch, limit: 200 })
+      .then(({ items, total }) => {
+        if (cancelled) return;
+        setSearchResults(items);
+        setSearchTotal(total);
+        searchOffsetRef.current = items.length;
+        searchTotalRef.current = total;
+      })
+      .catch(err => console.error('Search failed:', err))
+      .finally(() => { if (!cancelled) setSearchLoading(false); });
+    return () => { cancelled = true; };
+  }, [debouncedSearch]);
+
+  const handleSearchLoadMore = useCallback(async () => {
+    if (searchLoadingMoreRef.current) return;
+    if (searchOffsetRef.current >= searchTotalRef.current) return;
+    if (!searchRef.current) return;
+    searchLoadingMoreRef.current = true;
+    setSearchLoadingMore(true);
+    try {
+      const { items: more } = await fetchMedia({ search: searchRef.current, limit: 200, offset: searchOffsetRef.current });
+      if (more.length > 0) {
+        searchOffsetRef.current += more.length;
+        setSearchResults(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          return [...prev, ...more.filter(m => !existingIds.has(m.id))];
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load more search results:', err);
+    } finally {
+      searchLoadingMoreRef.current = false;
+      setSearchLoadingMore(false);
+    }
+  }, []);
 
   const rootFolders = useMemo(() => folders.filter(f => f.parentId === null), [folders]);
 
@@ -271,6 +341,14 @@ export default function Dashboard() {
           <Button onClick={() => setShowAddFolder(true)} disabled={isScanning} icon={<Icon name="folder" className="w-4 h-4" />}>
             <span className="hidden sm:inline">Add Folder</span>
           </Button>
+          <Button
+            variant={debouncedSearch ? 'secondary' : 'ghost'}
+            onClick={() => setSearchOpen(true)}
+            title="Search by title"
+            icon={<Icon name="search" className="w-4 h-4" />}
+          >
+            <span className="hidden sm:inline">Search</span>
+          </Button>
         </div>
       </div>
 
@@ -338,8 +416,35 @@ export default function Dashboard() {
         </div>
       </Modal>
 
-      {/* Folder Grid or Empty State */}
-      {rootFolders.length > 0 ? (
+      {/* Search results or Folder Grid */}
+      {debouncedSearch ? (
+        searchLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Spinner size="lg" />
+          </div>
+        ) : searchResults.length > 0 ? (
+          <>
+            <MediaGrid
+              items={searchResults}
+              onItemClick={item => navigate(`/media/${item.id}`)}
+              onItemLike={likeMedia}
+              onNearEnd={searchResults.length < searchTotal ? handleSearchLoadMore : undefined}
+            />
+            {searchLoadingMore && (
+              <div className="flex items-center justify-center gap-2 py-4">
+                <Spinner size="sm" />
+                <span className="text-gray-400 text-sm">Loading more items…</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <EmptyState
+            icon={<Icon name="search" className="w-16 h-16" />}
+            title="No results"
+            description={`No media matching "${debouncedSearch}".`}
+          />
+        )
+      ) : rootFolders.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {rootFolders.map(folder => (
             <FolderCard
@@ -360,6 +465,34 @@ export default function Dashboard() {
           }}
         />
       )}
+
+      {/* Search modal */}
+      <Modal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        title="Search"
+      >
+        <div className="relative">
+          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          <Input
+            type="search"
+            placeholder="Search by title…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="pl-9"
+            autoFocus
+          />
+        </div>
+        {debouncedSearch && (
+          <Button
+            variant="text"
+            className="mt-3 text-sm"
+            onClick={() => { setSearchQuery(''); setDebouncedSearch(''); searchRef.current = ''; }}
+          >
+            Clear search
+          </Button>
+        )}
+      </Modal>
     </div>
   );
 }
