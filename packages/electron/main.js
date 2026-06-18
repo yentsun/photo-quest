@@ -1,39 +1,47 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, Tray, Menu, nativeImage, utilityProcess, dialog } from 'electron'
 import { spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const ROOT = path.join(__dirname, '..', '..')
 const isDev = !app.isPackaged
 
-const SERVER_DIR = isDev ? path.join(__dirname, '..', 'server') : path.join(process.resourcesPath, 'server')
-const WORKER_DIR = isDev ? path.join(__dirname, '..', 'worker') : path.join(process.resourcesPath, 'worker')
-const ICON_PATH = path.join(__dirname, '..', 'web', 'public', 'logo512.png')
+const SERVER_DIR = isDev
+  ? path.join(__dirname, '..', 'server')
+  : path.join(process.resourcesPath, 'server')
+const WORKER_DIR = isDev
+  ? path.join(__dirname, '..', 'worker')
+  : path.join(process.resourcesPath, 'worker')
+const ICON_PATH = isDev
+  ? path.join(__dirname, '..', 'web', 'public', 'logo512.png')
+  : path.join(process.resourcesPath, 'web', 'dist', 'logo512.png')
 
-let serverPort = 3000
-let webPort = 5000
-try {
-  const cfg = JSON.parse(readFileSync(path.join(ROOT, 'config.json'), 'utf8'))
-  serverPort = cfg.serverPort || serverPort
-  webPort = cfg.webappPort || webPort
-} catch { /* use defaults */ }
-
-/* In dev load from Vite (hot reload). In prod load from server (serves built dist). */
-const APP_URL = isDev ? `http://127.0.0.1:${webPort}` : `http://127.0.0.1:${serverPort}`
-const WAIT_PORT = isDev ? webPort : serverPort
+const serverPort = 3000
+const APP_URL = isDev ? 'http://127.0.0.1:5000' : `http://127.0.0.1:${serverPort}`
+const WAIT_PORT = isDev ? 5000 : serverPort
 
 let mainWindow = null
 let tray = null
-let serverProcess = null
-let workerProcess = null
-let viteProcess = null
+let serverProc = null
+let workerProc = null
+let viteProc = null
 let isQuitting = false
 
-function spawnProcess(cmd, args, cwd) {
-  return spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], shell: true })
+function startProcess(script, dir) {
+  if (isDev) {
+    return spawn('node', ['--experimental-sqlite', script], {
+      cwd: dir,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: true,
+    })
+  }
+  // Use Electron's bundled Node.js — no external node binary required
+  return utilityProcess.fork(path.join(dir, script), [], {
+    cwd: dir,
+    stdio: 'pipe',
+    env: { ...process.env, NODE_OPTIONS: '--experimental-sqlite' },
+  })
 }
 
 function waitForPort(port, maxAttempts = 60) {
@@ -87,20 +95,20 @@ function createTray() {
 }
 
 app.whenReady().then(async () => {
-  serverProcess = spawnProcess('node', ['--experimental-sqlite', 'boot.js'], SERVER_DIR)
-  workerProcess = spawnProcess('node', ['--experimental-sqlite', 'index.js'], WORKER_DIR)
-  serverProcess.stdout.on('data', d => process.stdout.write(`[server] ${d}`))
-  serverProcess.stderr.on('data', d => process.stderr.write(`[server] ${d}`))
-  workerProcess.stdout.on('data', d => process.stdout.write(`[worker] ${d}`))
-  workerProcess.stderr.on('data', d => process.stderr.write(`[worker] ${d}`))
+  serverProc = startProcess('boot.js', SERVER_DIR)
+  workerProc = startProcess('index.js', WORKER_DIR)
+  serverProc.stdout?.on('data', d => process.stdout.write(`[server] ${d}`))
+  serverProc.stderr?.on('data', d => process.stderr.write(`[server] ${d}`))
+  workerProc.stdout?.on('data', d => process.stdout.write(`[worker] ${d}`))
+  workerProc.stderr?.on('data', d => process.stderr.write(`[worker] ${d}`))
 
   if (isDev) {
-    viteProcess = spawn('cmd.exe', ['/c', 'pnpm run dev'], {
+    viteProc = spawn('cmd.exe', ['/c', 'pnpm run dev'], {
       cwd: path.join(__dirname, '..', 'web'),
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-    viteProcess.stdout.on('data', d => process.stdout.write(`[vite] ${d}`))
-    viteProcess.stderr.on('data', d => process.stderr.write(`[vite] ${d}`))
+    viteProc.stdout.on('data', d => process.stdout.write(`[vite] ${d}`))
+    viteProc.stderr.on('data', d => process.stderr.write(`[vite] ${d}`))
   }
 
   try {
@@ -113,13 +121,32 @@ app.whenReady().then(async () => {
 
   createTray()
   createWindow()
+
+  if (!isDev) {
+    const { autoUpdater } = await import('electron-updater')
+    autoUpdater.on('update-downloaded', () => {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Update ready',
+        message: 'A new version of Photo Quest has been downloaded. Restart now to install it?',
+        buttons: ['Restart', 'Later'],
+        defaultId: 0,
+      }).then(({ response }) => {
+        if (response === 0) {
+          isQuitting = true
+          autoUpdater.quitAndInstall()
+        }
+      })
+    })
+    autoUpdater.checkForUpdates()
+  }
 })
 
 app.on('window-all-closed', e => e.preventDefault())
 
 app.on('before-quit', () => {
   isQuitting = true
-  serverProcess?.kill()
-  workerProcess?.kill()
-  viteProcess?.kill()
+  serverProc?.kill()
+  workerProc?.kill()
+  viteProc?.kill()
 })

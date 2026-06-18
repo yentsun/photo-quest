@@ -8,6 +8,9 @@
     "start": "electron .",
     "build": "electron-builder"
   },
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  },
   "devDependencies": {
     "electron": "^35.7.5",
     "electron-builder": "^25.1.8"
