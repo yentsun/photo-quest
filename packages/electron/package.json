@@ -6,14 +6,15 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "node build.mjs && electron-builder"
   },
   "dependencies": {
     "electron-updater": "^6.3.0"
   },
   "devDependencies": {
     "electron": "^35.7.5",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.25.12"
   },
   "repository": "https://github.com/yentsun/photo-quest",
   "build": {
@@ -29,37 +30,20 @@
     ],
     "extraResources": [
       {
-        "from": "../../node_modules",
-        "to": "node_modules",
-        "filter": [
-          "**/*",
-          "!.cache/**",
-          "!**/.bin/**"
-        ]
+        "from": "vendor/node_modules",
+        "to": "node_modules"
       },
       {
-        "from": "../server",
-        "to": "server",
-        "filter": [
-          "**/*",
-          "!node_modules/**"
-        ]
+        "from": "vendor/bin",
+        "to": "bin"
       },
       {
-        "from": "../worker",
-        "to": "worker",
-        "filter": [
-          "**/*",
-          "!node_modules/**"
-        ]
+        "from": "../server/dist",
+        "to": "server"
       },
       {
-        "from": "../shared",
-        "to": "shared",
-        "filter": [
-          "**/*",
-          "!node_modules/**"
-        ]
+        "from": "../worker/dist",
+        "to": "worker"
       },
       {
         "from": "../web/dist",

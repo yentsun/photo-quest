@@ -53,10 +53,16 @@ function startProcess(script, dir) {
       shell: true,
     })
   }
+  const binDir = path.join(process.resourcesPath, 'bin')
   return utilityProcess.fork(path.join(dir, script), [], {
     cwd: dir,
     stdio: 'pipe',
-    env: { ...process.env, NODE_OPTIONS: '--experimental-sqlite' },
+    env: {
+      ...process.env,
+      NODE_OPTIONS: '--experimental-sqlite',
+      FFMPEG_BIN: path.join(binDir, 'ffmpeg.exe'),
+      FFPROBE_BIN: path.join(binDir, 'ffprobe.exe'),
+    },
   })
 }
 
