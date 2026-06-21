@@ -1,12 +1,18 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, utilityProcess, dialog } from 'electron'
 import { spawn } from 'node:child_process'
-import { createWriteStream, mkdirSync } from 'node:fs'
+import { createWriteStream, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged
+
+const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
+
+function readSettings() {
+  try { return existsSync(SETTINGS_PATH) ? JSON.parse(readFileSync(SETTINGS_PATH, 'utf8')) : {} } catch { return {} }
+}
 
 const SERVER_DIR = isDev
   ? path.join(__dirname, '..', 'server')
@@ -54,7 +60,9 @@ function startProcess(script, dir) {
     })
   }
   const binDir = path.join(process.resourcesPath, 'bin')
-  return utilityProcess.fork(path.join(dir, script), [], {
+  const settings = readSettings()
+  const dbPath = settings.libraryPath || path.join(process.resourcesPath, 'photo-quest.db')
+  const proc = utilityProcess.fork(path.join(dir, script), [], {
     cwd: dir,
     stdio: 'pipe',
     env: {
@@ -62,9 +70,11 @@ function startProcess(script, dir) {
       NODE_OPTIONS: '--experimental-sqlite',
       FFMPEG_BIN: path.join(binDir, 'ffmpeg.exe'),
       FFPROBE_BIN: path.join(binDir, 'ffprobe.exe'),
-      DB_PATH: path.join(process.resourcesPath, 'photo-quest.db'),
+      DB_PATH: dbPath,
+      SETTINGS_PATH,
     },
   })
+  return proc
 }
 
 function waitForPort(port, maxAttempts = 60) {
@@ -131,6 +141,13 @@ app.whenReady().then(async () => {
 
   serverProc.stdout?.on('data', d => log('server', d.toString().trim()))
   serverProc.stderr?.on('data', d => log('server:err', d.toString().trim()))
+  serverProc.on('message', msg => {
+    if (msg?.type === 'relaunch') {
+      log('electron', 'relaunching for library change')
+      app.relaunch()
+      app.quit()
+    }
+  })
   workerProc.stdout?.on('data', d => log('worker', d.toString().trim()))
   workerProc.stderr?.on('data', d => log('worker:err', d.toString().trim()))
 

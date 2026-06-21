@@ -23,7 +23,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Absolute path to the SQLite database file.
  * @type {string}
  */
-export const DB_PATH = path.join(__dirname, '..', 'photo-quest.db');
+export const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'photo-quest.db');
 
 /**
  * Module-level singleton database instance.

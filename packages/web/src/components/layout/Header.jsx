@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo } from '../../utils/api.js';
+import { fetchNetworkInfo, pickLibraryFile, connectLibrary } from '../../utils/api.js';
 import { Button, Icon, Modal } from '../ui/index.js';
 
 /**
@@ -16,6 +16,9 @@ export default function Header() {
   const [networkUrl, setNetworkUrl] = useState(null);
   const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [pickedPath, setPickedPath] = useState(null);
+  const [libraryStatus, setLibraryStatus] = useState(null);
 
   useEffect(() => {
     fetchNetworkInfo()
@@ -33,6 +36,28 @@ export default function Header() {
       navigator.clipboard.writeText(networkUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handlePickLibrary = async () => {
+    setLibraryStatus(null);
+    setPickedPath(null);
+    try {
+      const result = await pickLibraryFile();
+      if (!result.cancelled) setPickedPath(result.path);
+    } catch (err) {
+      setLibraryStatus({ error: err.message });
+    }
+  };
+
+  const handleConnectLibrary = async () => {
+    if (!pickedPath) return;
+    setLibraryStatus({ loading: true });
+    try {
+      await connectLibrary(pickedPath);
+      setLibraryStatus({ success: true });
+    } catch (err) {
+      setLibraryStatus({ error: err.message });
     }
   };
 
@@ -63,6 +88,50 @@ export default function Header() {
               Liked
             </NavLink>
           </nav>
+
+          {/* Connect existing library */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => { setShowLibrary(true); setPickedPath(null); setLibraryStatus(null); }}
+            title="Connect existing library"
+            icon={<Icon name="folder" className="w-4 h-4" />}
+          >
+            Library
+          </Button>
+
+          <Modal
+            open={showLibrary}
+            onClose={() => setShowLibrary(false)}
+            title="Connect existing library"
+          >
+            <div className="flex flex-col gap-4">
+              <p className="text-gray-400 text-sm">
+                Select a <code className="text-gray-300">.db</code> file from a previous Photo Quest installation to open that library.
+              </p>
+              <Button variant="secondary" onClick={handlePickLibrary} icon={<Icon name="folder" className="w-4 h-4" />}>
+                Browse…
+              </Button>
+              {pickedPath && (
+                <p className="text-sm text-gray-300 break-all bg-gray-800 rounded px-3 py-2">{pickedPath}</p>
+              )}
+              {libraryStatus?.error && (
+                <p className="text-sm text-red-400">{libraryStatus.error}</p>
+              )}
+              {libraryStatus?.success && (
+                <p className="text-sm text-green-400">Library connected — the app is restarting…</p>
+              )}
+              <div className="flex gap-2 justify-end">
+                <Button variant="secondary" onClick={() => setShowLibrary(false)}>Cancel</Button>
+                <Button
+                  onClick={handleConnectLibrary}
+                  disabled={!pickedPath || libraryStatus?.loading || libraryStatus?.success}
+                >
+                  {libraryStatus?.loading ? 'Connecting…' : 'Connect'}
+                </Button>
+              </div>
+            </div>
+          </Modal>
 
           {/* Network URL for other devices — desktop only */}
           {networkUrl && (

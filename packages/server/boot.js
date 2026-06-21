@@ -58,6 +58,7 @@ export default async function boot() {
   /* Config values that ops and endpoints need. */
   kojo.set('port', PORT);
   kojo.set('mediaPaths', MEDIA_PATHS);
+  kojo.set('settingsPath', process.env.SETTINGS_PATH || null);
 
   if (MEDIA_PATHS.length > 0) {
     console.debug(`[boot] Media paths configured: ${MEDIA_PATHS.join(', ')}`);

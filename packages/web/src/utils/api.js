@@ -314,6 +314,33 @@ export async function removeFolder(folderId) {
 }
 
 /**
+ * Open native file picker and return a selected .db path.
+ * @returns {Promise<{path: string}|{cancelled: true}>}
+ */
+export async function pickLibraryFile() {
+  const response = await fetch(apiRoutes.libraryPick, { method: 'POST' });
+  if (!response.ok) throw new Error('Could not open file picker');
+  return response.json();
+}
+
+/**
+ * Connect to an existing library file. Triggers app relaunch.
+ * @param {string} libraryPath
+ */
+export async function connectLibrary(libraryPath) {
+  const response = await fetch(apiRoutes.libraryConnect, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: libraryPath }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to connect library');
+  }
+  return response.json();
+}
+
+/**
  * Download a media file to the user's device.
  *
  * @param {Object} media - Media object with id, title, type

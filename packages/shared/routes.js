@@ -102,5 +102,11 @@ export const apiRoutes = {
   jobEvents: '/jobs/events',
 
   /** GET  -- Server network info for connecting from other devices. */
-  network: '/network'
+  network: '/network',
+
+  /** POST -- Open a native file picker and return a selected .db path. */
+  libraryPick: '/library/pick',
+
+  /** POST -- Connect to an existing library file. Body: { path }. Triggers app relaunch. */
+  libraryConnect: '/library/connect',
 };
