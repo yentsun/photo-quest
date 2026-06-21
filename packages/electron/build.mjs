@@ -96,6 +96,8 @@ const serverEntries = [
 
 console.log(`[build] Bundling server (${serverEntries.length} entry points)...`)
 fs.rmSync(path.join(serverDir, 'dist'), { recursive: true, force: true })
+fs.mkdirSync(path.join(serverDir, 'dist'), { recursive: true })
+fs.copyFileSync(path.join(serverDir, 'package.json'), path.join(serverDir, 'dist', 'package.json'))
 
 await esbuild.build({
   entryPoints: serverEntries,
