@@ -1,12 +1,12 @@
 import fs from 'node:fs';
-import { json } from '../src/http.js';
+import { json, parseBody } from '../src/http.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
     method: 'POST',
     pathname: '/library/connect',
   }, async (req, res) => {
-    const body = await req.json();
+    const body = await parseBody(req);
     const libraryPath = body?.path;
 
     if (!libraryPath) return json(res, 400, { error: 'path is required' });

@@ -100,39 +100,6 @@ export default function Header() {
             Library
           </Button>
 
-          <Modal
-            open={showLibrary}
-            onClose={() => setShowLibrary(false)}
-            title="Connect existing library"
-          >
-            <div className="flex flex-col gap-4">
-              <p className="text-gray-400 text-sm">
-                Select a <code className="text-gray-300">.db</code> file from a previous Photo Quest installation to open that library.
-              </p>
-              <Button variant="secondary" onClick={handlePickLibrary} icon={<Icon name="folder" className="w-4 h-4" />}>
-                Browse…
-              </Button>
-              {pickedPath && (
-                <p className="text-sm text-gray-300 break-all bg-gray-800 rounded px-3 py-2">{pickedPath}</p>
-              )}
-              {libraryStatus?.error && (
-                <p className="text-sm text-red-400">{libraryStatus.error}</p>
-              )}
-              {libraryStatus?.success && (
-                <p className="text-sm text-green-400">Library connected — the app is restarting…</p>
-              )}
-              <div className="flex gap-2 justify-end">
-                <Button variant="secondary" onClick={() => setShowLibrary(false)}>Cancel</Button>
-                <Button
-                  onClick={handleConnectLibrary}
-                  disabled={!pickedPath || libraryStatus?.loading || libraryStatus?.success}
-                >
-                  {libraryStatus?.loading ? 'Connecting…' : 'Connect'}
-                </Button>
-              </div>
-            </div>
-          </Modal>
-
           {/* Network URL for other devices — desktop only */}
           {networkUrl && (
             <>
@@ -167,6 +134,40 @@ export default function Header() {
           )}
         </div>
       </div>
+
+      {/* Rendered outside the flex row so StrictMode double-render doesn't stack two fixed overlays */}
+      <Modal
+        open={showLibrary}
+        onClose={() => setShowLibrary(false)}
+        title="Connect existing library"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-gray-400 text-sm">
+            Select a <code className="text-gray-300">.db</code> file from a previous Photo Quest installation to open that library.
+          </p>
+          <Button variant="secondary" onClick={handlePickLibrary} icon={<Icon name="folder" className="w-4 h-4" />}>
+            Browse…
+          </Button>
+          {pickedPath && (
+            <p className="text-sm text-gray-300 break-all bg-gray-800 rounded px-3 py-2">{pickedPath}</p>
+          )}
+          {libraryStatus?.error && (
+            <p className="text-sm text-red-400">{libraryStatus.error}</p>
+          )}
+          {libraryStatus?.success && (
+            <p className="text-sm text-green-400">Library connected — the app is restarting…</p>
+          )}
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={() => setShowLibrary(false)}>Cancel</Button>
+            <Button
+              onClick={handleConnectLibrary}
+              disabled={!pickedPath || libraryStatus?.loading || libraryStatus?.success}
+            >
+              {libraryStatus?.loading ? 'Connecting…' : 'Connect'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </header>
   );
 }
