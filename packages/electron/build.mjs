@@ -34,15 +34,7 @@ const requireFromWorker = createRequire(path.join(workerDir, 'package.json'))
 // sharp + its @img peer packages (sharp-win32-x64, colour)
 const sharpPkgJson = requireFromServer.resolve('sharp/package.json')
 const sharpDir = path.dirname(sharpPkgJson)
-const imgDir = path.join(sharpDir, '..', '@img')
-copyDir(sharpDir, path.join(vendorDir, 'node_modules', 'sharp'))
-if (fs.existsSync(imgDir)) {
-  copyDir(imgDir, path.join(vendorDir, 'node_modules', '@img'))
-}
-
-const requireFromSharp = createRequire(path.join(sharpDir, 'package.json'))
-const detectLibcDir = path.dirname(requireFromSharp.resolve('detect-libc/package.json'))
-copyDir(detectLibcDir, path.join(vendorDir, 'node_modules', 'detect-libc'))
+copyPackageWithDeps('sharp', sharpDir)
 
 // ffmpeg binary (ffmpeg-static exports the binary path directly)
 const ffmpegBin = requireFromWorker('ffmpeg-static')
@@ -140,6 +132,28 @@ await esbuild.build({
 console.log('[build] Done.')
 
 // --- helpers ----------------------------------------------------------
+
+function copyPackageWithDeps(name, pkgDir, seen = new Set()) {
+  const key = path.resolve(pkgDir)
+  if (seen.has(key)) return
+  seen.add(key)
+
+  const parts = name.split('/')
+  const destDir = path.join(vendorDir, 'node_modules', ...parts)
+  copyDir(pkgDir, destDir)
+
+  let pkg
+  try { pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8')) } catch { return }
+  const deps = Object.keys(pkg.dependencies || {})
+  const req = createRequire(path.join(pkgDir, 'package.json'))
+  for (const dep of deps) {
+    try {
+      const depPkgJson = req.resolve(`${dep}/package.json`)
+      const depDir = path.dirname(depPkgJson)
+      copyPackageWithDeps(dep, depDir, seen)
+    } catch { }
+  }
+}
 
 function copyDir(src, dest) {
   fs.mkdirSync(dest, { recursive: true })
