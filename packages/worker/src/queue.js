@@ -23,7 +23,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Points to the server package's database.
  * @type {string}
  */
-const DB_PATH = path.join(__dirname, '..', '..', 'server', 'photo-quest.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', '..', 'server', 'photo-quest.db');
 
 /** @type {import('node:sqlite').DatabaseSync | undefined} */
 let db;

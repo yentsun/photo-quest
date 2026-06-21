@@ -62,6 +62,7 @@ function startProcess(script, dir) {
       NODE_OPTIONS: '--experimental-sqlite',
       FFMPEG_BIN: path.join(binDir, 'ffmpeg.exe'),
       FFPROBE_BIN: path.join(binDir, 'ffprobe.exe'),
+      DB_PATH: path.join(process.resourcesPath, 'photo-quest.db'),
     },
   })
 }

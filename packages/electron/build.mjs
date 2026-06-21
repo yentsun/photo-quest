@@ -108,6 +108,9 @@ await esbuild.build({
   outbase: serverDir,
   external: ['node:*', 'sharp'],
   plugins: [ffprobePlugin],
+  banner: {
+    js: `import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);`,
+  },
   logLevel: 'info',
 })
 
