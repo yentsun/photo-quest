@@ -180,6 +180,7 @@ app.whenReady().then(async () => {
         })
       })
       autoUpdater.checkForUpdates()
+      setInterval(() => autoUpdater.checkForUpdates(), 60 * 60 * 1000)
     } catch (err) {
       log('updater', `error: ${err.message}`)
     }
