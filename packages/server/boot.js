@@ -12,6 +12,7 @@
  *  6. Return the kojo instance for external use.
  */
 
+import 'urlpattern-polyfill';
 import Kojo from 'kojo';
 import config from '@photo-quest/shared/config.js';
 import { initDb } from './src/db.js';
