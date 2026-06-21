@@ -40,6 +40,10 @@ if (fs.existsSync(imgDir)) {
   copyDir(imgDir, path.join(vendorDir, 'node_modules', '@img'))
 }
 
+const requireFromSharp = createRequire(path.join(sharpDir, 'package.json'))
+const detectLibcDir = path.dirname(requireFromSharp.resolve('detect-libc/package.json'))
+copyDir(detectLibcDir, path.join(vendorDir, 'node_modules', 'detect-libc'))
+
 // ffmpeg binary (ffmpeg-static exports the binary path directly)
 const ffmpegBin = requireFromWorker('ffmpeg-static')
 const ffmpegExt = path.extname(ffmpegBin)
