@@ -133,6 +133,18 @@ console.log('[build] Done.')
 
 // --- helpers ----------------------------------------------------------
 
+function resolvePackageDir(req, name) {
+  // Some packages (e.g. @img/sharp-win32-x64) have exports that don't expose ./package.json,
+  // so req.resolve('pkg/package.json') throws ERR_PACKAGE_PATH_NOT_EXPORTED.
+  // Fall back to walking node_modules lookup paths manually.
+  try { return path.dirname(req.resolve(`${name}/package.json`)) } catch {}
+  for (const dir of (req.resolve.paths(name) || [])) {
+    const candidate = path.join(dir, ...name.split('/'), 'package.json')
+    if (fs.existsSync(candidate)) return path.dirname(candidate)
+  }
+  return null
+}
+
 function copyPackageWithDeps(name, pkgDir, seen = new Set()) {
   const key = path.resolve(pkgDir)
   if (seen.has(key)) return
@@ -144,14 +156,11 @@ function copyPackageWithDeps(name, pkgDir, seen = new Set()) {
 
   let pkg
   try { pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8')) } catch { return }
-  const deps = Object.keys(pkg.dependencies || {})
+  const deps = Object.keys({ ...pkg.dependencies, ...pkg.optionalDependencies })
   const req = createRequire(path.join(pkgDir, 'package.json'))
   for (const dep of deps) {
-    try {
-      const depPkgJson = req.resolve(`${dep}/package.json`)
-      const depDir = path.dirname(depPkgJson)
-      copyPackageWithDeps(dep, depDir, seen)
-    } catch { }
+    const depDir = resolvePackageDir(req, dep)
+    if (depDir) copyPackageWithDeps(dep, depDir, seen)
   }
 }
 
