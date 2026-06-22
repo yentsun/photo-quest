@@ -15,7 +15,7 @@ import { MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, likeMedia as likeMediaApi, renameMedia, updateMediaTags, requestTranscode, getLastMediaItem } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, requestTranscode, getLastMediaItem } from '../../utils/api.js';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 
 export default function MediaPage() {
@@ -32,6 +32,8 @@ export default function MediaPage() {
   const [fileStatus, setFileStatus] = useState(null);
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
+  const [allTags, setAllTags] = useState([]);
+  const [suggestionIndex, setSuggestionIndex] = useState(-1);
   const tagInputRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const viewerRef = useRef(null);
@@ -366,8 +368,17 @@ export default function MediaPage() {
   }, [titleDraft, item]);
 
   useEffect(() => {
-    if (addingTag) setTimeout(() => tagInputRef.current?.focus(), 0);
+    if (!addingTag) return;
+    setTimeout(() => tagInputRef.current?.focus(), 0);
+    fetchTags().then(data => setAllTags(data.map(t => t.tag))).catch(() => {});
   }, [addingTag]);
+
+  const suggestions = useMemo(() => {
+    const trimmed = tagDraft.trim().toLowerCase();
+    if (!trimmed) return [];
+    const existing = new Set(item?.tags || []);
+    return allTags.filter(t => t.toLowerCase().includes(trimmed) && !existing.has(t)).slice(0, 6);
+  }, [tagDraft, allTags, item?.tags]);
 
   const handleRemoveTag = useCallback(async (tagToRemove) => {
     if (!item) return;
@@ -381,12 +392,9 @@ export default function MediaPage() {
     }
   }, [item]);
 
-  const commitTag = useCallback(async () => {
-    const trimmed = tagDraft.trim();
-    setAddingTag(false);
-    setTagDraft('');
-    if (!trimmed || (item?.tags || []).includes(trimmed)) return;
-    const newTags = [...(item.tags || []), trimmed];
+  const applyTag = useCallback(async (tag) => {
+    if (!tag || (item?.tags || []).includes(tag)) return;
+    const newTags = [...(item.tags || []), tag];
     setItem(prev => ({ ...prev, tags: newTags }));
     try {
       await updateMediaTags(item.id, newTags);
@@ -394,7 +402,22 @@ export default function MediaPage() {
       console.error('Failed to add tag:', err);
       setItem(prev => ({ ...prev, tags: item.tags }));
     }
-  }, [tagDraft, item]);
+  }, [item]);
+
+  const selectSuggestion = useCallback((tag) => {
+    setAddingTag(false);
+    setTagDraft('');
+    setSuggestionIndex(-1);
+    applyTag(tag);
+  }, [applyTag]);
+
+  const commitTag = useCallback(async () => {
+    const trimmed = tagDraft.trim();
+    setAddingTag(false);
+    setTagDraft('');
+    setSuggestionIndex(-1);
+    applyTag(trimmed);
+  }, [tagDraft, applyTag]);
 
   /* Keyboard navigation */
   useEffect(() => {
@@ -640,18 +663,40 @@ export default function MediaPage() {
                 </span>
               ))}
               {addingTag ? (
-                <input
-                  ref={tagInputRef}
-                  className="bg-gray-800 text-white text-xs rounded-full px-2 py-0.5 w-24 outline-none focus:ring-1 focus:ring-blue-500"
-                  value={tagDraft}
-                  onChange={e => setTagDraft(e.target.value)}
-                  onBlur={commitTag}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitTag(); }
-                    if (e.key === 'Escape') { e.preventDefault(); setAddingTag(false); setTagDraft(''); }
-                  }}
-                  placeholder="tag name"
-                />
+                <div className="relative">
+                  <input
+                    ref={tagInputRef}
+                    className="bg-gray-800 text-white text-xs rounded-full px-2 py-0.5 w-24 outline-none focus:ring-1 focus:ring-blue-500"
+                    value={tagDraft}
+                    onChange={e => { setTagDraft(e.target.value); setSuggestionIndex(-1); }}
+                    onBlur={commitTag}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowDown') { e.preventDefault(); setSuggestionIndex(i => Math.min(i + 1, suggestions.length - 1)); }
+                      if (e.key === 'ArrowUp') { e.preventDefault(); setSuggestionIndex(i => Math.max(i - 1, -1)); }
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        suggestionIndex >= 0 && suggestions[suggestionIndex]
+                          ? selectSuggestion(suggestions[suggestionIndex])
+                          : commitTag();
+                      }
+                      if (e.key === 'Escape') { e.preventDefault(); setAddingTag(false); setTagDraft(''); setSuggestionIndex(-1); }
+                    }}
+                    placeholder="tag name"
+                  />
+                  {suggestions.length > 0 && (
+                    <div className="absolute bottom-full left-0 mb-1 z-10 bg-gray-800 border border-gray-700 rounded-lg shadow-xl overflow-hidden min-w-[140px]">
+                      {suggestions.map((tag, i) => (
+                        <button
+                          key={tag}
+                          className={`block w-full text-left px-3 py-1.5 text-xs ${i === suggestionIndex ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                          onMouseDown={e => { e.preventDefault(); selectSuggestion(tag); }}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <button
                   className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 hover:text-gray-300 text-xs"
