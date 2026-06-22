@@ -1,0 +1,296 @@
+/**
+ * @file Scan a directory for media files using a database-backed import queue.
+ *
+ * Kojo op: accessed as `kojo.ops.scanMedia(dirPath)`.
+ *
+ * LAW 2.3: Media import uses a db-based queue. Files are discovered and queued
+ * individually, progress is reported via SSE, and interrupted imports resume
+ * automatically on restart.
+ *
+ * Two-phase approach:
+ *  1. Discovery — walk the directory, insert each file into `import_queue`,
+ *     create a `scans` record with the total count.
+ *  2. Processing — work through queued items one at a time (hash, dedup,
+ *     insert media, create probe job), broadcasting progress via SSE.
+ *
+ * @param {string} dirPath - Absolute path to the directory to scan.
+ * @returns {{ scanId: number, total: number }}
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { Worker } from 'node:worker_threads';
+import { fileURLToPath } from 'node:url';
+import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, JOB_TYPE, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
+import { broadcastSse } from '../src/sse.js';
+import { DB_PATH } from '../src/db.js';
+
+const WORKER_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/scanWorker.js');
+
+/**
+ * Compute a content hash for a file.
+ * Uses first 64KB + file size for reliable identification (LAW 1.24).
+ * Async with timeout to avoid hanging on cloud-synced files.
+ */
+async function computeFileHash(filePath, timeoutMs = 5000) {
+  const stat = fs.statSync(filePath);
+  const chunkSize = Math.min(65536, stat.size);
+
+  const buffer = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('File read timed out'));
+    }, timeoutMs);
+
+    const chunks = [];
+    let read = 0;
+    const stream = fs.createReadStream(filePath, { start: 0, end: chunkSize - 1 });
+    stream.on('data', (chunk) => {
+      chunks.push(chunk);
+      read += chunk.length;
+      if (read >= chunkSize) stream.destroy();
+    });
+    stream.on('end', () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
+    stream.on('close', () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
+    stream.on('error', (err) => { clearTimeout(timer); reject(err); });
+  });
+
+  const hash = crypto.createHash('sha256');
+  hash.update(buffer);
+  hash.update(String(stat.size));
+  return hash.digest('hex').substring(0, 32);
+}
+
+/**
+ * Process a single import queue item: hash, dedup, insert media record.
+ * Exported for testing.
+ */
+export async function processOneItem(db, itemId, filePath, logger) {
+  const ext = path.extname(filePath).toLowerCase();
+
+  /* Skip files with unsupported extensions (LAW 1.31). */
+  if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+    db.prepare(
+      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
+    ).run(IMPORT_STATUS.FAILED, 'Unsupported file type', itemId);
+    return;
+  }
+
+  const title = path.basename(filePath, ext);
+  const folder = path.dirname(filePath);
+  const isImage = IMAGE_EXTENSIONS.includes(ext);
+  const mediaType = isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO;
+  const status = isImage ? MEDIA_STATUS.READY : MEDIA_STATUS.PENDING;
+
+  /* Check file still exists (may have been moved/deleted since discovery). */
+  if (!fs.existsSync(filePath)) {
+    db.prepare(
+      'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
+    ).run(IMPORT_STATUS.FAILED, 'File not found', itemId);
+    return;
+  }
+
+  /* Fast path — path already in library, no need to hash. */
+  const existing = db.prepare('SELECT id FROM media WHERE path = ? AND hidden = 0').get(filePath);
+  if (existing) {
+    db.prepare('UPDATE import_queue SET status = ? WHERE id = ?').run(IMPORT_STATUS.COMPLETED, itemId);
+    return;
+  }
+
+  const hash = await computeFileHash(filePath);
+
+  /* Ensure folder has a record in the folders table. */
+  db.prepare('INSERT OR IGNORE INTO folders (path) VALUES (?)').run(folder);
+
+  /* Check if hidden media with same hash exists (restore case). */
+  const hidden = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 1').get(hash);
+
+  if (hidden) {
+    db.prepare(
+      `UPDATE media SET path = ?, folder = ?, hidden = 0,
+       updated_at = datetime('now') WHERE id = ?`
+    ).run(filePath, folder, hidden.id);
+    logger.debug(`Restored media id=${hidden.id} at ${filePath}`);
+  } else {
+    /* Check if path already exists. */
+    const exists = db.prepare('SELECT id FROM media WHERE path = ?').get(filePath);
+
+    if (exists) {
+      db.prepare('UPDATE media SET hash = ? WHERE path = ? AND hash IS NULL').run(hash, filePath);
+    } else {
+      /* Insert new media. */
+      const result = db.prepare(
+        `INSERT INTO media (path, title, type, folder, status, hash)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(filePath, title, mediaType, folder, status, hash);
+
+      /* Videos are processed on demand when the user views them. */
+    }
+  }
+
+  /* Mark queue item as completed. */
+  db.prepare(
+    'UPDATE import_queue SET status = ? WHERE id = ?'
+  ).run(IMPORT_STATUS.COMPLETED, itemId);
+}
+
+/** The single active scan worker, or null when idle. */
+let activeWorker = null;
+
+/** Terminate the worker immediately. No-op if idle. */
+export function terminateAllScanWorkers() {
+  if (activeWorker) {
+    activeWorker.terminate();
+    activeWorker = null;
+  }
+}
+
+/**
+ * Ensure the single worker thread is running.
+ * If it is already running it will naturally pick up items from the new
+ * scan that were just added to import_queue — no second thread needed.
+ */
+function ensureScanWorker(logger) {
+  if (activeWorker) return;
+
+  const worker = new Worker(WORKER_PATH, { workerData: { dbPath: DB_PATH } });
+  activeWorker = worker;
+
+  worker.on('message', (msg) => {
+    if (msg.type === 'sse') broadcastSse(msg.event);
+    if (msg.type === 'log') logger[msg.level]?.(msg.msg);
+  });
+  worker.on('error', (err) => {
+    activeWorker = null;
+    logger.warn(`Scan worker error: ${err.message}`);
+  });
+  worker.on('exit', () => { activeWorker = null; });
+}
+
+/**
+ * Resume any incomplete scans found in the database.
+ * Called at boot time to satisfy LAW 2.3 resume requirement.
+ */
+export function resumeIncompleteScans(kojo, logger) {
+  const db = kojo.get('db');
+  const scans = db.prepare(
+    'SELECT id FROM scans WHERE status IN (?, ?)'
+  ).all(SCAN_STATUS.DISCOVERING, SCAN_STATUS.IMPORTING);
+
+  if (scans.length === 0) return;
+
+  /* Cancel all stale scans rather than resuming them. With path-based
+     deduplication, rescans are fast — the user can re-trigger if needed.
+     Resuming accumulates workers on every restart and was the cause of
+     dozens of redundant workers spawning. */
+  const stmt = db.prepare('UPDATE scans SET status = ? WHERE id = ?');
+  for (const scan of scans) {
+    stmt.run(SCAN_STATUS.CANCELLED, scan.id);
+  }
+  logger.info(`Cancelled ${scans.length} incomplete scan(s) from previous session`);
+}
+
+/**
+ * Create folder records for the scan root and all intermediate directories.
+ * This ensures the full folder hierarchy is navigable, not just leaf dirs.
+ */
+function createFolderHierarchy(db, scanRoot, files) {
+  const dirs = new Set();
+  dirs.add(scanRoot);
+
+  for (const filePath of files) {
+    let current = path.dirname(filePath);
+    while (current.length >= scanRoot.length && current !== path.dirname(current)) {
+      dirs.add(current);
+      if (current === scanRoot) break;
+      current = path.dirname(current);
+    }
+  }
+
+  const insertFolder = db.prepare('INSERT OR IGNORE INTO folders (path) VALUES (?)');
+  for (const dir of dirs) {
+    insertFolder.run(dir);
+  }
+}
+
+export default function (dirPath) {
+  const [kojo, logger] = this;
+  const db = kojo.get('db');
+
+  dirPath = dirPath.replace(/^["']+|["']+$/g, '').trim();
+
+  if (!fs.existsSync(dirPath)) {
+    throw new Error(`Directory not found: ${dirPath}`);
+  }
+
+  const stat = fs.statSync(dirPath);
+  if (!stat.isDirectory()) {
+    throw new Error(`Not a directory: ${dirPath}`);
+  }
+
+  /* Phase 1: Discovery — walk directory. */
+  const files = findMediaFiles(dirPath);
+
+  /* Always update the folder hierarchy (needed for navigation). */
+  createFolderHierarchy(db, dirPath, files);
+
+  /* Filter to only files not already in the library — single indexed query,
+     no I/O. This avoids queueing, worker threads, and SSE noise for rescans
+     where everything is already imported. */
+  const existingPaths = new Set(
+    db.prepare('SELECT path FROM media WHERE hidden = 0').all().map(r => r.path)
+  );
+  const newFiles = files.filter(f => !existingPaths.has(f));
+
+  logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
+
+  if (newFiles.length === 0) {
+    return { scanId: null, total: 0 };
+  }
+
+  /* Create scan record with only the new-file count. */
+  const scanResult = db.prepare(
+    'INSERT INTO scans (dir_path, total, status) VALUES (?, ?, ?)'
+  ).run(dirPath, newFiles.length, SCAN_STATUS.DISCOVERING);
+  const scanId = scanResult.lastInsertRowid;
+
+  /* Queue only new files — wrapped in a transaction for speed. */
+  const insertStmt = db.prepare(
+    'INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)'
+  );
+  db.exec('BEGIN');
+  for (const filePath of newFiles) {
+    insertStmt.run(scanId, filePath, IMPORT_STATUS.PENDING);
+  }
+  db.exec('COMMIT');
+
+  db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.IMPORTING, scanId);
+
+  broadcastSse({ type: 'import_started', scanId, total: newFiles.length, processed: 0 });
+
+  /* Phase 2: Ensure the single worker thread is running — it will pick up
+     the new scan's items along with any other queued work. */
+  ensureScanWorker(logger);
+
+  return { scanId, total: newFiles.length };
+}
+
+/**
+ * Recursively find all files with a supported media extension.
+ */
+function findMediaFiles(dirPath) {
+  const results = [];
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+
+    if (entry.isDirectory()) {
+      results.push(...findMediaFiles(fullPath));
+    } else if (SUPPORTED_EXTENSIONS.includes(path.extname(entry.name).toLowerCase())) {
+      results.push(fullPath);
+    }
+  }
+
+  return results;
+}

@@ -1,0 +1,101 @@
+/**
+ * @file HTML5 video player wrapper.
+ */
+
+import { useRef, useEffect, useImperativeHandle, forwardRef, useState } from 'react';
+import Spinner from '../ui/Spinner.jsx';
+
+/**
+ * Video player component with play/pause controls.
+ *
+ * @param {Object} props
+ * @param {string} props.src - Video source URL
+ * @param {string} [props.title] - Title shown in the buffering indicator
+ * @param {boolean} [props.autoPlay=false] - Auto-play on mount
+ * @param {Function} [props.onEnded] - Called when video finishes
+ * @param {string} [props.className] - Additional CSS classes
+ */
+const MediaPlayer = forwardRef(function MediaPlayer({
+  src,
+  title = '',
+  autoPlay = true,
+  onEnded,
+  className = '',
+}, ref) {
+  const videoRef = useRef(null);
+  const [buffering, setBuffering] = useState(true);
+
+  // Same race-condition fix as ImageViewer: reset buffering during render so
+  // it happens before the browser can fire onCanPlay for a cached/buffered src.
+  const [renderedSrc, setRenderedSrc] = useState(src);
+  if (src !== renderedSrc) {
+    setRenderedSrc(src);
+    setBuffering(true);
+  }
+
+  useImperativeHandle(ref, () => ({
+    togglePlay() {
+      const v = videoRef.current;
+      if (!v) return;
+      v.paused ? v.play().catch(() => {}) : v.pause();
+    },
+  }));
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const saved = localStorage.getItem('player_volume');
+    if (saved !== null) {
+      try {
+        const { volume, muted } = JSON.parse(saved);
+        v.volume = volume ?? 1;
+        v.muted = muted ?? false;
+      } catch {}
+    }
+    if (autoPlay) {
+      v.play().catch(() => {});
+    }
+  }, [src, autoPlay]);
+
+  const handleVolumeChange = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    localStorage.setItem('player_volume', JSON.stringify({ volume: v.volume, muted: v.muted }));
+  };
+
+  const [error, setError] = useState(null);
+
+  const label = title ? `Buffering "${title}"…` : 'Buffering video…';
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center">
+      {buffering && !error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black z-10 pointer-events-none">
+          <Spinner size="lg" />
+          <p className="text-gray-200 text-sm font-medium tracking-wide">{label}</p>
+        </div>
+      )}
+      {error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black z-10 pointer-events-none">
+          <p className="text-red-400 text-sm font-medium">{error}</p>
+        </div>
+      )}
+      <video
+        ref={videoRef}
+        src={src}
+        className={`w-full h-full object-contain ${className}`}
+        controls
+        loop
+        onEnded={onEnded}
+        playsInline
+        onCanPlay={() => setBuffering(false)}
+        onWaiting={() => setBuffering(true)}
+        onPlaying={() => setBuffering(false)}
+        onVolumeChange={handleVolumeChange}
+        onError={() => { setBuffering(false); setError('This video could not be played.'); }}
+      />
+    </div>
+  );
+});
+
+export default MediaPlayer;

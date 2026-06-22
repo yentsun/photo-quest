@@ -1,0 +1,63 @@
+/**
+ * @file List all media records, newest first.
+ *
+ * Kojo op: accessed as `kojo.ops.listMedia()`.
+ * Must use `function()` syntax (not arrow) to receive kojo context via `this`.
+ */
+
+export default function ({ limit, offset, folder, subtree, liked, random, sort, search, tag } = {}) {
+  const [kojo] = this;
+  const db = kojo.get('db');
+
+  const conditions = ['hidden = 0'];
+  const params = [];
+
+  if (folder != null) {
+    if (subtree) {
+      conditions.push('(folder = ? OR folder LIKE ?)');
+      params.push(folder, folder.replace(/\\/g, '/') + '/%');
+    } else {
+      conditions.push('folder = ?');
+      params.push(folder);
+    }
+  }
+
+  if (liked) {
+    conditions.push('likes > 0');
+  }
+
+  if (search != null && search.trim() !== '') {
+    conditions.push('title LIKE ?');
+    params.push(`%${search.trim()}%`);
+  }
+
+  if (tag != null) {
+    conditions.push("EXISTS (SELECT 1 FROM json_each(media.tags) WHERE value = ?)");
+    params.push(tag);
+  }
+
+  const where = conditions.join(' AND ');
+
+  // Get total count for pagination metadata
+  const { total } = db.prepare(`SELECT COUNT(*) AS total FROM media WHERE ${where}`).get(...params);
+
+  /* random=true → ORDER BY RANDOM() so SQLite does the shuffle server-side.
+     Each paginated fetch of 200 pulls a fresh random slice without loading
+     the entire library into JS. */
+  const orderBy = random ? 'RANDOM()' : sort === 'filename' ? 'path ASC' : liked ? 'likes DESC' : 'created_at DESC';
+  let sql = `SELECT * FROM media WHERE ${where} ORDER BY ${orderBy}`;
+  const queryParams = [...params];
+
+  if (limit != null) {
+    sql += ' LIMIT ?';
+    queryParams.push(limit);
+    if (offset != null) {
+      sql += ' OFFSET ?';
+      queryParams.push(offset);
+    }
+  }
+
+  const items = db.prepare(sql).all(...queryParams);
+
+  return { items, total };
+}
