@@ -1,37 +1,17 @@
-/**
- * @file Root layout component.
- *
- * This component acts as the layout shell for every page in the app.  React
- * Router renders it for the "/" path and injects the matched child route via
- * the `<Outlet>` component.
- *
- * Includes the persistent Header navigation and global import progress bar.
- */
-
 import { useState, useEffect, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Header } from './layout/index.js';
 import { IconButton, Icon } from './ui/index.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
+import { JobProgressContext } from '../contexts/JobProgressContext.jsx';
 import { cancelScan } from '../utils/api.js';
 
-/**
- * Global import progress bar that listens to SSE for any active imports.
- * Also keeps ScanContext in sync so other components (e.g. Dashboard) know
- * whether a scan is running without having to duplicate SSE logic.
- * LAW 1.33: import progress must always be visible.
- */
-function ImportProgressBar() {
+function ImportProgressBar({ onJobProgress, onJobDone }) {
   const [progress, setProgress] = useState(null); // { total, processed, scanId }
   const { bump } = useRefresh();
   const { setIsScanning } = useScan();
 
-  /**
-   * Check /scans for any active import and sync state.
-   * Called on mount and after every SSE reconnect so stale progress
-   * is cleared if the scan finished while the connection was down.
-   */
   const syncFromServer = useCallback(() => {
     fetch('/scans')
       .then(r => r.json())
@@ -41,7 +21,6 @@ function ImportProgressBar() {
           setProgress({ total: active.total, processed: active.processed, scanId: active.id });
           setIsScanning(true);
         } else {
-          /* No active scan — clear any stale progress left from a dropped connection. */
           setProgress(null);
           setIsScanning(false);
         }
@@ -49,9 +28,6 @@ function ImportProgressBar() {
       .catch(() => {});
   }, [setIsScanning]);
 
-  /* SSE listener with auto-reconnect. On every (re)connect we sync from
-     the server first so stale state is cleared if the scan finished while
-     the connection was down. */
   useEffect(() => {
     let es = null;
     let reconnectTimer = null;
@@ -61,7 +37,6 @@ function ImportProgressBar() {
     const connect = () => {
       if (destroyed) return;
 
-      /* Sync current scan state before opening SSE — clears stale progress. */
       syncFromServer();
 
       es = new EventSource('/jobs/events');
@@ -72,7 +47,6 @@ function ImportProgressBar() {
           if (data.type === 'import_started' || data.type === 'import_progress') {
             setProgress({ total: data.total, processed: data.processed, scanId: data.scanId });
             setIsScanning(true);
-            /* Bump refresh signal every 50 items so pages re-fetch during import. */
             if (data.processed - lastBump >= 50) {
               lastBump = data.processed;
               bump();
@@ -82,15 +56,20 @@ function ImportProgressBar() {
             setProgress(null);
             setIsScanning(false);
             lastBump = 0;
-            /* Small delay to ensure server has saved DB before pages re-fetch. */
             setTimeout(bump, 500);
+          }
+          if (data.type === 'job_progress') {
+            onJobProgress(data.mediaId, data.progress);
+          }
+          if (data.type === 'job_done') {
+            onJobDone(data.mediaId);
+            setTimeout(bump, 300);
           }
         } catch { /* ignore parse errors */ }
       };
 
       es.onerror = () => {
         es.close();
-        /* Reconnect after 3 s — also re-syncs state to clear stale progress. */
         reconnectTimer = setTimeout(connect, 3000);
       };
     };
@@ -102,14 +81,13 @@ function ImportProgressBar() {
       clearTimeout(reconnectTimer);
       es?.close();
     };
-  }, [bump, setIsScanning, syncFromServer]);
+  }, [bump, setIsScanning, syncFromServer, onJobProgress, onJobDone]);
 
   const handleCancel = useCallback(async () => {
     if (!progress?.scanId) return;
     try {
       await cancelScan(progress.scanId);
     } catch (err) {
-      /* 400 means the scan already finished — not a real error. */
       if (!err.message?.includes('already')) {
         console.error('Failed to cancel scan:', err);
       }
@@ -145,18 +123,34 @@ function ImportProgressBar() {
   );
 }
 
-/**
- * Layout wrapper rendered by React Router for the root ("/") path.
- * Includes Header and renders child routes into the `<Outlet>` slot.
- */
 export default function Root() {
+  const [jobProgress, setJobProgress] = useState(new Map());
+
+  const handleJobProgress = useCallback((mediaId, progress) => {
+    setJobProgress(prev => {
+      const next = new Map(prev);
+      next.set(mediaId, progress);
+      return next;
+    });
+  }, []);
+
+  const handleJobDone = useCallback((mediaId) => {
+    setJobProgress(prev => {
+      const next = new Map(prev);
+      next.delete(mediaId);
+      return next;
+    });
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gray-900">
-      <Header />
-      <ImportProgressBar />
-      <main>
-        <Outlet />
-      </main>
-    </div>
+    <JobProgressContext.Provider value={jobProgress}>
+      <div className="min-h-screen bg-gray-900">
+        <Header />
+        <ImportProgressBar onJobProgress={handleJobProgress} onJobDone={handleJobDone} />
+        <main>
+          <Outlet />
+        </main>
+      </div>
+    </JobProgressContext.Provider>
   );
 }
