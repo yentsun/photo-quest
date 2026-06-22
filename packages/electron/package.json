@@ -1,0 +1,73 @@
+{
+  "name": "@photo-quest/electron",
+  "version": "0.2.4",
+  "private": true,
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "node build.mjs && electron-builder"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  },
+  "devDependencies": {
+    "electron": "^35.7.5",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.25.12"
+  },
+  "repository": "https://github.com/yentsun/photo-quest",
+  "build": {
+    "appId": "com.photoquest.app",
+    "productName": "Photo Quest",
+    "asar": false,
+    "directories": {
+      "output": "../../dist-electron"
+    },
+    "files": [
+      "main.js",
+      "!node_modules"
+    ],
+    "extraResources": [
+      {
+        "from": "vendor/node_modules",
+        "to": "node_modules"
+      },
+      {
+        "from": "vendor/bin",
+        "to": "bin"
+      },
+      {
+        "from": "../server/dist",
+        "to": "server"
+      },
+      {
+        "from": "../worker/dist",
+        "to": "worker"
+      },
+      {
+        "from": "../web/dist",
+        "to": "web/dist"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico"
+    },
+    "publish": {
+      "provider": "github"
+    }
+  }
+}

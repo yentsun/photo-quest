@@ -1,0 +1,120 @@
+/**
+ * @file Server bootstrap — initialises all services and returns a ready
+ * kojo instance.
+ *
+ * Boot sequence:
+ *  1. Create the kojo instance with custom directory names.
+ *  2. Initialise the SQLite database (better-sqlite3) and store it in state.
+ *  3. Store config values (port, routes table).
+ *  4. Call kojo.ready() to auto-discover ops/ and endpoints/.
+ *     Endpoints register their routes via the addHttpRoute op.
+ *  5. Start the HTTP server via kojo.ops.http().
+ *  6. Return the kojo instance for external use.
+ */
+
+import 'urlpattern-polyfill';
+import Kojo from 'kojo';
+import config from '@photo-quest/shared/config.js';
+import { initDb } from './src/db.js';
+import { resumeIncompleteScans } from './ops/scanMedia.js';
+import { broadcastSse } from './src/sse.js';
+
+/* Patch stdout/stderr to prepend timestamps to every line of output. */
+for (const stream of ['stdout', 'stderr']) {
+  const original = process[stream].write.bind(process[stream]);
+  process[stream].write = (chunk, ...args) => {
+    const str = typeof chunk === 'string' ? chunk : chunk.toString();
+    if (str.trim()) {
+      const ts = new Date().toISOString().slice(11, 23); // HH:mm:ss.SSS
+      return original(`${ts} ${str}`, ...args);
+    }
+    return original(chunk, ...args);
+  };
+}
+
+export default async function boot() {
+
+  const PORT = config.serverPort;
+
+  /* Media paths -- directories the server can scan for media files.
+   * Set via MEDIA_PATHS env var as semicolon-separated paths.
+   * Example: MEDIA_PATHS=/home/user/Pictures;/home/user/Videos */
+  const MEDIA_PATHS = process.env.MEDIA_PATHS
+    ? process.env.MEDIA_PATHS.split(';').map(p => p.trim()).filter(Boolean)
+    : [];
+
+  /* Kojo -- event-driven microservice framework.
+   * `functionsDir: 'ops'`  → business logic lives in ops/
+   * `subsDir: 'endpoints'` → route handlers live in endpoints/ */
+  const kojo = new Kojo({
+    name: 'photo-quest',
+    functionsDir: 'ops',
+    subsDir: 'endpoints',
+    logLevel: 'debug',
+  });
+
+  /* HTTP route table -- endpoints push into this via addHttpRoute op. */
+  kojo.set('routes', []);
+
+  /* Config values that ops and endpoints need. */
+  kojo.set('port', PORT);
+  kojo.set('mediaPaths', MEDIA_PATHS);
+  kojo.set('settingsPath', process.env.SETTINGS_PATH || null);
+
+  if (MEDIA_PATHS.length > 0) {
+    console.debug(`[boot] Media paths configured: ${MEDIA_PATHS.join(', ')}`);
+  }
+
+  /* SQLite database (better-sqlite3, native binding with WAL mode).
+   * Stored in kojo state so all ops can access it via kojo.get('db'). */
+  console.debug('[boot] Initialising database...');
+  const db = initDb();
+  kojo.set('db', db);
+
+  /* Auto-discover ops/ and endpoints/. During this phase every
+   * endpoint file calls kojo.ops.addHttpRoute() to register its route. */
+  console.debug('[boot] Loading ops and endpoints...');
+  await kojo.ready();
+
+  /* Unpack ops for direct access. */
+  const { requestMiddleware } = kojo.ops;
+
+  /* All routes are now registered -- start the HTTP server. */
+  const routes = kojo.get('routes') || [];
+  console.debug(`[boot] ${routes.length} routes registered`);
+  requestMiddleware();
+
+  /* Resume any imports that were interrupted by a previous crash/restart. */
+  resumeIncompleteScans(kojo, console);
+
+  /* Broadcast running job progress to SSE clients every second. */
+  const _lastProgress = new Map(); // jobId -> progress
+  setInterval(() => {
+    try {
+      const running = db.prepare(`SELECT id, media_id, progress FROM jobs WHERE status = 'running'`).all();
+      const runningIds = new Set(running.map(j => j.id));
+
+      for (const job of running) {
+        const prev = _lastProgress.get(job.id);
+        if (prev !== job.progress) {
+          broadcastSse({ type: 'job_progress', mediaId: job.media_id, progress: job.progress ?? 0 });
+          _lastProgress.set(job.id, job.progress);
+        }
+      }
+
+      // Detect jobs that just finished
+      for (const [jobId] of _lastProgress) {
+        if (!runningIds.has(jobId)) {
+          const done = db.prepare(`SELECT media_id FROM jobs WHERE id = ?`).get(jobId);
+          if (done) broadcastSse({ type: 'job_done', mediaId: done.media_id });
+          _lastProgress.delete(jobId);
+        }
+      }
+    } catch { /* ignore DB errors during shutdown */ }
+  }, 1000);
+
+  return kojo;
+}
+
+/* Self-invoke when run directly (e.g. `node boot.js`). */
+boot();

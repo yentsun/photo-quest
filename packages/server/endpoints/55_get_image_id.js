@@ -1,0 +1,90 @@
+/**
+ * @file GET /image/:id -- Serve an image file with EXIF rotation applied.
+ *
+ * Kojo endpoint: registers route via the addHttpRoute op.
+ *
+ * LAW 2.3: Photos must be displayed according to their EXIF orientation data.
+ * Uses the orientation value stored in the DB during import (LAW 2.4).
+ * Only processes through sharp when rotation is actually needed.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import sharp from 'sharp';
+import { json } from '../src/http.js';
+
+export default async (kojo, logger) => {
+  kojo.ops.addHttpRoute({
+    method: 'GET',
+    pathname: '/image/:id',
+  }, async (req, res, params) => {
+    const row = kojo.ops.getMediaById(Number(params.id));
+
+    if (!row) {
+      return json(res, 404, { error: 'Media not found' });
+    }
+
+    if (row.type !== 'image') {
+      return json(res, 400, { error: 'Not an image' });
+    }
+
+    const filePath = row.path;
+
+    if (!fs.existsSync(filePath)) {
+      return json(res, 404, { error: 'File not found on disk' });
+    }
+
+    /* Determine MIME type from extension. */
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.bmp': 'image/bmp',
+      '.heic': 'image/jpeg',
+      '.jfif': 'image/jpeg',
+    };
+    const contentType = mimeTypes[ext] || 'image/jpeg';
+
+    /* GIFs have no EXIF rotation and sharp strips animation to a single frame,
+     * so serve them raw to preserve animation. */
+    if (ext === '.gif') {
+      const stat = fs.statSync(filePath);
+      res.writeHead(200, {
+        'Content-Length': stat.size,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000',
+      });
+      return fs.createReadStream(filePath).pipe(res);
+    }
+
+    /* Always run through sharp.rotate() which auto-rotates based on EXIF.
+     * It's a no-op when no rotation is needed, and avoids relying on the
+     * stored orientation value which may be stale or incorrect. */
+    try {
+      const buffer = await sharp(filePath)
+        .rotate() // auto-rotate based on EXIF
+        .toBuffer();
+
+      res.writeHead(200, {
+        'Content-Length': buffer.length,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000',
+      });
+      return res.end(buffer);
+    } catch (err) {
+      logger.error(`Failed to process image ${filePath}: ${err.message}`);
+    }
+
+    /* Fallback: serve raw file if sharp fails. */
+    const stat = fs.statSync(filePath);
+    res.writeHead(200, {
+      'Content-Length': stat.size,
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000',
+    });
+    fs.createReadStream(filePath).pipe(res);
+  });
+};
