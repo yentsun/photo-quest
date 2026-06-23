@@ -1,7 +1,3 @@
-/**
- * @file Liked media page - shows items with likes > 0.
- */
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
@@ -37,13 +33,9 @@ export default function LikedPage() {
     offsetRef.current = 0;
     totalRef.current = 0;
 
-    /* IDB-first: show cached items instantly on return visits (first load only). */
     idbGetMedia({ liked: true, limit: PAGE_SIZE })
       .then(({ items }) => {
-        if (!cancelled && items.length > 0 && likedMedia.length === 0) {
-          setLikedMedia(items);
-          setLoading(false);
-        }
+        if (!cancelled && items.length > 0 && likedMedia.length === 0) { setLikedMedia(items); setLoading(false); }
       })
       .catch(() => {});
 
@@ -56,10 +48,7 @@ export default function LikedPage() {
         setTotal(t);
         setLoading(false);
       })
-      .catch(err => {
-        console.error('Failed to fetch liked media:', err);
-        if (!cancelled) setLoading(false);
-      });
+      .catch(err => { console.error('Failed to fetch liked media:', err); if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
   }, [signal]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -67,7 +56,6 @@ export default function LikedPage() {
   const handleLoadMore = useCallback(async () => {
     if (loadingMoreRef.current) return;
     if (offsetRef.current >= totalRef.current) return;
-
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
@@ -79,12 +67,8 @@ export default function LikedPage() {
           return [...prev, ...more.filter(m => !existingIds.has(m.id))];
         });
       }
-    } catch (err) {
-      console.error('Failed to load more liked media:', err);
-    } finally {
-      loadingMoreRef.current = false;
-      setLoadingMore(false);
-    }
+    } catch (err) { console.error('Failed to load more liked media:', err); }
+    finally { loadingMoreRef.current = false; setLoadingMore(false); }
   }, []);
 
   const handleShuffle = () => {
@@ -104,19 +88,17 @@ export default function LikedPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
-  if (loading) {
-    return <PageLoader message="Fetching your liked media…" />;
-  }
+  if (loading) return <PageLoader message="Fetching your liked media…" />;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-white">Liked</h1>
-          <p className="text-gray-400 text-sm">{total} item{total !== 1 ? 's' : ''}</p>
+          <h1 className="page-title">Liked</h1>
+          <p className="page-subtitle">{total} item{total !== 1 ? 's' : ''}</p>
         </div>
         {likedMedia.length > 0 && (
-          <Button variant="secondary" onClick={handleShuffle}>
+          <Button variant="ghost" size="sm" onClick={handleShuffle} icon={<Icon name="shuffle" className="icon-sm" />}>
             Shuffle
           </Button>
         )}
@@ -129,7 +111,7 @@ export default function LikedPage() {
         onNearEnd={likedMedia.length < total ? handleLoadMore : undefined}
         emptyState={
           <EmptyState
-            icon={<Icon name="heart" className="w-16 h-16" />}
+            icon={<Icon name="heart" className="icon-2xl" />}
             title="No liked items"
             description="Like photos and videos in your library to see them here."
           />
@@ -137,7 +119,7 @@ export default function LikedPage() {
       />
 
       {loadingMore && (
-        <div className="flex justify-center py-6">
+        <div className="loading-row">
           <Spinner />
         </div>
       )}
