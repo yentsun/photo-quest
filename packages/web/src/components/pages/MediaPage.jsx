@@ -546,9 +546,9 @@ export default function MediaPage() {
           </div>
 
           <div className="viewer-actions">
-            <IconButton icon={<Icon name="info" />} label="Info" onClick={() => setShowInfo(true)} />
-            <IconButton icon={<Icon name="download" />} label="Download" onClick={() => downloadMedia(item)} />
-            <IconButton icon={<Icon name="trash" />} label="Delete" onClick={handleDelete} />
+            <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
+            <Button variant="ghost" size="sm" icon={<Icon name="download" className="icon-sm" />} onClick={() => downloadMedia(item)}>Download</Button>
+            <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>
             <LikeButton count={item.likes || 0} onLike={handleLike} />
           </div>
         </div>
