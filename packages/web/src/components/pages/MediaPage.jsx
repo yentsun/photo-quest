@@ -268,18 +268,32 @@ export default function MediaPage() {
 
   const handleRemoveTag = useCallback(async (tagToRemove) => {
     if (!item) return;
-    const newTags = (item.tags || []).filter(t => t !== tagToRemove);
+    const targetId = item.id;
+    const originalTags = item.tags || [];
+    const newTags = originalTags.filter(t => t !== tagToRemove);
     setItem(prev => ({ ...prev, tags: newTags }));
-    try { await updateMediaTags(item.id, newTags); }
-    catch (err) { console.error('Failed to remove tag:', err); setItem(prev => ({ ...prev, tags: item.tags })); }
+    try {
+      const updated = await updateMediaTags(targetId, newTags);
+      setItem(prev => prev?.id === targetId ? { ...prev, ...updated } : prev);
+    } catch (err) {
+      console.error('Failed to remove tag:', err);
+      setItem(prev => prev?.id === targetId ? { ...prev, tags: originalTags } : prev);
+    }
   }, [item]);
 
   const applyTag = useCallback(async (tag) => {
     if (!tag || (item?.tags || []).includes(tag)) return;
-    const newTags = [...(item.tags || []), tag];
+    const targetId = item.id;
+    const originalTags = item.tags || [];
+    const newTags = [...originalTags, tag];
     setItem(prev => ({ ...prev, tags: newTags }));
-    try { await updateMediaTags(item.id, newTags); }
-    catch (err) { console.error('Failed to add tag:', err); setItem(prev => ({ ...prev, tags: item.tags })); }
+    try {
+      const updated = await updateMediaTags(targetId, newTags);
+      setItem(prev => prev?.id === targetId ? { ...prev, ...updated } : prev);
+    } catch (err) {
+      console.error('Failed to add tag:', err);
+      setItem(prev => prev?.id === targetId ? { ...prev, tags: originalTags } : prev);
+    }
   }, [item]);
 
   const selectSuggestion = useCallback((tag) => {
