@@ -75,8 +75,13 @@ export default function MediaGrid({
 
   const measure = useCallback(() => {
     if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    setDimensions({ width: rect.width, height: window.innerHeight - rect.top });
+    const w = containerRef.current.clientWidth;
+    const scrollEl = containerRef.current.closest('main') ?? containerRef.current.parentElement;
+    const availableHeight = scrollEl
+      ? scrollEl.clientHeight - Math.max(0, containerRef.current.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top)
+      : window.innerHeight - containerRef.current.getBoundingClientRect().top;
+    const h = Math.max(200, availableHeight);
+    setDimensions(prev => (prev.width === w && prev.height === h ? prev : { width: w, height: h }));
   }, []);
 
   useEffect(() => {
@@ -89,7 +94,7 @@ export default function MediaGrid({
   const { width, height } = dimensions;
   const columnCount = getColumnCount(width);
   const rowCount = Math.ceil(items.length / columnCount);
-  const columnWidth = width > 0 ? (width + GAP) / columnCount : 200;
+  const columnWidth = width > 0 ? width / columnCount : 200;
   const rowHeight = columnWidth; // aspect-square cards
 
   /* Fire onNearEnd when user scrolls within 3 rows of the last item. */
@@ -133,13 +138,13 @@ export default function MediaGrid({
         <Grid
           cellComponent={Cell}
           cellProps={{ items, columnCount, onItemClick, onItemLike }}
-          width={width}
-          height={height}
           columnCount={columnCount}
           columnWidth={columnWidth}
           rowCount={rowCount}
           rowHeight={rowHeight}
           overscanCount={2}
+          width={width}
+          height={height}
           style={{ overflowX: 'hidden' }}
           onScroll={handleScroll}
         />
