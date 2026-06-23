@@ -11,7 +11,11 @@
     "start": "pnpm --parallel --filter @photo-quest/server --filter @photo-quest/worker start",
     "test": "pnpm --filter @photo-quest/server test",
     "electron:dev": "pnpm --filter @photo-quest/electron start",
-    "electron:build": "pnpm build && pnpm --filter @photo-quest/electron build"
+    "electron:build": "pnpm build && pnpm --filter @photo-quest/electron build",
+    "make-icons": "node scripts/make-icons.mjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
