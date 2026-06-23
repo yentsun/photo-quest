@@ -144,12 +144,14 @@ export default function Root() {
 
   return (
     <JobProgressContext.Provider value={jobProgress}>
-      <div className="min-h-screen bg-gray-900">
+      <div className="h-screen bg-gray-900 flex overflow-hidden">
         <Header />
-        <ImportProgressBar onJobProgress={handleJobProgress} onJobDone={handleJobDone} />
-        <main>
-          <Outlet />
-        </main>
+        <div className="flex-1 flex flex-col pl-52 min-h-0">
+          <ImportProgressBar onJobProgress={handleJobProgress} onJobDone={handleJobDone} />
+          <main className="flex-1 overflow-y-auto min-h-0">
+            <Outlet />
+          </main>
+        </div>
       </div>
     </JobProgressContext.Provider>
   );
