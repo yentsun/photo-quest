@@ -119,7 +119,7 @@ export default function MediaGrid({
   // For small lists, render without virtualisation
   if (items.length <= VIRTUALIZE_THRESHOLD) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      <div className="item-grid">
         {items.map((media) => (
           <MediaCard
             key={media.id}
@@ -133,7 +133,7 @@ export default function MediaGrid({
   }
 
   return (
-    <div ref={containerRef} className="w-full">
+    <div ref={containerRef} style={{ width: '100%' }}>
       {width > 0 && (
         <Grid
           cellComponent={Cell}

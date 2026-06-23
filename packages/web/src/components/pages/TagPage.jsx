@@ -1,7 +1,3 @@
-/**
- * @file Media filtered by a single tag.
- */
-
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
@@ -29,7 +25,6 @@ export default function TagPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-
     fetchMedia({ tag: decodedTag })
       .then(({ items, total: t }) => {
         if (cancelled) return;
@@ -37,11 +32,7 @@ export default function TagPage() {
         setTotal(t);
         setLoading(false);
       })
-      .catch(err => {
-        console.error('Failed to fetch tagged media:', err);
-        if (!cancelled) setLoading(false);
-      });
-
+      .catch(err => { console.error('Failed to fetch tagged media:', err); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [decodedTag]);
 
@@ -58,25 +49,21 @@ export default function TagPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
-  if (loading) {
-    return <PageLoader message={`Loading "${decodedTag}"…`} />;
-  }
+  if (loading) return <PageLoader message={`Loading "${decodedTag}"…`} />;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page">
+      <div className="page-header">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Button variant="text" onClick={() => navigate('/tags')}>
-              Tags
-            </Button>
-            <span className="text-gray-600">/</span>
-            <h1 className="text-2xl font-bold text-white">{decodedTag}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+            <Button variant="text" onClick={() => navigate('/tags')}>Tags</Button>
+            <span className="breadcrumb-sep">/</span>
+            <h1 className="page-title">{decodedTag}</h1>
           </div>
-          <p className="text-gray-400 text-sm">{total} item{total !== 1 ? 's' : ''}</p>
+          <p className="page-subtitle">{total} item{total !== 1 ? 's' : ''}</p>
         </div>
         {media.length > 0 && (
-          <Button variant="secondary" onClick={handleShuffle}>
+          <Button variant="ghost" size="sm" onClick={handleShuffle} icon={<Icon name="shuffle" className="icon-sm" />}>
             Shuffle
           </Button>
         )}
@@ -88,7 +75,7 @@ export default function TagPage() {
         onItemLike={likeMedia}
         emptyState={
           <EmptyState
-            icon={<Icon name="list" className="w-16 h-16" />}
+            icon={<Icon name="list" className="icon-2xl" />}
             title={`No media tagged "${decodedTag}"`}
             description="Tag items from the media viewer."
           />
