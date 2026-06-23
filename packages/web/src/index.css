@@ -208,8 +208,8 @@ body {
 .btn-primary:hover { filter: brightness(0.9); }
 .btn-primary:disabled { filter: none; }
 
-.btn-ghost { background: transparent; border-color: transparent; color: var(--sol-text); }
-.btn-ghost:hover { background: var(--sol-surface); color: var(--sol-text-em); border-color: transparent; }
+.btn-ghost { background: transparent; border-color: var(--sol-border); color: var(--sol-text); }
+.btn-ghost:hover { background: var(--sol-surface); color: var(--sol-text-em); border-color: var(--sol-text-mut); }
 
 .btn-danger { background: transparent; color: var(--sol-red); border-color: var(--sol-border); }
 .btn-danger:hover { background: #3a1d1a; border-color: var(--sol-red); }
