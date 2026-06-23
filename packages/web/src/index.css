@@ -592,7 +592,15 @@ body {
 .viewer-meta-label { color: var(--sol-blue); }
 
 .viewer-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; position: relative; }
-.viewer-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.viewer-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.viewer-actions .icon-btn { border-color: var(--sol-border); color: var(--sol-text); }
+.viewer-actions .icon-btn:hover { background: var(--sol-surface); border-color: var(--sol-text-mut); color: var(--sol-text-em); }
+.viewer-actions .like-btn {
+  background: transparent; border: 1px solid var(--sol-border); color: var(--sol-text);
+  width: var(--row-h); height: var(--row-h); flex-direction: row; gap: 4px;
+}
+.viewer-actions .like-btn:hover { background: var(--sol-surface); border-color: var(--sol-text-mut); }
+.viewer-actions .like-count { color: var(--sol-text-mut); margin-top: 0; }
 
 .viewer-viewport {
   flex: 1; display: flex; align-items: center; justify-content: center;
