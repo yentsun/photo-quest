@@ -6,7 +6,7 @@ import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
+import { Button, Icon, IconButton, Modal, PageLoader, Select, Spinner } from '../ui/index.js';
 import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, requestTranscode, getLastMediaItem, getLastFolders } from '../../utils/api.js';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -36,6 +36,7 @@ export default function MediaPage() {
   const touchStartOnControl = useRef(false);
 
   const inSlideshow = slideshow.active;
+  const [sort, setSort] = useState('filename');
 
   const [item, setItem] = useState(() => {
     if (inSlideshow) return slideshow.current;
@@ -87,12 +88,12 @@ export default function MediaPage() {
         setItem(mediaItem);
         setLoading(false);
         if (mediaItem.folder) {
-          const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, limit: 200 });
+          const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, limit: 200, ...(sort && { sort }) });
           if (!cancelled && cachedSiblings.length > 0) setFolderMedia(cachedSiblings);
           const cachedFolders = await idbGetFolders();
           if (!cancelled) { setFolders(cachedFolders); setFolder(cachedFolders.find(f => f.path === mediaItem.folder) || null); }
           setLoadingMessage('Loading folder context…');
-          const [folderResult, allFolders] = await Promise.all([fetchMedia({ folder: mediaItem.folder, limit: 200 }), fetchFolders()]);
+          const [folderResult, allFolders] = await Promise.all([fetchMedia({ folder: mediaItem.folder, limit: 200, ...(sort && { sort }) }), fetchFolders()]);
           if (cancelled) return;
           setFolderMedia(folderResult.items);
           setFolders(allFolders);
@@ -103,7 +104,7 @@ export default function MediaPage() {
     };
     load();
     return () => { cancelled = true; };
-  }, [id, inSlideshow, signal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, inSlideshow, signal, sort]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const TERMINAL = [MEDIA_STATUS.READY, MEDIA_STATUS.ERROR];
   useEffect(() => {
@@ -168,12 +169,12 @@ export default function MediaPage() {
     folderNavInFlight.current = true;
     setFolderNavLoading(true);
     try {
-      const { items } = await fetchMedia({ folder: item.folder, sort: 'filename' });
+      const { items } = await fetchMedia({ folder: item.folder, ...(sort && { sort }) });
       setFolderMedia(items);
       return items;
     } catch (err) { console.error('Failed to load folder siblings:', err); return []; }
     finally { folderNavInFlight.current = false; setFolderNavLoading(false); }
-  }, [item, folderMedia]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [item, folderMedia, sort]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const folderIndex = folderMedia.length > 0 && item ? folderMedia.findIndex(m => m.id === item.id) : -1;
   const hasFolderPrev = inSlideshow && !!item?.folder && (folderIndex < 0 || folderIndex > 0);
@@ -575,6 +576,17 @@ export default function MediaPage() {
           </div>
 
           <div className="viewer-actions">
+            {!inSlideshow && navItems.length > 1 && (
+              <Select
+                value={sort}
+                onChange={e => setSort(e.target.value)}
+                options={[
+                  { value: 'filename', label: 'Name' },
+                  { value: '', label: 'Date' },
+                ]}
+                title="Sort order"
+              />
+            )}
             <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
             <Button variant="ghost" size="sm" icon={<Icon name="download" className="icon-sm" />} onClick={() => downloadMedia(item)}>Download</Button>
             <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>

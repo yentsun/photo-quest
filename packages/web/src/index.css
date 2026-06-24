@@ -277,6 +277,22 @@ body {
 .input-error { border-color: var(--sol-red); }
 .input-error:focus { border-color: var(--sol-red); box-shadow: inset 0 0 0 1px var(--sol-red); }
 
+/* ─── Select ─── */
+.select {
+  height: 26px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid var(--sol-border);
+  color: var(--sol-text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.1s;
+}
+.select:hover { background: var(--sol-surface); color: var(--sol-text-em); border-color: var(--sol-text-mut); }
+.select:focus { border-color: var(--sol-accent); }
+
 /* ─── Badge ─── */
 .badge {
   display: inline-flex;
