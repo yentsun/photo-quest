@@ -11,6 +11,12 @@ import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
 import { Button, Icon, Input, Modal, PageLoader, Spinner } from './ui/index.js';
 
+function byFolderName(a, b) {
+  const nameA = a.path.split(/[/\\]/).pop() || '';
+  const nameB = b.path.split(/[/\\]/).pop() || '';
+  return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+}
+
 function usePathValidation() {
   const [pathValid, setPathValid] = useState(null);
   const [pathError, setPathError] = useState(null);
@@ -160,7 +166,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  const rootFolders = useMemo(() => folders.filter(f => f.parentId === null), [folders]);
+  const rootFolders = useMemo(() => folders.filter(f => f.parentId === null).sort(byFolderName), [folders]);
   const totalMedia = useMemo(
     () => rootFolders.reduce((sum, f) => sum + (f.subtreeMediaCount || 0), 0),
     [rootFolders],

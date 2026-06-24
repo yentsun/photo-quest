@@ -18,6 +18,12 @@ function byName(a, b) {
   return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
 }
 
+function byFolderName(a, b) {
+  const nameA = a.path.split(/[/\\]/).pop() || '';
+  const nameB = b.path.split(/[/\\]/).pop() || '';
+  return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+}
+
 export default function FolderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -154,7 +160,7 @@ export default function FolderPage() {
   }, [folderId, signal, debouncedSearch, sort]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
-  const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId), [folders, folderId]);
+  const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId).sort(byFolderName), [folders, folderId]);
 
   const breadcrumbs = useMemo(() => {
     const crumbs = [];
