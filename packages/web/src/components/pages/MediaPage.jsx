@@ -11,6 +11,10 @@ import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fe
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
 
+function byName(a, b) {
+  return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+}
+
 export default function MediaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -49,7 +53,7 @@ export default function MediaPage() {
     if (!cachedFolders) return [];
     const f = cachedFolders.find(cf => cf.path === cachedItem.folder);
     if (!f) return [];
-    return getPageCache(`folder:${f.id}`)?.data?.directMedia ?? [];
+    return getPageCache(`folder:${f.id}:filename`)?.data?.directMedia ?? [];
   });
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [folder, setFolder] = useState(() => {
@@ -88,13 +92,13 @@ export default function MediaPage() {
         setLoading(false);
         if (mediaItem.folder) {
           const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, limit: 200 });
-          if (!cancelled && cachedSiblings.length > 0) setFolderMedia(cachedSiblings);
+          if (!cancelled && cachedSiblings.length > 0) setFolderMedia(cachedSiblings.slice().sort(byName));
           const cachedFolders = await idbGetFolders();
           if (!cancelled) { setFolders(cachedFolders); setFolder(cachedFolders.find(f => f.path === mediaItem.folder) || null); }
           setLoadingMessage('Loading folder context…');
           const [folderResult, allFolders] = await Promise.all([fetchMedia({ folder: mediaItem.folder, limit: 200, sort: 'filename' }), fetchFolders()]);
           if (cancelled) return;
-          setFolderMedia(folderResult.items);
+          setFolderMedia(folderResult.items.slice().sort(byName));
           setFolders(allFolders);
           setFolder(allFolders.find(f => f.path === mediaItem.folder) || null);
         }
@@ -169,8 +173,9 @@ export default function MediaPage() {
     setFolderNavLoading(true);
     try {
       const { items } = await fetchMedia({ folder: item.folder, sort: 'filename' });
-      setFolderMedia(items);
-      return items;
+      const sorted = items.slice().sort(byName);
+      setFolderMedia(sorted);
+      return sorted;
     } catch (err) { console.error('Failed to load folder siblings:', err); return []; }
     finally { folderNavInFlight.current = false; setFolderNavLoading(false); }
   }, [item, folderMedia]); // eslint-disable-line react-hooks/exhaustive-deps
