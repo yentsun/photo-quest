@@ -18,6 +18,13 @@ function byName(a, b) {
   return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
 }
 
+function applySort(items, sort) {
+  const result = sort === 'filename' ? items.slice().sort(byName) : items.slice();
+  const coverIdx = result.findIndex(m => /cover/i.test(m.title));
+  if (coverIdx > 0) result.unshift(result.splice(coverIdx, 1)[0]);
+  return result;
+}
+
 function byFolderName(a, b) {
   const nameA = a.path.split(/[/\\]/).pop() || '';
   const nameB = b.path.split(/[/\\]/).pop() || '';
@@ -99,7 +106,7 @@ export default function FolderPage() {
     const scMedia   = !isSearching && scFolder ? getLastFolderMedia(scFolder.path) : null;
     if (!scFolders) setLoading(true);
     if (scMedia) {
-      setDirectMedia(sort === 'filename' ? scMedia.items.slice().sort(byName) : scMedia.items);
+      setDirectMedia(applySort(scMedia.items, sort));
       setMediaTotal(scMedia.total);
       offsetRef.current = scMedia.items.length;
       mediaTotalRef.current = scMedia.total;
@@ -124,7 +131,7 @@ export default function FolderPage() {
         folderRef.current = found;
         mediaTotalRef.current = total;
         offsetRef.current = items.length;
-        setDirectMedia(sort === 'filename' ? items.slice().sort(byName) : items);
+        setDirectMedia(applySort(items, sort));
         setMediaTotal(total);
         setLoading(false);
         setContentReady(true);
@@ -145,7 +152,7 @@ export default function FolderPage() {
           const { items, total } = await fetchMedia(fetchOpts);
           if (!cancelled) {
             serverLoadedRef.current = true;
-            const sorted = sort === 'filename' ? items.slice().sort(byName) : items;
+            const sorted = applySort(items, sort);
             offsetRef.current = items.length;
             mediaTotalRef.current = total;
             setDirectMedia(sorted);
@@ -190,7 +197,7 @@ export default function FolderPage() {
         setDirectMedia(prev => {
           const existingIds = new Set(prev.map(m => m.id));
           const combined = [...prev, ...more.filter(m => !existingIds.has(m.id))];
-          return sortRef.current === 'filename' ? combined.sort(byName) : combined;
+          return applySort(combined, sortRef.current);
         });
       }
     } catch (err) { console.error('Failed to load more media:', err); }

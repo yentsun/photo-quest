@@ -37,10 +37,13 @@ export default async (kojo, logger) => {
       }
     }
 
-    /* Get one preview media ID per folder (first image, or first video if no images). */
+    /* Get one preview media ID per folder — cover item wins, then images before videos. */
     const previews = db.prepare(
       `SELECT folder, id FROM media WHERE hidden = 0
-       ORDER BY CASE WHEN type = 'image' THEN 0 ELSE 1 END, created_at DESC`
+       ORDER BY
+         CASE WHEN LOWER(title) LIKE '%cover%' THEN 0 ELSE 1 END,
+         CASE WHEN type = 'image' THEN 0 ELSE 1 END,
+         created_at DESC`
     ).all();
     const previewIds = new Map();
     for (const row of previews) {
