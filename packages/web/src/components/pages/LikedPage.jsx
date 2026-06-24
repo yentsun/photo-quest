@@ -125,7 +125,7 @@ export default function LikedPage() {
 
       {loadingMore && (
         <div className="loading-row">
-          <span className="spinner" />
+          <Loader />
         </div>
       )}
     </div>
