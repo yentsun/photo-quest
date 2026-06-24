@@ -9,6 +9,7 @@ import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
 import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, requestTranscode, getLastMediaItem, getLastFolders } from '../../utils/api.js';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
+import { getPageCache } from '../../utils/pageCache.js';
 
 export default function MediaPage() {
   const { id } = useParams();
@@ -40,7 +41,16 @@ export default function MediaPage() {
     if (inSlideshow) return slideshow.current;
     return getLastMediaItem(Number(id)) || null;
   });
-  const [folderMedia, setFolderMedia] = useState([]);
+  const [folderMedia, setFolderMedia] = useState(() => {
+    if (inSlideshow) return [];
+    const cachedItem = getLastMediaItem(Number(id));
+    if (!cachedItem?.folder) return [];
+    const cachedFolders = getLastFolders();
+    if (!cachedFolders) return [];
+    const f = cachedFolders.find(cf => cf.path === cachedItem.folder);
+    if (!f) return [];
+    return getPageCache(`folder:${f.id}`)?.data?.directMedia ?? [];
+  });
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [folder, setFolder] = useState(() => {
     const cachedItem = inSlideshow ? slideshow.current : getLastMediaItem(Number(id));
