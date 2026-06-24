@@ -7,12 +7,12 @@ import { fetchFolders, fetchMedia, getLastFolders, getLastFolderMedia, scanMedia
 import { Select } from '../ui/index.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
 import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
-import { FolderCard } from '../media/index.js';
-import { MediaGrid } from '../media/index.js';
+import { FolderCard, MediaCard } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, Input, Loader, Modal } from '../ui/index.js';
 
 const PAGE_SIZE = 30;
+const FETCH_LIMIT = 10000;
 
 function byName(a, b) {
   return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
@@ -61,7 +61,7 @@ export default function FolderPage() {
   const [page, setPage] = useState(0);
 
   const folderId = Number(id);
-  const CACHE_KEY = `folder:${folderId}:${sort}:${page}`;
+  const CACHE_KEY = `folder:${folderId}:${sort}`;
   const _pc = isPageCacheValid(CACHE_KEY, signal) ? getPageCache(CACHE_KEY) : null;
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -80,16 +80,14 @@ export default function FolderPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Reset to first page when search or sort changes
   useEffect(() => { setPage(0); }, [debouncedSearch]);
 
   const _sc0Folders = getLastFolders();
   const _sc0Folder  = _sc0Folders?.find(f => f.id === folderId) ?? null;
-  const _sc0Media   = page === 0 && _sc0Folder ? getLastFolderMedia(_sc0Folder.path) : null;
+  const _sc0Media   = _sc0Folder ? getLastFolderMedia(_sc0Folder.path) : null;
 
   const [folders, setFolders] = useState(_pc?.data.folders ?? _sc0Folders ?? []);
   const [directMedia, setDirectMedia] = useState(_pc?.data.directMedia ?? _sc0Media?.items ?? []);
-  const [mediaTotal, setMediaTotal] = useState(_pc?.data.mediaTotal ?? _sc0Media?.total ?? 0);
   const [loading, setLoading] = useState(!_pc && !_sc0Folders);
   const [loadingMessage, setLoadingMessage] = useState('Fetching folder list…');
   const [contentReady, setContentReady] = useState(!!_pc || !!_sc0Media);
@@ -101,13 +99,11 @@ export default function FolderPage() {
     serverLoadedRef.current = false;
     setLoadingMessage('Fetching folder list…');
     const isSearching = Boolean(debouncedSearch);
-    const offset = page * PAGE_SIZE;
 
     if (!isSearching && isPageCacheValid(CACHE_KEY, signal)) {
-      const { folders: pf, directMedia: pm, mediaTotal: pt } = getPageCache(CACHE_KEY).data;
+      const { folders: pf, directMedia: pm } = getPageCache(CACHE_KEY).data;
       setFolders(pf);
       setDirectMedia(pm);
-      setMediaTotal(pt);
       folderRef.current = pf.find(f => f.id === folderId) ?? folderRef.current;
       setContentReady(true);
       setLoading(false);
@@ -116,30 +112,27 @@ export default function FolderPage() {
 
     const scFolders = getLastFolders();
     const scFolder  = scFolders?.find(f => f.id === folderId);
-    const scMedia   = !isSearching && page === 0 && scFolder ? getLastFolderMedia(scFolder.path) : null;
+    const scMedia   = !isSearching && scFolder ? getLastFolderMedia(scFolder.path) : null;
     if (!scFolders) setLoading(true);
     if (scMedia) {
       setDirectMedia(applySort(scMedia.items, sort));
-      setMediaTotal(scMedia.total);
       if (scFolder) folderRef.current = scFolder;
       setContentReady(true);
       setLoading(false);
     } else {
       setDirectMedia([]);
-      setMediaTotal(0);
       setContentReady(false);
     }
-    if (!isSearching && page === 0) {
+    if (!isSearching) {
       idbGetFolders().then(async (cachedFolders) => {
         if (cancelled) return;
         const found = cachedFolders.find(f => f.id === folderId);
         if (!found) return;
-        const { items, total } = await idbGetMedia({ folder: found.path, limit: PAGE_SIZE, sort: 'filename' });
+        const { items } = await idbGetMedia({ folder: found.path, limit: FETCH_LIMIT, sort: 'filename' });
         if (cancelled || items.length === 0 || scMedia || serverLoadedRef.current) return;
         setFolders(cachedFolders);
         folderRef.current = found;
         setDirectMedia(applySort(items, sort));
-        setMediaTotal(total);
         setLoading(false);
         setContentReady(true);
       }).catch(() => {});
@@ -154,16 +147,15 @@ export default function FolderPage() {
           folderRef.current = found;
           const folderName = found.path.split(/[/\\]/).filter(Boolean).pop() || 'folder';
           setLoadingMessage(`'${folderName}'…`);
-          const fetchOpts = { folder: found.path, limit: PAGE_SIZE, offset, ...(sort && { sort }) };
+          const fetchOpts = { folder: found.path, limit: FETCH_LIMIT, offset: 0, ...(sort && { sort }) };
           if (debouncedSearch) fetchOpts.search = debouncedSearch;
-          const { items, total } = await fetchMedia(fetchOpts);
+          const { items } = await fetchMedia(fetchOpts);
           if (!cancelled) {
             serverLoadedRef.current = true;
             const sorted = applySort(items, sort);
             setDirectMedia(sorted);
-            setMediaTotal(total);
             if (!isSearching) {
-              setPageCache(CACHE_KEY, { folders: allFolders, directMedia: sorted, mediaTotal: total, page }, signal);
+              setPageCache(CACHE_KEY, { folders: allFolders, directMedia: sorted }, signal);
             }
           }
         }
@@ -172,10 +164,21 @@ export default function FolderPage() {
     };
     load();
     return () => { cancelled = true; };
-  }, [folderId, signal, debouncedSearch, sort, page]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [folderId, signal, debouncedSearch, sort]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
   const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId).sort(byFolderName), [folders, folderId]);
+
+  const allItems = useMemo(() => {
+    if (debouncedSearch) return directMedia.map(m => ({ kind: 'media', item: m }));
+    return [
+      ...subfolders.map(f => ({ kind: 'folder', item: f })),
+      ...directMedia.map(m => ({ kind: 'media', item: m })),
+    ];
+  }, [subfolders, directMedia, debouncedSearch]);
+
+  const totalPages = Math.ceil(allItems.length / PAGE_SIZE);
+  const displayItems = allItems.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const breadcrumbs = useMemo(() => {
     const crumbs = [];
@@ -218,14 +221,14 @@ export default function FolderPage() {
 
   const folderName = folder ? folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder' : 'Folder';
   const subtreeTotal = folder?.subtreeMediaCount || 0;
-  const totalPages = Math.ceil(mediaTotal / PAGE_SIZE);
 
   const itemLabel = (() => {
-    if (mediaTotal === 0) return null;
-    if (totalPages <= 1) return `${mediaTotal.toLocaleString()} item${mediaTotal !== 1 ? 's' : ''}`;
+    const total = allItems.length;
+    if (total === 0) return null;
+    if (totalPages <= 1) return `${total.toLocaleString()} item${total !== 1 ? 's' : ''}`;
     const start = page * PAGE_SIZE + 1;
-    const end = Math.min((page + 1) * PAGE_SIZE, mediaTotal);
-    return `${start.toLocaleString()}–${end.toLocaleString()} of ${mediaTotal.toLocaleString()} items`;
+    const end = Math.min((page + 1) * PAGE_SIZE, total);
+    return `${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} items`;
   })();
 
   return (
@@ -254,10 +257,8 @@ export default function FolderPage() {
         <div>
           <h1 className="page-title">{folderName}</h1>
           <p className="page-subtitle">
-            {subfolders.length > 0 && `${subfolders.length} folder${subfolders.length !== 1 ? 's' : ''}`}
-            {subfolders.length > 0 && itemLabel && ', '}
             {itemLabel}
-            {contentReady && subfolders.length === 0 && !itemLabel && '0 items'}
+            {contentReady && !itemLabel && '0 items'}
           </p>
         </div>
         <div className="page-actions">
@@ -292,21 +293,17 @@ export default function FolderPage() {
         </div>
       </div>
 
-      {subfolders.length > 0 && !debouncedSearch && (
-        <div className="item-grid">
-          {subfolders.map(sub => <FolderCard key={sub.id} folder={sub} />)}
-        </div>
-      )}
-
       {!contentReady ? (
         <div className="page-loader"><Loader /></div>
-      ) : directMedia.length > 0 ? (
+      ) : displayItems.length > 0 ? (
         <>
-          <MediaGrid
-            items={directMedia}
-            onItemClick={m => navigate(`/media/${m.id}`)}
-            onItemLike={likeMedia}
-          />
+          <div className="item-grid">
+            {displayItems.map(({ kind, item }) =>
+              kind === 'folder'
+                ? <FolderCard key={`f-${item.id}`} folder={item} />
+                : <MediaCard key={`m-${item.id}`} media={item} onClick={m => navigate(`/media/${m.id}`)} onLike={likeMedia} />
+            )}
+          </div>
           {totalPages > 1 && (
             <div className="pagination-row">
               <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)} icon={<Icon name="prev" className="icon-sm" />} />
@@ -325,13 +322,13 @@ export default function FolderPage() {
           title="No results"
           description={`No media matching "${debouncedSearch}".`}
         />
-      ) : subfolders.length === 0 ? (
+      ) : (
         <EmptyState
           icon={<Icon name="folder" className="icon-2xl" />}
           title="Folder not found"
           description="This folder doesn't exist or contains no media."
         />
-      ) : null}
+      )}
 
       <Modal open={searchOpen} onClose={() => setSearchOpen(false)} title="Search">
         <div className="search-wrap">
