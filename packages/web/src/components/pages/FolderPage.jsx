@@ -14,6 +14,10 @@ import { Button, Icon, Input, Modal, PageLoader, Spinner } from '../ui/index.js'
 
 const PAGE_SIZE = 200;
 
+function byName(a, b) {
+  return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+}
+
 export default function FolderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -87,7 +91,7 @@ export default function FolderPage() {
     const scMedia   = !isSearching && scFolder ? getLastFolderMedia(scFolder.path) : null;
     if (!scFolders) setLoading(true);
     if (scMedia) {
-      setDirectMedia(scMedia.items);
+      setDirectMedia(sort === 'filename' ? scMedia.items.slice().sort(byName) : scMedia.items);
       setMediaTotal(scMedia.total);
       offsetRef.current = scMedia.items.length;
       mediaTotalRef.current = scMedia.total;
@@ -112,7 +116,7 @@ export default function FolderPage() {
         folderRef.current = found;
         mediaTotalRef.current = total;
         offsetRef.current = items.length;
-        setDirectMedia(items);
+        setDirectMedia(sort === 'filename' ? items.slice().sort(byName) : items);
         setMediaTotal(total);
         setLoading(false);
         setContentReady(true);
@@ -132,12 +136,13 @@ export default function FolderPage() {
           if (debouncedSearch) fetchOpts.search = debouncedSearch;
           const { items, total } = await fetchMedia(fetchOpts);
           if (!cancelled) {
+            const sorted = sort === 'filename' ? items.slice().sort(byName) : items;
             offsetRef.current = items.length;
             mediaTotalRef.current = total;
-            setDirectMedia(items);
+            setDirectMedia(sorted);
             setMediaTotal(total);
             if (!isSearching) {
-              setPageCache(CACHE_KEY, { folders: allFolders, directMedia: items, mediaTotal: total, offset: items.length }, signal);
+              setPageCache(CACHE_KEY, { folders: allFolders, directMedia: sorted, mediaTotal: total, offset: items.length }, signal);
             }
           }
         }
@@ -175,7 +180,8 @@ export default function FolderPage() {
         offsetRef.current += more.length;
         setDirectMedia(prev => {
           const existingIds = new Set(prev.map(m => m.id));
-          return [...prev, ...more.filter(m => !existingIds.has(m.id))];
+          const combined = [...prev, ...more.filter(m => !existingIds.has(m.id))];
+          return sortRef.current === 'filename' ? combined.sort(byName) : combined;
         });
       }
     } catch (err) { console.error('Failed to load more media:', err); }
