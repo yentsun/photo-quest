@@ -146,7 +146,7 @@ export default function FolderPage() {
         if (found) {
           folderRef.current = found;
           const folderName = found.path.split(/[/\\]/).filter(Boolean).pop() || 'folder';
-          setLoadingMessage(`Loading '${folderName}'…`);
+          setLoadingMessage(`'${folderName}'…`);
           const fetchOpts = { folder: found.path, limit: PAGE_SIZE, offset: 0, ...(sort && { sort }) };
           if (debouncedSearch) fetchOpts.search = debouncedSearch;
           const { items, total } = await fetchMedia(fetchOpts);

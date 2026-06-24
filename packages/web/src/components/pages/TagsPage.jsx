@@ -15,7 +15,7 @@ export default function TagsPage() {
       .catch(err => { console.error('Failed to fetch tags:', err); setLoading(false); });
   }, []);
 
-  if (loading) return <PageLoader message="Loading tags…" />;
+  if (loading) return <PageLoader message="tags…" />;
 
   return (
     <div className="page">

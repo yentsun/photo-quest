@@ -313,20 +313,29 @@ body {
 .badge-warning  { color: var(--sol-yellow); border-color: #5a4f1c; background: #34300f; }
 .badge-error    { color: var(--sol-red);    border-color: #6a2a26; background: #3a1d1a; }
 
-/* ─── Spinner ─── */
-@keyframes sol-spin { to { transform: rotate(360deg); } }
-@keyframes sol-ping { 0% { transform: scale(1); opacity: 1; } 75%, 100% { transform: scale(2); opacity: 0; } }
+/* ─── Spinner (blinking cursor) ─── */
+@keyframes sol-blink { 50% { background: transparent; } }
 
 .spinner {
-  width: 28px; height: 28px;
-  border: 2px solid var(--sol-border);
-  border-top-color: var(--sol-accent);
-  border-radius: 50%;
-  animation: sol-spin 0.75s linear infinite;
+  display: inline-block;
+  width: 5px; height: 10px;
+  background: var(--sol-text-em);
+  animation: sol-blink 1.05s steps(2, end) infinite;
   flex-shrink: 0;
+  vertical-align: middle;
 }
-.spinner-sm { width: 16px; height: 16px; border-width: 2px; }
-.spinner-lg { width: 42px; height: 42px; border-width: 3px; }
+.spinner-sm { width: 4px; height: 8px; }
+.spinner-lg { width: 6px; height: 12px; }
+
+/* ─── Loader ─── */
+.loader { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.loader-line {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-family: var(--font-mono); font-size: var(--fs-xl);
+  color: var(--sol-text-mut);
+}
+.loader-line .spinner { height: 0.85em; width: 0.35em; }
+.loader-msg { color: var(--sol-text-mut); font-size: var(--fs-sm); font-family: var(--font-mono); }
 
 /* ─── Modal ─── */
 @keyframes scrim-in  { from { opacity: 0; }                    to { opacity: 1; } }
@@ -544,8 +553,7 @@ body {
 .empty-state-desc { color: var(--sol-text-mut); font-size: var(--fs-sm); max-width: 360px; margin-bottom: 16px; }
 
 /* ─── Page loader ─── */
-.page-loader { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50vh; gap: 14px; }
-.page-loader-msg { color: var(--sol-text-em); font-size: var(--fs-sm); letter-spacing: 0.04em; }
+.page-loader { display: flex; align-items: center; justify-content: center; min-height: 50vh; }
 
 /* ─── Loading row ─── */
 .loading-row { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px 0; color: var(--sol-text-mut); font-size: var(--fs-sm); }
@@ -580,7 +588,6 @@ body {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
 }
-.image-viewer-label { color: var(--sol-text-em); font-size: var(--fs-sm); }
 .image-viewer-error { color: var(--sol-text-mut); font-size: var(--fs-sm); }
 
 /* ─── Media player ─── */
