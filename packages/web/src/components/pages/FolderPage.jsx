@@ -217,10 +217,10 @@ export default function FolderPage() {
     const f = folderRef.current;
     if (!f) return;
     try {
-      const { items, total } = await fetchMedia({ folder: f.path, subtree: true, limit: PAGE_SIZE, random: true });
+      const { items, total } = await fetchMedia({ folder: f.path, subtree: true, random: true });
       if (items.length === 0) return;
       pendingShuffle.current = true;
-      slideshow.start(items, { order: 'sequential', total, loadMore: () => fetchMedia({ folder: f.path, subtree: true, limit: PAGE_SIZE, random: true }).then(d => d.items) });
+      slideshow.start(items, { order: 'sequential', total });
     } catch (err) { console.error('Failed to fetch subtree media for shuffle:', err); }
   };
 

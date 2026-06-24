@@ -179,10 +179,10 @@ export default function Dashboard() {
   const handleShuffle = async () => {
     if (totalMedia === 0) return;
     try {
-      const { items, total } = await fetchMedia({ limit: 200, random: true });
+      const { items, total } = await fetchMedia({ random: true });
       if (items.length === 0) return;
       pendingShuffle.current = true;
-      slideshow.start(items, { order: 'sequential', total, loadMore: () => fetchMedia({ limit: 200, random: true }).then(d => d.items) });
+      slideshow.start(items, { order: 'sequential', total });
     } catch (err) { console.error('Failed to fetch media for shuffle:', err); }
   };
 
