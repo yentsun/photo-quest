@@ -105,7 +105,7 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   if (tag != null) url.searchParams.set('tag', tag);
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, random ? { cache: 'no-store' } : undefined);
     if (!response.ok) throw new Error('Failed to fetch media');
     const data = await response.json();
     /* Warm the sync cache so return visits resolve instantly. */
