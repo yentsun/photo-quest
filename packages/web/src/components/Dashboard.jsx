@@ -1,7 +1,3 @@
-/**
- * @file Dashboard page component - main media library view.
- */
-
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../hooks/useMedia.js';
@@ -14,13 +10,10 @@ import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
 import { Button, Icon, Input, Modal, PageLoader, Spinner } from './ui/index.js';
 
-/**
- * Validate a folder path against the server.
- */
 function usePathValidation() {
   const [pathValid, setPathValid] = useState(null);
   const [pathError, setPathError] = useState(null);
-  const [pathInfo, setPathInfo] = useState(null); // { files, newEstimate }
+  const [pathInfo, setPathInfo] = useState(null);
   const [checking, setChecking] = useState(false);
 
   const validate = useCallback(async (path) => {
@@ -57,9 +50,6 @@ function usePathValidation() {
   return { pathValid, pathError, pathInfo, checking, validate, reset };
 }
 
-/**
- * Main library dashboard showing all media.
- */
 export default function Dashboard() {
   const navigate = useNavigate();
   const { addFolderWithPath, removeFolder, refreshLibrary, likeMedia } = useMediaActions();
@@ -68,12 +58,7 @@ export default function Dashboard() {
   const { isScanning } = useScan();
   const pendingShuffle = useRef(false);
 
-  /* Sync cache — populated by fetchFolders() on every successful load.
-     Lets the useState initialisers below resolve synchronously so there is
-     no loading flash when pressing browser back from shuffle mode. */
-
-  /* Clear slideshow when returning to dashboard. */
-  useEffect(() => { slideshow.stop(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [scanProgress, setScanProgress] = useState(null);
   const [importProgress, setImportProgress] = useState(null);
@@ -82,8 +67,6 @@ export default function Dashboard() {
   const [browsing, setBrowsing] = useState(false);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
 
-  /* Sync-cache first so there is no loading flash when returning from shuffle.
-     Falls back to empty / loading=true on first ever visit (cache is null). */
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [loading, setLoading] = useState(!getLastFolders());
 
@@ -101,33 +84,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     let cancelled = false;
-
-    /* 1. Serve stale data from IDB immediately — hides the spinner on first visits
-          (sync cache already handled return visits via the useState initialiser).
-          Skip when sync cache has data to avoid a visible jump if IDB and server
-          sort folders in a different order. */
     idbGetFolders()
       .then(cached => { if (!cancelled && cached.length > 0 && !getLastFolders()) { setFolders(cached); setLoading(false); } })
-      .catch(() => {}); // IDB miss is fine; server fetch below will cover it
-
-    /* 2. Refresh from server in the background; IDB + sync cache updated inside fetchFolders. */
+      .catch(() => {});
     fetchFolders()
       .then(data => { if (!cancelled) { setFolders(data); setLoading(false); } })
       .catch(err => { console.error('Failed to fetch folders:', err); if (!cancelled) setLoading(false); });
-
     return () => { cancelled = true; };
   }, [signal]);
 
-  /* Debounce search input by 300ms. */
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-      searchRef.current = searchQuery;
-    }, 300);
+    const timer = setTimeout(() => { setDebouncedSearch(searchQuery); searchRef.current = searchQuery; }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  /* Fetch search results whenever the debounced query changes. */
   useEffect(() => {
     if (!debouncedSearch) {
       setSearchResults([]);
@@ -177,35 +147,23 @@ export default function Dashboard() {
   }, []);
 
   const rootFolders = useMemo(() => folders.filter(f => f.parentId === null), [folders]);
-
   const totalMedia = useMemo(
     () => rootFolders.reduce((sum, f) => sum + (f.subtreeMediaCount || 0), 0),
     [rootFolders],
   );
 
   useEffect(() => {
-    if (!showAddFolder) {
-      setSelectedPath(null);
-      setBrowsing(false);
-      reset();
-    }
+    if (!showAddFolder) { setSelectedPath(null); setBrowsing(false); reset(); }
   }, [showAddFolder, reset]);
 
   const handleShuffle = async () => {
     if (totalMedia === 0) return;
     try {
-      /* Fetch first page of 200 random items — start immediately, load more lazily. */
       const { items, total } = await fetchMedia({ limit: 200, random: true });
       if (items.length === 0) return;
       pendingShuffle.current = true;
-      slideshow.start(items, {
-        order: 'sequential', // already randomised by ORDER BY RANDOM() on server
-        total,
-        loadMore: () => fetchMedia({ limit: 200, random: true }).then(d => d.items),
-      });
-    } catch (err) {
-      console.error('Failed to fetch media for shuffle:', err);
-    }
+      slideshow.start(items, { order: 'sequential', total, loadMore: () => fetchMedia({ limit: 200, random: true }).then(d => d.items) });
+    } catch (err) { console.error('Failed to fetch media for shuffle:', err); }
   };
 
   useEffect(() => {
@@ -221,9 +179,7 @@ export default function Dashboard() {
       setTimeout(() => setScanProgress(null), 3000);
       return;
     }
-
     setScanProgress('Refreshing library...');
-
     try {
       const result = await refreshLibrary(folders, (progress) => setScanProgress(progress));
       const totalFolders = result.serverFolders + result.clientFolders;
@@ -244,47 +200,29 @@ export default function Dashboard() {
       if (data.cancelled || !data.path) return;
       setSelectedPath(data.path);
       validate(data.path);
-    } catch (err) {
-      console.error('Failed to open folder dialog:', err);
-    } finally {
-      setBrowsing(false);
-    }
+    } catch (err) { console.error('Failed to open folder dialog:', err); }
+    finally { setBrowsing(false); }
   };
 
   const handleAddFolder = async () => {
     if (!selectedPath || !pathValid) return;
-
     setImportProgress(null);
-
     try {
       const { scanId, total } = await addFolderWithPath(selectedPath);
       setImportProgress({ total, processed: 0 });
-
-      /* Listen to SSE for import progress. */
       const { cancelled } = await new Promise((resolve, reject) => {
         const es = new EventSource('/jobs/events');
         es.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
             if (data.scanId !== scanId) return;
-
-            if (data.type === 'import_progress') {
-              setImportProgress({ total: data.total, processed: data.processed });
-            }
-            if (data.type === 'import_complete') {
-              setImportProgress({ total: data.total, processed: data.processed });
-              es.close();
-              resolve({ cancelled: false });
-            }
-            if (data.type === 'import_cancelled') {
-              es.close();
-              resolve({ cancelled: true });
-            }
+            if (data.type === 'import_progress') setImportProgress({ total: data.total, processed: data.processed });
+            if (data.type === 'import_complete') { setImportProgress({ total: data.total, processed: data.processed }); es.close(); resolve({ cancelled: false }); }
+            if (data.type === 'import_cancelled') { es.close(); resolve({ cancelled: true }); }
           } catch { /* ignore parse errors */ }
         };
         es.onerror = () => { es.close(); reject(new Error('Lost connection')); };
       });
-
       bump();
       setScanProgress(cancelled ? 'Scan stopped.' : `Imported ${total} files.`);
       setShowAddFolder(false);
@@ -300,9 +238,7 @@ export default function Dashboard() {
 
   const handleRemoveFolder = async (folder) => {
     const folderName = folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
-    if (!confirm(`Remove "${folderName}" from library?\n\nYour likes will be preserved if you re-add this folder later.`)) {
-      return;
-    }
+    if (!confirm(`Remove "${folderName}" from library?\n\nYour likes will be preserved if you re-add this folder later.`)) return;
     try {
       const result = await removeFolder(folder.id);
       setScanProgress(`Removed "${folderName}" (${result.hidden} items hidden)`);
@@ -313,113 +249,91 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) {
-    return <PageLoader message="Fetching your media folders…" />;
-  }
-
-  const folderIcon = <Icon name="folder" className="w-16 h-16" />;
+  if (loading) return <PageLoader message="Fetching your media folders…" />;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="page">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-white">Library</h1>
-          <p className="text-gray-400 text-sm">{totalMedia} items</p>
+          <h1 className="page-title">Library</h1>
+          <p className="page-subtitle">{totalMedia} items</p>
         </div>
-        <div className="flex gap-2">
+        <div className="page-actions">
           {totalMedia > 0 && (
-            <Button variant="secondary" onClick={handleShuffle} disabled={isScanning} icon={<Icon name="shuffle" className="w-4 h-4" />}>
-              <span className="hidden sm:inline">Shuffle</span>
+            <Button variant="ghost" size="sm" onClick={handleShuffle} disabled={isScanning} icon={<Icon name="shuffle" className="icon-sm" />}>
+              <span className="sm-show">Shuffle</span>
             </Button>
           )}
           {rootFolders.length > 0 && (
-            <Button variant="ghost" onClick={handleRefresh} disabled={isScanning} title="Rescan folders for new files" icon={<Icon name="refresh" className="w-4 h-4" />}>
-              <span className="hidden sm:inline">Refresh</span>
+            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isScanning} title="Rescan folders for new files" icon={<Icon name="refresh" className="icon-sm" />}>
+              <span className="sm-show">Refresh</span>
             </Button>
           )}
-          <Button onClick={() => setShowAddFolder(true)} disabled={isScanning} icon={<Icon name="folder" className="w-4 h-4" />}>
-            <span className="hidden sm:inline">Add Folder</span>
+          <Button size="sm" onClick={() => setShowAddFolder(true)} disabled={isScanning} icon={<Icon name="folder" className="icon-sm" />}>
+            <span className="sm-show">Add Folder</span>
           </Button>
           <Button
-            variant={debouncedSearch ? 'secondary' : 'ghost'}
+            variant={debouncedSearch ? 'primary' : 'ghost'}
+            size="sm"
             onClick={() => setSearchOpen(true)}
             title="Search by title"
-            icon={<Icon name="search" className="w-4 h-4" />}
+            icon={<Icon name="search" className="icon-sm" />}
           >
-            <span className="hidden sm:inline">Search</span>
+            <span className="sm-show">Search</span>
           </Button>
         </div>
       </div>
 
-      {/* Scan Progress */}
       {scanProgress && (
-        <div className="mb-6 p-4 bg-blue-900/30 border border-blue-700/50 rounded-lg">
-          <div className="flex items-center gap-3">
-            <p className="text-blue-300">{scanProgress}</p>
-          </div>
+        <div className="scan-notice">
+          <p>{scanProgress}</p>
         </div>
       )}
 
-      {/* Add Folder Modal */}
-      <Modal
-        open={showAddFolder}
-        onClose={() => setShowAddFolder(false)}
-        title="Add Folder"
-      >
-        <div className="space-y-4">
-          <Button
-            variant="secondary"
-            onClick={handleBrowse}
-            disabled={browsing || !!importProgress}
-            className="w-full"
-          >
-            {browsing ? 'Opening dialog…' : selectedPath ? 'Browse again…' : 'Browse for folder…'}
+      <Modal open={showAddFolder} onClose={() => setShowAddFolder(false)} title="Add Folder">
+        <Button
+          variant="ghost"
+          onClick={handleBrowse}
+          disabled={browsing || !!importProgress}
+          className="btn-full"
+        >
+          {browsing ? 'Opening dialog…' : selectedPath ? 'Browse again…' : 'Browse for folder…'}
+        </Button>
+
+        {selectedPath && <div className="path-preview">{selectedPath}</div>}
+
+        {checking && <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--sol-text-mut)' }}>Checking path…</p>}
+        {pathError && <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--sol-red)' }}>{pathError}</p>}
+        {pathValid && pathInfo && (
+          <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--sol-green)' }}>
+            {pathInfo.files} media file{pathInfo.files !== 1 ? 's' : ''} found
+            {pathInfo.newEstimate > 0 && ` (${pathInfo.newEstimate} new)`}
+            {pathInfo.newEstimate === 0 && pathInfo.files > 0 && ' (all already in library)'}
+          </p>
+        )}
+
+        {importProgress && (
+          <div className="import-progress">
+            <div className="import-progress-label">
+              <span>Importing files…</span>
+              <span>{importProgress.processed}/{importProgress.total}</span>
+            </div>
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${importProgress.total ? (importProgress.processed / importProgress.total) * 100 : 0}%` }} />
+            </div>
+          </div>
+        )}
+
+        {selectedPath && !isScanning && (
+          <Button variant="primary" onClick={handleAddFolder} disabled={!pathValid || checking || browsing}>
+            Add
           </Button>
-
-          {selectedPath && (
-            <div className="p-3 rounded-lg bg-gray-700/50 text-sm text-gray-200 break-all">
-              {selectedPath}
-            </div>
-          )}
-
-          {checking && <p className="text-gray-400 text-xs">Checking path…</p>}
-          {pathError && <p className="text-red-400 text-xs">{pathError}</p>}
-          {pathValid && pathInfo && (
-            <p className="text-green-400 text-xs">
-              {pathInfo.files} media file{pathInfo.files !== 1 ? 's' : ''} found
-              {pathInfo.newEstimate > 0 && ` (${pathInfo.newEstimate} new)`}
-              {pathInfo.newEstimate === 0 && pathInfo.files > 0 && ' (all already in library)'}
-            </p>
-          )}
-
-          {importProgress && (
-            <div>
-              <div className="flex justify-between text-xs text-gray-400 mb-1">
-                <span>Importing files…</span>
-                <span>{importProgress.processed}/{importProgress.total}</span>
-              </div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-200"
-                  style={{ width: `${importProgress.total ? (importProgress.processed / importProgress.total) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {selectedPath && !isScanning && (
-            <Button onClick={handleAddFolder} disabled={!pathValid || checking || browsing}>
-              Add
-            </Button>
-          )}
-        </div>
+        )}
       </Modal>
 
-      {/* Search results or Folder Grid */}
       {debouncedSearch ? (
         searchLoading ? (
-          <div className="flex items-center justify-center py-16">
+          <div className="loading-row" style={{ paddingTop: 48, paddingBottom: 48 }}>
             <Spinner size="lg" />
           </div>
         ) : searchResults.length > 0 ? (
@@ -431,21 +345,21 @@ export default function Dashboard() {
               onNearEnd={searchResults.length < searchTotal ? handleSearchLoadMore : undefined}
             />
             {searchLoadingMore && (
-              <div className="flex items-center justify-center gap-2 py-4">
+              <div className="loading-row">
                 <Spinner size="sm" />
-                <span className="text-gray-400 text-sm">Loading more items…</span>
+                <span>Loading more items…</span>
               </div>
             )}
           </>
         ) : (
           <EmptyState
-            icon={<Icon name="search" className="w-16 h-16" />}
+            icon={<Icon name="search" className="icon-2xl" />}
             title="No results"
             description={`No media matching "${debouncedSearch}".`}
           />
         )
       ) : rootFolders.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div className="item-grid">
           {rootFolders.map(folder => (
             <FolderCard
               key={folder.id}
@@ -456,37 +370,27 @@ export default function Dashboard() {
         </div>
       ) : (
         <EmptyState
-          icon={folderIcon}
+          icon={<Icon name="folder" className="icon-2xl" />}
           title="No media yet"
           description="Add a folder from your device to start building your library."
-          action={{
-            label: 'Add Folder',
-            onClick: () => setShowAddFolder(true),
-          }}
+          action={{ label: 'Add Folder', onClick: () => setShowAddFolder(true) }}
         />
       )}
 
-      {/* Search modal */}
-      <Modal
-        open={searchOpen}
-        onClose={() => setSearchOpen(false)}
-        title="Search"
-      >
-        <div className="relative">
-          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+      <Modal open={searchOpen} onClose={() => setSearchOpen(false)} title="Search">
+        <div className="search-wrap">
+          <Icon name="search" className="search-icon icon-sm" />
           <Input
             type="search"
             placeholder="Search by title…"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="pl-9"
             autoFocus
           />
         </div>
         {debouncedSearch && (
           <Button
             variant="text"
-            className="mt-3 text-sm"
             onClick={() => { setSearchQuery(''); setDebouncedSearch(''); searchRef.current = ''; }}
           >
             Clear search

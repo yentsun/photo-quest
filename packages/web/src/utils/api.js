@@ -166,6 +166,7 @@ export async function updateMediaTags(id, tags) {
   if (!response.ok) throw new Error('Failed to update tags');
   const item = parseTags(await response.json());
   _mediaCache.set(item.id, item);
+  idbPutMedia(item).catch(err => console.warn('[idb] putMedia (tags) failed:', err));
   return item;
 }
 

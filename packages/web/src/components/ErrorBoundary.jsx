@@ -72,21 +72,16 @@ export default class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-8">
-          <div className="max-w-md">
-            <h2 className="text-2xl font-bold mb-4">Something went wrong</h2>
-
-            {/* Simple recovery instructions -- keep these short and
-                actionable so the user knows what to do next. */}
-            <ul className="space-y-2 text-gray-300">
-              <li>Reload the page (press <code className="bg-gray-700 px-1 rounded">F5</code>)</li>
-              <li><a href={r.root} className="text-blue-400 underline">Go home</a></li>
+        <div className="error-boundary">
+          <div className="error-boundary-inner">
+            <h2 className="error-boundary-title">Something went wrong</h2>
+            <ul className="error-boundary-list">
+              <li>Reload the page (press <code>F5</code>)</li>
+              <li><a href={r.root} className="error-boundary-link">Go home</a></li>
             </ul>
-
-            {/* Collapsible error details for developers / bug reports. */}
-            <details className="mt-4 text-sm text-gray-500">
+            <details className="error-boundary-details">
               <summary>Error details</summary>
-              <pre className="mt-2 whitespace-pre-wrap">{this.state.error?.toString()}</pre>
+              <pre>{this.state.error?.toString()}</pre>
             </details>
           </div>
         </div>
