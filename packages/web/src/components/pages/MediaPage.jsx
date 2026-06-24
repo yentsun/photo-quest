@@ -7,7 +7,7 @@ import { MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, requestTranscode, getLastMediaItem } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, requestTranscode, getLastMediaItem, getLastFolders } from '../../utils/api.js';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 
 export default function MediaPage() {
@@ -41,8 +41,13 @@ export default function MediaPage() {
     return getLastMediaItem(Number(id)) || null;
   });
   const [folderMedia, setFolderMedia] = useState([]);
-  const [folder, setFolder] = useState(null);
-  const [folders, setFolders] = useState([]);
+  const [folders, setFolders] = useState(() => getLastFolders() || []);
+  const [folder, setFolder] = useState(() => {
+    const cachedItem = inSlideshow ? slideshow.current : getLastMediaItem(Number(id));
+    const cachedFolders = getLastFolders();
+    if (!cachedItem?.folder || !cachedFolders) return null;
+    return cachedFolders.find(f => f.path === cachedItem.folder) || null;
+  });
   const [loading, setLoading] = useState(!inSlideshow && !getLastMediaItem(Number(id)));
   const [loadingMessage, setLoadingMessage] = useState('Fetching media item…');
 
