@@ -54,81 +54,79 @@ export default function Header() {
     }
   };
 
-  const linkClass = ({ isActive }) =>
-    `flex items-center px-3 py-2 rounded-lg transition-colors w-full text-sm ${
-      isActive
-        ? 'bg-blue-600 text-white'
-        : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-    }`;
-
   return (
     <>
-      <aside className="fixed left-0 top-0 bottom-0 w-52 bg-gray-900 border-r border-gray-800 flex flex-col z-20">
-        {/* Logo */}
-        <div className="p-4 border-b border-gray-800">
-          <Link
-            to={clientRoutes.dashboard}
-            className="flex items-center gap-2 text-lg font-bold text-white hover:text-gray-200 transition-colors"
-          >
-            <img src="/favicon.png" alt="" className="w-7 h-7" />
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <Link to={clientRoutes.dashboard}>
+            <img src="/favicon.png" alt="" />
             Photo Quest
           </Link>
         </div>
 
-        {/* Nav links */}
-        <nav className="flex-1 p-3 flex flex-col gap-1">
-          <NavLink to={clientRoutes.dashboard} className={linkClass}>
+        <nav className="sidebar-nav">
+          <NavLink
+            to={clientRoutes.dashboard}
+            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+          >
+            <Icon name="folder" className="icon-sm" />
             Library
           </NavLink>
-          <NavLink to={clientRoutes.liked} className={linkClass}>
+          <NavLink
+            to={clientRoutes.liked}
+            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+          >
+            <Icon name="heart" className="icon-sm" />
             Liked
           </NavLink>
-          <NavLink to={clientRoutes.tags} className={linkClass}>
+          <NavLink
+            to={clientRoutes.tags}
+            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+          >
+            <Icon name="list" className="icon-sm" />
             Tags
           </NavLink>
         </nav>
 
-        {/* Bottom actions */}
-        <div className="p-3 border-t border-gray-800 flex flex-col gap-2">
+        <div className="sidebar-footer">
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
             onClick={() => { setShowLibrary(true); setPickedPath(null); setLibraryStatus(null); }}
             title="Connect existing library"
-            icon={<Icon name="folder" className="w-4 h-4" />}
-            className="w-full"
+            icon={<Icon name="folder" className="icon-sm" />}
+            className="btn-full"
           >
             Library
           </Button>
 
           {networkUrl && (
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
               onClick={() => setShowQr(true)}
               title="Show QR code for other devices"
-              icon={<Icon name="network" className="w-4 h-4" />}
-              className="w-full"
+              icon={<Icon name="network" className="icon-sm" />}
+              className="btn-full"
             >
-              <span className="truncate">{networkUrl}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{networkUrl}</span>
             </Button>
           )}
         </div>
       </aside>
 
-      {/* Modals */}
       {networkUrl && (
         <Modal open={showQr} onClose={() => setShowQr(false)} title="Open on another device">
-          <div className="flex flex-col items-center gap-4">
-            <div className="p-4 bg-white rounded-xl">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+            <div style={{ padding: 16, background: '#fff' }}>
               <QRCodeSVG value={networkUrl} size={220} />
             </div>
-            <p className="text-gray-400 text-sm text-center">{networkUrl}</p>
+            <p className="text-mut" style={{ fontSize: 'var(--fs-sm)', textAlign: 'center' }}>{networkUrl}</p>
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
               onClick={handleCopyUrl}
-              icon={<Icon name="copy" className="w-4 h-4" />}
+              icon={<Icon name="copy" className="icon-sm" />}
             >
               {copied ? 'Copied!' : 'Copy URL'}
             </Button>
@@ -141,31 +139,30 @@ export default function Header() {
         onClose={() => setShowLibrary(false)}
         title="Connect existing library"
       >
-        <div className="flex flex-col gap-4">
-          <p className="text-gray-400 text-sm">
-            Select a <code className="text-gray-300">.db</code> file from a previous Photo Quest installation to open that library.
-          </p>
-          <Button variant="secondary" onClick={handlePickLibrary} icon={<Icon name="folder" className="w-4 h-4" />}>
-            Browse…
+        <p className="text-mut" style={{ fontSize: 'var(--fs-sm)' }}>
+          Select a <code style={{ color: 'var(--sol-text-em)' }}>.db</code> file from a previous Photo Quest installation to open that library.
+        </p>
+        <Button variant="ghost" onClick={handlePickLibrary} icon={<Icon name="folder" className="icon-sm" />}>
+          Browse…
+        </Button>
+        {pickedPath && (
+          <div className="path-preview">{pickedPath}</div>
+        )}
+        {libraryStatus?.error && (
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{libraryStatus.error}</p>
+        )}
+        {libraryStatus?.success && (
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Library connected — the app is restarting…</p>
+        )}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" onClick={() => setShowLibrary(false)}>Cancel</Button>
+          <Button
+            variant="primary"
+            onClick={handleConnectLibrary}
+            disabled={!pickedPath || libraryStatus?.loading || libraryStatus?.success}
+          >
+            {libraryStatus?.loading ? 'Connecting…' : 'Connect'}
           </Button>
-          {pickedPath && (
-            <p className="text-sm text-gray-300 break-all bg-gray-800 rounded px-3 py-2">{pickedPath}</p>
-          )}
-          {libraryStatus?.error && (
-            <p className="text-sm text-red-400">{libraryStatus.error}</p>
-          )}
-          {libraryStatus?.success && (
-            <p className="text-sm text-green-400">Library connected — the app is restarting…</p>
-          )}
-          <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setShowLibrary(false)}>Cancel</Button>
-            <Button
-              onClick={handleConnectLibrary}
-              disabled={!pickedPath || libraryStatus?.loading || libraryStatus?.success}
-            >
-              {libraryStatus?.loading ? 'Connecting…' : 'Connect'}
-            </Button>
-          </div>
         </div>
       </Modal>
     </>
