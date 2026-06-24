@@ -4,6 +4,7 @@ import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchFolders, fetchMedia, getLastFolders, getLastFolderMedia, scanMedia as scanMediaApi } from '../../utils/api.js';
+import { Select } from '../ui/index.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
 import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
 import { FolderCard } from '../media/index.js';
@@ -21,13 +22,15 @@ export default function FolderPage() {
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [sort, setSort] = useState('filename');
+  const sortRef = useRef('filename');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const searchRef = useRef('');
 
   const folderId = Number(id);
-  const CACHE_KEY = `folder:${folderId}`;
+  const CACHE_KEY = `folder:${folderId}:${sort}`;
   const _pc = isPageCacheValid(CACHE_KEY, signal) ? getPageCache(CACHE_KEY) : null;
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -36,6 +39,8 @@ export default function FolderPage() {
     setSearchQuery('');
     setDebouncedSearch('');
     searchRef.current = '';
+    setSort('filename');
+    sortRef.current = 'filename';
   }, [folderId]);
 
   useEffect(() => {
@@ -123,7 +128,7 @@ export default function FolderPage() {
           folderRef.current = found;
           const folderName = found.path.split(/[/\\]/).filter(Boolean).pop() || 'folder';
           setLoadingMessage(`Loading '${folderName}'…`);
-          const fetchOpts = { folder: found.path, limit: PAGE_SIZE, offset: 0, sort: 'filename' };
+          const fetchOpts = { folder: found.path, limit: PAGE_SIZE, offset: 0, ...(sort && { sort }) };
           if (debouncedSearch) fetchOpts.search = debouncedSearch;
           const { items, total } = await fetchMedia(fetchOpts);
           if (!cancelled) {
@@ -141,7 +146,7 @@ export default function FolderPage() {
     };
     load();
     return () => { cancelled = true; };
-  }, [folderId, signal, debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [folderId, signal, debouncedSearch, sort]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
   const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId), [folders, folderId]);
@@ -163,7 +168,7 @@ export default function FolderPage() {
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const loadMoreOpts = { folder: folderRef.current.path, limit: PAGE_SIZE, offset: offsetRef.current, sort: 'filename' };
+      const loadMoreOpts = { folder: folderRef.current.path, limit: PAGE_SIZE, offset: offsetRef.current, ...(sortRef.current && { sort: sortRef.current }) };
       if (searchRef.current) loadMoreOpts.search = searchRef.current;
       const { items: more } = await fetchMedia(loadMoreOpts);
       if (more.length > 0) {
@@ -260,6 +265,15 @@ export default function FolderPage() {
               <span className="sm-show">Refresh</span>
             </Button>
           )}
+          <Select
+            value={sort}
+            onChange={e => { const v = e.target.value; setSort(v); sortRef.current = v; }}
+            options={[
+              { value: 'filename', label: 'Name' },
+              { value: '', label: 'Date' },
+            ]}
+            title="Sort order"
+          />
           <Button
             variant={debouncedSearch ? 'primary' : 'ghost'}
             size="sm"
