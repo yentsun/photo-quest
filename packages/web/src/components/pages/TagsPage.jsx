@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchTags } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
-import { Icon, PageLoader } from '../ui/index.js';
+import { Icon, Loader } from '../ui/index.js';
 
 export default function TagsPage() {
   const navigate = useNavigate();
@@ -15,7 +15,7 @@ export default function TagsPage() {
       .catch(err => { console.error('Failed to fetch tags:', err); setLoading(false); });
   }, []);
 
-  if (loading) return <PageLoader message="tags…" />;
+  if (loading) return <div className="page-loader"><Loader message="tags…" /></div>;
 
   return (
     <div className="page">

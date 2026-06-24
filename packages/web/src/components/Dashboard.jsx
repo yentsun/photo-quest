@@ -9,7 +9,7 @@ import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache
 import { idbGetFolders } from '../services/idb.js';
 import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
-import { Button, Icon, Input, Modal, PageLoader, Spinner } from './ui/index.js';
+import { Button, Icon, Input, Loader, Modal } from './ui/index.js';
 
 function byFolderName(a, b) {
   const nameA = a.path.split(/[/\\]/).pop() || '';
@@ -269,7 +269,7 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) return <PageLoader message="Fetching your media folders…" />;
+  if (loading) return <div className="page-loader"><Loader message="Fetching your media folders…" /></div>;
 
   return (
     <div className="page">
@@ -354,7 +354,7 @@ export default function Dashboard() {
       {debouncedSearch ? (
         searchLoading ? (
           <div className="loading-row" style={{ paddingTop: 48, paddingBottom: 48 }}>
-            <Spinner size="lg" />
+            <span className="spinner spinner-lg" />
           </div>
         ) : searchResults.length > 0 ? (
           <>
@@ -366,7 +366,7 @@ export default function Dashboard() {
             />
             {searchLoadingMore && (
               <div className="loading-row">
-                <Spinner size="sm" />
+                <span className="spinner spinner-sm" />
                 <span>Loading more items…</span>
               </div>
             )}

@@ -10,7 +10,7 @@ import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
 import { FolderCard } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, Input, Modal, PageLoader, Spinner } from '../ui/index.js';
+import { Button, Icon, Input, Loader, Modal } from '../ui/index.js';
 
 const PAGE_SIZE = 30;
 
@@ -214,7 +214,7 @@ export default function FolderPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
-  if (loading) return <PageLoader message={loadingMessage} />;
+  if (loading) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
 
   const folderName = folder ? folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder' : 'Folder';
   const subtreeTotal = folder?.subtreeMediaCount || 0;
@@ -299,9 +299,7 @@ export default function FolderPage() {
       )}
 
       {!contentReady ? (
-        <div className="loading-row" style={{ paddingTop: 48, paddingBottom: 48 }}>
-          <Spinner size="lg" />
-        </div>
+        <div className="page-loader"><Loader /></div>
       ) : directMedia.length > 0 ? (
         <>
           <MediaGrid
