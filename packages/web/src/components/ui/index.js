@@ -8,5 +8,6 @@ export { default as Icon } from './Icon.jsx';
 export { default as IconButton } from './IconButton.jsx';
 export { default as Input } from './Input.jsx';
 export { default as Modal } from './Modal.jsx';
+export { default as Select } from './Select.jsx';
 export { default as PageLoader } from './PageLoader.jsx';
 export { default as Spinner } from './Spinner.jsx';
