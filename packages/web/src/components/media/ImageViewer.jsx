@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import Spinner from '../ui/Spinner.jsx';
+import Loader from '../ui/Loader.jsx';
 
 export default function ImageViewer({ src, alt = '', className = '' }) {
   const [status, setStatus] = useState('loading');
@@ -14,8 +14,7 @@ export default function ImageViewer({ src, alt = '', className = '' }) {
     <div className="image-viewer">
       {status === 'loading' && (
         <div className="image-viewer-state">
-          <Spinner size="lg" />
-          <p className="image-viewer-label">{alt ? `Loading "${alt}"…` : 'Loading…'}</p>
+          <Loader message={alt ? `"${alt}"…` : null} />
         </div>
       )}
       {status === 'error' && (

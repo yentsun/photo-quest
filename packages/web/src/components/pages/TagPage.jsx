@@ -56,7 +56,7 @@ export default function TagPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
-  if (loading) return <PageLoader message={`Loading "${decodedTag}"…`} />;
+  if (loading) return <PageLoader message={`"${decodedTag}"…`} />;
 
   return (
     <div className="page">

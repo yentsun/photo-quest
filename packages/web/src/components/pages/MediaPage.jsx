@@ -102,7 +102,7 @@ export default function MediaPage() {
           if (!cancelled && cachedSiblings.length > 0) setFolderMedia(applySort(cachedSiblings));
           const cachedFolders = await idbGetFolders();
           if (!cancelled) { setFolders(cachedFolders); setFolder(cachedFolders.find(f => f.path === mediaItem.folder) || null); }
-          setLoadingMessage('Loading folder context…');
+          setLoadingMessage('folder context…');
           const [folderResult, allFolders] = await Promise.all([fetchMedia({ folder: mediaItem.folder, limit: 200, sort: 'filename' }), fetchFolders()]);
           if (cancelled) return;
           setFolderMedia(applySort(folderResult.items));
