@@ -1,5 +1,4 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef, useState } from 'react';
-import Spinner from '../ui/Spinner.jsx';
 
 const MediaPlayer = forwardRef(function MediaPlayer({
   src,
@@ -50,7 +49,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
     <div className="media-player">
       {buffering && !error && (
         <div className="media-player-state">
-          <Spinner size="lg" />
+          <span className="spinner spinner-lg" />
           <p className="media-player-label">{title ? `Buffering "${title}"…` : 'Buffering…'}</p>
         </div>
       )}

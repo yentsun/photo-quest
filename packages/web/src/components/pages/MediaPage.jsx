@@ -6,7 +6,7 @@ import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, IconButton, Modal, PageLoader, Spinner } from '../ui/index.js';
+import { Button, Icon, IconButton, Loader, Modal } from '../ui/index.js';
 import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, requestTranscode, getLastMediaItem, getLastFolders } from '../../utils/api.js';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -371,7 +371,7 @@ export default function MediaPage() {
 
   const backTarget = folder ? `/folder/${folder.id}` : '/dashboard';
 
-  if (loading) return <PageLoader message={loadingMessage} />;
+  if (loading) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
 
   if (!item) {
     return (
@@ -459,7 +459,7 @@ export default function MediaPage() {
         {hasFolderPrev && (
           <IconButton
             variant="overlay"
-            icon={folderNavLoading ? <Spinner size="sm" /> : <Icon name="up" className="icon-xl" />}
+            icon={folderNavLoading ? <span className="spinner spinner-sm" /> : <Icon name="up" className="icon-xl" />}
             label="Previous in folder"
             size="lg"
             disabled={folderNavLoading}
@@ -471,7 +471,7 @@ export default function MediaPage() {
         {hasFolderNext && (
           <IconButton
             variant="overlay"
-            icon={folderNavLoading ? <Spinner size="sm" /> : <Icon name="down" className="icon-xl" />}
+            icon={folderNavLoading ? <span className="spinner spinner-sm" /> : <Icon name="down" className="icon-xl" />}
             label="Next in folder"
             size="lg"
             disabled={folderNavLoading}
@@ -486,10 +486,10 @@ export default function MediaPage() {
               <IconButton variant="overlay" icon={<Icon name="prev" className="icon-md" />} label="Previous" onClick={goPrev} />
             )}
             {hasFolderPrev && (
-              <IconButton variant="overlay" icon={folderNavLoading ? <Spinner size="sm" /> : <Icon name="up" className="icon-md" />} label="Previous in folder" disabled={folderNavLoading} onClick={goFolderPrev} />
+              <IconButton variant="overlay" icon={folderNavLoading ? <span className="spinner spinner-sm" /> : <Icon name="up" className="icon-md" />} label="Previous in folder" disabled={folderNavLoading} onClick={goFolderPrev} />
             )}
             {hasFolderNext && (
-              <IconButton variant="overlay" icon={folderNavLoading ? <Spinner size="sm" /> : <Icon name="down" className="icon-md" />} label="Next in folder" disabled={folderNavLoading} onClick={goFolderNext} />
+              <IconButton variant="overlay" icon={folderNavLoading ? <span className="spinner spinner-sm" /> : <Icon name="down" className="icon-md" />} label="Next in folder" disabled={folderNavLoading} onClick={goFolderNext} />
             )}
             {isImage && hasNext && (
               <IconButton variant="overlay" icon={<Icon name="next" className="icon-md" />} label="Next" onClick={goNext} />
@@ -599,7 +599,7 @@ export default function MediaPage() {
         <div className="file-status">
           {fileStatus === null ? (
             <>
-              <Spinner size="sm" />
+              <span className="spinner spinner-sm" />
               <span className="status-mut">Checking file...</span>
             </>
           ) : fileStatus.ok ? (

@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getThumbUrl } from '../../utils/api.js';
-import { Icon, Spinner } from '../ui/index.js';
+import { Icon } from '../ui/index.js';
 import LikeButton from './LikeButton.jsx';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 
@@ -49,7 +49,7 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
               </>
             ) : (
               <>
-                <Spinner size="sm" />
+                <span className="spinner spinner-sm" />
                 <span className="media-card-overlay-text">{isTranscoding ? 'Transcoding…' : 'Processing…'}</span>
               </>
             )}

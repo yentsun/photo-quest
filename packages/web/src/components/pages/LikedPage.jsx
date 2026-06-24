@@ -8,7 +8,7 @@ import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCa
 import { idbGetMedia } from '../../services/idb.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, PageLoader, Spinner } from '../ui/index.js';
+import { Button, Icon, Loader } from '../ui/index.js';
 
 const PAGE_SIZE = 200;
 
@@ -93,7 +93,7 @@ export default function LikedPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
-  if (loading) return <PageLoader message="Fetching your liked media…" />;
+  if (loading) return <div className="page-loader"><Loader message="Fetching your liked media…" /></div>;
 
   return (
     <div className="page">
@@ -125,7 +125,7 @@ export default function LikedPage() {
 
       {loadingMore && (
         <div className="loading-row">
-          <Spinner />
+          <span className="spinner" />
         </div>
       )}
     </div>

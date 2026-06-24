@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Header } from './layout/index.js';
-import { IconButton, Icon, Spinner } from './ui/index.js';
+import { IconButton, Icon } from './ui/index.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
 import { JobProgressContext } from '../contexts/JobProgressContext.jsx';
@@ -81,7 +81,7 @@ function ImportProgressBar({ onJobProgress, onJobDone }) {
   return (
     <div className="import-bar">
       <div className="import-bar-inner">
-        <Spinner size="sm" />
+        <span className="spinner spinner-sm" />
         <span className="import-bar-text">
           Importing… {progress.processed}/{progress.total}
         </span>

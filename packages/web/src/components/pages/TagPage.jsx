@@ -7,7 +7,7 @@ import { fetchMedia } from '../../utils/api.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, PageLoader } from '../ui/index.js';
+import { Button, Icon, Loader } from '../ui/index.js';
 
 export default function TagPage() {
   const { tag } = useParams();
@@ -56,7 +56,7 @@ export default function TagPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
-  if (loading) return <PageLoader message={`"${decodedTag}"…`} />;
+  if (loading) return <div className="page-loader"><Loader message={`"${decodedTag}"…`} /></div>;
 
   return (
     <div className="page">
