@@ -60,7 +60,7 @@ export default function MediaPage() {
     if (!cachedFolders) return [];
     const f = cachedFolders.find(cf => cf.path === cachedItem.folder);
     if (!f) return [];
-    return getPageCache(`folder:${f.id}:filename`)?.data?.directMedia ?? [];
+    return getPageCache(`folder:${f.id}:filename:0`)?.data?.directMedia ?? [];
   });
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [folder, setFolder] = useState(() => {
