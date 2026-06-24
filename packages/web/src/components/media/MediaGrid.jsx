@@ -5,8 +5,6 @@ import MediaCard from './MediaCard.jsx';
 const VIRTUALIZE_THRESHOLD = 50;
 const GAP = 12;
 const META_H = 38;
-// Must match .page { padding } so Grid height + above-content fills .page exactly with no overflow
-const PAGE_PADDING = 16;
 
 function getColumnCount(width) {
   if (width >= 1280) return 6;
@@ -34,10 +32,10 @@ export default function MediaGrid({ items = [], onItemClick, onItemLike, emptySt
   const measure = useCallback(() => {
     if (!containerRef.current) return;
     const w = containerRef.current.clientWidth;
-    const scrollEl = containerRef.current.closest('main') ?? containerRef.current.parentElement;
-    const offsetFromTop = containerRef.current.getBoundingClientRect().top
-      - (scrollEl?.getBoundingClientRect().top ?? 0);
-    const h = Math.max(200, (scrollEl?.clientHeight ?? window.innerHeight) - Math.max(0, offsetFromTop) - PAGE_PADDING);
+    const scrollEl = containerRef.current.closest('.page') ?? containerRef.current.closest('main') ?? containerRef.current.parentElement;
+    const paddingBottom = parseFloat(getComputedStyle(scrollEl).paddingBottom) || 0;
+    const offsetFromTop = containerRef.current.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top;
+    const h = Math.max(200, scrollEl.clientHeight - Math.max(0, offsetFromTop) - paddingBottom);
     setDimensions(prev => (prev.width === w && prev.height === h ? prev : { width: w, height: h }));
   }, []);
 
