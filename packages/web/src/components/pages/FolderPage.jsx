@@ -4,6 +4,7 @@ import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchFolders, fetchMedia, getLastFolders, getLastFolderMedia, scanMedia as scanMediaApi } from '../../utils/api.js';
+import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
 import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
 import { FolderCard } from '../media/index.js';
 import { MediaGrid } from '../media/index.js';
@@ -26,6 +27,8 @@ export default function FolderPage() {
   const searchRef = useRef('');
 
   const folderId = Number(id);
+  const CACHE_KEY = `folder:${folderId}`;
+  const _pc = isPageCacheValid(CACHE_KEY, signal) ? getPageCache(CACHE_KEY) : null;
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -44,22 +47,36 @@ export default function FolderPage() {
   const _sc0Folder  = _sc0Folders?.find(f => f.id === folderId) ?? null;
   const _sc0Media   = _sc0Folder ? getLastFolderMedia(_sc0Folder.path) : null;
 
-  const [folders, setFolders] = useState(_sc0Folders || []);
-  const [directMedia, setDirectMedia] = useState(_sc0Media?.items ?? []);
-  const [mediaTotal, setMediaTotal] = useState(_sc0Media?.total ?? 0);
-  const [loading, setLoading] = useState(!_sc0Folders);
+  const [folders, setFolders] = useState(_pc?.data.folders ?? _sc0Folders ?? []);
+  const [directMedia, setDirectMedia] = useState(_pc?.data.directMedia ?? _sc0Media?.items ?? []);
+  const [mediaTotal, setMediaTotal] = useState(_pc?.data.mediaTotal ?? _sc0Media?.total ?? 0);
+  const [loading, setLoading] = useState(!_pc && !_sc0Folders);
   const [loadingMessage, setLoadingMessage] = useState('Fetching folder list…');
   const [loadingMore, setLoadingMore] = useState(false);
-  const [contentReady, setContentReady] = useState(!!_sc0Media);
+  const [contentReady, setContentReady] = useState(!!_pc || !!_sc0Media);
   const loadingMoreRef = useRef(false);
-  const offsetRef = useRef(_sc0Media?.items.length ?? 0);
-  const mediaTotalRef = useRef(_sc0Media?.total ?? 0);
-  const folderRef = useRef(_sc0Folder);
+  const offsetRef = useRef(_pc?.data.offset ?? _sc0Media?.items.length ?? 0);
+  const mediaTotalRef = useRef(_pc?.data.mediaTotal ?? _sc0Media?.total ?? 0);
+  const folderRef = useRef(_pc?.data.folders?.find(f => f.id === folderId) ?? _sc0Folder);
 
   useEffect(() => {
     let cancelled = false;
     setLoadingMessage('Fetching folder list…');
     const isSearching = Boolean(debouncedSearch);
+
+    if (!isSearching && isPageCacheValid(CACHE_KEY, signal)) {
+      const { folders: pf, directMedia: pm, mediaTotal: pt, offset: po } = getPageCache(CACHE_KEY).data;
+      setFolders(pf);
+      setDirectMedia(pm);
+      setMediaTotal(pt);
+      offsetRef.current = po;
+      mediaTotalRef.current = pt;
+      folderRef.current = pf.find(f => f.id === folderId) ?? folderRef.current;
+      setContentReady(true);
+      setLoading(false);
+      return;
+    }
+
     const scFolders = getLastFolders();
     const scFolder  = scFolders?.find(f => f.id === folderId);
     const scMedia   = !isSearching && scFolder ? getLastFolderMedia(scFolder.path) : null;
@@ -109,14 +126,22 @@ export default function FolderPage() {
           const fetchOpts = { folder: found.path, limit: PAGE_SIZE, offset: 0, sort: 'filename' };
           if (debouncedSearch) fetchOpts.search = debouncedSearch;
           const { items, total } = await fetchMedia(fetchOpts);
-          if (!cancelled) { offsetRef.current = items.length; mediaTotalRef.current = total; setDirectMedia(items); setMediaTotal(total); }
+          if (!cancelled) {
+            offsetRef.current = items.length;
+            mediaTotalRef.current = total;
+            setDirectMedia(items);
+            setMediaTotal(total);
+            if (!isSearching) {
+              setPageCache(CACHE_KEY, { folders: allFolders, directMedia: items, mediaTotal: total, offset: items.length }, signal);
+            }
+          }
         }
       } catch (err) { console.error('Failed to load folder data:', err); }
       finally { if (!cancelled) { setLoading(false); setContentReady(true); } }
     };
     load();
     return () => { cancelled = true; };
-  }, [folderId, signal, debouncedSearch]);
+  }, [folderId, signal, debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
   const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId), [folders, folderId]);

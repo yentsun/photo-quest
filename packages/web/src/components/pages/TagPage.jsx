@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
+import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchMedia } from '../../utils/api.js';
+import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, PageLoader } from '../ui/index.js';
@@ -11,18 +13,22 @@ export default function TagPage() {
   const { tag } = useParams();
   const navigate = useNavigate();
   const { likeMedia } = useMediaActions();
+  const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [media, setMedia] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-
   const decodedTag = decodeURIComponent(tag);
+  const CACHE_KEY = `tag:${decodedTag}`;
+  const _pc = isPageCacheValid(CACHE_KEY, signal) ? getPageCache(CACHE_KEY) : null;
+
+  const [media, setMedia] = useState(_pc?.data.media ?? []);
+  const [total, setTotal] = useState(_pc?.data.total ?? 0);
+  const [loading, setLoading] = useState(!_pc);
 
   useEffect(() => {
+    if (isPageCacheValid(CACHE_KEY, signal)) return;
     let cancelled = false;
     setLoading(true);
     fetchMedia({ tag: decodedTag })
@@ -31,10 +37,11 @@ export default function TagPage() {
         setMedia(items);
         setTotal(t);
         setLoading(false);
+        setPageCache(CACHE_KEY, { media: items, total: t }, signal);
       })
       .catch(err => { console.error('Failed to fetch tagged media:', err); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [decodedTag]);
+  }, [decodedTag, signal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleShuffle = () => {
     if (media.length === 0) return;

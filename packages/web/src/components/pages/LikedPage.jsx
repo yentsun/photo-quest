@@ -4,6 +4,7 @@ import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchMedia } from '../../utils/api.js';
+import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
 import { idbGetMedia } from '../../services/idb.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
@@ -20,15 +21,18 @@ export default function LikedPage() {
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [likedMedia, setLikedMedia] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const _pc = isPageCacheValid('liked', signal) ? getPageCache('liked') : null;
+
+  const [likedMedia, setLikedMedia] = useState(_pc?.data.likedMedia ?? []);
+  const [total, setTotal] = useState(_pc?.data.total ?? 0);
+  const [loading, setLoading] = useState(!_pc);
   const [loadingMore, setLoadingMore] = useState(false);
-  const offsetRef = useRef(0);
-  const totalRef = useRef(0);
+  const offsetRef = useRef(_pc?.data.offset ?? 0);
+  const totalRef = useRef(_pc?.data.total ?? 0);
   const loadingMoreRef = useRef(false);
 
   useEffect(() => {
+    if (isPageCacheValid('liked', signal)) return;
     let cancelled = false;
     offsetRef.current = 0;
     totalRef.current = 0;
@@ -47,6 +51,7 @@ export default function LikedPage() {
         setLikedMedia(items);
         setTotal(t);
         setLoading(false);
+        setPageCache('liked', { likedMedia: items, total: t, offset: items.length }, signal);
       })
       .catch(err => { console.error('Failed to fetch liked media:', err); if (!cancelled) setLoading(false); });
 
