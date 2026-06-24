@@ -1,4 +1,5 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef, useState } from 'react';
+import Loader from '../ui/Loader.jsx';
 
 const MediaPlayer = forwardRef(function MediaPlayer({
   src,
@@ -49,8 +50,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
     <div className="media-player">
       {buffering && !error && (
         <div className="media-player-state">
-          <span className="spinner spinner-lg" />
-          <p className="media-player-label">{title ? `Buffering "${title}"…` : 'Buffering…'}</p>
+          <Loader message={title ? `Buffering "${title}"…` : 'Buffering…'} />
         </div>
       )}
       {error && (

@@ -354,7 +354,7 @@ export default function Dashboard() {
       {debouncedSearch ? (
         searchLoading ? (
           <div className="loading-row" style={{ paddingTop: 48, paddingBottom: 48 }}>
-            <span className="spinner spinner-lg" />
+            <Loader />
           </div>
         ) : searchResults.length > 0 ? (
           <>
@@ -366,8 +366,7 @@ export default function Dashboard() {
             />
             {searchLoadingMore && (
               <div className="loading-row">
-                <span className="spinner spinner-sm" />
-                <span>Loading more items…</span>
+                <Loader />
               </div>
             )}
           </>

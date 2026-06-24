@@ -91,6 +91,7 @@ export default function FolderPage() {
   const [loading, setLoading] = useState(!_pc && !_sc0Folders);
   const [loadingMessage, setLoadingMessage] = useState('Fetching folder list…');
   const [contentReady, setContentReady] = useState(!!_pc || !!_sc0Media);
+  const contentReadyRef = useRef(!!_pc || !!_sc0Media);
   const serverLoadedRef = useRef(false);
   const folderRef = useRef(_pc?.data.folders?.find(f => f.id === folderId) ?? _sc0Folder);
 
@@ -105,6 +106,7 @@ export default function FolderPage() {
       setFolders(pf);
       setDirectMedia(pm);
       folderRef.current = pf.find(f => f.id === folderId) ?? folderRef.current;
+      contentReadyRef.current = true;
       setContentReady(true);
       setLoading(false);
       return;
@@ -117,9 +119,10 @@ export default function FolderPage() {
     if (scMedia) {
       setDirectMedia(applySort(scMedia.items, sort));
       if (scFolder) folderRef.current = scFolder;
+      contentReadyRef.current = true;
       setContentReady(true);
       setLoading(false);
-    } else {
+    } else if (!contentReadyRef.current) {
       setDirectMedia([]);
       setContentReady(false);
     }
@@ -134,6 +137,7 @@ export default function FolderPage() {
         folderRef.current = found;
         setDirectMedia(applySort(items, sort));
         setLoading(false);
+        contentReadyRef.current = true;
         setContentReady(true);
       }).catch(() => {});
     }
@@ -160,7 +164,7 @@ export default function FolderPage() {
           }
         }
       } catch (err) { console.error('Failed to load folder data:', err); }
-      finally { if (!cancelled) { setLoading(false); setContentReady(true); } }
+      finally { if (!cancelled) { setLoading(false); contentReadyRef.current = true; setContentReady(true); } }
     };
     load();
     return () => { cancelled = true; };
