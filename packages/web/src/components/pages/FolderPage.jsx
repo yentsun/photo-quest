@@ -70,12 +70,14 @@ export default function FolderPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [contentReady, setContentReady] = useState(!!_pc || !!_sc0Media);
   const loadingMoreRef = useRef(false);
+  const serverLoadedRef = useRef(false);
   const offsetRef = useRef(_pc?.data.offset ?? _sc0Media?.items.length ?? 0);
   const mediaTotalRef = useRef(_pc?.data.mediaTotal ?? _sc0Media?.total ?? 0);
   const folderRef = useRef(_pc?.data.folders?.find(f => f.id === folderId) ?? _sc0Folder);
 
   useEffect(() => {
     let cancelled = false;
+    serverLoadedRef.current = false;
     setLoadingMessage('Fetching folder list…');
     const isSearching = Boolean(debouncedSearch);
 
@@ -117,7 +119,7 @@ export default function FolderPage() {
         const found = cachedFolders.find(f => f.id === folderId);
         if (!found) return;
         const { items, total } = await idbGetMedia({ folder: found.path, limit: PAGE_SIZE, sort: 'filename' });
-        if (cancelled || items.length === 0 || scMedia) return;
+        if (cancelled || items.length === 0 || scMedia || serverLoadedRef.current) return;
         setFolders(cachedFolders);
         folderRef.current = found;
         mediaTotalRef.current = total;
@@ -142,6 +144,7 @@ export default function FolderPage() {
           if (debouncedSearch) fetchOpts.search = debouncedSearch;
           const { items, total } = await fetchMedia(fetchOpts);
           if (!cancelled) {
+            serverLoadedRef.current = true;
             const sorted = sort === 'filename' ? items.slice().sort(byName) : items;
             offsetRef.current = items.length;
             mediaTotalRef.current = total;
