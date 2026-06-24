@@ -5,6 +5,7 @@ import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
 import { fetchFolders, fetchMedia, getLastFolders } from '../utils/api.js';
+import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache.js';
 import { idbGetFolders } from '../services/idb.js';
 import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
@@ -67,8 +68,14 @@ export default function Dashboard() {
   const [browsing, setBrowsing] = useState(false);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
 
-  const [folders, setFolders] = useState(() => getLastFolders() || []);
-  const [loading, setLoading] = useState(!getLastFolders());
+  const [folders, setFolders] = useState(() => {
+    if (isPageCacheValid('dashboard', signal)) return getPageCache('dashboard').data.folders;
+    return getLastFolders() || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    if (isPageCacheValid('dashboard', signal)) return false;
+    return !getLastFolders();
+  });
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,12 +90,19 @@ export default function Dashboard() {
   const searchLoadingMoreRef = useRef(false);
 
   useEffect(() => {
+    if (isPageCacheValid('dashboard', signal)) return;
     let cancelled = false;
     idbGetFolders()
       .then(cached => { if (!cancelled && cached.length > 0 && !getLastFolders()) { setFolders(cached); setLoading(false); } })
       .catch(() => {});
     fetchFolders()
-      .then(data => { if (!cancelled) { setFolders(data); setLoading(false); } })
+      .then(data => {
+        if (!cancelled) {
+          setFolders(data);
+          setLoading(false);
+          setPageCache('dashboard', { folders: data }, signal);
+        }
+      })
       .catch(err => { console.error('Failed to fetch folders:', err); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [signal]);
