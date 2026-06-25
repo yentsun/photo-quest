@@ -50,6 +50,9 @@ export function initDb() {
   /* Enable foreign key enforcement (off by default in SQLite). */
   db.exec('PRAGMA foreign_keys = ON');
 
+  /* Unicode-aware lowercase for case-insensitive search (SQLite LOWER is ASCII-only). */
+  db.function('unicode_lower', { deterministic: true }, (s) => (s == null ? null : s.toLowerCase()));
+
   /* Create tables if they do not exist yet. */
   db.exec(CREATE_MEDIA_TABLE);
   db.exec(CREATE_JOBS_TABLE);

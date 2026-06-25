@@ -33,7 +33,7 @@ export default function ({ limit, offset, folder, subtree, liked, random, sort, 
 
   if (search != null && search.trim() !== '') {
     logger.debug(`[listMedia] filtering by search: "${search.trim()}"`);
-    conditions.push('title LIKE ?');
+    conditions.push('unicode_lower(title) LIKE unicode_lower(?)');
     params.push(`%${search.trim()}%`);
   }
 
