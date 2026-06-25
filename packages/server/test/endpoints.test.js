@@ -17,7 +17,6 @@ import endpoint_post_scan from '../endpoints/30_post_media_scan.js';
 import endpoint_post_add from '../endpoints/35_post_media_add.js';
 import endpoint_delete from '../endpoints/40_delete_media_id.js';
 import endpoint_delete_folder from '../endpoints/45_delete_media_folder.js';
-import endpoint_get_jobs from '../endpoints/60_get_jobs.js';
 
 let db;
 let kojo;
@@ -78,9 +77,7 @@ async function setup() {
         }
         return { added };
       },
-      listJobs: function() {
-        return db.prepare('SELECT * FROM jobs ORDER BY created_at DESC').all();
-      },
+
     },
   };
 
@@ -93,7 +90,6 @@ async function setup() {
   await endpoint_post_add(kojo, logger);
   await endpoint_delete(kojo, logger);
   await endpoint_delete_folder(kojo, logger);
-  await endpoint_get_jobs(kojo, logger);
 }
 
 function mockRes() {
@@ -371,17 +367,3 @@ test('DELETE /media/folder/:id', async (t) => {
   });
 });
 
-test('GET /jobs', async (t) => {
-  await setup();
-
-  await t.test('returns empty array initially', async () => {
-    const route = findRoute('GET', '/jobs');
-    const req = mockReq('GET', '/jobs');
-    const res = mockRes();
-
-    await route.handler(req, res);
-
-    t.assert.strictEqual(res._status, 200);
-    t.assert.deepStrictEqual(res._body, []);
-  });
-});

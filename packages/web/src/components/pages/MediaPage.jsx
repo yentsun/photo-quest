@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
@@ -7,7 +7,8 @@ import { MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, requestTranscode, getLastMediaItem, getLastFolders } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, getLastMediaItem, getLastFolders } from '../../utils/api.js';
+import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
 
@@ -25,6 +26,7 @@ function applySort(items) {
 export default function MediaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { deleteMedia } = useMediaActions();
   const { signal } = useRefresh();
   const slideshow = useSlideshow();
@@ -71,6 +73,7 @@ export default function MediaPage() {
   });
   const [loading, setLoading] = useState(!inSlideshow && !getLastMediaItem(Number(id)));
   const [loadingMessage, setLoadingMessage] = useState('Fetching media item…');
+  const progressSecs = useJobProgress(item?.id);
 
   useEffect(() => {
     if (!inSlideshow) return;
@@ -119,7 +122,6 @@ export default function MediaPage() {
   const TERMINAL = [MEDIA_STATUS.READY, MEDIA_STATUS.ERROR];
   useEffect(() => {
     if (!item || item.type !== MEDIA_TYPE.VIDEO || TERMINAL.includes(item.status)) return;
-    requestTranscode(item.id);
     const interval = setInterval(async () => {
       try { const fresh = await fetchMediaById(Number(id)); setItem(fresh); } catch { /* ignore */ }
     }, 3000);
@@ -370,6 +372,10 @@ export default function MediaPage() {
   }, [folders, folder]);
 
   const backTarget = folder ? `/folder/${folder.id}` : '/dashboard';
+  const goBack = useCallback(() => {
+    if (location.key !== 'default') navigate(-1);
+    else navigate(backTarget);
+  }, [location.key, navigate, backTarget]);
 
   if (loading) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
 
@@ -394,7 +400,7 @@ export default function MediaPage() {
           <IconButton
             icon={<Icon name="prev" className="icon-sm" />}
             label="Back"
-            onClick={() => navigate(backTarget)}
+            onClick={goBack}
           />
           <nav className="breadcrumb-nav">
             <Button variant="text" onClick={() => navigate('/dashboard')}>Library</Button>
@@ -427,8 +433,41 @@ export default function MediaPage() {
           </div>
         ) : item.status !== MEDIA_STATUS.READY ? (
           <div className="media-processing">
-            <p className="media-processing-msg">{item.status}…</p>
-            <p className="media-processing-sub">This video is still being processed</p>
+            {item.status === MEDIA_STATUS.TRANSCODING ? (() => {
+              const pct = progressSecs !== null && item.duration > 0
+                ? Math.min(99, Math.round((progressSecs / item.duration) * 100))
+                : null;
+              const label = pct !== null
+                ? `Transcoding… ${pct}%`
+                : progressSecs !== null
+                  ? `Transcoding… ${Math.round(progressSecs)}s`
+                  : 'Transcoding…';
+              return (
+                <>
+                  <div className="media-processing-progress">
+                    <div
+                      className={pct !== null ? 'media-processing-progress-fill' : 'media-processing-progress-fill media-processing-progress-indeterminate'}
+                      style={pct !== null ? { width: `${pct}%` } : undefined}
+                    />
+                  </div>
+                  <p className="media-processing-msg">{label}</p>
+                </>
+              );
+            })() : (() => {
+              const STATUS_LABEL = {
+                pending: 'Queued…',
+                probing: 'Analysing file…',
+                probed: 'Starting transcode…',
+              };
+              return (
+                <>
+                  <div className="media-processing-progress">
+                    <div className="media-processing-progress-fill media-processing-progress-indeterminate" />
+                  </div>
+                  <p className="media-processing-msg">{STATUS_LABEL[item.status] ?? `${item.status}…`}</p>
+                </>
+              );
+            })()}
           </div>
         ) : (
           <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} />

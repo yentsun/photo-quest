@@ -158,26 +158,3 @@ test('removeMedia op', async (t) => {
   });
 });
 
-test('jobs query logic', async (t) => {
-  /** Run the same query that listJobs op uses internally. */
-  function queryJobs(db) {
-    return db.prepare('SELECT * FROM jobs ORDER BY created_at DESC').all();
-  }
-
-  await t.test('returns empty array when no jobs exist', (t) => {
-    const db = freshDb();
-    t.assert.deepStrictEqual(queryJobs(db), []);
-  });
-
-  await t.test('returns all jobs for a media record', (t) => {
-    const db = freshDb();
-    const mediaId = insertMedia(db, '/j.mp4');
-    db.prepare("INSERT INTO jobs (media_id, type, status) VALUES (?, 'probe', 'pending')").run(mediaId);
-    db.prepare("INSERT INTO jobs (media_id, type, status) VALUES (?, 'transcode', 'pending')").run(mediaId);
-
-    const result = queryJobs(db);
-    t.assert.strictEqual(result.length, 2);
-    const types = result.map(r => r.type).sort();
-    t.assert.deepStrictEqual(types, ['probe', 'transcode']);
-  });
-});

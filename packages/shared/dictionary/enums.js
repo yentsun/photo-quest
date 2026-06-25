@@ -6,45 +6,6 @@
  */
 
 /**
- * The two kinds of background jobs the worker can process.
- * - PROBE  -- uses ffprobe to extract metadata (duration, resolution, codec).
- * - TRANSCODE -- converts the file to a web-friendly H.264/AAC MP4.
- *
- * @readonly
- * @enum {string}
- */
-export const JOB_TYPE = {
-  PROBE: 'probe',
-  TRANSCODE: 'transcode'
-};
-
-/**
- * Lifecycle states for a single job record.
- *
- * Transition diagram:
- *   PENDING  -->  RUNNING  -->  COMPLETED
- *                    |
- *                    +-------->  FAILED
- *
- * @readonly
- * @enum {string}
- */
-export const JOB_STATUS = {
-  /** Job has been inserted but not yet picked up by the worker. */
-  PENDING: 'pending',
-
-  /** The worker has claimed this job and is actively processing it. */
-  RUNNING: 'running',
-
-  /** Job finished successfully. */
-  COMPLETED: 'completed',
-
-  /** Job encountered an unrecoverable error. The `error` column stores the
-   *  reason string. */
-  FAILED: 'failed'
-};
-
-/**
  * Lifecycle states for a media record. These reflect the overall progress of
  * the media item through the ingest pipeline (scan -> probe -> transcode).
  *

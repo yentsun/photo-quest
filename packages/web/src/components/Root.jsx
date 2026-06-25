@@ -4,10 +4,9 @@ import { Header } from './layout/index.js';
 import { IconButton, Icon } from './ui/index.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
-import { JobProgressContext } from '../contexts/JobProgressContext.jsx';
 import { cancelScan } from '../utils/api.js';
 
-function ImportProgressBar({ onJobProgress, onJobDone }) {
+function ImportProgressBar() {
   const [progress, setProgress] = useState(null);
   const { bump } = useRefresh();
   const { setIsScanning } = useScan();
@@ -53,8 +52,6 @@ function ImportProgressBar({ onJobProgress, onJobDone }) {
             lastBump = 0;
             setTimeout(bump, 500);
           }
-          if (data.type === 'job_progress') onJobProgress(data.mediaId, data.progress);
-          if (data.type === 'job_done') { onJobDone(data.mediaId); setTimeout(bump, 300); }
         } catch { /* ignore parse errors */ }
       };
 
@@ -63,7 +60,7 @@ function ImportProgressBar({ onJobProgress, onJobDone }) {
 
     connect();
     return () => { destroyed = true; clearTimeout(reconnectTimer); es?.close(); };
-  }, [bump, setIsScanning, syncFromServer, onJobProgress, onJobDone]);
+  }, [bump, setIsScanning, syncFromServer]);
 
   const handleCancel = useCallback(async () => {
     if (!progress?.scanId) return;
@@ -100,27 +97,15 @@ function ImportProgressBar({ onJobProgress, onJobDone }) {
 }
 
 export default function Root() {
-  const [jobProgress, setJobProgress] = useState(new Map());
-
-  const handleJobProgress = useCallback((mediaId, progress) => {
-    setJobProgress(prev => { const next = new Map(prev); next.set(mediaId, progress); return next; });
-  }, []);
-
-  const handleJobDone = useCallback((mediaId) => {
-    setJobProgress(prev => { const next = new Map(prev); next.delete(mediaId); return next; });
-  }, []);
-
   return (
-    <JobProgressContext.Provider value={jobProgress}>
-      <div className="app">
-        <Header />
-        <div className="app-body">
-          <ImportProgressBar onJobProgress={handleJobProgress} onJobDone={handleJobDone} />
-          <main className="main-area">
-            <Outlet />
-          </main>
-        </div>
+    <div className="app">
+      <Header />
+      <div className="app-body">
+        <ImportProgressBar />
+        <main className="main-area">
+          <Outlet />
+        </main>
       </div>
-    </JobProgressContext.Provider>
+    </div>
   );
 }
