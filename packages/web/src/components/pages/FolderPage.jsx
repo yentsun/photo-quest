@@ -47,7 +47,7 @@ function byFolderName(a, b) {
 export default function FolderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { likeMedia } = useMediaActions();
+  const { likeMedia, removeFolder } = useMediaActions();
   const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
@@ -208,6 +208,17 @@ export default function FolderPage() {
     finally { setRefreshing(false); }
   };
 
+  const handleRemove = async () => {
+    const f = folderRef.current;
+    if (!f) return;
+    const name = f.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
+    if (!confirm(`Remove "${name}" from library?\n\nFiles on disk are not deleted.`)) return;
+    try {
+      await removeFolder(f.id);
+      navigate('/dashboard');
+    } catch (err) { console.error('Failed to remove folder:', err); }
+  };
+
   const handleShuffle = async () => {
     const f = folderRef.current;
     if (!f) return;
@@ -299,6 +310,11 @@ export default function FolderPage() {
           >
             <span className="sm-show">Search</span>
           </Button>
+          {folder && (
+            <Button variant="danger" size="sm" onClick={handleRemove} title="Remove folder from library" icon={<Icon name="trash" className="icon-sm" />}>
+              <span className="sm-show">Remove</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -347,6 +363,7 @@ export default function FolderPage() {
             placeholder="Search by title…"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') setSearchOpen(false); }}
             autoFocus
           />
         </div>

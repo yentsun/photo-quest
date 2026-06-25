@@ -8,6 +8,7 @@ import GlobalContext, { initialState, reducer } from '../globalContext';
 import { SlideshowProvider } from '../contexts/SlideshowContext.jsx';
 import { RefreshProvider } from '../contexts/RefreshContext.jsx';
 import { ScanProvider } from '../contexts/ScanContext.jsx';
+import { JobProgressProvider } from '../contexts/JobProgressContext.jsx';
 import { clientRoutes as r } from '@photo-quest/shared';
 import ErrorBoundary from './ErrorBoundary';
 import Root from './Root';
@@ -22,6 +23,7 @@ export default function Router() {
     <GlobalContext.Provider value={{ state, dispatch }}>
       <RefreshProvider>
         <ScanProvider>
+        <JobProgressProvider>
         <SlideshowProvider>
           <ToasterMessage />
 
@@ -42,6 +44,7 @@ export default function Router() {
             </BrowserRouter>
           </ErrorBoundary>
         </SlideshowProvider>
+        </JobProgressProvider>
         </ScanProvider>
       </RefreshProvider>
     </GlobalContext.Provider>
