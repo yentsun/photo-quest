@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import ffmpegPath from 'ffmpeg-static';
 import ffprobeInstaller from '@ffprobe-installer/ffprobe';
@@ -30,33 +31,52 @@ async function run(db, media, logger) {
     db.prepare("UPDATE media SET status = 'probing', updated_at = datetime('now') WHERE id = ?").run(media.id);
 
     const info = await probe(media.path);
-    logger.info(`[transcode] Probe done: codec=${info.codec} duration=${info.duration}s ${info.width}x${info.height}`);
+    logger.info(`[transcode] Probe done: videoCodec=${info.codec} audioCodec=${info.audioCodec} duration=${info.duration}s ${info.width}x${info.height}`);
 
     db.prepare(
       "UPDATE media SET status = 'probed', codec = ?, duration = ?, width = ?, height = ?, updated_at = datetime('now') WHERE id = ?"
     ).run(info.codec, info.duration, info.width, info.height, media.id);
 
-    if (info.codec === 'h264' && media.path.toLowerCase().endsWith('.mp4')) {
-      logger.info(`[transcode] Already H.264 MP4, marking ready`);
+    const isMp4 = media.path.toLowerCase().endsWith('.mp4');
+    const isH264 = info.codec === 'h264';
+    const isAac = info.audioCodec === 'aac';
+
+    if (isH264 && isAac && isMp4) {
+      logger.info(`[transcode] Already H.264+AAC MP4, marking ready`);
       db.prepare("UPDATE media SET status = 'ready', updated_at = datetime('now') WHERE id = ?").run(media.id);
       return;
     }
 
     const dir = path.dirname(media.path);
     const base = path.basename(media.path, path.extname(media.path));
-    const suffix = media.path.toLowerCase().endsWith('.mp4') ? '_h264' : '';
+    const suffix = isMp4 ? '_converted' : '';
     const outputPath = path.join(dir, `${base}${suffix}.mp4`);
 
-    logger.info(`[transcode] Transcoding → ${outputPath}`);
+    /* Stream-copy when possible; re-encode only when codec is incompatible. */
+    const videoArgs = isH264
+      ? ['-c:v', 'copy']
+      : ['-c:v', 'libx264', '-preset', 'slow', '-crf', '18'];
+    const audioArgs = isAac
+      ? ['-c:a', 'copy']
+      : ['-c:a', 'aac', '-b:a', '192k'];
+
+    logger.info(`[transcode] video=${isH264 ? 'copy' : 'libx264/crf18'} audio=${isAac ? 'copy' : 'aac/192k'} → ${outputPath}`);
     db.prepare("UPDATE media SET status = 'transcoding', updated_at = datetime('now') WHERE id = ?").run(media.id);
 
-    await transcode(media.path, outputPath, (progressSecs) => {
+    await transcode(media.path, outputPath, videoArgs, audioArgs, (progressSecs) => {
       broadcastSse({ type: 'transcode_progress', mediaId: media.id, progressSecs });
     });
 
     db.prepare(
       "UPDATE media SET status = 'ready', transcoded_path = ?, updated_at = datetime('now') WHERE id = ?"
     ).run(outputPath, media.id);
+
+    try {
+      fs.unlinkSync(media.path);
+      logger.info(`[transcode] Deleted original: ${media.path}`);
+    } catch (err) {
+      logger.warn(`[transcode] Could not delete original: ${err.message}`);
+    }
 
     broadcastSse({ type: 'transcode_complete', mediaId: media.id });
     logger.info(`[transcode] Done: ${outputPath}`);
@@ -80,11 +100,13 @@ function probe(filePath) {
       try {
         const out = JSON.parse(Buffer.concat(chunks).toString());
         const video = out.streams?.find(s => s.codec_type === 'video');
+        const audio = out.streams?.find(s => s.codec_type === 'audio');
         resolve({
           duration: parseFloat(out.format?.duration) || 0,
           width: video?.width || 0,
           height: video?.height || 0,
           codec: video?.codec_name || 'unknown',
+          audioCodec: audio?.codec_name || 'unknown',
         });
       } catch (e) {
         reject(new Error(`Failed to parse ffprobe output: ${e.message}`));
@@ -94,12 +116,12 @@ function probe(filePath) {
   });
 }
 
-function transcode(inputPath, outputPath, onProgress) {
+function transcode(inputPath, outputPath, videoArgs, audioArgs, onProgress) {
   return new Promise((resolve, reject) => {
     const args = [
       '-i', inputPath,
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '23',
-      '-c:a', 'aac', '-b:a', '128k',
+      ...videoArgs,
+      ...audioArgs,
       '-movflags', '+faststart',
       '-y', outputPath,
     ];
