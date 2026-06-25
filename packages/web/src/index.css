@@ -746,7 +746,10 @@ body {
 .media-error-path { color: var(--sol-text-mut); font-size: var(--fs-xs); }
 .media-processing { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; }
 .media-processing-msg { color: var(--sol-text-em); font-weight: 500; text-transform: capitalize; }
-.media-processing-sub { color: var(--sol-text-mut); font-size: var(--fs-sm); }
+.media-processing-progress { width: 240px; height: 4px; background: var(--sol-border); border-radius: 2px; overflow: hidden; }
+.media-processing-progress-fill { height: 100%; background: var(--sol-accent); border-radius: 2px; transition: width 0.5s; }
+@keyframes indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+.media-processing-progress-indeterminate { width: 25%; animation: indeterminate 1.4s ease-in-out infinite; }
 
 /* ─── Media info modal ─── */
 .file-status {

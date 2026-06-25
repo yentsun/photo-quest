@@ -23,25 +23,25 @@ export default async (kojo, logger) => {
     method: 'GET',
     pathname: '/stream/:id',
   }, (req, res, params) => {
+    logger.debug(`[GET /stream/:id] id=${params.id}`);
     const row = kojo.ops.getMediaById(Number(params.id));
 
     if (!row) {
+      logger.debug(`[GET /stream/:id] media not found: id=${params.id}`);
       return json(res, 404, { error: 'Media not found' });
     }
 
-    /* Prefer the transcoded file if recorded, fall back to original. */
-    const filePath = (row.transcoded_path && fs.existsSync(row.transcoded_path))
-      ? row.transcoded_path
-      : row.path;
+    const usingTranscoded = !!(row.transcoded_path && fs.existsSync(row.transcoded_path));
+    const filePath = usingTranscoded ? row.transcoded_path : row.path;
+    logger.debug(`[GET /stream/:id] serving ${usingTranscoded ? 'transcoded' : 'original'}: ${filePath}`);
 
     if (!fs.existsSync(filePath)) {
+      logger.debug(`[GET /stream/:id] file not on disk: ${filePath}`);
       return json(res, 404, { error: 'File not found on disk' });
     }
 
     const stat = fs.statSync(filePath);
     const fileSize = stat.size;
-
-    /* Determine MIME type from extension. */
     const ext = path.extname(filePath).toLowerCase();
     const mimeTypes = {
       '.mp4': 'video/mp4',
@@ -53,20 +53,21 @@ export default async (kojo, logger) => {
     const contentType = mimeTypes[ext] || 'application/octet-stream';
 
     const rangeHeader = req.headers.range;
+    logger.debug(`[GET /stream/:id] fileSize=${fileSize} contentType=${contentType} range=${rangeHeader || 'none'}`);
 
     if (rangeHeader) {
-      /* Parse "bytes=START-END" (END is optional). */
       const parts = rangeHeader.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
 
-      /* Validate range bounds. */
       if (start >= fileSize || end >= fileSize || start > end) {
+        logger.debug(`[GET /stream/:id] invalid range ${start}-${end}/${fileSize}, sending 416`);
         res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
         return res.end();
       }
 
       const chunkSize = end - start + 1;
+      logger.debug(`[GET /stream/:id] 206 range ${start}-${end} (${chunkSize} bytes)`);
 
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -77,7 +78,7 @@ export default async (kojo, logger) => {
 
       fs.createReadStream(filePath, { start, end }).pipe(res);
     } else {
-      /* No Range header -- send the entire file. */
+      logger.debug(`[GET /stream/:id] 200 full file (${fileSize} bytes)`);
       res.writeHead(200, {
         'Content-Length': fileSize,
         'Content-Type': contentType,
