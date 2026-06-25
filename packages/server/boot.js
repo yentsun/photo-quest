@@ -17,7 +17,6 @@ import Kojo from 'kojo';
 import config from '@photo-quest/shared/config.js';
 import { initDb } from './src/db.js';
 import { resumeIncompleteScans } from './ops/scanMedia.js';
-import { broadcastSse } from './src/sse.js';
 
 /* Patch stdout/stderr to prepend timestamps to every line of output. */
 for (const stream of ['stdout', 'stderr']) {
@@ -86,32 +85,6 @@ export default async function boot() {
 
   /* Resume any imports that were interrupted by a previous crash/restart. */
   resumeIncompleteScans(kojo, console);
-
-  /* Broadcast running job progress to SSE clients every second. */
-  const _lastProgress = new Map(); // jobId -> progress
-  setInterval(() => {
-    try {
-      const running = db.prepare(`SELECT id, media_id, progress FROM jobs WHERE status = 'running'`).all();
-      const runningIds = new Set(running.map(j => j.id));
-
-      for (const job of running) {
-        const prev = _lastProgress.get(job.id);
-        if (prev !== job.progress) {
-          broadcastSse({ type: 'job_progress', mediaId: job.media_id, progress: job.progress ?? 0 });
-          _lastProgress.set(job.id, job.progress);
-        }
-      }
-
-      // Detect jobs that just finished
-      for (const [jobId] of _lastProgress) {
-        if (!runningIds.has(jobId)) {
-          const done = db.prepare(`SELECT media_id FROM jobs WHERE id = ?`).get(jobId);
-          if (done) broadcastSse({ type: 'job_done', mediaId: done.media_id });
-          _lastProgress.delete(jobId);
-        }
-      }
-    } catch { /* ignore DB errors during shutdown */ }
-  }, 1000);
 
   return kojo;
 }

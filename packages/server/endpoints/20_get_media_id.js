@@ -12,12 +12,21 @@ export default async (kojo, logger) => {
     method: 'GET',
     pathname: '/media/:id',
   }, (req, res, params) => {
+    logger.debug(`[GET /media/:id] id=${params.id}`);
     const row = kojo.ops.getMediaById(Number(params.id));
 
     if (!row) {
+      logger.debug(`[GET /media/:id] not found: id=${params.id}`);
       return json(res, 404, { error: 'Media not found' });
     }
 
+    const INCOMPLETE = ['pending', 'probing', 'probed', 'transcoding'];
+    if (row.type === 'video' && INCOMPLETE.includes(row.status)) {
+      logger.debug(`[GET /media/:id] triggering on-demand transcode for id=${params.id} (status=${row.status})`);
+      kojo.ops.transcodeNow(row.id);
+    }
+
+    logger.debug(`[GET /media/:id] found: id=${params.id} status=${row.status}`);
     json(res, 200, row);
   });
 };

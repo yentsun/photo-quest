@@ -22,7 +22,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
-import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, JOB_TYPE, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
+import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
 import { broadcastSse } from '../src/sse.js';
 import { DB_PATH } from '../src/db.js';
 
@@ -67,9 +67,10 @@ async function computeFileHash(filePath, timeoutMs = 5000) {
  */
 export async function processOneItem(db, itemId, filePath, logger) {
   const ext = path.extname(filePath).toLowerCase();
+  logger.debug(`[processOneItem] itemId=${itemId} ext=${ext} path=${filePath}`);
 
-  /* Skip files with unsupported extensions (LAW 1.31). */
   if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+    logger.debug(`[processOneItem] unsupported extension "${ext}", marking failed`);
     db.prepare(
       'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
     ).run(IMPORT_STATUS.FAILED, 'Unsupported file type', itemId);
@@ -81,57 +82,58 @@ export async function processOneItem(db, itemId, filePath, logger) {
   const isImage = IMAGE_EXTENSIONS.includes(ext);
   const mediaType = isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO;
   const status = isImage ? MEDIA_STATUS.READY : MEDIA_STATUS.PENDING;
+  logger.debug(`[processOneItem] type=${mediaType} status=${status} title="${title}"`);
 
-  /* Check file still exists (may have been moved/deleted since discovery). */
   if (!fs.existsSync(filePath)) {
+    logger.debug(`[processOneItem] file not found on disk, marking failed`);
     db.prepare(
       'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
     ).run(IMPORT_STATUS.FAILED, 'File not found', itemId);
     return;
   }
 
-  /* Fast path — path already in library, no need to hash. */
   const existing = db.prepare('SELECT id FROM media WHERE path = ? AND hidden = 0').get(filePath);
   if (existing) {
+    logger.debug(`[processOneItem] fast-path: already in library as id=${existing.id}, skipping`);
     db.prepare('UPDATE import_queue SET status = ? WHERE id = ?').run(IMPORT_STATUS.COMPLETED, itemId);
     return;
   }
 
+  logger.debug(`[processOneItem] computing hash for ${filePath}`);
   const hash = await computeFileHash(filePath);
+  logger.debug(`[processOneItem] hash=${hash}`);
 
-  /* Ensure folder has a record in the folders table. */
   db.prepare('INSERT OR IGNORE INTO folders (path) VALUES (?)').run(folder);
 
-  /* Check if hidden media with same hash exists (restore case). */
   const hidden = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 1').get(hash);
 
   if (hidden) {
+    logger.debug(`[processOneItem] restoring hidden media id=${hidden.id} with same hash`);
     db.prepare(
       `UPDATE media SET path = ?, folder = ?, hidden = 0,
        updated_at = datetime('now') WHERE id = ?`
     ).run(filePath, folder, hidden.id);
     logger.debug(`Restored media id=${hidden.id} at ${filePath}`);
   } else {
-    /* Check if path already exists. */
     const exists = db.prepare('SELECT id FROM media WHERE path = ?').get(filePath);
 
     if (exists) {
+      logger.debug(`[processOneItem] path exists with id=${exists.id}, patching hash`);
       db.prepare('UPDATE media SET hash = ? WHERE path = ? AND hash IS NULL').run(hash, filePath);
     } else {
-      /* Insert new media. */
+      logger.debug(`[processOneItem] inserting new media record`);
       const result = db.prepare(
         `INSERT INTO media (path, title, type, folder, status, hash)
          VALUES (?, ?, ?, ?, ?, ?)`
       ).run(filePath, title, mediaType, folder, status, hash);
-
-      /* Videos are processed on demand when the user views them. */
+      logger.debug(`[processOneItem] inserted media id=${result.lastInsertRowid}`);
     }
   }
 
-  /* Mark queue item as completed. */
   db.prepare(
     'UPDATE import_queue SET status = ? WHERE id = ?'
   ).run(IMPORT_STATUS.COMPLETED, itemId);
+  logger.debug(`[processOneItem] completed itemId=${itemId}`);
 }
 
 /** The single active scan worker, or null when idle. */
@@ -217,34 +219,38 @@ export default function (dirPath) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
+  logger.debug(`[scanMedia] dirPath="${dirPath}"`);
   dirPath = dirPath.replace(/^["']+|["']+$/g, '').trim();
+  logger.debug(`[scanMedia] trimmed dirPath="${dirPath}"`);
 
   if (!fs.existsSync(dirPath)) {
+    logger.debug(`[scanMedia] directory not found: ${dirPath}`);
     throw new Error(`Directory not found: ${dirPath}`);
   }
 
   const stat = fs.statSync(dirPath);
   if (!stat.isDirectory()) {
+    logger.debug(`[scanMedia] path is not a directory: ${dirPath}`);
     throw new Error(`Not a directory: ${dirPath}`);
   }
 
-  /* Phase 1: Discovery — walk directory. */
+  logger.debug(`[scanMedia] walking directory tree`);
   const files = findMediaFiles(dirPath);
+  logger.debug(`[scanMedia] discovered ${files.length} media files on disk`);
 
-  /* Always update the folder hierarchy (needed for navigation). */
   createFolderHierarchy(db, dirPath, files);
+  logger.debug(`[scanMedia] folder hierarchy updated`);
 
-  /* Filter to only files not already in the library — single indexed query,
-     no I/O. This avoids queueing, worker threads, and SSE noise for rescans
-     where everything is already imported. */
   const existingPaths = new Set(
     db.prepare('SELECT path FROM media WHERE hidden = 0').all().map(r => r.path)
   );
+  logger.debug(`[scanMedia] library has ${existingPaths.size} existing paths`);
   const newFiles = files.filter(f => !existingPaths.has(f));
 
   logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
 
   if (newFiles.length === 0) {
+    logger.debug(`[scanMedia] all files already in library, nothing to queue`);
     return { scanId: null, total: 0 };
   }
 
