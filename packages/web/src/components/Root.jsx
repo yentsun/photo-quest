@@ -4,12 +4,14 @@ import { Header } from './layout/index.js';
 import { IconButton, Icon } from './ui/index.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
+import { useJobProgressUpdater } from '../contexts/JobProgressContext.jsx';
 import { cancelScan } from '../utils/api.js';
 
 function ImportProgressBar() {
   const [progress, setProgress] = useState(null);
   const { bump } = useRefresh();
   const { setIsScanning } = useScan();
+  const { update: updateProgress, clear: clearProgress } = useJobProgressUpdater();
 
   const syncFromServer = useCallback(() => {
     fetch('/scans')
@@ -52,6 +54,12 @@ function ImportProgressBar() {
             lastBump = 0;
             setTimeout(bump, 500);
           }
+          if (data.type === 'transcode_progress') {
+            updateProgress(data.mediaId, data.progressSecs);
+          }
+          if (data.type === 'transcode_complete') {
+            clearProgress(data.mediaId);
+          }
         } catch { /* ignore parse errors */ }
       };
 
@@ -60,7 +68,7 @@ function ImportProgressBar() {
 
     connect();
     return () => { destroyed = true; clearTimeout(reconnectTimer); es?.close(); };
-  }, [bump, setIsScanning, syncFromServer]);
+  }, [bump, setIsScanning, syncFromServer, updateProgress, clearProgress]);
 
   const handleCancel = useCallback(async () => {
     if (!progress?.scanId) return;

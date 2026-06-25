@@ -25,10 +25,15 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Folder not found' });
     }
 
-    /* Hide all media from this folder and all subfolders. */
+    /* Hide all media from this folder and all subfolders (handle both separators). */
     const result = db.prepare(
-      "UPDATE media SET hidden = 1, updated_at = datetime('now') WHERE folder = ? OR folder LIKE ?"
-    ).run(folder.path, folder.path + '\\%');
+      "UPDATE media SET hidden = 1, updated_at = datetime('now') WHERE folder = ? OR folder LIKE ? OR folder LIKE ?"
+    ).run(folder.path, folder.path + '/%', folder.path + '\\%');
+
+    /* Remove the folder and its subfolders from the folders table. */
+    db.prepare(
+      "DELETE FROM folders WHERE path = ? OR path LIKE ? OR path LIKE ?"
+    ).run(folder.path, folder.path + '/%', folder.path + '\\%');
 
     logger.info(`Removed folder "${folder.path}" (${result.changes} items hidden)`);
 

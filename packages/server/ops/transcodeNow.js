@@ -2,11 +2,12 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import ffmpegPath from 'ffmpeg-static';
 import ffprobeInstaller from '@ffprobe-installer/ffprobe';
+import { broadcastSse } from '../src/sse.js';
 
 const FFPROBE_PATH = ffprobeInstaller.path;
 
 /** Media IDs currently being processed — prevents double-start. */
-const inProgress = new Set();
+export const inProgress = new Set();
 
 export default async function (id) {
   const [kojo, logger] = this;
@@ -49,12 +50,15 @@ async function run(db, media, logger) {
     logger.info(`[transcode] Transcoding → ${outputPath}`);
     db.prepare("UPDATE media SET status = 'transcoding', updated_at = datetime('now') WHERE id = ?").run(media.id);
 
-    await transcode(media.path, outputPath);
+    await transcode(media.path, outputPath, (progressSecs) => {
+      broadcastSse({ type: 'transcode_progress', mediaId: media.id, progressSecs });
+    });
 
     db.prepare(
       "UPDATE media SET status = 'ready', transcoded_path = ?, updated_at = datetime('now') WHERE id = ?"
     ).run(outputPath, media.id);
 
+    broadcastSse({ type: 'transcode_complete', mediaId: media.id });
     logger.info(`[transcode] Done: ${outputPath}`);
   } catch (err) {
     logger.error(`[transcode] FAILED for media ${media.id}: ${err.message}`);
@@ -90,7 +94,7 @@ function probe(filePath) {
   });
 }
 
-function transcode(inputPath, outputPath) {
+function transcode(inputPath, outputPath, onProgress) {
   return new Promise((resolve, reject) => {
     const args = [
       '-i', inputPath,
@@ -100,6 +104,21 @@ function transcode(inputPath, outputPath) {
       '-y', outputPath,
     ];
     const proc = spawn(ffmpegPath, args);
+
+    let buf = '';
+    proc.stderr.on('data', chunk => {
+      buf += chunk.toString();
+      const lines = buf.split(/\r?\n|\r/);
+      buf = lines.pop() ?? '';
+      for (const line of lines) {
+        const m = line.match(/time=(\d+):(\d+):(\d+\.\d+)/);
+        if (m) {
+          const secs = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]);
+          onProgress(secs);
+        }
+      }
+    });
+
     proc.on('close', code => {
       if (code !== 0) reject(new Error(`ffmpeg exited with code ${code}`));
       else resolve(outputPath);

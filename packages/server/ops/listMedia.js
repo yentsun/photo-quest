@@ -17,8 +17,8 @@ export default function ({ limit, offset, folder, subtree, liked, random, sort, 
   if (folder != null) {
     if (subtree) {
       logger.debug(`[listMedia] filtering by subtree of: ${folder}`);
-      conditions.push('(folder = ? OR folder LIKE ?)');
-      params.push(folder, folder.replace(/\\/g, '/') + '/%');
+      conditions.push('(folder = ? OR folder LIKE ? OR folder LIKE ?)');
+      params.push(folder, folder + '/%', folder + '\\%');
     } else {
       logger.debug(`[listMedia] filtering by exact folder: ${folder}`);
       conditions.push('folder = ?');

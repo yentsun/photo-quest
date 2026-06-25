@@ -455,7 +455,7 @@ export default function MediaPage() {
               );
             })() : (() => {
               const STATUS_LABEL = {
-                pending: 'Queued…',
+                pending: 'Preparing…',
                 probing: 'Analysing file…',
                 probed: 'Starting transcode…',
               };
