@@ -289,7 +289,7 @@ export default function Dashboard() {
               <span className="sm-show">Refresh</span>
             </Button>
           )}
-          <Button size="sm" onClick={() => setShowAddFolder(true)} disabled={isScanning} icon={<Icon name="folder" className="icon-sm" />}>
+          <Button variant="ghost" size="sm" onClick={() => setShowAddFolder(true)} disabled={isScanning} icon={<Icon name="folder" className="icon-sm" />}>
             <span className="sm-show">Add Folder</span>
           </Button>
           <Button

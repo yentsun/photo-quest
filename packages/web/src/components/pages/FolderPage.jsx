@@ -92,6 +92,7 @@ export default function FolderPage() {
   const [loadingMessage, setLoadingMessage] = useState('Fetching folder list…');
   const [contentReady, setContentReady] = useState(!!_pc || !!_sc0Media);
   const contentReadyRef = useRef(!!_pc || !!_sc0Media);
+  const contentReadyForIdRef = useRef(folderId);
   const serverLoadedRef = useRef(false);
   const folderRef = useRef(_pc?.data.folders?.find(f => f.id === folderId) ?? _sc0Folder);
 
@@ -107,6 +108,7 @@ export default function FolderPage() {
       setDirectMedia(pm);
       folderRef.current = pf.find(f => f.id === folderId) ?? folderRef.current;
       contentReadyRef.current = true;
+      contentReadyForIdRef.current = folderId;
       setContentReady(true);
       setLoading(false);
       return;
@@ -120,11 +122,13 @@ export default function FolderPage() {
       setDirectMedia(applySort(scMedia.items, sort));
       if (scFolder) folderRef.current = scFolder;
       contentReadyRef.current = true;
+      contentReadyForIdRef.current = folderId;
       setContentReady(true);
       setLoading(false);
-    } else if (!contentReadyRef.current) {
+    } else if (!contentReadyRef.current || contentReadyForIdRef.current !== folderId) {
       setDirectMedia([]);
       setContentReady(false);
+      contentReadyRef.current = false;
     }
     if (!isSearching) {
       idbGetFolders().then(async (cachedFolders) => {
@@ -138,6 +142,7 @@ export default function FolderPage() {
         setDirectMedia(applySort(items, sort));
         setLoading(false);
         contentReadyRef.current = true;
+        contentReadyForIdRef.current = folderId;
         setContentReady(true);
       }).catch(() => {});
     }
@@ -164,7 +169,7 @@ export default function FolderPage() {
           }
         }
       } catch (err) { console.error('Failed to load folder data:', err); }
-      finally { if (!cancelled) { setLoading(false); contentReadyRef.current = true; setContentReady(true); } }
+      finally { if (!cancelled) { setLoading(false); contentReadyRef.current = true; contentReadyForIdRef.current = folderId; setContentReady(true); } }
     };
     load();
     return () => { cancelled = true; };

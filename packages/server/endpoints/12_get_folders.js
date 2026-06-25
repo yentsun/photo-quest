@@ -17,8 +17,9 @@ export default async (kojo, logger) => {
   }, (req, res) => {
     const db = kojo.get('db');
 
-    /* Fetch all folders. */
+    logger.debug(`[GET /folders] querying folders`);
     const folders = db.prepare('SELECT id, path FROM folders ORDER BY path').all();
+    logger.debug(`[GET /folders] raw folder count: ${folders.length}`);
 
     /* Build path→id map for parent lookup. */
     const pathToId = new Map(folders.map(f => [f.path, f.id]));
@@ -83,8 +84,8 @@ export default async (kojo, logger) => {
       }
     }
 
-    /* Filter out folders with no media in their subtree. */
     const filtered = result.filter(f => f.subtreeMediaCount > 0);
+    logger.debug(`[GET /folders] filtered to ${filtered.length} folders with media`);
 
     json(res, 200, filtered);
   });

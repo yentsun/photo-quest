@@ -34,7 +34,9 @@ export default async (kojo, logger) => {
     if (search != null) opts.search = search;
     if (tag != null) opts.tag = tag;
 
+    logger.debug(`[GET /media] opts=${JSON.stringify(opts)}`);
     const result = kojo.ops.listMedia(opts);
+    logger.debug(`[GET /media] → total=${result.total} items=${result.items.length}`);
     json(res, 200, result);
   });
 };

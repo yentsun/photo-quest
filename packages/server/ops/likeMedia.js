@@ -11,16 +11,21 @@
  */
 
 export default function (id) {
-  const [kojo] = this;
+  const [kojo, logger] = this;
   const db = kojo.get('db');
+
+  logger.debug(`[likeMedia] id=${id}`);
 
   const result = db.prepare(
     "UPDATE media SET likes = likes + 1, updated_at = datetime('now') WHERE id = ?"
   ).run(Number(id));
 
   if (result.changes === 0) {
+    logger.debug(`[likeMedia] not found: id=${id}`);
     return null;
   }
 
-  return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id));
+  const media = db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id));
+  logger.debug(`[likeMedia] liked: id=${id} new likes=${media.likes}`);
+  return media;
 }

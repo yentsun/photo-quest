@@ -15,12 +15,15 @@ export default async (kojo, logger) => {
     method: 'PATCH',
     pathname: '/media/:id/like',
   }, (req, res, params) => {
+    logger.debug(`[PATCH /media/:id/like] id=${params.id}`);
     const result = kojo.ops.likeMedia(Number(params.id));
 
     if (!result) {
+      logger.debug(`[PATCH /media/:id/like] not found: id=${params.id}`);
       return json(res, 404, { error: 'Media not found' });
     }
 
+    logger.debug(`[PATCH /media/:id/like] liked: id=${params.id} likes=${result.likes}`);
     json(res, 200, result);
   });
 };

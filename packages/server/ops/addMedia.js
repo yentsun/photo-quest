@@ -22,15 +22,16 @@ export default function (folderId, folderName, files) {
 
   let added = 0;
 
+  logger.debug(`[addMedia] folderId=${folderId} folderName="${folderName}" files=${files.length}`);
+
   for (const file of files) {
     const ext = path.extname(file.name).toLowerCase();
     const title = path.basename(file.name, ext);
     const isImage = IMAGE_EXTENSIONS.includes(ext);
     const mediaType = isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO;
-
-    // For client-side scanned files, path format is "folderId:relativePath"
-    // This distinguishes them from server-scanned absolute paths
     const mediaPath = `${folderId}:${file.path}`;
+
+    logger.debug(`[addMedia] inserting: ${file.name} type=${mediaType} path=${mediaPath}`);
 
     try {
       const result = db.prepare(
@@ -39,6 +40,9 @@ export default function (folderId, folderName, files) {
 
       if (result.changes > 0) {
         added++;
+        logger.debug(`[addMedia] inserted: ${file.name}`);
+      } else {
+        logger.debug(`[addMedia] skipped (already exists): ${mediaPath}`);
       }
     } catch (err) {
       logger.warn(`Failed to insert ${file.name}: ${err.message}`);

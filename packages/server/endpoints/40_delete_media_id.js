@@ -13,12 +13,15 @@ export default async (kojo, logger) => {
     method: 'DELETE',
     pathname: '/media/:id',
   }, (req, res, params) => {
+    logger.debug(`[DELETE /media/:id] id=${params.id}`);
     const result = kojo.ops.removeMedia(Number(params.id));
 
     if (!result.deleted) {
+      logger.debug(`[DELETE /media/:id] not found: id=${params.id}`);
       return json(res, 404, { error: 'Media not found' });
     }
 
+    logger.debug(`[DELETE /media/:id] deleted: id=${params.id} path=${result.path}`);
     json(res, 200, result);
   });
 };

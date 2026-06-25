@@ -6,15 +6,21 @@
  */
 
 export default function (id, tags) {
-  const [kojo] = this;
+  const [kojo, logger] = this;
   const db = kojo.get('db');
+
+  logger.debug(`[updateTags] id=${id} tags=${JSON.stringify(tags)}`);
 
   const result = db.prepare(
     "UPDATE media SET tags = ?, updated_at = datetime('now') WHERE id = ?"
   ).run(JSON.stringify(tags), Number(id));
 
-  if (result.changes === 0) return null;
+  if (result.changes === 0) {
+    logger.debug(`[updateTags] not found: id=${id}`);
+    return null;
+  }
 
+  logger.debug(`[updateTags] updated: id=${id}`);
   const media = db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id));
   media.tags = JSON.parse(media.tags || '[]');
   return media;

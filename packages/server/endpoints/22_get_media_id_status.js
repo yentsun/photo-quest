@@ -13,20 +13,23 @@ export default async (kojo, logger) => {
     method: 'GET',
     pathname: '/media/:id/status',
   }, async (req, res, params) => {
+    logger.debug(`[GET /media/:id/status] id=${params.id}`);
     const row = kojo.ops.getMediaById(Number(params.id));
 
     if (!row) {
+      logger.debug(`[GET /media/:id/status] not found: id=${params.id}`);
       return json(res, 404, { error: 'Media not found' });
     }
 
+    logger.debug(`[GET /media/:id/status] checking path=${row.path}`);
     const result = { exists: false, readable: false, size: null, ok: false };
 
     try {
       const stat = fs.statSync(row.path);
       result.exists = true;
       result.size = stat.size;
+      logger.debug(`[GET /media/:id/status] file exists size=${stat.size}, probing readability`);
 
-      /* Try reading first 1KB with a 3s timeout to confirm accessibility. */
       await new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('Read timed out')), 3000);
         const stream = fs.createReadStream(row.path, { start: 0, end: Math.min(1023, stat.size - 1) });
@@ -38,8 +41,10 @@ export default async (kojo, logger) => {
 
       result.readable = true;
       result.ok = true;
+      logger.debug(`[GET /media/:id/status] ok: id=${params.id}`);
     } catch (err) {
       result.error = err.message;
+      logger.debug(`[GET /media/:id/status] error: ${err.message}`);
     }
 
     json(res, 200, result);
