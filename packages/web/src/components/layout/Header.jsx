@@ -5,7 +5,7 @@ import { clientRoutes } from '@photo-quest/shared';
 import { fetchNetworkInfo, pickLibraryFile, connectLibrary } from '../../utils/api.js';
 import { Button, Icon, Modal } from '../ui/index.js';
 
-export default function Header() {
+export default function Header({ collapsed, onToggle }) {
   const [networkUrl, setNetworkUrl] = useState(null);
   const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -56,11 +56,11 @@ export default function Header() {
 
   return (
     <>
-      <aside className="sidebar">
+      <aside className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}>
         <div className="sidebar-logo">
-          <Link to={clientRoutes.dashboard}>
+          <Link to={clientRoutes.dashboard} title={collapsed ? 'Photo Quest' : undefined}>
             <img src="/favicon.png" alt="" />
-            Photo Quest
+            <span className="nav-label">Photo Quest</span>
           </Link>
         </div>
 
@@ -68,23 +68,26 @@ export default function Header() {
           <NavLink
             to={clientRoutes.dashboard}
             className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+            title={collapsed ? 'Library' : undefined}
           >
             <Icon name="folder" className="icon-sm" />
-            Library
+            <span className="nav-label">Library</span>
           </NavLink>
           <NavLink
             to={clientRoutes.liked}
             className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+            title={collapsed ? 'Liked' : undefined}
           >
             <Icon name="heart" className="icon-sm" />
-            Liked
+            <span className="nav-label">Liked</span>
           </NavLink>
           <NavLink
             to={clientRoutes.tags}
             className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+            title={collapsed ? 'Tags' : undefined}
           >
             <Icon name="list" className="icon-sm" />
-            Tags
+            <span className="nav-label">Tags</span>
           </NavLink>
         </nav>
 
@@ -97,7 +100,7 @@ export default function Header() {
             icon={<Icon name="folder" className="icon-sm" />}
             className="btn-full"
           >
-            Library
+            <span className="nav-label">Library</span>
           </Button>
 
           {networkUrl && (
@@ -109,9 +112,13 @@ export default function Header() {
               icon={<Icon name="network" className="icon-sm" />}
               className="btn-full"
             >
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{networkUrl}</span>
+              <span className="nav-label" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{networkUrl}</span>
             </Button>
           )}
+
+          <button className="sidebar-toggle" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <Icon name={collapsed ? 'next' : 'prev'} className="icon-sm" />
+          </button>
         </div>
       </aside>
 
