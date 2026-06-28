@@ -418,8 +418,21 @@ body {
   margin-bottom: 24px;
   gap: 12px;
 }
-.page-title { font-size: var(--fs-xl); font-weight: 700; color: var(--sol-text-em); letter-spacing: -0.01em; }
+.page-title { font-size: var(--fs-xl); font-weight: 700; color: var(--sol-text-em); letter-spacing: -0.01em; display: flex; align-items: center; gap: 6px; }
 .page-subtitle { color: var(--sol-text-mut); font-size: var(--fs-sm); margin-top: 2px; }
+.folder-title-rename-btn {
+  background: none; border: none; cursor: pointer; padding: 2px 4px;
+  color: var(--sol-text-mut); display: flex; align-items: center; opacity: 0;
+  transition: opacity 0.1s, color 0.1s;
+}
+.page-header:hover .folder-title-rename-btn { opacity: 1; }
+.folder-title-rename-btn:hover { color: var(--sol-text-em); }
+.folder-page-rename-input {
+  font-size: var(--fs-xl); font-weight: 700; font-family: var(--font-mono);
+  letter-spacing: -0.01em; color: var(--sol-text-em);
+  background: var(--sol-dim); border: 1px solid var(--sol-accent);
+  padding: 0 4px; outline: none; width: 100%; max-width: 400px;
+}
 .page-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
 
 /* ─── Scan notice ─── */
@@ -543,6 +556,14 @@ body {
 
 .folder-card-remove { position: absolute; top: 6px; right: 6px; opacity: 0; transition: opacity 0.15s; }
 .folder-card:hover .folder-card-remove { opacity: 1; }
+.folder-card-rename { position: absolute; top: 6px; left: 6px; opacity: 0; transition: opacity 0.15s; }
+.folder-card:hover .folder-card-rename { opacity: 1; }
+.folder-rename-input {
+  width: 100%; padding: 1px 4px; margin: 0;
+  background: var(--sol-dim); border: 1px solid var(--sol-accent);
+  color: var(--sol-text-em); font-size: var(--fs-sm); font-family: var(--font-mono);
+  outline: none;
+}
 
 .folder-card-meta {
   padding: 6px 10px;

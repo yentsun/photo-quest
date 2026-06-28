@@ -343,6 +343,16 @@ export async function removeFolder(folderId) {
   return response.json();
 }
 
+export async function renameFolder(folderId, name) {
+  const response = await fetch(`/folders/${folderId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) throw new Error('Failed to rename folder');
+  return response.json();
+}
+
 /**
  * Open native file picker and return a selected .db path.
  * @returns {Promise<{path: string}|{cancelled: true}>}

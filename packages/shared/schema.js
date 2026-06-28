@@ -139,7 +139,8 @@ export const CREATE_SCANS_TABLE = `
 export const CREATE_FOLDERS_TABLE = `
   CREATE TABLE IF NOT EXISTS folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    path TEXT NOT NULL UNIQUE
+    path TEXT NOT NULL UNIQUE,
+    name TEXT
   )
 `;
 

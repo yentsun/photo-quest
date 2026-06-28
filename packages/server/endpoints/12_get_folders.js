@@ -18,7 +18,7 @@ export default async (kojo, logger) => {
     const db = kojo.get('db');
 
     logger.debug(`[GET /folders] querying folders`);
-    const folders = db.prepare('SELECT id, path FROM folders ORDER BY path').all();
+    const folders = db.prepare('SELECT id, path, name FROM folders ORDER BY path').all();
     logger.debug(`[GET /folders] raw folder count: ${folders.length}`);
 
     /* Build path→id map for parent lookup. */
@@ -56,6 +56,7 @@ export default async (kojo, logger) => {
     const result = folders.map(f => ({
       id: f.id,
       path: f.path,
+      name: f.name || null,
       parentId: pathToId.get(path.dirname(f.path)) || null,
       mediaCount: (imageCounts.get(f.path) || 0) + (videoCounts.get(f.path) || 0),
       imageCount: imageCounts.get(f.path) || 0,

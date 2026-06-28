@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { fetchFolders, fetchMedia, getLastFolders, getLastFolderMedia, scanMedia as scanMediaApi } from '../../utils/api.js';
+import { fetchFolders, fetchMedia, getLastFolders, getLastFolderMedia, scanMedia as scanMediaApi, renameFolder } from '../../utils/api.js';
 import { Select } from '../ui/index.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
 import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
@@ -38,10 +38,12 @@ function getPageNumbers(current, total) {
   return result;
 }
 
+function getFolderName(f) {
+  return f.name || f.path.split(/[/\\]/).pop() || '';
+}
+
 function byFolderName(a, b) {
-  const nameA = a.path.split(/[/\\]/).pop() || '';
-  const nameB = b.path.split(/[/\\]/).pop() || '';
-  return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+  return getFolderName(a).localeCompare(getFolderName(b), undefined, { numeric: true, sensitivity: 'base' });
 }
 
 export default function FolderPage() {
@@ -52,6 +54,9 @@ export default function FolderPage() {
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [renamingFolder, setRenamingFolder] = useState(false);
+  const [renameInput, setRenameInput] = useState('');
+  const renameInputRef = useRef(null);
   const [sort, setSort] = useState('filename');
   const sortRef = useRef('filename');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -219,6 +224,28 @@ export default function FolderPage() {
     } catch (err) { console.error('Failed to remove folder:', err); }
   };
 
+  const startRename = () => {
+    const f = folderRef.current;
+    if (!f) return;
+    setRenameInput(getFolderName(f));
+    setRenamingFolder(true);
+    setTimeout(() => renameInputRef.current?.select(), 0);
+  };
+
+  const saveRename = async () => {
+    if (!renamingFolder) return;
+    setRenamingFolder(false);
+    const f = folderRef.current;
+    if (!f) return;
+    const trimmed = renameInput.trim();
+    const current = getFolderName(f);
+    if (trimmed === current) return;
+    try {
+      await renameFolder(f.id, trimmed || null);
+      bump();
+    } catch (err) { console.error('Failed to rename folder:', err); }
+  };
+
   const handleShuffle = async () => {
     const f = folderRef.current;
     if (!f) return;
@@ -239,7 +266,7 @@ export default function FolderPage() {
 
   if (loading) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
 
-  const folderName = folder ? folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder' : 'Folder';
+  const folderName = folder ? getFolderName(folder) || 'Folder' : 'Folder';
   const subtreeTotal = folder?.subtreeMediaCount || 0;
 
   const itemLabel = (() => {
@@ -257,7 +284,7 @@ export default function FolderPage() {
         <nav className="breadcrumb-nav">
           <Button variant="text" onClick={() => navigate('/dashboard')}>Library</Button>
           {breadcrumbs.map((crumb, i) => {
-            const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
+            const name = getFolderName(crumb);
             const isLast = i === breadcrumbs.length - 1;
             return (
               <span key={crumb.id} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
@@ -275,7 +302,26 @@ export default function FolderPage() {
 
       <div className="page-header">
         <div>
-          <h1 className="page-title">{folderName}</h1>
+          {renamingFolder ? (
+            <input
+              ref={renameInputRef}
+              className="folder-page-rename-input"
+              value={renameInput}
+              onChange={e => setRenameInput(e.target.value)}
+              onBlur={saveRename}
+              onKeyDown={e => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenamingFolder(false); }}
+              autoFocus
+            />
+          ) : (
+            <h1 className="page-title">
+              {folderName}
+              {folder && (
+                <button className="folder-title-rename-btn" onClick={startRename} title="Rename folder">
+                  <Icon name="edit" className="icon-sm" />
+                </button>
+              )}
+            </h1>
+          )}
           <p className="page-subtitle">
             {itemLabel}
             {contentReady && !itemLabel && '0 items'}

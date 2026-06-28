@@ -100,6 +100,7 @@ function migrateDb() {
     'ALTER TABLE media ADD COLUMN date_taken TEXT',
     'ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0',
     "ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
+    'ALTER TABLE folders ADD COLUMN name TEXT',
   ];
 
   for (const sql of migrations) {
