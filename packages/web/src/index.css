@@ -800,6 +800,7 @@ body {
   color: var(--sol-text-mut); pointer-events: none;
 }
 .search-wrap .input { padding-left: 32px; }
+.search-hint { font-size: var(--fs-sm); color: var(--sol-text-mut); margin-top: 8px; }
 
 /* ─── Icon sizing ─── */
 .icon-xs  { width: 12px; height: 12px; }

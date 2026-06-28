@@ -404,9 +404,17 @@ export default function Dashboard() {
             placeholder="Search by title…"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') setSearchOpen(false); }}
             autoFocus
           />
         </div>
+        {debouncedSearch && !searchLoading && (
+          <p className="search-hint">
+            {searchTotal > 0
+              ? `${searchTotal} result${searchTotal !== 1 ? 's' : ''} — press Enter or close to view`
+              : `No results for "${debouncedSearch}"`}
+          </p>
+        )}
         {debouncedSearch && (
           <Button
             variant="text"
