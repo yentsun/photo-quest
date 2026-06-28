@@ -1,5 +1,7 @@
 /* ─── Reset ─── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+#root { height: 100%; }
 button { cursor: pointer; font: inherit; border: none; background: none; padding: 0; color: inherit; }
 a { color: inherit; text-decoration: none; }
 img, video { display: block; max-width: 100%; }
@@ -60,13 +62,15 @@ body {
 /* ─── App shell ─── */
 .app {
   display: flex;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
   background: var(--sol-bg);
   position: relative;
 }
 
-/* CRT scanline + vignette overlay — position: absolute so children can paint above */
+/* CRT scanline + vignette overlay — suppressed on viewer page */
+.app--viewer::after, .app--viewer::before { display: none; }
+
 .app::after {
   content: '';
   position: absolute; inset: 0; pointer-events: none; z-index: 100;
@@ -407,7 +411,7 @@ body {
 }
 
 /* ─── Page layout ─── */
-.page { padding: 16px; flex: 1; overflow-y: auto; min-height: 0; }
+.page { padding: 16px; flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; }
 @media (min-width: 640px)  { .page { padding: 24px; } }
 @media (min-width: 1024px) { .page { padding: 32px; } }
 
@@ -650,19 +654,28 @@ body {
 .media-player-error { color: var(--sol-red); font-size: var(--fs-sm); }
 
 /* ─── Media viewer ─── */
-.viewer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.viewer { position: fixed; inset: 0; z-index: 21; display: flex; flex-direction: column; }
 .viewer-fullscreen { background: #000; }
 
 .viewer-topbar {
   background: var(--sol-bg); border-bottom: 1px solid var(--sol-border);
   padding: 4px 8px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  position: relative;
+}
+.viewer-topbar::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 1px, transparent 1px, transparent 3px);
 }
 
 .viewer-infobar {
   background: var(--sol-bg); border-top: 1px solid var(--sol-border);
   padding: 8px 14px;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  flex-shrink: 0; min-width: 0;
+  flex-shrink: 0; min-width: 0; position: relative;
+}
+.viewer-infobar::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 1px, transparent 1px, transparent 3px);
 }
 
 .viewer-infobar-left { min-width: 0; flex: 1; }
@@ -725,6 +738,27 @@ body {
 
 /* Nav hidden on mobile */
 @media (max-width: 639px) { .viewer-nav { display: none; } .viewer-nav-fs { display: none; } }
+
+/* ─── Mobile layout ─── */
+@media (max-width: 639px) {
+  /* Auto-collapse sidebar to icon-only strip */
+  :root { --sidebar-w: 52px; }
+  .sidebar { width: 52px; overflow: hidden; }
+  .sidebar .nav-label { display: none; }
+  .sidebar .nav-item { justify-content: center; padding: 8px 6px; }
+  .sidebar-logo { padding: 14px 0; }
+  .sidebar-logo a { justify-content: center; }
+  .sidebar-footer { padding: 8px 6px; align-items: center; }
+  .sidebar-footer .btn-full { width: auto; justify-content: center; }
+  .sidebar-toggle { display: none; }
+  /* Page header: stack title above buttons */
+  .page-header { flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .page-actions { flex-wrap: wrap; }
+  /* Viewer infobar: stack as column, actions below title */
+  .viewer-infobar { flex-direction: column; align-items: stretch; overflow-y: auto; max-height: 45vh; }
+  .viewer-infobar-left { width: 100%; }
+  .viewer-actions { width: 100%; padding-top: 6px; border-top: 1px solid var(--sol-border); flex-wrap: wrap; }
+}
 
 /* Mobile nav panel */
 .mobile-nav {

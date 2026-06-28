@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Header } from './layout/index.js';
 import { IconButton, Icon } from './ui/index.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
@@ -105,6 +105,8 @@ function ImportProgressBar() {
 }
 
 export default function Root() {
+  const location = useLocation();
+  const isViewer = location.pathname.startsWith('/media/');
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true');
 
   const toggleSidebar = useCallback(() => {
@@ -116,7 +118,7 @@ export default function Root() {
   }, []);
 
   return (
-    <div className="app" style={collapsed ? { '--sidebar-w': '52px' } : undefined}>
+    <div className={`app${isViewer ? ' app--viewer' : ''}`} style={collapsed ? { '--sidebar-w': '52px' } : undefined}>
       <Header collapsed={collapsed} onToggle={toggleSidebar} />
       <div className="app-body">
         <ImportProgressBar />
