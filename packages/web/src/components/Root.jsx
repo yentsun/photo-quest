@@ -105,9 +105,19 @@ function ImportProgressBar() {
 }
 
 export default function Root() {
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true');
+
+  const toggleSidebar = useCallback(() => {
+    setCollapsed(c => {
+      const next = !c;
+      localStorage.setItem('sidebar-collapsed', next);
+      return next;
+    });
+  }, []);
+
   return (
-    <div className="app">
-      <Header />
+    <div className="app" style={collapsed ? { '--sidebar-w': '52px' } : undefined}>
+      <Header collapsed={collapsed} onToggle={toggleSidebar} />
       <div className="app-body">
         <ImportProgressBar />
         <main className="main-area">
