@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { fetchTags } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
 import { Icon, Loader } from '../ui/index.js';
+import { TagCard } from '../media/index.js';
 
 export default function TagsPage() {
-  const navigate = useNavigate();
   const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -33,16 +32,9 @@ export default function TagsPage() {
           description="Open any photo or video and click '+ tag' to start tagging."
         />
       ) : (
-        <div className="tag-list">
-          {tags.map(({ tag, count }) => (
-            <button
-              key={tag}
-              onClick={() => navigate(`/tags/${encodeURIComponent(tag)}`)}
-              className="tag-list-item"
-            >
-              <span>{tag}</span>
-              <span className="tag-count">{count}</span>
-            </button>
+        <div className="item-grid">
+          {tags.map(({ tag, count, previewMediaId }) => (
+            <TagCard key={tag} tag={tag} count={count} previewMediaId={previewMediaId} />
           ))}
         </div>
       )}
