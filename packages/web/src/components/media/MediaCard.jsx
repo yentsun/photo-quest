@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getThumbUrl } from '../../utils/api.js';
-import { Icon, Loader } from '../ui/index.js';
+import { Icon, Loader, ProgressBar } from '../ui/index.js';
 import LikeButton from './LikeButton.jsx';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 
@@ -41,14 +41,9 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
         ) : (isTranscoding || isPending) && (
           <div className="media-card-overlay">
             {isTranscoding && progressSecs !== null ? (
-              <>
-                <div className="media-card-progress">
-                  <div className="media-card-progress-fill" style={{ width: `${pct ?? 0}%` }} />
-                </div>
-                <span className="media-card-overlay-text">
-                  {pct !== null ? `${pct}%` : `${Math.round(progressSecs)}s`}
-                </span>
-              </>
+              pct !== null
+                ? <ProgressBar value={pct} width={12} variant="light" />
+                : <ProgressBar width={12} indeterminate showPct={false} variant="light" />
             ) : (
               <>
                 <Loader size="sm" />

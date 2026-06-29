@@ -6,7 +6,7 @@ import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, IconButton, Loader, Modal } from '../ui/index.js';
+import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
 import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, getLastMediaItem, getLastFolders } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
@@ -444,12 +444,9 @@ export default function MediaPage() {
                   : 'Transcoding…';
               return (
                 <>
-                  <div className="media-processing-progress">
-                    <div
-                      className={pct !== null ? 'media-processing-progress-fill' : 'media-processing-progress-fill media-processing-progress-indeterminate'}
-                      style={pct !== null ? { width: `${pct}%` } : undefined}
-                    />
-                  </div>
+                  {pct !== null
+                    ? <ProgressBar value={pct} width={20} showPct={false} />
+                    : <ProgressBar width={20} indeterminate showPct={false} />}
                   <p className="media-processing-msg">{label}</p>
                 </>
               );
@@ -461,9 +458,7 @@ export default function MediaPage() {
               };
               return (
                 <>
-                  <div className="media-processing-progress">
-                    <div className="media-processing-progress-fill media-processing-progress-indeterminate" />
-                  </div>
+                  <ProgressBar width={20} indeterminate showPct={false} />
                   <p className="media-processing-msg">{STATUS_LABEL[item.status] ?? `${item.status}…`}</p>
                 </>
               );

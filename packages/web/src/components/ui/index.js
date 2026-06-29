@@ -10,3 +10,4 @@ export { default as Input } from './Input.jsx';
 export { default as Modal } from './Modal.jsx';
 export { default as Select } from './Select.jsx';
 export { default as Loader } from './Loader.jsx';
+export { default as ProgressBar } from './ProgressBar.jsx';

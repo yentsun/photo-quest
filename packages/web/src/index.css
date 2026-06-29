@@ -526,8 +526,18 @@ body {
 }
 .media-card-overlay-text { color: #fff; font-size: var(--fs-xs); text-align: center; }
 .media-card-error .media-card-overlay-text { color: var(--sol-red); }
-.media-card-progress { width: 100%; height: 4px; background: var(--sol-border); }
-.media-card-progress-fill { height: 100%; background: var(--sol-accent); transition: width 0.5s; }
+/* ─── ASCII meter (ProgressBar component) ─── */
+.ascii-meter { display: inline-flex; align-items: center; }
+.ascii-meter-brk { color: var(--sol-text-mut); }
+.ascii-meter-cells { display: inline-flex; gap: 1px; margin: 0 2px; }
+.ascii-meter-cell { width: 6px; height: 11px; background: var(--sol-border); }
+.ascii-meter-cell.on { background: var(--sol-accent); }
+.ascii-meter-pct { margin-left: 6px; color: var(--sol-text-mut); }
+/* light variant — for use on dark overlays */
+.ascii-meter.light .ascii-meter-brk { color: rgba(255,255,255,0.45); }
+.ascii-meter.light .ascii-meter-cell { background: rgba(255,255,255,0.18); }
+.ascii-meter.light .ascii-meter-cell.on { background: rgba(255,255,255,0.85); }
+.ascii-meter.light .ascii-meter-pct { color: rgba(255,255,255,0.6); }
 
 /* ─── Folder card ─── */
 .folder-card {
@@ -622,8 +632,6 @@ body {
 /* ─── Import progress (inside modal) ─── */
 .import-progress { display: flex; flex-direction: column; gap: 6px; }
 .import-progress-label { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--sol-text-mut); }
-.progress-track { width: 100%; height: 4px; background: var(--sol-border); }
-.progress-fill { height: 100%; background: var(--sol-accent); transition: width 0.2s; }
 
 /* ─── Path preview ─── */
 .path-preview {
@@ -824,10 +832,6 @@ body {
 .media-error-path { color: var(--sol-text-mut); font-size: var(--fs-xs); }
 .media-processing { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; }
 .media-processing-msg { color: var(--sol-text-em); font-weight: 500; text-transform: capitalize; }
-.media-processing-progress { width: 240px; height: 4px; background: var(--sol-border); border-radius: 2px; overflow: hidden; }
-.media-processing-progress-fill { height: 100%; background: var(--sol-accent); border-radius: 2px; transition: width 0.5s; }
-@keyframes indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
-.media-processing-progress-indeterminate { width: 25%; animation: indeterminate 1.4s ease-in-out infinite; }
 
 /* ─── Media info modal ─── */
 .file-status {

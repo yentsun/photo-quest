@@ -9,7 +9,7 @@ import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache
 import { idbGetFolders } from '../services/idb.js';
 import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
-import { Button, Icon, Input, Loader, Modal } from './ui/index.js';
+import { Button, Icon, Input, Loader, Modal, ProgressBar } from './ui/index.js';
 
 function byFolderName(a, b) {
   const nameA = a.path.split(/[/\\]/).pop() || '';
@@ -338,9 +338,7 @@ export default function Dashboard() {
               <span>Importing files…</span>
               <span>{importProgress.processed}/{importProgress.total}</span>
             </div>
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${importProgress.total ? (importProgress.processed / importProgress.total) * 100 : 0}%` }} />
-            </div>
+            <ProgressBar value={importProgress.processed} max={importProgress.total || 1} width={20} showPct={false} />
           </div>
         )}
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Header } from './layout/index.js';
-import { IconButton, Icon } from './ui/index.js';
+import { IconButton, Icon, ProgressBar } from './ui/index.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
 import { useJobProgressUpdater } from '../contexts/JobProgressContext.jsx';
@@ -90,9 +90,7 @@ function ImportProgressBar() {
         <span className="import-bar-text">
           Importing… {progress.processed}/{progress.total}
         </span>
-        <div className="progress-track" style={{ flex: 1 }}>
-          <div className="progress-fill" style={{ width: `${pct}%` }} />
-        </div>
+        <ProgressBar value={pct} width={20} showPct={false} />
         <IconButton
           icon={<Icon name="close" className="icon-sm" />}
           label="Stop import"
