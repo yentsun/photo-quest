@@ -15,10 +15,17 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import fs from 'node:fs'
+import { execSync } from 'node:child_process'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const serverDir = path.resolve(__dirname, '..', 'server')
 const vendorDir = path.join(__dirname, 'vendor')
+
+// --- embed git revision -----------------------------------------------
+
+const revision = execSync('git rev-parse --short HEAD').toString().trim()
+fs.writeFileSync(path.join(__dirname, 'revision.txt'), revision)
+console.log(`[build] Revision: ${revision}`)
 
 // --- vendor directory -------------------------------------------------
 
