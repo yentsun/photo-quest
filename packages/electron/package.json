@@ -63,7 +63,8 @@
       "installerIcon": "assets/icon.ico"
     },
     "publish": {
-      "provider": "github"
+      "provider": "github",
+      "releaseType": "release"
     }
   }
 }
