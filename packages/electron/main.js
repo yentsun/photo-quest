@@ -115,6 +115,7 @@ function createWindow() {
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   })
   mainWindow.loadURL(APP_URL)
+  mainWindow.on('page-title-updated', e => { e.preventDefault() })
   mainWindow.once('ready-to-show', () => { log('electron', 'window ready'); mainWindow.show() })
   mainWindow.on('close', e => {
     if (!isQuitting) { e.preventDefault(); mainWindow.hide() }
