@@ -1,6 +1,6 @@
 {
   "name": "@photo-quest/electron",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "main": "main.js",
@@ -9,7 +9,8 @@
     "build": "node build.mjs && electron-builder"
   },
   "dependencies": {
-    "electron-updater": "^6.3.0"
+    "electron-updater": "^6.3.0",
+    "photo-quest": "file:../.."
   },
   "devDependencies": {
     "electron": "^35.7.5",
