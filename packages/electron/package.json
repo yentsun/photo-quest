@@ -26,6 +26,7 @@
     },
     "files": [
       "main.js",
+      "revision.txt",
       "!node_modules"
     ],
     "extraResources": [

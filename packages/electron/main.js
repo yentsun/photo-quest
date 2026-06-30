@@ -1,5 +1,5 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, utilityProcess, dialog } from 'electron'
-import { spawn } from 'node:child_process'
+import { spawn, execSync } from 'node:child_process'
 import { createWriteStream, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
@@ -7,6 +7,12 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged
+
+const version = app.getVersion()
+const revFile = path.join(__dirname, 'revision.txt')
+const revision = existsSync(revFile)
+  ? readFileSync(revFile, 'utf8').trim()
+  : (() => { try { return execSync('git rev-parse --short HEAD').toString().trim() } catch { return 'dev' } })()
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
 
@@ -99,6 +105,7 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
+    title: `Photo Quest ${version} (${revision})`,
     icon: ICON_PATH,
     show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
