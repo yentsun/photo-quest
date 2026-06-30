@@ -42,10 +42,6 @@
         "to": "server"
       },
       {
-        "from": "../worker/dist",
-        "to": "worker"
-      },
-      {
         "from": "../web/dist",
         "to": "web/dist"
       }
