@@ -27,9 +27,13 @@ const ICON_PATH = isDev
   ? path.join(__dirname, '..', 'web', 'public', 'logo512.png')
   : path.join(process.resourcesPath, 'web', 'dist', 'logo512.png')
 
-const serverPort = 3000
-const APP_URL = isDev ? 'http://127.0.0.1:5000' : `http://127.0.0.1:${serverPort}`
-const WAIT_PORT = isDev ? 5000 : serverPort
+const rootDir = isDev ? path.join(__dirname, '..', '..') : process.resourcesPath
+let _cfg = {}
+try { _cfg = JSON.parse(readFileSync(path.join(rootDir, 'config.json'), 'utf8')) } catch {}
+const serverPort = _cfg.serverPort ?? 3000
+const webappPort = _cfg.webappPort ?? 5000
+const APP_URL = isDev ? `http://127.0.0.1:${webappPort}` : `http://127.0.0.1:${serverPort}`
+const WAIT_PORT = isDev ? webappPort : serverPort
 
 // --- logging ----------------------------------------------------------
 
