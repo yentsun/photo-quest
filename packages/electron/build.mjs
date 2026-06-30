@@ -18,7 +18,6 @@ import fs from 'node:fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const serverDir = path.resolve(__dirname, '..', 'server')
-const workerDir = path.resolve(__dirname, '..', 'worker')
 const vendorDir = path.join(__dirname, 'vendor')
 
 // --- vendor directory -------------------------------------------------
@@ -29,7 +28,6 @@ fs.mkdirSync(path.join(vendorDir, 'node_modules'), { recursive: true })
 
 // createRequire follows pnpm junctions to resolve workspace package deps
 const requireFromServer = createRequire(path.join(serverDir, 'package.json'))
-const requireFromWorker = createRequire(path.join(workerDir, 'package.json'))
 
 // sharp + its @img peer packages (sharp-win32-x64, colour)
 const sharpPkgJson = requireFromServer.resolve('sharp/package.json')
@@ -37,12 +35,12 @@ const sharpDir = path.dirname(sharpPkgJson)
 copyPackageWithDeps('sharp', sharpDir)
 
 // ffmpeg binary (ffmpeg-static exports the binary path directly)
-const ffmpegBin = requireFromWorker('ffmpeg-static')
+const ffmpegBin = requireFromServer('ffmpeg-static')
 const ffmpegExt = path.extname(ffmpegBin)
 fs.copyFileSync(ffmpegBin, path.join(vendorDir, 'bin', 'ffmpeg' + ffmpegExt))
 
 // ffprobe binary (@ffprobe-installer/ffprobe exports { path, version, url })
-const ffprobeInstaller = requireFromWorker('@ffprobe-installer/ffprobe')
+const ffprobeInstaller = requireFromServer('@ffprobe-installer/ffprobe')
 const ffprobeExt = path.extname(ffprobeInstaller.path)
 fs.copyFileSync(ffprobeInstaller.path, path.join(vendorDir, 'bin', 'ffprobe' + ffprobeExt))
 
@@ -109,23 +107,6 @@ await esbuild.build({
   banner: {
     js: `import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);`,
   },
-  logLevel: 'info',
-})
-
-// --- worker bundle ----------------------------------------------------
-
-console.log('[build] Bundling worker...')
-fs.rmSync(path.join(workerDir, 'dist'), { recursive: true, force: true })
-
-await esbuild.build({
-  entryPoints: [path.join(workerDir, 'index.js')],
-  bundle: true,
-  format: 'esm',
-  platform: 'node',
-  target: ['node22'],
-  outfile: path.join(workerDir, 'dist', 'index.js'),
-  external: ['node:*'],
-  plugins: [ffprobePlugin],
   logLevel: 'info',
 })
 

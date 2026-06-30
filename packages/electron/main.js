@@ -17,9 +17,6 @@ function readSettings() {
 const SERVER_DIR = isDev
   ? path.join(__dirname, '..', 'server')
   : path.join(process.resourcesPath, 'server')
-const WORKER_DIR = isDev
-  ? path.join(__dirname, '..', 'worker')
-  : path.join(process.resourcesPath, 'worker')
 const ICON_PATH = isDev
   ? path.join(__dirname, '..', 'web', 'public', 'logo512.png')
   : path.join(process.resourcesPath, 'web', 'dist', 'logo512.png')
@@ -46,7 +43,6 @@ function log(tag, ...args) {
 let mainWindow = null
 let tray = null
 let serverProc = null
-let workerProc = null
 let viteProc = null
 let isQuitting = false
 
@@ -132,12 +128,10 @@ function createTray() {
 app.whenReady().then(async () => {
   log('electron', `starting — isDev=${isDev} resourcesPath=${process.resourcesPath ?? 'n/a'}`)
   log('electron', `SERVER_DIR=${SERVER_DIR}`)
-  log('electron', `WORKER_DIR=${WORKER_DIR}`)
   log('electron', `ICON_PATH=${ICON_PATH}`)
   log('electron', `LOG_FILE=${LOG_FILE}`)
 
   serverProc = startProcess('boot.js', SERVER_DIR)
-  workerProc = startProcess('index.js', WORKER_DIR)
 
   serverProc.stdout?.on('data', d => log('server', d.toString().trim()))
   serverProc.stderr?.on('data', d => log('server:err', d.toString().trim()))
@@ -148,11 +142,7 @@ app.whenReady().then(async () => {
       app.quit()
     }
   })
-  workerProc.stdout?.on('data', d => log('worker', d.toString().trim()))
-  workerProc.stderr?.on('data', d => log('worker:err', d.toString().trim()))
-
   serverProc.on?.('exit', (code, signal) => log('server', `exited code=${code} signal=${signal}`))
-  workerProc.on?.('exit', (code, signal) => log('worker', `exited code=${code} signal=${signal}`))
 
   if (isDev) {
     viteProc = spawn('cmd.exe', ['/c', 'pnpm run dev'], {
@@ -210,6 +200,5 @@ app.on('before-quit', () => {
   isQuitting = true
   log('electron', 'quitting')
   serverProc?.kill()
-  workerProc?.kill()
   viteProc?.kill()
 })
