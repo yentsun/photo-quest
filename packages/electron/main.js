@@ -33,7 +33,11 @@ try { _cfg = JSON.parse(readFileSync(path.join(rootDir, 'config.json'), 'utf8'))
 const serverPort = _cfg.serverPort ?? 3000
 const webappPort = _cfg.webappPort ?? 5000
 const APP_URL = isDev ? `http://127.0.0.1:${webappPort}` : `http://127.0.0.1:${serverPort}`
-const WAIT_PORT = isDev ? webappPort : serverPort
+/* In dev, Electron spawns both the Vite dev server and the API server itself.
+ * Vite comes up almost instantly; the API server takes longer (SQLite init,
+ * kojo ops/endpoints auto-discovery) — wait for both or the window loads
+ * before the API is reachable and initial data fetches (e.g. /folders) fail. */
+const WAIT_PORTS = isDev ? [webappPort, serverPort] : [serverPort]
 
 // --- logging ----------------------------------------------------------
 
@@ -166,9 +170,11 @@ app.whenReady().then(async () => {
   }
 
   try {
-    log('electron', `waiting for port ${WAIT_PORT}...`)
-    await waitForPort(WAIT_PORT)
-    log('electron', `port ${WAIT_PORT} open`)
+    for (const port of WAIT_PORTS) {
+      log('electron', `waiting for port ${port}...`)
+      await waitForPort(port)
+      log('electron', `port ${port} open`)
+    }
   } catch (err) {
     log('electron', `FATAL: ${err.message}`)
     await dialog.showMessageBox({
