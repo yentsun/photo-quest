@@ -346,6 +346,7 @@ export default function MediaPage() {
       if (e.key === 'i') setShowInfo(prev => !prev);
       if (e.key === 'f') toggleFullscreen();
       if (e.key === 'Delete') handleDelete();
+      if (e.key === 't' || e.key === 'T') setAddingTag(true);
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -615,7 +616,7 @@ export default function MediaPage() {
                   )}
                 </div>
               ) : (
-                <button className="tag-add-btn" onClick={() => setAddingTag(true)}>+ tag</button>
+                <button className="tag-add-btn" onClick={() => setAddingTag(true)} title="Add tag (T)">+ tag</button>
               )}
             </div>
           </div>
