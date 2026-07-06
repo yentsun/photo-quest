@@ -1,0 +1,40 @@
+16:50:02.557 [boot] Initialising database...
+16:50:02.785 [db] Initialised (loaded from disk)
+16:50:02.785 [boot] Loading ops and endpoints...
+16:50:02.787 
+*************************************************************
+16:50:02.787   ta7ky  |  @photo-quest/server@0.3.3  |  kojo@9.0.4
+16:50:02.788 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+16:50:02.790     loading ops...16:50:02.937  done (12)
+16:50:02.938     loading endpoints...16:50:02.966  photo-quest DEBUG [addHttpRoute] POST /media/:id/transcode
+16:50:03.050  photo-quest DEBUG [addHttpRoute] GET /media
+16:50:03.050  photo-quest DEBUG [addHttpRoute] GET /folders
+16:50:03.051  photo-quest DEBUG [addHttpRoute] PATCH /folders/:id
+16:50:03.051  photo-quest DEBUG [addHttpRoute] GET /media/:id/status
+16:50:03.051  photo-quest DEBUG [addHttpRoute] PATCH /media/:id/like
+16:50:03.052  photo-quest DEBUG [addHttpRoute] PATCH /media/:id/title
+16:50:03.052  photo-quest DEBUG [addHttpRoute] PATCH /media/:id/tags
+16:50:03.052  photo-quest DEBUG [addHttpRoute] POST /media/scan
+16:50:03.053  photo-quest DEBUG [addHttpRoute] GET /scans
+16:50:03.053  photo-quest DEBUG [addHttpRoute] POST /media/add
+16:50:03.053  photo-quest DEBUG [addHttpRoute] POST /open-folder
+16:50:03.054  photo-quest DEBUG [addHttpRoute] DELETE /media/:id
+16:50:03.054  photo-quest DEBUG [addHttpRoute] DELETE /media/folder/:id
+16:50:03.055  photo-quest DEBUG [addHttpRoute] GET /stream/:id
+16:50:03.055  photo-quest DEBUG [addHttpRoute] GET /image/:id
+16:50:03.056  photo-quest DEBUG [addHttpRoute] GET /tags
+16:50:03.056  photo-quest DEBUG [addHttpRoute] GET /jobs/events
+16:50:03.057  photo-quest DEBUG [addHttpRoute] GET /network
+16:50:03.057  photo-quest DEBUG [addHttpRoute] POST /library/pick
+16:50:03.057  photo-quest DEBUG [addHttpRoute] POST /library/connect
+16:50:03.059  photo-quest DEBUG [addHttpRoute] GET /media/:id
+16:50:03.060  photo-quest DEBUG [addHttpRoute] POST /scans/:id/cancel
+16:50:03.060  photo-quest DEBUG [addHttpRoute] POST /media/check-path
+16:50:03.060  photo-quest DEBUG [addHttpRoute] GET /thumb/:id
+16:50:03.060  done (25)
+16:50:03.061     kojo "photo-quest" ready [undefined]
+16:50:03.061 *************************************************************
+16:50:03.061 [boot] 25 routes registered
+16:50:03.080  photo-quest INFO [requestMiddleware] Port 7837 is free
+16:50:03.088  photo-quest INFO [requestMiddleware] Open app → http://localhost:7838
+16:50:03.089  photo-quest INFO [requestMiddleware] Network  → http://10.0.0.3:7838
