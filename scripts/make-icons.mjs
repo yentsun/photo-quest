@@ -1,5 +1,4 @@
 import sharp from 'sharp'
-import { mkdir } from 'node:fs/promises'
 
 const LOGO = 'logo.png'
 
@@ -70,17 +69,12 @@ async function getTransparentBuffer() {
 }
 
 async function main() {
-  await mkdir('packages/electron/assets', { recursive: true })
-
   const { buffer, width, height } = await getTransparentBuffer()
 
   const outputs = [
     { size: 32,  path: 'packages/web/public/favicon.png' },
     { size: 192, path: 'packages/web/public/logo192.png' },
     { size: 512, path: 'packages/web/public/logo512.png' },
-    { size: 16,  path: 'packages/electron/assets/tray.png' },
-    { size: 32,  path: 'packages/electron/assets/tray@2x.png' },
-    { size: 256, path: 'packages/electron/assets/icon.png' },
   ]
 
   for (const { size, path } of outputs) {

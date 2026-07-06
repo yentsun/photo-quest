@@ -9,8 +9,6 @@
     "build": "pnpm --filter @photo-quest/web build",
     "start": "pnpm --filter @photo-quest/server start",
     "test": "pnpm --filter @photo-quest/server test",
-    "dev:electron": "npm --prefix packages/electron install && pnpm --filter @photo-quest/electron start",
-    "electron:build": "pnpm build && pnpm --filter @photo-quest/electron build",
     "make-icons": "node scripts/make-icons.mjs"
   },
   "devDependencies": {
