@@ -1,0 +1,57 @@
+17:08:17.147 [boot] Initialising database...
+17:08:17.385 [db] Initialised (loaded from disk)
+17:08:17.385 [boot] Loading ops and endpoints...
+17:08:17.386 
+*************************************************************
+17:08:17.386   FIKPD  |  @photo-quest/server@0.3.3  |  kojo@9.0.4
+17:08:17.386 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+17:08:17.387 (node:38016) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+17:08:17.388     loading ops...17:08:17.546  done (12)
+17:08:17.548     loading endpoints...17:08:17.591  photo-quest DEBUG [addHttpRoute] POST /media/:id/transcode
+17:08:17.687  photo-quest DEBUG [addHttpRoute] GET /media
+17:08:17.688  photo-quest DEBUG [addHttpRoute] GET /folders
+17:08:17.688  photo-quest DEBUG [addHttpRoute] PATCH /folders/:id
+17:08:17.689  photo-quest DEBUG [addHttpRoute] GET /media/:id/status
+17:08:17.690  photo-quest DEBUG [addHttpRoute] PATCH /media/:id/like
+17:08:17.690  photo-quest DEBUG [addHttpRoute] PATCH /media/:id/title
+17:08:17.690  photo-quest DEBUG [addHttpRoute] PATCH /media/:id/tags
+17:08:17.691  photo-quest DEBUG [addHttpRoute] POST /media/scan
+17:08:17.691  photo-quest DEBUG [addHttpRoute] GET /scans
+17:08:17.692  photo-quest DEBUG [addHttpRoute] POST /media/add
+17:08:17.692  photo-quest DEBUG [addHttpRoute] POST /open-folder
+17:08:17.692  photo-quest DEBUG [addHttpRoute] DELETE /media/:id
+17:08:17.692  photo-quest DEBUG [addHttpRoute] DELETE /media/folder/:id
+17:08:17.693  photo-quest DEBUG [addHttpRoute] GET /stream/:id
+17:08:17.693  photo-quest DEBUG [addHttpRoute] GET /image/:id
+17:08:17.693  photo-quest DEBUG [addHttpRoute] GET /tags
+17:08:17.693  photo-quest DEBUG [addHttpRoute] GET /jobs/events
+17:08:17.693  photo-quest DEBUG [addHttpRoute] GET /network
+17:08:17.693  photo-quest DEBUG [addHttpRoute] POST /library/pick
+17:08:17.693  photo-quest DEBUG [addHttpRoute] POST /library/connect
+17:08:17.694  photo-quest DEBUG [addHttpRoute] GET /media/:id
+17:08:17.694  photo-quest DEBUG [addHttpRoute] POST /scans/:id/cancel
+17:08:17.694  photo-quest DEBUG [addHttpRoute] POST /media/check-path
+17:08:17.694  photo-quest DEBUG [addHttpRoute] GET /thumb/:id
+17:08:17.694  done (25)
+17:08:17.694     kojo "photo-quest" ready [undefined]
+17:08:17.694 *************************************************************
+17:08:17.695 [boot] 25 routes registered
+17:08:17.716  photo-quest INFO [requestMiddleware] Port 7837 is free
+17:08:17.725  photo-quest INFO [requestMiddleware] Open app → http://localhost:7838
+17:08:17.725  photo-quest INFO [requestMiddleware] Network  → http://10.0.0.3:7838
+17:08:18.235  photo-quest DEBUG [requestMiddleware] GET /scans → 200 (6ms)
+17:08:18.260  photo-quest DEBUG [requestMiddleware] GET /scans → 200 (1ms)
+17:08:20.501  photo-quest DEBUG [requestMiddleware] GET /network → 200 (8ms)
+17:08:20.505  photo-quest DEBUG [requestMiddleware] GET /scans → 200 (3ms)
+17:08:20.508  photo-quest DEBUG [12_get_folders] [GET /folders] querying folders
+17:08:20.516  photo-quest DEBUG [12_get_folders] [GET /folders] raw folder count: 3227
+17:08:21.975  photo-quest DEBUG [12_get_folders] [GET /folders] filtered to 3203 folders with media
+17:08:21.986  photo-quest DEBUG [requestMiddleware] GET /folders → 200 (1480ms)
+17:08:21.996  photo-quest DEBUG [requestMiddleware] GET /network → 200 (8ms)
+17:08:21.999  photo-quest DEBUG [requestMiddleware] GET /scans → 200 (1ms)
+17:08:22.002  photo-quest DEBUG [12_get_folders] [GET /folders] querying folders
+17:08:22.010  photo-quest DEBUG [12_get_folders] [GET /folders] raw folder count: 3227
+17:08:23.521  photo-quest DEBUG [12_get_folders] [GET /folders] filtered to 3203 folders with media
+17:08:23.532  photo-quest DEBUG [requestMiddleware] GET /folders → 200 (1530ms)
+17:08:23.536  photo-quest DEBUG [requestMiddleware] GET /scans → 200 (2ms)

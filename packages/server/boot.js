@@ -18,14 +18,24 @@ import config from '@photo-quest/shared/config.js';
 import { initDb } from './src/db.js';
 import { resumeIncompleteScans } from './ops/scanMedia.js';
 
-/* Patch stdout/stderr to prepend timestamps to every line of output. */
-for (const stream of ['stdout', 'stderr']) {
-  const original = process[stream].write.bind(process[stream]);
-  process[stream].write = (chunk, ...args) => {
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOG_PATH = path.join(__dirname, 'photo-quest.log');
+
+/* Tee stdout/stderr to both the original stream and a log file. */
+const logStream = fs.createWriteStream(LOG_PATH, { flags: 'a' });
+for (const streamName of ['stdout', 'stderr']) {
+  const original = process[streamName].write.bind(process[streamName]);
+  process[streamName].write = (chunk, ...args) => {
     const str = typeof chunk === 'string' ? chunk : chunk.toString();
     if (str.trim()) {
-      const ts = new Date().toISOString().slice(11, 23); // HH:mm:ss.SSS
-      return original(`${ts} ${str}`, ...args);
+      const ts = new Date().toISOString().slice(11, 23);
+      const line = `${ts} ${str}`;
+      logStream.write(line);
+      return original(line, ...args);
     }
     return original(chunk, ...args);
   };
