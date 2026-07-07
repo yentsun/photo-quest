@@ -1,5 +1,5 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, utilityProcess, dialog } from 'electron'
-import { spawn, execSync } from 'node:child_process'
+import { app, shell, Tray, Menu, nativeImage, utilityProcess, dialog } from 'electron'
+import { spawn } from 'node:child_process'
 import { createWriteStream, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
@@ -7,12 +7,6 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged
-
-const version = app.getVersion()
-const revFile = path.join(__dirname, 'revision.txt')
-const revision = existsSync(revFile)
-  ? readFileSync(revFile, 'utf8').trim()
-  : (() => { try { return execSync('git rev-parse --short HEAD').toString().trim() } catch { return 'dev' } })()
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
 
@@ -54,7 +48,6 @@ function log(tag, ...args) {
 
 // ----------------------------------------------------------------------
 
-let mainWindow = null
 let tray = null
 let serverProc = null
 let viteProc = null
@@ -107,38 +100,16 @@ function waitForPort(port, maxAttempts = 60) {
   })
 }
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 800,
-    minHeight: 600,
-    title: `Photo Quest ${version} (${revision})`,
-    icon: ICON_PATH,
-    show: false,
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
-  })
-  mainWindow.loadURL(APP_URL)
-  mainWindow.on('page-title-updated', e => { e.preventDefault() })
-  mainWindow.once('ready-to-show', () => { log('electron', 'window ready'); mainWindow.show() })
-  mainWindow.on('close', e => {
-    if (!isQuitting) { e.preventDefault(); mainWindow.hide() }
-  })
-}
-
 function createTray() {
   const img = nativeImage.createFromPath(ICON_PATH)
   tray = new Tray(img.resize({ width: 16, height: 16 }))
   tray.setToolTip('Photo Quest')
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open Photo Quest', click() { mainWindow.show(); mainWindow.focus() } },
+    { label: 'Open Photo Quest', click() { shell.openExternal(APP_URL) } },
     { type: 'separator' },
     { label: 'Quit', click() { isQuitting = true; app.quit() } },
   ]))
-  tray.on('click', () => {
-    if (mainWindow.isVisible()) mainWindow.hide()
-    else { mainWindow.show(); mainWindow.focus() }
-  })
+
 }
 
 app.whenReady().then(async () => {
@@ -188,13 +159,12 @@ app.whenReady().then(async () => {
   }
 
   createTray()
-  createWindow()
 
   if (!isDev) {
     try {
       const { autoUpdater } = await import('electron-updater')
       autoUpdater.on('update-downloaded', () => {
-        dialog.showMessageBox(mainWindow, {
+        dialog.showMessageBox({
           type: 'info',
           title: 'Update ready',
           message: 'A new version of Photo Quest has been downloaded. Restart now to install it?',
@@ -211,8 +181,6 @@ app.whenReady().then(async () => {
     }
   }
 })
-
-app.on('window-all-closed', e => e.preventDefault())
 
 app.on('before-quit', () => {
   isQuitting = true
