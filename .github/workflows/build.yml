@@ -43,6 +43,7 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      actions: read
 
     steps:
       - uses: actions/checkout@v4
@@ -64,14 +65,23 @@ jobs:
         env:
           npm_config_build_from_source: true
 
+      - name: Build web frontend
+        run: pnpm build
+
       - name: Build and publish Electron release
-        run: pnpm electron:build
+        working-directory: packages/electron
+        run: node build.mjs && npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List output
+        run: Get-ChildItem dist-electron/ -Recurse -Name
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: photo-quest-installer
           path: dist-electron/*.exe
+          if-no-files-found: warn
           retention-days: 7
