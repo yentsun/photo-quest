@@ -68,3 +68,10 @@ jobs:
         run: pnpm electron:build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-quest-installer
+          path: dist-electron/*.exe
+          retention-days: 7
