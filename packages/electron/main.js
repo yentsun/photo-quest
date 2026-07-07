@@ -106,6 +106,7 @@ function createTray() {
   tray.setToolTip('Photo Quest')
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open Photo Quest', click() { shell.openExternal(APP_URL) } },
+    { label: 'Server Logs', click() { spawn(`start "Logs" powershell -NoExit -Command "Get-Content -Path '${LOG_FILE}' -Wait -Tail 30"`, { shell: true, detached: true, stdio: 'ignore' }) } },
     { type: 'separator' },
     { label: 'Quit', click() { isQuitting = true; app.quit() } },
   ]))
