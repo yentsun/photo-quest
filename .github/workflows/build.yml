@@ -68,6 +68,15 @@ jobs:
       - name: Build web frontend
         run: pnpm build
 
+      - name: Generate ICO for installer
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $bmp = New-Object System.Drawing.Bitmap('packages/electron/assets/icon.png')
+          $ico = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+          $fs = [System.IO.File]::Create('packages/electron/assets/icon.ico')
+          $ico.Save($fs)
+          $fs.Close()
+
       - name: Build and publish Electron release
         working-directory: packages/electron
         run: node build.mjs && npx electron-builder --publish always
