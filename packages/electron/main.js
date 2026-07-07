@@ -124,9 +124,9 @@ function checkForUpdates() {
     _autoUpdater.checkForUpdates()
   } else {
     dialog.showMessageBox({
-      type: 'info',
+      type: 'error',
       title: 'Photo Quest',
-      message: 'Update checks are only available in the installed version.',
+      message: 'Update checker failed to initialise — reinstalling the app may help.',
       buttons: ['OK'],
     })
   }
@@ -195,26 +195,26 @@ app.whenReady().then(async () => {
 
   createTray()
 
-  if (!isDev) {
-    try {
-      const { autoUpdater } = await import('electron-updater')
-      _autoUpdater = autoUpdater
-      autoUpdater.on('update-downloaded', () => {
-        dialog.showMessageBox({
-          type: 'info',
-          title: 'Update ready',
-          message: 'A new version of Photo Quest has been downloaded. Restart now to install it?',
-          buttons: ['Restart', 'Later'],
-          defaultId: 0,
-        }).then(({ response }) => {
-          if (response === 0) { isQuitting = true; autoUpdater.quitAndInstall() }
-        })
+  try {
+    const { autoUpdater } = await import('electron-updater')
+    _autoUpdater = autoUpdater
+    autoUpdater.on('update-downloaded', () => {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update ready',
+        message: 'A new version of Photo Quest has been downloaded. Restart now to install it?',
+        buttons: ['Restart', 'Later'],
+        defaultId: 0,
+      }).then(({ response }) => {
+        if (response === 0) { isQuitting = true; autoUpdater.quitAndInstall() }
       })
+    })
+    if (!isDev) {
       autoUpdater.checkForUpdates()
       setInterval(() => autoUpdater.checkForUpdates(), 60 * 60 * 1000)
-    } catch (err) {
-      log('updater', `error: ${err.message}`)
     }
+  } catch (err) {
+    log('updater', `error: ${err.message}`)
   }
 })
 
