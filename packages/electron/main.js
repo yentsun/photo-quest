@@ -68,7 +68,7 @@ function startProcess(script, dir) {
   const proc = utilityProcess.fork(path.join(dir, script), [], {
     cwd: dir,
     stdio: 'pipe',
-    env: {
+      env: {
       ...process.env,
       NODE_OPTIONS: '--experimental-sqlite',
       FFMPEG_BIN: path.join(binDir, 'ffmpeg.exe'),
