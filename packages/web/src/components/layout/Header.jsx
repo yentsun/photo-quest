@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { clientRoutes } from '@photo-quest/shared';
 import { fetchNetworkInfo, pickLibraryFile, connectLibrary } from '../../utils/api.js';
 import { Button, Icon, Modal } from '../ui/index.js';
+import { version } from '../../../package.json';
 
 export default function Header({ collapsed, onToggle }) {
   const [networkUrl, setNetworkUrl] = useState(null);
@@ -62,6 +63,7 @@ export default function Header({ collapsed, onToggle }) {
             <img src="/favicon.png" alt="" />
             <span className="nav-label">Photo Quest</span>
           </Link>
+          <span className="sidebar-version">{version}</span>
         </div>
 
         <nav className="sidebar-nav">
