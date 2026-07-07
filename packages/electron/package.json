@@ -28,7 +28,11 @@
     "files": [
       "main.js",
       "revision.txt",
-      "!node_modules"
+      "!node_modules/.cache",
+      "!node_modules/.bin",
+      "!node_modules/electron",
+      "!node_modules/electron-builder",
+      "!node_modules/esbuild"
     ],
     "extraResources": [
       {
