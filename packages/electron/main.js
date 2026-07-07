@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged
+const version = app.getVersion()
+
+
+
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json')
 
@@ -52,6 +56,7 @@ let tray = null
 let serverProc = null
 let viteProc = null
 let isQuitting = false
+let _autoUpdater = null
 
 function startProcess(script, dir) {
   log('electron', `starting ${script} in ${dir}`)
@@ -100,6 +105,33 @@ function waitForPort(port, maxAttempts = 60) {
   })
 }
 
+function showAbout() {
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'About Photo Quest',
+    message: `Photo Quest v${version}`,
+    detail: `Electron ${process.versions.electron}\nNode ${process.versions.node}\nChrome ${process.versions.chrome}`,
+    icon: nativeImage.createFromPath(ICON_PATH),
+    buttons: ['GitHub', 'OK'],
+    defaultId: 1,
+  }).then(({ response }) => {
+    if (response === 0) shell.openExternal('https://github.com/yentsun/photo-quest')
+  })
+}
+
+function checkForUpdates() {
+  if (_autoUpdater) {
+    _autoUpdater.checkForUpdates()
+  } else {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Photo Quest',
+      message: 'Update checks are only available in the installed version.',
+      buttons: ['OK'],
+    })
+  }
+}
+
 function createTray() {
   const img = nativeImage.createFromPath(ICON_PATH)
   tray = new Tray(img.resize({ width: 16, height: 16 }))
@@ -107,6 +139,8 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open Photo Quest', click() { shell.openExternal(APP_URL) } },
     { label: 'Server Logs', click() { spawn(`start "Logs" powershell -NoExit -Command "Get-Content -Path '${LOG_FILE}' -Wait -Tail 30"`, { shell: true, detached: true, stdio: 'ignore' }) } },
+    { label: 'About', click() { showAbout() } },
+    { label: 'Check for Updates', click() { checkForUpdates() } },
     { type: 'separator' },
     { label: 'Quit', click() { isQuitting = true; app.quit() } },
   ]))
@@ -164,6 +198,7 @@ app.whenReady().then(async () => {
   if (!isDev) {
     try {
       const { autoUpdater } = await import('electron-updater')
+      _autoUpdater = autoUpdater
       autoUpdater.on('update-downloaded', () => {
         dialog.showMessageBox({
           type: 'info',
