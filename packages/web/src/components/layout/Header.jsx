@@ -61,7 +61,10 @@ export default function Header({ collapsed, onToggle }) {
         <div className="sidebar-logo">
           <Link to={clientRoutes.dashboard} title={collapsed ? 'Photo Quest' : undefined}>
             <img src="/favicon.png" alt="" />
-            <span className="nav-label">Photo Quest</span>
+            <span className="sidebar-title-group">
+              <span className="nav-label">Photo Quest</span>
+              <span className="nav-label version-label">v{import.meta.env.VITE_APP_VERSION}</span>
+            </span>
           </Link>
           <span className="sidebar-version">{version}</span>
         </div>

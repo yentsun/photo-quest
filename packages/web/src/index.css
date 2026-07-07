@@ -146,11 +146,16 @@ body {
 .sidebar-logo a:hover { color: var(--sol-accent); }
 .sidebar-logo img { width: 28px; height: 28px; flex-shrink: 0; }
 
-.sidebar-version {
-  font-size: 10px;
-  color: var(--sol-text-mut);
-  line-height: 1;
-  margin-left: auto;
+.sidebar-title-group {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.version-label {
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--sol-text-muted);
 }
 
 .sidebar-nav {
