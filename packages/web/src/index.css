@@ -129,6 +129,9 @@ body {
 .sidebar-logo {
   padding: 14px 16px;
   border-bottom: 1px solid var(--sol-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .sidebar-logo a {
@@ -142,6 +145,13 @@ body {
 }
 .sidebar-logo a:hover { color: var(--sol-accent); }
 .sidebar-logo img { width: 28px; height: 28px; flex-shrink: 0; }
+
+.sidebar-version {
+  font-size: 10px;
+  color: var(--sol-text-mut);
+  line-height: 1;
+  margin-left: auto;
+}
 
 .sidebar-nav {
   flex: 1;
