@@ -1,6 +1,6 @@
 {
   "name": "@photo-quest/electron",
-  "version": "0.3.10",
+  "version": "0.3.11",
   "private": true,
   "type": "module",
   "main": "main.js",
@@ -57,7 +57,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.png"
     },
     "nsis": {
       "oneClick": false,
