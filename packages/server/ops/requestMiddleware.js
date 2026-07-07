@@ -17,7 +17,6 @@ import { fileURLToPath } from 'node:url';
 import config from '@photo-quest/shared/config.js';
 import { json } from '../src/http.js';
 import { destroyAllSseClients } from '../src/sse.js';
-import { startTray, stopTray } from '../src/tray.js';
 
 /**
  * Get the local network IP address.
@@ -141,12 +140,10 @@ export default async function () {
     const webPort = config.webappPort;
     logger.info(`Open app → http://localhost:${webPort}`);
     logger.info(`Network  → http://${localIP}:${webPort}`);
-    startTray();
   });
 
   function shutdown() {
     logger.info('Shutting down server...');
-    stopTray();
     destroyAllSseClients();
     server.close(() => logger.info('Server closed.'));
   }
