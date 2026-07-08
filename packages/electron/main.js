@@ -196,8 +196,37 @@ app.whenReady().then(async () => {
   createTray()
 
   try {
-    const { autoUpdater } = await import('electron-updater')
+    const updaterModule = await import('electron-updater')
+    const { autoUpdater } = updaterModule.default || updaterModule
     _autoUpdater = autoUpdater
+    autoUpdater.forceDevUpdateConfig = true
+    autoUpdater.on('update-not-available', () => {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'No update available',
+        message: 'You are running the latest version of Photo Quest.',
+        buttons: ['OK'],
+      })
+    })
+    autoUpdater.on('update-available', (info) => {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update available',
+        message: `Photo Quest v${info.version} is available. Downloading now…`,
+        buttons: ['OK'],
+      })
+    })
+    autoUpdater.on('error', (err) => {
+      dialog.showMessageBox({
+        type: 'error',
+        title: 'Update error',
+        message: err.message,
+        buttons: ['OK'],
+      })
+    })
+    autoUpdater.on('download-progress', (info) => {
+      log('updater', `download progress: ${Math.round(info.percent)}%`)
+    })
     autoUpdater.on('update-downloaded', () => {
       dialog.showMessageBox({
         type: 'info',
@@ -209,10 +238,6 @@ app.whenReady().then(async () => {
         if (response === 0) { isQuitting = true; autoUpdater.quitAndInstall() }
       })
     })
-    if (!isDev) {
-      autoUpdater.checkForUpdates()
-      setInterval(() => autoUpdater.checkForUpdates(), 60 * 60 * 1000)
-    }
   } catch (err) {
     log('updater', `error: ${err.message}`)
   }
