@@ -1,0 +1,4 @@
+provider: github
+owner: yentsun
+repo: photo-quest
+releaseType: release
