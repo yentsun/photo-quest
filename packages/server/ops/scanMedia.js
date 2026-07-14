@@ -26,7 +26,8 @@ import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, MEDIA_TYPE, MEDIA_STATUS, SCAN_
 import { broadcastSse } from '../src/sse.js';
 import { DB_PATH } from '../src/db.js';
 
-const WORKER_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/scanWorker.js');
+const WORKER_PATH = process.env.SCAN_WORKER_PATH
+  || path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/scanWorker.js');
 
 /**
  * Compute a content hash for a file.

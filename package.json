@@ -1,6 +1,6 @@
 {
   "name": "photo-quest",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel --filter @photo-quest/web --filter @photo-quest/server dev",

@@ -84,13 +84,14 @@ function startProcess(script, dir) {
     cwd: dir,
     stdio: 'pipe',
       env: {
-      ...process.env,
-      NODE_OPTIONS: '--experimental-sqlite',
-      FFMPEG_BIN: path.join(binDir, 'ffmpeg.exe'),
-      FFPROBE_BIN: path.join(binDir, 'ffprobe.exe'),
-      DB_PATH: dbPath,
-      SETTINGS_PATH,
-    },
+        ...process.env,
+        NODE_OPTIONS: '--experimental-sqlite',
+        SCAN_WORKER_PATH: path.join(dir, 'src', 'scanWorker.js'),
+        FFMPEG_BIN: path.join(binDir, 'ffmpeg.exe'),
+        FFPROBE_BIN: path.join(binDir, 'ffprobe.exe'),
+        DB_PATH: dbPath,
+        SETTINGS_PATH,
+      },
   })
   return proc
 }
