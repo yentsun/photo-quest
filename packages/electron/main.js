@@ -58,6 +58,16 @@ let viteProc = null
 let isQuitting = false
 let _autoUpdater = null
 
+const trayIcon = nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16 })
+const trayMenu = Menu.buildFromTemplate([
+  { label: 'Open Photo Quest', click() { shell.openExternal(APP_URL) } },
+  { label: 'Server Logs', click() { spawn(`start "Logs" powershell -NoExit -Command "Get-Content -Path '${LOG_FILE}' -Wait -Tail 30"`, { shell: true, detached: true, stdio: 'ignore' }) } },
+  { label: 'About', click() { showAbout() } },
+  { label: 'Check for Updates', click() { checkForUpdates() } },
+  { type: 'separator' },
+  { label: 'Quit', click() { isQuitting = true; app.quit() } },
+])
+
 function startProcess(script, dir) {
   log('electron', `starting ${script} in ${dir}`)
   if (isDev) {
@@ -124,27 +134,19 @@ function checkForUpdates() {
     _autoUpdater.checkForUpdates()
   } else {
     dialog.showMessageBox({
-      type: 'info',
+      type: 'error',
       title: 'Photo Quest',
-      message: 'Update checks are only available in the installed version.',
+      message: 'Update checker failed to initialise — reinstalling the app may help.',
       buttons: ['OK'],
     })
   }
 }
 
 function createTray() {
-  const img = nativeImage.createFromPath(ICON_PATH)
-  tray = new Tray(img.resize({ width: 16, height: 16 }))
-  tray.setToolTip('Photo Quest')
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open Photo Quest', click() { shell.openExternal(APP_URL) } },
-    { label: 'Server Logs', click() { spawn(`start "Logs" powershell -NoExit -Command "Get-Content -Path '${LOG_FILE}' -Wait -Tail 30"`, { shell: true, detached: true, stdio: 'ignore' }) } },
-    { label: 'About', click() { showAbout() } },
-    { label: 'Check for Updates', click() { checkForUpdates() } },
-    { type: 'separator' },
-    { label: 'Quit', click() { isQuitting = true; app.quit() } },
-  ]))
-
+  tray = new Tray(trayIcon)
+  tray.setToolTip(`Photo Quest v${version}`)
+  tray.on('right-click', () => { tray.popUpContextMenu(trayMenu) })
+  tray.on('click', () => { shell.openExternal(APP_URL) })
 }
 
 app.whenReady().then(async () => {
@@ -193,29 +195,60 @@ app.whenReady().then(async () => {
     return
   }
 
-  createTray()
-
-  if (!isDev) {
-    try {
-      const { autoUpdater } = await import('electron-updater')
-      _autoUpdater = autoUpdater
-      autoUpdater.on('update-downloaded', () => {
-        dialog.showMessageBox({
-          type: 'info',
-          title: 'Update ready',
-          message: 'A new version of Photo Quest has been downloaded. Restart now to install it?',
-          buttons: ['Restart', 'Later'],
-          defaultId: 0,
-        }).then(({ response }) => {
-          if (response === 0) { isQuitting = true; autoUpdater.quitAndInstall() }
-        })
-      })
-      autoUpdater.checkForUpdates()
-      setInterval(() => autoUpdater.checkForUpdates(), 60 * 60 * 1000)
-    } catch (err) {
-      log('updater', `error: ${err.message}`)
+  try {
+    const updaterModule = await import('electron-updater')
+    const { autoUpdater } = updaterModule.default || updaterModule
+    _autoUpdater = autoUpdater
+    autoUpdater.forceDevUpdateConfig = true
+    autoUpdater.logger = {
+      info(msg) { log('updater', msg) },
+      warn(msg) { if (!msg.includes('duplicated in blockmap')) log('updater', `warn: ${msg}`) },
+      error(msg) { log('updater', `error: ${msg}`) },
+      debug(msg) {},
     }
+    autoUpdater.on('update-not-available', () => {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'No update available',
+        message: 'You are running the latest version of Photo Quest.',
+        buttons: ['OK'],
+      })
+    })
+    autoUpdater.on('update-available', (info) => {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update available',
+        message: `Photo Quest v${info.version} is available. Downloading now…`,
+        buttons: ['OK'],
+      })
+    })
+    autoUpdater.on('error', (err) => {
+      dialog.showMessageBox({
+        type: 'error',
+        title: 'Update error',
+        message: err.message,
+        buttons: ['OK'],
+      })
+    })
+    autoUpdater.on('download-progress', (info) => {
+      log('updater', `download progress: ${Math.round(info.percent)}%`)
+    })
+    autoUpdater.on('update-downloaded', () => {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update ready',
+        message: 'A new version of Photo Quest has been downloaded. Restart now to install it?',
+        buttons: ['Restart', 'Later'],
+        defaultId: 0,
+      }).then(({ response }) => {
+        if (response === 0) { isQuitting = true; autoUpdater.quitAndInstall() }
+      })
+    })
+  } catch (err) {
+    log('updater', `error: ${err.message}`)
   }
+
+  createTray()
 })
 
 app.on('before-quit', () => {
