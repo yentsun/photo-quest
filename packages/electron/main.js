@@ -28,8 +28,8 @@ const ICON_PATH = isDev
 const rootDir = isDev ? path.join(__dirname, '..', '..') : process.resourcesPath
 let _cfg = {}
 try { _cfg = JSON.parse(readFileSync(path.join(rootDir, 'config.json'), 'utf8')) } catch {}
-const serverPort = _cfg.serverPort ?? 3000
-const webappPort = _cfg.webappPort ?? 5000
+const serverPort = _cfg.serverPort ?? 7837
+const webappPort = _cfg.webappPort ?? 7838
 const APP_URL = isDev ? `http://127.0.0.1:${webappPort}` : `http://127.0.0.1:${serverPort}`
 /* In dev, Electron spawns both the Vite dev server and the API server itself.
  * Vite comes up almost instantly; the API server takes longer (SQLite init,
