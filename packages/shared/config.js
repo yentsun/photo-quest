@@ -13,8 +13,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
 
 const DEFAULTS = {
-  serverPort: 3000,
-  webappPort: 5000,
+  serverPort: 7837,
+  webappPort: 7838,
 };
 
 let config;
