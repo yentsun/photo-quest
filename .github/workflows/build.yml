@@ -48,6 +48,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify tag matches package versions
+        run: |
+          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          $files = 'package.json', 'packages/web/package.json', 'packages/electron/package.json', 'packages/server/package.json', 'packages/shared/package.json'
+          $bad = $files | Where-Object { (Get-Content $_ -Raw | ConvertFrom-Json).version -ne $tag }
+          if ($bad) { Write-Error "Version mismatch with tag v${tag}: $($bad -join ', ')" }
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10
