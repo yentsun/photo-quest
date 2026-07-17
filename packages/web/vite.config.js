@@ -16,7 +16,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 import config from '@photo-quest/shared/config.js';
 import { readFileSync } from 'node:fs';
 
-const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+/* Single source of truth for the displayed app version: the root package.json
+ * (kept in lockstep with the electron package version used by the updater). */
+const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 
 const API_TARGET = `http://127.0.0.1:${config.serverPort}`;
 
