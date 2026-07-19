@@ -77,8 +77,14 @@ export default function MediaPage() {
 
   useEffect(() => {
     if (!inSlideshow) return;
-    setItem(slideshow.current);
+    const currentItem = slideshow.current;
+    setItem(currentItem);
     setLoading(false);
+    if (currentItem?.folder && folders.length > 0) {
+      setFolder(folders.find(f => f.path === currentItem.folder) || null);
+    } else {
+      setFolder(null);
+    }
   }, [inSlideshow, slideshow.current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
