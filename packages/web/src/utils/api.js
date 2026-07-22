@@ -1,11 +1,11 @@
 /**
  * @file API fetch wrappers for server endpoints.
  *
- * Read functions (fetchMedia, fetchMediaById, fetchFolders) follow a
- * network-first / IDB-fallback pattern:
- *   1. Try the server.
- *   2. On success — write results to IndexedDB and return them.
- *   3. On failure — return whatever IDB has from a previous load.
+ * Read functions (fetchMedia, fetchMediaById, fetchFolders) follow an
+ * IDB-first / background-refresh pattern:
+ *   1. Return whatever IDB has immediately (instant UI).
+ *   2. Fire a server request in the background to refresh the cache.
+ *   3. On network/server error the IDB data is still shown.
  *
  * Write operations (like, delete, scan, …) stay server-only; they have no
  * meaningful offline equivalent.
@@ -76,16 +76,35 @@ export function getLastMediaItem(id) { return _mediaCache.get(id) ?? null; }
  */
 export function getLastFolderMedia(folderPath) { return _folderMediaCache.get(folderPath) ?? null; }
 
-/**
- * Fetch media items — network first, IDB fallback.
- *
- * On a successful server response the results are upserted into IndexedDB so
- * future offline loads can show the same data.  On any network/server error
- * the IDB snapshot is returned instead (applying the same filters in JS).
- *
- * @param {{ limit?: number, offset?: number, folder?: string, subtree?: boolean, liked?: boolean, random?: boolean }} [opts]
- * @returns {Promise<{ items: Array, total: number }>}
- */
+// ---------------------------------------------------------------------------
+// Internal server fetch helpers
+// ---------------------------------------------------------------------------
+
+async function _fetchMediaFromServer(url, opts) {
+  const response = await fetch(url, opts.random ? { cache: 'no-store' } : undefined);
+  if (!response.ok) throw new Error('Failed to fetch media');
+  const data = await response.json();
+  for (const item of data.items) { parseTags(item); _mediaCache.set(item.id, item); }
+  if (opts.folder != null && !opts.random && !opts.liked && !opts.search && (!opts.offset || opts.offset === 0)) {
+    _folderMediaCache.set(opts.folder, { items: data.items, total: data.total });
+  }
+  idbPutManyMedia(data.items).catch(err => console.warn('[idb] putManyMedia failed:', err));
+  return data;
+}
+
+async function _fetchFoldersFromServer() {
+  const response = await fetch(apiRoutes.folders);
+  if (!response.ok) throw new Error('Failed to fetch folders');
+  const folders = await response.json();
+  _foldersCache = folders;
+  idbPutManyFolders(folders).catch(err => console.warn('[idb] putManyFolders failed:', err));
+  return folders;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 export async function fetchTags() {
   const response = await fetch(apiRoutes.tags);
   if (!response.ok) throw new Error('Failed to fetch tags');
@@ -104,38 +123,59 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   if (search != null) url.searchParams.set('search', search);
   if (tag != null) url.searchParams.set('tag', tag);
 
+  const opts = { limit, offset, folder, subtree, liked, random, sort, search, tag };
+
+  // IDB-first: return cached data immediately if available
+  let idbData = null;
   try {
-    const response = await fetch(url, random ? { cache: 'no-store' } : undefined);
-    if (!response.ok) throw new Error('Failed to fetch media');
-    const data = await response.json();
-    /* Warm the sync cache so return visits resolve instantly. */
-    for (const item of data.items) { parseTags(item); _mediaCache.set(item.id, item); }
-    if (folder != null && !random && !liked && !search && (!offset || offset === 0)) {
-      _folderMediaCache.set(folder, { items: data.items, total: data.total });
-    }
-    /* Write to IDB in the background — don't block the caller. */
-    idbPutManyMedia(data.items).catch(err => console.warn('[idb] putManyMedia failed:', err));
-    return data;
+    idbData = await idbGetMedia(opts);
+  } catch (e) { /* ignore */ }
+
+  if (idbData && idbData.items.length > 0) {
+    // Refresh from server in background without blocking the UI
+    _fetchMediaFromServer(url, opts).catch(() => {});
+    return idbData;
+  }
+
+  // No IDB data — wait for the server
+  try {
+    return await _fetchMediaFromServer(url, opts);
   } catch (err) {
     console.warn('[api] fetchMedia falling back to IDB:', err.message);
-    return idbGetMedia({ folder, subtree, liked, limit, offset, sort });
+    return idbGetMedia(opts);
   }
 }
 
-/**
- * Fetch a single media item by ID — network first, IDB fallback.
- *
- * @param {number} id
- * @returns {Promise<Object>}
- */
 export async function fetchMediaById(id) {
+  // IDB-first
+  let idbItem = null;
+  try {
+    idbItem = await idbGetMediaById(Number(id));
+  } catch (e) { /* ignore */ }
+
+  if (idbItem) {
+    parseTags(idbItem);
+    _mediaCache.set(idbItem.id, idbItem);
+    // Refresh from server in background
+    fetch(`${apiRoutes.media}/${id}`, { headers: { 'Accept': 'application/json' } })
+      .then(async r => {
+        if (!r.ok) return;
+        const item = parseTags(await r.json());
+        _mediaCache.set(item.id, item);
+        idbPutMedia(item).catch(() => {});
+      })
+      .catch(() => {});
+    return idbItem;
+  }
+
+  // No IDB data — wait for the server
   try {
     const response = await fetch(`${apiRoutes.media}/${id}`, {
       headers: { 'Accept': 'application/json' },
     });
     if (!response.ok) throw new Error('Failed to fetch media item');
     const item = parseTags(await response.json());
-    _mediaCache.set(item.id, item);  // warm sync cache
+    _mediaCache.set(item.id, item);
     idbPutMedia(item).catch(err => console.warn('[idb] putMedia failed:', err));
     return item;
   } catch (err) {
@@ -146,13 +186,6 @@ export async function fetchMediaById(id) {
   }
 }
 
-/**
- * Rename a media item.
- *
- * @param {number} id
- * @param {string} title
- * @returns {Promise<Object>} Updated media object
- */
 export async function requestTranscode(id) {
   await fetch(`/media/${id}/transcode`, { method: 'POST' });
 }
@@ -179,15 +212,10 @@ export async function renameMedia(id, title) {
   if (!response.ok) throw new Error('Failed to rename media');
   const item = await response.json();
   _mediaCache.set(item.id, item);
+  idbPutMedia(item).catch(() => {});
   return item;
 }
 
-/**
- * Like a media item (increment like count).
- *
- * @param {number} id - Media ID
- * @returns {Promise<Object>} Updated media object
- */
 export async function likeMedia(id) {
   const response = await fetch(`/media/${id}/like`, {
     method: 'PATCH',
@@ -195,15 +223,12 @@ export async function likeMedia(id) {
   if (!response.ok) {
     throw new Error('Failed to like media');
   }
-  return response.json();
+  const item = await response.json();
+  _mediaCache.set(item.id, item);
+  idbPutMedia(item).catch(() => {});
+  return item;
 }
 
-/**
- * Delete a media item from library and disk.
- *
- * @param {number} id - Media ID
- * @returns {Promise<Object>}
- */
 export async function deleteMedia(id) {
   const response = await fetch(`/media/${id}`, {
     method: 'DELETE',
@@ -211,16 +236,11 @@ export async function deleteMedia(id) {
   if (!response.ok) {
     throw new Error('Failed to delete media');
   }
-  return response.json();
+  const result = await response.json();
+  _mediaCache.delete(id);
+  return result;
 }
 
-/**
- * Scan a directory for media files.
- * Returns immediately with { scanId, total }. Progress is reported via SSE.
- *
- * @param {string} path - Absolute path to scan
- * @returns {Promise<{scanId: number, total: number}>}
- */
 export async function scanMedia(path) {
   const response = await fetch(apiRoutes.mediaScan, {
     method: 'POST',
@@ -233,12 +253,6 @@ export async function scanMedia(path) {
   return response.json();
 }
 
-/**
- * Cancel an in-progress scan/import.
- *
- * @param {number} scanId - Scan ID to cancel
- * @returns {Promise<{scanId: number, status: string}>}
- */
 export async function cancelScan(scanId) {
   const response = await fetch(`/scans/${scanId}/cancel`, {
     method: 'POST',
@@ -250,52 +264,23 @@ export async function cancelScan(scanId) {
   return response.json();
 }
 
-/**
- * Get the URL for streaming a video.
- *
- * @param {number} id - Media ID
- * @returns {string} Stream URL
- */
 export function getStreamUrl(id) {
   return `/stream/${id}`;
 }
 
-/**
- * Get the URL for an image.
- *
- * @param {number} id - Media ID
- * @returns {string} Image URL
- */
 export function getImageUrl(id) {
   return `/image/${id}`;
 }
 
-/**
- * Get the thumbnail URL for any media item (first frame JPEG for videos).
- *
- * @param {number} id - Media ID
- * @returns {string} Thumbnail URL
- */
 export function getThumbUrl(id) {
   return `/thumb/${id}`;
 }
 
-/**
- * Get the URL for displaying media (image or video).
- *
- * @param {Object} media - Media object with id, path, type
- * @returns {string} URL for the media
- */
 export function getMediaUrl(media) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
   return isImage ? getImageUrl(media.id) : getStreamUrl(media.id);
 }
 
-/**
- * Fetch network info (local and network URLs).
- *
- * @returns {Promise<{local: string, network: string|null, ip: string|null, port: number}>}
- */
 export async function fetchNetworkInfo() {
   const response = await fetch(apiRoutes.network);
   if (!response.ok) {
@@ -304,35 +289,35 @@ export async function fetchNetworkInfo() {
   return response.json();
 }
 
-/**
- * Fetch all folders with hierarchy metadata — network first, IDB fallback.
- *
- * The server computes parentId, subtreeCounts, and previewMediaId; those
- * computed fields are stored as-is so offline reads return identical shapes.
- *
- * @returns {Promise<Object[]>}
- */
 export async function fetchFolders() {
+  // IDB-first: return cached folders immediately if available
+  let idbFolders = null;
   try {
-    const response = await fetch(apiRoutes.folders);
-    if (!response.ok) throw new Error('Failed to fetch folders');
-    const folders = await response.json();
-    _foldersCache = folders;  // warm sync cache
-    idbPutManyFolders(folders).catch(err => console.warn('[idb] putManyFolders failed:', err));
-    return folders;
+    idbFolders = await idbGetFolders();
+  } catch (e) { /* ignore */ }
+
+  if (idbFolders && idbFolders.length > 0) {
+    _foldersCache = idbFolders;
+    // Refresh from server in background without blocking the UI
+    _fetchFoldersFromServer().catch(() => {});
+    return idbFolders;
+  }
+
+  // No IDB data — wait for the server
+  try {
+    return await _fetchFoldersFromServer();
   } catch (err) {
     console.warn('[api] fetchFolders falling back to IDB:', err.message);
     return idbGetFolders();
   }
 }
 
-/**
- * Remove a folder from the library by ID.
- * Records are hidden (not deleted) so likes are preserved if re-added.
- *
- * @param {number} folderId - ID of the folder to remove
- * @returns {Promise<{folder: string, hidden: number}>}
- */
+export async function fetchFoldersForParent(parentId) {
+  const response = await fetch(`/folders?parent=${parentId}`);
+  if (!response.ok) throw new Error('Failed to fetch folder scope');
+  return response.json();
+}
+
 export async function removeFolder(folderId) {
   const response = await fetch(`/media/folder/${folderId}`, {
     method: 'DELETE',
@@ -353,20 +338,12 @@ export async function renameFolder(folderId, name) {
   return response.json();
 }
 
-/**
- * Open native file picker and return a selected .db path.
- * @returns {Promise<{path: string}|{cancelled: true}>}
- */
 export async function pickLibraryFile() {
   const response = await fetch(apiRoutes.libraryPick, { method: 'POST' });
   if (!response.ok) throw new Error('Could not open file picker');
   return response.json();
 }
 
-/**
- * Connect to an existing library file. Triggers app relaunch.
- * @param {string} libraryPath
- */
 export async function connectLibrary(libraryPath) {
   const response = await fetch(apiRoutes.libraryConnect, {
     method: 'POST',
@@ -380,11 +357,6 @@ export async function connectLibrary(libraryPath) {
   return response.json();
 }
 
-/**
- * Download a media file to the user's device.
- *
- * @param {Object} media - Media object with id, title, type
- */
 export async function downloadMedia(media) {
   try {
     const url = getMediaUrl(media);

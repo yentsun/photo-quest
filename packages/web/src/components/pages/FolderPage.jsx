@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { fetchFolders, fetchMedia, getLastFolders, getLastFolderMedia, scanMedia as scanMediaApi, renameFolder } from '../../utils/api.js';
+import { fetchMedia, getLastFolders, getLastFolderMedia, scanMedia as scanMediaApi, renameFolder, fetchFoldersForParent } from '../../utils/api.js';
 import { Select } from '../ui/index.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
 import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
@@ -192,7 +192,7 @@ export default function FolderPage() {
     }
     const load = async () => {
       try {
-        const allFolders = await fetchFolders();
+        const allFolders = await fetchFoldersForParent(folderId);
         if (cancelled) return;
         setFolders(allFolders);
         const found = allFolders.find(f => f.id === folderId);
