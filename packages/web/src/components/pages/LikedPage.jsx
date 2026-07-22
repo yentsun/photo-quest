@@ -33,11 +33,12 @@ export default function LikedPage() {
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  const page = Math.max(0, parseInt(searchParams.get('page'), 10) || 0);
+  const paramPage = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
+  const page = paramPage - 1;
 
   const goToPage = useCallback((p) => {
     if (p === 0) { setSearchParams({}, { replace: true }); return; }
-    setSearchParams({ page: String(p) });
+    setSearchParams({ page: String(p + 1) });
   }, [setSearchParams]);
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
