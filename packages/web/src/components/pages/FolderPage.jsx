@@ -19,7 +19,19 @@ function byName(a, b) {
 }
 
 function applySort(items, sort) {
-  const result = sort === 'filename' ? items.slice().sort(byName) : items.slice();
+  let result;
+  if (sort === 'filename') {
+    result = items.slice().sort(byName);
+  } else {
+    result = items.slice().sort((a, b) => {
+      const aDate = a.date_taken || a.created_at || '';
+      const bDate = b.date_taken || b.created_at || '';
+      const dateCompare = bDate.localeCompare(aDate);
+      if (dateCompare !== 0) return dateCompare;
+      const pathA = a.path || '', pathB = b.path || '';
+      return pathB.localeCompare(pathA);
+    });
+  }
   const coverIdx = result.findIndex(m => /cover/i.test(m.title));
   if (coverIdx > 0) result.unshift(result.splice(coverIdx, 1)[0]);
   return result;
@@ -44,6 +56,10 @@ function getFolderName(f) {
 
 function byFolderName(a, b) {
   return getFolderName(a).localeCompare(getFolderName(b), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function byFolderDate(a, b) {
+  return b.id - a.id;
 }
 
 export default function FolderPage() {
@@ -100,8 +116,31 @@ export default function FolderPage() {
   const contentReadyForIdRef = useRef(folderId);
   const serverLoadedRef = useRef(false);
   const folderRef = useRef(_pc?.data.folders?.find(f => f.id === folderId) ?? _sc0Folder);
+  const prevFolderId = useRef(folderId);
+  const prevSignal = useRef(signal);
+  const prevSearch = useRef(debouncedSearch);
+  const prevSort = useRef(sort);
+  const directMediaRef = useRef(directMedia);
+  directMediaRef.current = directMedia;
 
   useEffect(() => {
+    const onlySortChanged = prevSort.current !== sort
+      && prevFolderId.current === folderId
+      && prevSignal.current === signal
+      && prevSearch.current === debouncedSearch;
+    prevFolderId.current = folderId;
+    prevSignal.current = signal;
+    prevSearch.current = debouncedSearch;
+    prevSort.current = sort;
+
+    if (onlySortChanged && directMediaRef.current.length > 0) {
+      const sorted = applySort(directMediaRef.current, sort);
+      setDirectMedia(sorted);
+      setPageCache(CACHE_KEY, { folders, directMedia: sorted }, signal);
+      setPage(0);
+      return;
+    }
+
     let cancelled = false;
     serverLoadedRef.current = false;
     setLoadingMessage('Fetching folder list…');
@@ -140,7 +179,7 @@ export default function FolderPage() {
         if (cancelled) return;
         const found = cachedFolders.find(f => f.id === folderId);
         if (!found) return;
-        const { items } = await idbGetMedia({ folder: found.path, limit: FETCH_LIMIT, sort: 'filename' });
+        const { items } = await idbGetMedia({ folder: found.path, limit: FETCH_LIMIT, sort: sortRef.current });
         if (cancelled || items.length === 0 || scMedia || serverLoadedRef.current) return;
         setFolders(cachedFolders);
         folderRef.current = found;
@@ -161,7 +200,8 @@ export default function FolderPage() {
           folderRef.current = found;
           const folderName = found.path.split(/[/\\]/).filter(Boolean).pop() || 'folder';
           setLoadingMessage(`'${folderName}'…`);
-          const fetchOpts = { folder: found.path, limit: FETCH_LIMIT, offset: 0, ...(sort && { sort }) };
+          const fetchOpts = { folder: found.path, limit: FETCH_LIMIT, offset: 0 };
+          if (sort != null && sort !== '') fetchOpts.sort = sort;
           if (debouncedSearch) fetchOpts.search = debouncedSearch;
           const { items } = await fetchMedia(fetchOpts);
           if (!cancelled) {
@@ -181,7 +221,7 @@ export default function FolderPage() {
   }, [folderId, signal, debouncedSearch, sort]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
-  const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId).sort(byFolderName), [folders, folderId]);
+  const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId).sort(sort === 'date' ? byFolderDate : byFolderName), [folders, folderId, sort]);
 
   const allItems = useMemo(() => {
     if (debouncedSearch) return directMedia.map(m => ({ kind: 'media', item: m }));
@@ -264,7 +304,7 @@ export default function FolderPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
-  if (loading) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
+  const showPageLoader = loading && !contentReady;
 
   const folderName = folder ? getFolderName(folder) || 'Folder' : 'Folder';
   const subtreeTotal = folder?.subtreeMediaCount || 0;
@@ -372,7 +412,7 @@ export default function FolderPage() {
             {displayItems.map(({ kind, item }) =>
               kind === 'folder'
                 ? <FolderCard key={`f-${item.id}`} folder={item} />
-                : <MediaCard key={`m-${item.id}`} media={item} onClick={m => navigate(`/media/${m.id}`)} onLike={likeMedia} />
+                : <MediaCard key={`m-${item.id}`} media={item} onClick={m => navigate(`/media/${m.id}`, { state: { sort } })} onLike={likeMedia} />
             )}
           </div>
           {totalPages > 1 && (
