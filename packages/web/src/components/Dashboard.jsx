@@ -9,12 +9,16 @@ import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache
 import { idbGetFolders } from '../services/idb.js';
 import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
-import { Button, Icon, Input, Loader, Modal, ProgressBar } from './ui/index.js';
+import { Button, Icon, Input, Loader, Modal, ProgressBar, Select } from './ui/index.js';
 
 function byFolderName(a, b) {
   const nameA = a.path.split(/[/\\]/).pop() || '';
   const nameB = b.path.split(/[/\\]/).pop() || '';
   return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function byFolderDate(a, b) {
+  return b.id - a.id;
 }
 
 function usePathValidation() {
@@ -73,6 +77,8 @@ export default function Dashboard() {
   const [selectedPath, setSelectedPath] = useState(null);
   const [browsing, setBrowsing] = useState(false);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
+
+  const [folderSort, setFolderSort] = useState('name');
 
   const [folders, setFolders] = useState(() => {
     if (isPageCacheValid('dashboard', signal)) return getPageCache('dashboard').data.folders;
@@ -166,7 +172,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  const rootFolders = useMemo(() => folders.filter(f => f.parentId === null).sort(byFolderName), [folders]);
+  const rootFolders = useMemo(() => folders.filter(f => f.parentId === null).sort(folderSort === 'date' ? byFolderDate : byFolderName), [folders, folderSort]);
   const totalMedia = useMemo(
     () => rootFolders.reduce((sum, f) => sum + (f.subtreeMediaCount || 0), 0),
     [rootFolders],
@@ -269,7 +275,7 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) return <div className="page-loader"><Loader message="Fetching your media folders…" /></div>;
+  if (loading && folders.length === 0) return <div className="page-loader"><Loader message="Fetching your media folders…" /></div>;
 
   return (
     <div className="page">
@@ -288,6 +294,17 @@ export default function Dashboard() {
             <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isScanning} title="Rescan folders for new files" icon={<Icon name="refresh" className="icon-sm" />}>
               <span className="sm-show">Refresh</span>
             </Button>
+          )}
+          {rootFolders.length > 0 && (
+            <Select
+              value={folderSort}
+              onChange={e => setFolderSort(e.target.value)}
+              options={[
+                { value: 'name', label: 'Name' },
+                { value: 'date', label: 'Date' },
+              ]}
+              title="Sort order"
+            />
           )}
           <Button variant="ghost" size="sm" onClick={() => setShowAddFolder(true)} disabled={isScanning} icon={<Icon name="folder" className="icon-sm" />}>
             <span className="sm-show">Add Folder</span>
