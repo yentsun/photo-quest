@@ -149,23 +149,24 @@ export async function idbGetMediaById(id) {
  */
 export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort } = {}) {
   const db = await openDB();
-  let items = await getAll(db, 'media');
+  let items;
+
+  if (folder != null && !subtree) {
+    items = await req2p(db.transaction('media', 'readonly').objectStore('media').index('folder').getAll(folder));
+  } else {
+    items = await getAll(db, 'media');
+  }
 
   /* Mirror server's WHERE hidden = 0 */
   items = items.filter(m => m.hidden === 0);
 
-  /* Mirror server's folder / subtree filter */
-  if (folder != null) {
-    if (subtree) {
-      /* Server does: folder = ? OR folder LIKE '.../%' */
-      const prefix = folder.replace(/\\/g, '/') + '/';
-      items = items.filter(m =>
-        m.folder === folder ||
-        (m.folder && m.folder.replace(/\\/g, '/').startsWith(prefix))
-      );
-    } else {
-      items = items.filter(m => m.folder === folder);
-    }
+  /* Mirror server's folder / subtree filter (subtree path is handled in JS). */
+  if (folder != null && subtree) {
+    const prefix = folder.replace(/\\/g, '/') + '/';
+    items = items.filter(m =>
+      m.folder === folder ||
+      (m.folder && m.folder.replace(/\\/g, '/').startsWith(prefix))
+    );
   }
 
   /* Mirror server's liked filter */
@@ -185,7 +186,14 @@ export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort 
   } else if (liked) {
     items.sort((a, b) => b.likes - a.likes);
   } else {
-    items.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    items.sort((a, b) => {
+      const aDate = a.date_taken || a.created_at || '';
+      const bDate = b.date_taken || b.created_at || '';
+      const dateCompare = bDate.localeCompare(aDate);
+      if (dateCompare !== 0) return dateCompare;
+      const pathA = a.path || '', pathB = b.path || '';
+      return pathB.localeCompare(pathA);
+    });
   }
 
   const total = items.length;
