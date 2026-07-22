@@ -60,6 +60,10 @@ export function initDb() {
   db.exec(CREATE_IMPORT_QUEUE_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
 
+  /* Indexes for common query patterns. */
+  db.exec('CREATE INDEX IF NOT EXISTS idx_media_folder ON media(folder)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_media_hidden ON media(hidden)');
+
   /* Run migrations for existing databases. */
   migrateDb();
 
