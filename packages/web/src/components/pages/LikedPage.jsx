@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
@@ -10,7 +10,21 @@ import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, Loader } from '../ui/index.js';
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 30;
+const FETCH_LIMIT = 10000;
+
+function getPageNumbers(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  const set = new Set([0, total - 1, current]);
+  for (let i = Math.max(0, current - 2); i <= Math.min(total - 1, current + 2); i++) set.add(i);
+  const sorted = [...set].sort((a, b) => a - b);
+  const result = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('…');
+    result.push(sorted[i]);
+  }
+  return result;
+}
 
 export default function LikedPage() {
   const navigate = useNavigate();
@@ -18,72 +32,47 @@ export default function LikedPage() {
   const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
+  const [page, setPage] = useState(0);
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage(0); }, [signal]);
 
   const _pc = isPageCacheValid('liked', signal) ? getPageCache('liked') : null;
 
   const [likedMedia, setLikedMedia] = useState(_pc?.data.likedMedia ?? []);
   const [total, setTotal] = useState(_pc?.data.total ?? 0);
   const [loading, setLoading] = useState(!_pc);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const offsetRef = useRef(_pc?.data.offset ?? 0);
-  const totalRef = useRef(_pc?.data.total ?? 0);
-  const loadingMoreRef = useRef(false);
 
   useEffect(() => {
     if (isPageCacheValid('liked', signal)) return;
     let cancelled = false;
-    offsetRef.current = 0;
-    totalRef.current = 0;
 
-    idbGetMedia({ liked: true, limit: PAGE_SIZE })
+    idbGetMedia({ liked: true, limit: FETCH_LIMIT })
       .then(({ items }) => {
         if (!cancelled && items.length > 0 && likedMedia.length === 0) { setLikedMedia(items); setLoading(false); }
       })
       .catch(() => {});
 
-    fetchMedia({ liked: true, limit: PAGE_SIZE, offset: 0 })
+    fetchMedia({ liked: true, limit: FETCH_LIMIT })
       .then(({ items, total: t }) => {
         if (cancelled) return;
-        offsetRef.current = items.length;
-        totalRef.current = t;
         setLikedMedia(items);
         setTotal(t);
         setLoading(false);
-        setPageCache('liked', { likedMedia: items, total: t, offset: items.length }, signal);
+        setPageCache('liked', { likedMedia: items, total: t }, signal);
       })
       .catch(err => { console.error('Failed to fetch liked media:', err); if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
   }, [signal]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleLoadMore = useCallback(async () => {
-    if (loadingMoreRef.current) return;
-    if (offsetRef.current >= totalRef.current) return;
-    loadingMoreRef.current = true;
-    setLoadingMore(true);
-    try {
-      const { items: more } = await fetchMedia({ liked: true, limit: PAGE_SIZE, offset: offsetRef.current });
-      if (more.length > 0) {
-        offsetRef.current += more.length;
-        setLikedMedia(prev => {
-          const existingIds = new Set(prev.map(m => m.id));
-          return [...prev, ...more.filter(m => !existingIds.has(m.id))];
-        });
-      }
-    } catch (err) { console.error('Failed to load more liked media:', err); }
-    finally { loadingMoreRef.current = false; setLoadingMore(false); }
-  }, []);
+  const totalPages = Math.max(1, Math.ceil(likedMedia.length / PAGE_SIZE));
+  const displayItems = useMemo(() => likedMedia.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [likedMedia, page]);
 
   const handleShuffle = () => {
     if (likedMedia.length === 0) return;
     pendingShuffle.current = true;
-    slideshow.start(likedMedia, {
-      order: 'random',
-      total,
-      loadMore: () => fetchMedia({ liked: true, limit: PAGE_SIZE, offset: likedMedia.length }).then(d => d.items),
-    });
+    slideshow.start(likedMedia, { order: 'random', total });
   };
 
   useEffect(() => {
@@ -93,6 +82,14 @@ export default function LikedPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
+  const itemLabel = (() => {
+    if (total === 0) return null;
+    if (totalPages <= 1) return `${total.toLocaleString()} item${total !== 1 ? 's' : ''}`;
+    const start = page * PAGE_SIZE + 1;
+    const end = Math.min((page + 1) * PAGE_SIZE, likedMedia.length);
+    return `${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} items`;
+  })();
+
   if (loading) return <div className="page-loader"><Loader message="Fetching your liked media…" /></div>;
 
   return (
@@ -100,7 +97,7 @@ export default function LikedPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Liked</h1>
-          <p className="page-subtitle">{total} item{total !== 1 ? 's' : ''}</p>
+          <p className="page-subtitle">{itemLabel || '0 items'}</p>
         </div>
         {likedMedia.length > 0 && (
           <Button variant="ghost" size="sm" onClick={handleShuffle} icon={<Icon name="shuffle" className="icon-sm" />}>
@@ -110,10 +107,9 @@ export default function LikedPage() {
       </div>
 
       <MediaGrid
-        items={likedMedia}
+        items={displayItems}
         onItemClick={m => navigate(`/media/${m.id}`)}
         onItemLike={likeMedia}
-        onNearEnd={likedMedia.length < total ? handleLoadMore : undefined}
         emptyState={
           <EmptyState
             icon={<Icon name="heart" className="icon-2xl" />}
@@ -123,9 +119,15 @@ export default function LikedPage() {
         }
       />
 
-      {loadingMore && (
-        <div className="loading-row">
-          <Loader />
+      {totalPages > 1 && (
+        <div className="pagination-row">
+          <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)} icon={<Icon name="prev" className="icon-sm" />} />
+          {getPageNumbers(page, totalPages).map((p, i) =>
+            p === '…'
+              ? <span key={`ellipsis-${i}`} className="pagination-ellipsis">…</span>
+              : <Button key={p} variant={p === page ? 'primary' : 'ghost'} size="sm" onClick={() => setPage(p)}>{p + 1}</Button>
+          )}
+          <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} icon={<Icon name="next" className="icon-sm" />} />
         </div>
       )}
     </div>
