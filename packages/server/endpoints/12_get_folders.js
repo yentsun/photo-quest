@@ -59,11 +59,10 @@ export default async (kojo, logger) => {
       const pathToId = new Map(descendants.map(f => [f.path, f.id]));
       for (const a of ancestors) pathToId.set(a.path, a.id);
 
-      /* Direct media counts for descendant folders. */
-      const placeholders = descendants.map(() => '?').join(',');
+      /* Direct media counts for descendant folders (path prefix matching). */
       const typeCounts = db.prepare(
-        `SELECT folder, type, COUNT(*) as count FROM media WHERE hidden = 0 AND folder IN (${placeholders}) GROUP BY folder, type`
-      ).all(...descendants.map(f => f.path));
+        'SELECT folder, type, COUNT(*) as count FROM media WHERE hidden = 0 AND (folder = ? OR folder LIKE ?) GROUP BY folder, type'
+      ).all(targetPath, likePattern);
       const imageCounts = new Map();
       const videoCounts = new Map();
       for (const row of typeCounts) {
@@ -74,19 +73,17 @@ export default async (kojo, logger) => {
         }
       }
 
-      /* Preview media IDs for descendant folders. */
-      let previewIds = new Map();
-      if (placeholders.length > 0) {
-        const previews = db.prepare(
-          `SELECT folder, id FROM media WHERE hidden = 0 AND folder IN (${placeholders})
-           ORDER BY
-             CASE WHEN LOWER(title) LIKE '%cover%' THEN 0 ELSE 1 END,
-             title ASC`
-        ).all(...descendants.map(f => f.path));
-        for (const row of previews) {
-          if (!previewIds.has(row.folder)) {
-            previewIds.set(row.folder, row.id);
-          }
+      /* Preview media IDs for descendant folders (path prefix matching). */
+      const previews = db.prepare(
+        `SELECT folder, id FROM media WHERE hidden = 0 AND (folder = ? OR folder LIKE ?)
+         ORDER BY
+           CASE WHEN LOWER(title) LIKE '%cover%' THEN 0 ELSE 1 END,
+           title ASC`
+      ).all(targetPath, likePattern);
+      const previewIds = new Map();
+      for (const row of previews) {
+        if (!previewIds.has(row.folder)) {
+          previewIds.set(row.folder, row.id);
         }
       }
 

@@ -312,10 +312,24 @@ export async function fetchFolders() {
   }
 }
 
+const _folderScopeInFlight = new Map();
+
 export async function fetchFoldersForParent(parentId) {
-  const response = await fetch(`/folders?parent=${parentId}`);
-  if (!response.ok) throw new Error('Failed to fetch folder scope');
-  return response.json();
+  const inflight = _folderScopeInFlight.get(parentId);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const response = await fetch(`/folders?parent=${parentId}`);
+    if (!response.ok) throw new Error('Failed to fetch folder scope');
+    return response.json();
+  })();
+
+  _folderScopeInFlight.set(parentId, promise);
+  try {
+    return await promise;
+  } finally {
+    _folderScopeInFlight.delete(parentId);
+  }
 }
 
 export async function removeFolder(folderId) {
