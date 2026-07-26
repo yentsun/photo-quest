@@ -16,8 +16,20 @@ function byName(a, b) {
   return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
 }
 
-function applySort(items) {
-  const result = items.slice().sort(byName);
+function applySort(items, sort = 'filename') {
+  let result;
+  if (sort === 'filename') {
+    result = items.slice().sort(byName);
+  } else {
+    result = items.slice().sort((a, b) => {
+      const aDate = a.date_taken || a.created_at || '';
+      const bDate = b.date_taken || b.created_at || '';
+      const dateCompare = bDate.localeCompare(aDate);
+      if (dateCompare !== 0) return dateCompare;
+      const pathA = a.path || '', pathB = b.path || '';
+      return pathB.localeCompare(pathA);
+    });
+  }
   const coverIdx = result.findIndex(m => /cover/i.test(m.title));
   if (coverIdx > 0) result.unshift(result.splice(coverIdx, 1)[0]);
   return result;
@@ -27,6 +39,7 @@ export default function MediaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const sort = location.state?.sort || 'filename';
   const { deleteMedia } = useMediaActions();
   const { signal } = useRefresh();
   const slideshow = useSlideshow();
@@ -62,7 +75,9 @@ export default function MediaPage() {
     if (!cachedFolders) return [];
     const f = cachedFolders.find(cf => cf.path === cachedItem.folder);
     if (!f) return [];
-    return getPageCache(`folder:${f.id}:filename`)?.data?.directMedia ?? [];
+      return getPageCache(`folder:${f.id}:${sort}`)?.data?.directMedia
+        ?? getPageCache(`folder:${f.id}:filename`)?.data?.directMedia
+        ?? [];
   });
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [folder, setFolder] = useState(() => {
@@ -107,14 +122,14 @@ export default function MediaPage() {
         setItem(mediaItem);
         setLoading(false);
         if (mediaItem.folder) {
-          const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, limit: 200 });
-          if (!cancelled && cachedSiblings.length > 0) setFolderMedia(applySort(cachedSiblings));
+          const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, limit: 200, sort });
+          if (!cancelled && cachedSiblings.length > 0) setFolderMedia(applySort(cachedSiblings, sort));
           const cachedFolders = await idbGetFolders();
           if (!cancelled) { setFolders(cachedFolders); setFolder(cachedFolders.find(f => f.path === mediaItem.folder) || null); }
           setLoadingMessage('folder context…');
-          const [folderResult, allFolders] = await Promise.all([fetchMedia({ folder: mediaItem.folder, limit: 200, sort: 'filename' }), fetchFolders()]);
+          const [folderResult, allFolders] = await Promise.all([fetchMedia({ folder: mediaItem.folder, limit: 200, sort }), fetchFolders()]);
           if (cancelled) return;
-          setFolderMedia(applySort(folderResult.items));
+          setFolderMedia(applySort(folderResult.items, sort));
           setFolders(allFolders);
           setFolder(allFolders.find(f => f.path === mediaItem.folder) || null);
         }
@@ -166,14 +181,14 @@ export default function MediaPage() {
   const goPrev = useCallback(() => {
     if (!hasPrev) return;
     if (inSlideshow) slideshow.prev();
-    else navigate(`/media/${navItems[currentIndex - 1].id}`);
-  }, [hasPrev, inSlideshow, slideshow, navigate, navItems, currentIndex]);
+    else navigate(`/media/${navItems[currentIndex - 1].id}`, { state: location.state });
+  }, [hasPrev, inSlideshow, slideshow, navigate, navItems, currentIndex, location.state]);
 
   const goNext = useCallback(() => {
     if (!hasNext) return;
     if (inSlideshow) slideshow.next();
-    else navigate(`/media/${navItems[currentIndex + 1].id}`);
-  }, [hasNext, inSlideshow, slideshow, navigate, navItems, currentIndex]);
+    else navigate(`/media/${navItems[currentIndex + 1].id}`, { state: location.state });
+  }, [hasNext, inSlideshow, slideshow, navigate, navItems, currentIndex, location.state]);
 
   const [folderNavLoading, setFolderNavLoading] = useState(false);
   const folderNavInFlight = useRef(false);
@@ -187,8 +202,8 @@ export default function MediaPage() {
     folderNavInFlight.current = true;
     setFolderNavLoading(true);
     try {
-      const { items } = await fetchMedia({ folder: item.folder, sort: 'filename' });
-      const sorted = applySort(items);
+      const { items } = await fetchMedia({ folder: item.folder, sort });
+      const sorted = applySort(items, sort);
       setFolderMedia(sorted);
       return sorted;
     } catch (err) { console.error('Failed to load folder siblings:', err); return []; }
@@ -203,15 +218,15 @@ export default function MediaPage() {
     if (!hasFolderPrev) return;
     const siblings = await ensureFolderSiblings();
     const idx = siblings.findIndex(m => m.id === Number(id));
-    if (idx > 0) { setItem(siblings[idx - 1]); navigate(`/media/${siblings[idx - 1].id}`); }
-  }, [hasFolderPrev, ensureFolderSiblings, id, navigate]);
+    if (idx > 0) { setItem(siblings[idx - 1]); navigate(`/media/${siblings[idx - 1].id}`, { state: location.state }); }
+  }, [hasFolderPrev, ensureFolderSiblings, id, navigate, location.state]);
 
   const goFolderNext = useCallback(async () => {
     if (!hasFolderNext) return;
     const siblings = await ensureFolderSiblings();
     const idx = siblings.findIndex(m => m.id === Number(id));
-    if (idx >= 0 && idx < siblings.length - 1) { setItem(siblings[idx + 1]); navigate(`/media/${siblings[idx + 1].id}`); }
-  }, [hasFolderNext, ensureFolderSiblings, id, navigate]);
+    if (idx >= 0 && idx < siblings.length - 1) { setItem(siblings[idx + 1]); navigate(`/media/${siblings[idx + 1].id}`, { state: location.state }); }
+  }, [hasFolderNext, ensureFolderSiblings, id, navigate, location.state]);
 
   const toggleFullscreen = useCallback(() => {
     if (!viewerRef.current) return;
@@ -259,7 +274,7 @@ export default function MediaPage() {
     if (!confirm(`Delete "${item.title}"?\n\nThis will remove it from the library AND delete the file from disk.`)) return;
     const nextItem = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
     const deletedId = item.id;
-    if (nextItem) navigate(`/media/${nextItem.id}`, { replace: true });
+    if (nextItem) navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
     else navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
     if (inSlideshow) removeSlideshowItem(deletedId);
     try { await deleteMedia(deletedId); }
@@ -384,7 +399,7 @@ export default function MediaPage() {
     else navigate(backTarget);
   }, [location.key, navigate, backTarget]);
 
-  if (loading) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
+  if (loading && !item) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
 
   if (!item) {
     return (
