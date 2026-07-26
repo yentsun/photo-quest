@@ -35,6 +35,14 @@ function applySort(items, sort = 'filename') {
   return result;
 }
 
+function safeTags(tags) {
+  if (Array.isArray(tags)) return tags;
+  if (typeof tags === 'string') {
+    try { return JSON.parse(tags); } catch { return []; }
+  }
+  return [];
+}
+
 export default function MediaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -312,14 +320,14 @@ export default function MediaPage() {
   const suggestions = useMemo(() => {
     const trimmed = tagDraft.trim().toLowerCase();
     if (!trimmed) return [];
-    const existing = new Set(item?.tags || []);
+    const existing = new Set(safeTags(item?.tags));
     return allTags.filter(t => t.toLowerCase().includes(trimmed) && !existing.has(t)).slice(0, 6);
   }, [tagDraft, allTags, item?.tags]);
 
   const handleRemoveTag = useCallback(async (tagToRemove) => {
     if (!item) return;
     const targetId = item.id;
-    const originalTags = item.tags || [];
+    const originalTags = safeTags(item.tags);
     const newTags = originalTags.filter(t => t !== tagToRemove);
     setItem(prev => ({ ...prev, tags: newTags }));
     try {
@@ -332,9 +340,9 @@ export default function MediaPage() {
   }, [item]);
 
   const applyTag = useCallback(async (tag) => {
-    if (!tag || (item?.tags || []).includes(tag)) return;
+    if (!tag || safeTags(item?.tags).includes(tag)) return;
     const targetId = item.id;
-    const originalTags = item.tags || [];
+    const originalTags = safeTags(item.tags);
     const newTags = [...originalTags, tag];
     setItem(prev => ({ ...prev, tags: newTags }));
     try {
@@ -593,7 +601,7 @@ export default function MediaPage() {
               {navItems.length > 1 && <span>{currentIndex + 1} / {navItems.length}</span>}
             </div>
             <div className="viewer-tags">
-              {(item.tags || []).map(tag => (
+              {safeTags(item.tags).map(tag => (
                 <span key={tag} className="tag-chip">
                   <button className="tag-chip-link" onClick={() => navigate(`/tags/${encodeURIComponent(tag)}`)}>
                     {tag}
