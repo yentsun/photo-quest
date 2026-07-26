@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMediaActions } from '../hooks/useMedia.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
@@ -19,6 +19,21 @@ function byFolderName(a, b) {
 
 function byFolderDate(a, b) {
   return b.id - a.id;
+}
+
+const SEARCH_PAGE_SIZE = 30;
+
+function getSearchPageNumbers(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  const set = new Set([0, total - 1, current]);
+  for (let i = Math.max(0, current - 2); i <= Math.min(total - 1, current + 2); i++) set.add(i);
+  const sorted = [...set].sort((a, b) => a - b);
+  const result = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('…');
+    result.push(sorted[i]);
+  }
+  return result;
 }
 
 function usePathValidation() {
@@ -95,11 +110,16 @@ export default function Dashboard() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchTotal, setSearchTotal] = useState(0);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchLoadingMore, setSearchLoadingMore] = useState(false);
   const searchRef = useRef('');
-  const searchOffsetRef = useRef(0);
-  const searchTotalRef = useRef(0);
-  const searchLoadingMoreRef = useRef(false);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchParamPage = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
+  const searchPage = searchParamPage - 1;
+
+  const goSearchPage = useCallback((p) => {
+    if (p === 0) { setSearchParams({}, { replace: true }); return; }
+    setSearchParams({ page: String(p + 1) });
+  }, [setSearchParams]);
 
   useEffect(() => {
     if (isPageCacheValid('dashboard', signal)) return;
@@ -128,49 +148,37 @@ export default function Dashboard() {
     if (!debouncedSearch) {
       setSearchResults([]);
       setSearchTotal(0);
-      searchOffsetRef.current = 0;
-      searchTotalRef.current = 0;
       return;
     }
     let cancelled = false;
     setSearchLoading(true);
     setSearchResults([]);
-    searchOffsetRef.current = 0;
-    fetchMedia({ search: debouncedSearch, limit: 200 })
+    goSearchPage(0);
+    fetchMedia({ search: debouncedSearch, limit: SEARCH_PAGE_SIZE })
       .then(({ items, total }) => {
         if (cancelled) return;
         setSearchResults(items);
         setSearchTotal(total);
-        searchOffsetRef.current = items.length;
-        searchTotalRef.current = total;
       })
       .catch(err => console.error('Search failed:', err))
       .finally(() => { if (!cancelled) setSearchLoading(false); });
     return () => { cancelled = true; };
-  }, [debouncedSearch]);
+  }, [debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearchLoadMore = useCallback(async () => {
-    if (searchLoadingMoreRef.current) return;
-    if (searchOffsetRef.current >= searchTotalRef.current) return;
-    if (!searchRef.current) return;
-    searchLoadingMoreRef.current = true;
-    setSearchLoadingMore(true);
-    try {
-      const { items: more } = await fetchMedia({ search: searchRef.current, limit: 200, offset: searchOffsetRef.current });
-      if (more.length > 0) {
-        searchOffsetRef.current += more.length;
-        setSearchResults(prev => {
-          const existingIds = new Set(prev.map(m => m.id));
-          return [...prev, ...more.filter(m => !existingIds.has(m.id))];
-        });
-      }
-    } catch (err) {
-      console.error('Failed to load more search results:', err);
-    } finally {
-      searchLoadingMoreRef.current = false;
-      setSearchLoadingMore(false);
-    }
-  }, []);
+  /* Fetch page N of search results when searchPage changes. */
+  useEffect(() => {
+    if (!debouncedSearch || searchPage === 0) return;
+    let cancelled = false;
+    setSearchLoading(true);
+    fetchMedia({ search: debouncedSearch, limit: SEARCH_PAGE_SIZE, offset: searchPage * SEARCH_PAGE_SIZE })
+      .then(({ items }) => {
+        if (cancelled) return;
+        setSearchResults(items);
+      })
+      .catch(err => console.error('Search page fetch failed:', err))
+      .finally(() => { if (!cancelled) setSearchLoading(false); });
+    return () => { cancelled = true; };
+  }, [searchPage, debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rootFolders = useMemo(() => folders.filter(f => f.parentId === null).sort(folderSort === 'date' ? byFolderDate : byFolderName), [folders, folderSort]);
   const totalMedia = useMemo(
@@ -377,11 +385,16 @@ export default function Dashboard() {
               items={searchResults}
               onItemClick={item => navigate(`/media/${item.id}`)}
               onItemLike={likeMedia}
-              onNearEnd={searchResults.length < searchTotal ? handleSearchLoadMore : undefined}
             />
-            {searchLoadingMore && (
-              <div className="loading-row">
-                <Loader />
+            {searchTotal > SEARCH_PAGE_SIZE && (
+              <div className="pagination-row">
+                <Button variant="ghost" size="sm" disabled={searchPage === 0} onClick={() => goSearchPage(searchPage - 1)} icon={<Icon name="prev" className="icon-sm" />} />
+                {getSearchPageNumbers(searchPage, Math.ceil(searchTotal / SEARCH_PAGE_SIZE)).map((p, i) =>
+                  p === '…'
+                    ? <span key={`ellipsis-${i}`} className="pagination-ellipsis">…</span>
+                    : <Button key={p} variant={p === searchPage ? 'primary' : 'ghost'} size="sm" onClick={() => goSearchPage(p)}>{p + 1}</Button>
+                )}
+                <Button variant="ghost" size="sm" disabled={searchPage >= Math.ceil(searchTotal / SEARCH_PAGE_SIZE) - 1} onClick={() => goSearchPage(searchPage + 1)} icon={<Icon name="next" className="icon-sm" />} />
               </div>
             )}
           </>
