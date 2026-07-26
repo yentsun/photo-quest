@@ -93,9 +93,13 @@ export async function processOneItem(db, itemId, filePath, logger) {
     return;
   }
 
+  const fileStat = fs.statSync(filePath);
+  const dateTaken = fileStat.mtime.toISOString();
+
   const existing = db.prepare('SELECT id FROM media WHERE path = ? AND hidden = 0').get(filePath);
   if (existing) {
-    logger.debug(`[processOneItem] fast-path: already in library as id=${existing.id}, skipping`);
+    logger.debug(`[processOneItem] fast-path: already in library as id=${existing.id}, updating date_taken`);
+    db.prepare('UPDATE media SET date_taken = ? WHERE id = ? AND date_taken IS NULL').run(dateTaken, existing.id);
     db.prepare('UPDATE import_queue SET status = ? WHERE id = ?').run(IMPORT_STATUS.COMPLETED, itemId);
     return;
   }
@@ -111,22 +115,22 @@ export async function processOneItem(db, itemId, filePath, logger) {
   if (hidden) {
     logger.debug(`[processOneItem] restoring hidden media id=${hidden.id} with same hash`);
     db.prepare(
-      `UPDATE media SET path = ?, folder = ?, hidden = 0,
+      `UPDATE media SET path = ?, folder = ?, hidden = 0, date_taken = ?,
        updated_at = datetime('now') WHERE id = ?`
-    ).run(filePath, folder, hidden.id);
+    ).run(filePath, folder, dateTaken, hidden.id);
     logger.debug(`Restored media id=${hidden.id} at ${filePath}`);
   } else {
     const exists = db.prepare('SELECT id FROM media WHERE path = ?').get(filePath);
 
     if (exists) {
       logger.debug(`[processOneItem] path exists with id=${exists.id}, patching hash`);
-      db.prepare('UPDATE media SET hash = ? WHERE path = ? AND hash IS NULL').run(hash, filePath);
+      db.prepare('UPDATE media SET hash = ?, date_taken = ? WHERE path = ? AND (hash IS NULL OR date_taken IS NULL)').run(hash, dateTaken, filePath);
     } else {
       logger.debug(`[processOneItem] inserting new media record`);
       const result = db.prepare(
-        `INSERT INTO media (path, title, type, folder, status, hash)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      ).run(filePath, title, mediaType, folder, status, hash);
+        `INSERT INTO media (path, title, type, folder, status, hash, date_taken)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(filePath, title, mediaType, folder, status, hash, dateTaken);
       logger.debug(`[processOneItem] inserted media id=${result.lastInsertRowid}`);
     }
   }
@@ -250,30 +254,32 @@ export default function (dirPath) {
 
   logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
 
-  if (newFiles.length === 0) {
-    logger.debug(`[scanMedia] all files already in library, nothing to queue`);
+  if (files.length === 0) {
+    logger.debug(`[scanMedia] no media files found, nothing to do`);
     return { scanId: null, total: 0 };
   }
 
-  /* Create scan record with only the new-file count. */
+  /* Create scan record — queue all files so that existing ones get date_taken
+     updated via the worker pipeline and show progress via SSE. */
   const scanResult = db.prepare(
     'INSERT INTO scans (dir_path, total, status) VALUES (?, ?, ?)'
-  ).run(dirPath, newFiles.length, SCAN_STATUS.DISCOVERING);
+  ).run(dirPath, files.length, SCAN_STATUS.DISCOVERING);
   const scanId = scanResult.lastInsertRowid;
 
-  /* Queue only new files — wrapped in a transaction for speed. */
+  /* Queue all files. Existing files are handled by processOneItem's fast-path
+     (date_taken UPDATE only); new files go through full hash/dedup/insert. */
   const insertStmt = db.prepare(
     'INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)'
   );
   db.exec('BEGIN');
-  for (const filePath of newFiles) {
+  for (const filePath of files) {
     insertStmt.run(scanId, filePath, IMPORT_STATUS.PENDING);
   }
   db.exec('COMMIT');
 
   db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.IMPORTING, scanId);
 
-  broadcastSse({ type: 'import_started', scanId, total: newFiles.length, processed: 0 });
+  broadcastSse({ type: 'import_started', scanId, total: files.length, processed: 0 });
 
   /* Phase 2: Ensure the single worker thread is running — it will pick up
      the new scan's items along with any other queued work. */

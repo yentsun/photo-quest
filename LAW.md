@@ -114,6 +114,22 @@ The governing rules of the photo-quest project. This document is the source of t
 
 ---
 
+## Section 4 — Troubleshooting
+
+**4.1** If the server is unreachable from a mobile device via WireGuard despite the tunnel being up and the server listening on `0.0.0.0`:
+
+1. Add a Windows Firewall rule allowing the server port:
+   ```
+   New-NetFirewallRule -DisplayName "PhotoQuest Server" -Direction Inbound -Protocol TCP -LocalPort 7837 -Action Allow -Profile Any
+   ```
+2. Change the WireGuard network profile from Public to Private (Windows blocks inbound on Public by default):
+   ```
+   Get-NetConnectionProfile -InterfaceAlias "<WG interface>" | Set-NetConnectionProfile -NetworkCategory Private
+   ```
+   Run both commands as Administrator. To find the WG interface name, check `ipconfig /all` or `wg show`.
+
+---
+
 ## Glossary
 
 - **media** — A media file (video) in the library. Has path, title, duration, resolution, codec, status, transcoded_path, size.

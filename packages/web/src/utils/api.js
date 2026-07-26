@@ -125,6 +125,11 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
 
   const opts = { limit, offset, folder, subtree, liked, random, sort, search, tag };
 
+  /* IDB stores results in deterministic order — skip it for random queries. */
+  if (random) {
+    return _fetchMediaFromServer(url, opts);
+  }
+
   // IDB-first: return cached data immediately if available
   let idbData = null;
   try {

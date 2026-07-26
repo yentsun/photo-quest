@@ -1,6 +1,6 @@
 import { app, shell, Tray, Menu, nativeImage, utilityProcess, dialog } from 'electron'
 import { spawn } from 'node:child_process'
-import { createWriteStream, mkdirSync, existsSync, readFileSync } from 'node:fs'
+import { createWriteStream, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -62,6 +62,7 @@ const trayIcon = nativeImage.createFromPath(ICON_PATH).resize({ width: 16, heigh
 const trayMenu = Menu.buildFromTemplate([
   { label: 'Open Photo Quest', click() { shell.openExternal(APP_URL) } },
   { label: 'Server Logs', click() { spawn(`start "Logs" powershell -NoExit -Command "Get-Content -Path '${LOG_FILE}' -Wait -Tail 30"`, { shell: true, detached: true, stdio: 'ignore' }) } },
+  { label: 'Settings', click() { openSettings() } },
   { label: 'About', click() { showAbout() } },
   { label: 'Check for Updates', click() { checkForUpdates() } },
   { type: 'separator' },
@@ -141,6 +142,40 @@ function checkForUpdates() {
       buttons: ['OK'],
     })
   }
+}
+
+function openSettings() {
+  const settings = readSettings()
+  const currentValue = settings.launchAtLogin ?? false
+
+  dialog.showMessageBox({
+    type: 'question',
+    title: 'Photo Quest Settings',
+    message: 'Startup behaviour',
+    checkboxLabel: 'Launch at Windows start',
+    checkboxChecked: currentValue,
+    buttons: ['Save', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+  }).then(({ response, checkboxChecked }) => {
+    if (response !== 0) return
+    settings.launchAtLogin = checkboxChecked
+    try {
+      writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2))
+      if (!isDev) {
+        app.setLoginItemSettings({
+          openAtLogin: checkboxChecked,
+          path: process.execPath,
+        })
+        const verify = app.getLoginItemSettings({ path: process.execPath })
+        log('electron', `launchAtLogin set to ${checkboxChecked} path="${process.execPath}" registry=${verify.openAtLogin}`)
+      } else {
+        log('electron', `launchAtLogin set to ${checkboxChecked} (skipped in dev)`)
+      }
+    } catch (err) {
+      log('electron', `failed to save settings: ${err.message}`)
+    }
+  })
 }
 
 function createTray() {
@@ -247,6 +282,18 @@ app.whenReady().then(async () => {
     })
   } catch (err) {
     log('updater', `error: ${err.message}`)
+  }
+
+  const settings = readSettings()
+  if (!isDev) {
+    app.setLoginItemSettings({
+      openAtLogin: settings.launchAtLogin ?? false,
+      path: process.execPath,
+    })
+    const verify = app.getLoginItemSettings({ path: process.execPath })
+    log('electron', `launchAtLogin=${verify.openAtLogin} path="${process.execPath}"`)
+  } else {
+    log('electron', `launchAtLogin=${settings.launchAtLogin ?? false} (skipped in dev)`)
   }
 
   createTray()
