@@ -94,21 +94,29 @@ export default function FolderPage() {
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const prevDebouncedSearch = useRef(debouncedSearch);
   useEffect(() => {
-    setSearchQuery('');
-    setDebouncedSearch('');
-    searchRef.current = '';
-    setSort('filename');
-    sortRef.current = 'filename';
-    if (!searchParams.has('page')) goToPage(0);
-  }, [folderId]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (prevDebouncedSearch.current !== debouncedSearch) goToPage(0);
+    prevDebouncedSearch.current = debouncedSearch;
+  }, [debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(searchQuery); searchRef.current = searchQuery; }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => { goToPage(0); }, [debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  const prevFolderIdForReset = useRef(folderId);
+  useEffect(() => {
+    if (prevFolderIdForReset.current !== folderId) {
+      setSearchQuery('');
+      setDebouncedSearch('');
+      searchRef.current = '';
+      setSort('filename');
+      sortRef.current = 'filename';
+      goToPage(0);
+    }
+    prevFolderIdForReset.current = folderId;
+  }, [folderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const _sc0Folders = getLastFolders();
   const _sc0Folder  = _sc0Folders?.find(f => f.id === folderId) ?? null;
