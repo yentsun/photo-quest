@@ -130,12 +130,12 @@ export default function MediaPage() {
         setItem(mediaItem);
         setLoading(false);
         if (mediaItem.folder) {
-          const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, limit: 200, sort });
+          const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, sort });
           if (!cancelled && cachedSiblings.length > 0) setFolderMedia(applySort(cachedSiblings, sort));
           const cachedFolders = await idbGetFolders();
           if (!cancelled) { setFolders(cachedFolders); setFolder(cachedFolders.find(f => f.path === mediaItem.folder) || null); }
           setLoadingMessage('folder context…');
-          const [folderResult, allFolders] = await Promise.all([fetchMedia({ folder: mediaItem.folder, limit: 200, sort }), fetchFolders()]);
+          const [folderResult, allFolders] = await Promise.all([fetchMedia({ folder: mediaItem.folder, sort }), fetchFolders()]);
           if (cancelled) return;
           setFolderMedia(applySort(folderResult.items, sort));
           setFolders(allFolders);
@@ -498,27 +498,25 @@ export default function MediaPage() {
           <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} />
         )}
 
-        {hasPrev && (
-          <IconButton
-            variant="overlay"
-            icon={<Icon name="prev" className="icon-xl" />}
-            label="Previous"
-            size="lg"
-            onClick={goPrev}
-            className="viewer-nav viewer-nav-left"
-          />
-        )}
+        <IconButton
+          variant="overlay"
+          icon={<Icon name="prev" className="icon-xl" />}
+          label="Previous"
+          size="lg"
+          onClick={goPrev}
+          disabled={!hasPrev}
+          className="viewer-nav viewer-nav-left"
+        />
 
-        {hasNext && (
-          <IconButton
-            variant="overlay"
-            icon={<Icon name="next" className="icon-xl" />}
-            label="Next"
-            size="lg"
-            onClick={goNext}
-            className="viewer-nav viewer-nav-right"
-          />
-        )}
+        <IconButton
+          variant="overlay"
+          icon={<Icon name="next" className="icon-xl" />}
+          label="Next"
+          size="lg"
+          onClick={goNext}
+          disabled={!hasNext}
+          className="viewer-nav viewer-nav-right"
+        />
 
         {hasFolderPrev && (
           <IconButton
@@ -546,8 +544,8 @@ export default function MediaPage() {
 
         {showMobileNav && (
           <div className="mobile-nav">
-            {isImage && hasPrev && (
-              <IconButton variant="overlay" icon={<Icon name="prev" className="icon-md" />} label="Previous" onClick={goPrev} />
+            {isImage && (
+              <IconButton variant="overlay" icon={<Icon name="prev" className="icon-md" />} label="Previous" onClick={goPrev} disabled={!hasPrev} />
             )}
             {hasFolderPrev && (
               <IconButton variant="overlay" icon={folderNavLoading ? <span className="spinner spinner-sm" /> : <Icon name="up" className="icon-md" />} label="Previous in folder" disabled={folderNavLoading} onClick={goFolderPrev} />
@@ -555,8 +553,8 @@ export default function MediaPage() {
             {hasFolderNext && (
               <IconButton variant="overlay" icon={folderNavLoading ? <span className="spinner spinner-sm" /> : <Icon name="down" className="icon-md" />} label="Next in folder" disabled={folderNavLoading} onClick={goFolderNext} />
             )}
-            {isImage && hasNext && (
-              <IconButton variant="overlay" icon={<Icon name="next" className="icon-md" />} label="Next" onClick={goNext} />
+            {isImage && (
+              <IconButton variant="overlay" icon={<Icon name="next" className="icon-md" />} label="Next" onClick={goNext} disabled={!hasNext} />
             )}
           </div>
         )}
