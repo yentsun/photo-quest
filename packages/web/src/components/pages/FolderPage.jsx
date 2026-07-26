@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
@@ -79,7 +79,14 @@ export default function FolderPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const searchRef = useRef('');
-  const [page, setPage] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramPage = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
+  const page = paramPage - 1;
+
+  const goToPage = useCallback((p) => {
+    if (p === 0) { setSearchParams({}, { replace: true }); return; }
+    setSearchParams({ page: String(p + 1) });
+  }, [setSearchParams]);
 
   const folderId = Number(id);
   const CACHE_KEY = `folder:${folderId}:${sort}`;
@@ -93,7 +100,7 @@ export default function FolderPage() {
     searchRef.current = '';
     setSort('filename');
     sortRef.current = 'filename';
-    setPage(0);
+    goToPage(0);
   }, [folderId]);
 
   useEffect(() => {
@@ -101,7 +108,7 @@ export default function FolderPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => { setPage(0); }, [debouncedSearch]);
+  useEffect(() => { goToPage(0); }, [debouncedSearch, goToPage]);
 
   const _sc0Folders = getLastFolders();
   const _sc0Folder  = _sc0Folders?.find(f => f.id === folderId) ?? null;
@@ -133,11 +140,11 @@ export default function FolderPage() {
     prevSearch.current = debouncedSearch;
     prevSort.current = sort;
 
-    if (onlySortChanged && directMediaRef.current.length > 0) {
+      if (onlySortChanged && directMediaRef.current.length > 0) {
       const sorted = applySort(directMediaRef.current, sort);
       setDirectMedia(sorted);
       setPageCache(CACHE_KEY, { folders, directMedia: sorted }, signal);
-      setPage(0);
+      goToPage(0);
       return;
     }
 
@@ -380,7 +387,7 @@ export default function FolderPage() {
           )}
           <Select
             value={sort}
-            onChange={e => { const v = e.target.value; setSort(v); sortRef.current = v; setPage(0); }}
+            onChange={e => { const v = e.target.value; setSort(v); sortRef.current = v; goToPage(0); }}
             options={[
               { value: 'filename', label: 'Name' },
               { value: '', label: 'Date' },
@@ -417,13 +424,13 @@ export default function FolderPage() {
           </div>
           {totalPages > 1 && (
             <div className="pagination-row">
-              <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)} icon={<Icon name="prev" className="icon-sm" />} />
+              <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => goToPage(page - 1)} icon={<Icon name="prev" className="icon-sm" />} />
               {getPageNumbers(page, totalPages).map((p, i) =>
                 p === '…'
                   ? <span key={`ellipsis-${i}`} className="pagination-ellipsis">…</span>
-                  : <Button key={p} variant={p === page ? 'primary' : 'ghost'} size="sm" onClick={() => setPage(p)}>{p + 1}</Button>
+                  : <Button key={p} variant={p === page ? 'primary' : 'ghost'} size="sm" onClick={() => goToPage(p)}>{p + 1}</Button>
               )}
-              <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} icon={<Icon name="next" className="icon-sm" />} />
+              <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => goToPage(page + 1)} icon={<Icon name="next" className="icon-sm" />} />
             </div>
           )}
         </>
