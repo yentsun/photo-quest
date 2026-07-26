@@ -193,18 +193,13 @@ export default async (kojo, logger) => {
       }
     }
 
-    /* Get one preview media ID per folder — cover item wins, then first by name. */
+    /* Get one preview media ID per folder — oldest inserted first (fast clustered index scan). */
     const previews = db.prepare(
-      `SELECT folder, id FROM media WHERE hidden = 0
-       ORDER BY
-         CASE WHEN LOWER(title) LIKE '%cover%' THEN 0 ELSE 1 END,
-         title ASC`
+      'SELECT folder, MIN(id) as id FROM media WHERE hidden = 0 GROUP BY folder'
     ).all();
     const previewIds = new Map();
     for (const row of previews) {
-      if (!previewIds.has(row.folder)) {
-        previewIds.set(row.folder, row.id);
-      }
+      previewIds.set(row.folder, row.id);
     }
 
     /* Compute parentId and counts for each folder. */
