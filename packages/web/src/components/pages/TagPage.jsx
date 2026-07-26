@@ -51,7 +51,7 @@ export default function TagPage() {
     setSearchParams({ page: String(p + 1) });
   }, [setSearchParams]);
 
-  useEffect(() => { goToPage(0); }, [decodedTag, goToPage]);
+  useEffect(() => { goToPage(0); }, [decodedTag]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isPageCacheValid(CACHE_KEY, signal)) return;
