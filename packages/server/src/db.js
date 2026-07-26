@@ -63,6 +63,8 @@ export function initDb() {
   /* Indexes for common query patterns. */
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_folder ON media(folder)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_hidden ON media(hidden)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_media_date_sort ON media(COALESCE(date_taken, created_at))');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_media_title ON media(title)');
 
   /* Run migrations for existing databases. */
   migrateDb();
