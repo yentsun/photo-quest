@@ -108,7 +108,7 @@ export default function FolderPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => { goToPage(0); }, [debouncedSearch, goToPage]);
+  useEffect(() => { goToPage(0); }, [debouncedSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const _sc0Folders = getLastFolders();
   const _sc0Folder  = _sc0Folders?.find(f => f.id === folderId) ?? null;
