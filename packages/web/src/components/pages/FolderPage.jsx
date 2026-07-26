@@ -100,8 +100,8 @@ export default function FolderPage() {
     searchRef.current = '';
     setSort('filename');
     sortRef.current = 'filename';
-    goToPage(0);
-  }, [folderId]);
+    if (!searchParams.has('page')) goToPage(0);
+  }, [folderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(searchQuery); searchRef.current = searchQuery; }, 300);
