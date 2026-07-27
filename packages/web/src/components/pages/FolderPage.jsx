@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchMedia, getLastFolders, getLastFolderMedia, scanMedia as scanMediaApi, renameFolder, fetchFoldersForParent } from '../../utils/api.js';
 import { Select } from '../ui/index.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
+import usePersistedState from '../../hooks/usePersistedState.js';
 import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
 import { FolderCard, MediaCard } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
@@ -73,23 +74,25 @@ export default function FolderPage() {
   const [renamingFolder, setRenamingFolder] = useState(false);
   const [renameInput, setRenameInput] = useState('');
   const renameInputRef = useRef(null);
-  const [sort, setSort] = useState('filename');
-  const sortRef = useRef('filename');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const searchRef = useRef('');
-  const [searchParams, setSearchParams] = useSearchParams();
-  const paramPage = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
-  const page = paramPage - 1;
-
-  const goToPage = useCallback((p) => {
-    if (p === 0) { setSearchParams({}, { replace: true }); return; }
-    setSearchParams({ page: String(p + 1) });
-  }, [setSearchParams]);
 
   const folderId = Number(id);
-  const CACHE_KEY = `folder:${folderId}:${sort}`;
+  const [sort, setSort] = usePersistedState(`folder:${folderId}:sort`, 'filename');
+  const [page, setPage] = usePersistedState(`folder:${folderId}:page`, 0, {
+    serialize: String,
+    parse: (v) => Math.max(0, parseInt(v, 10) || 0),
+  });
+  const [mediaFilter, setMediaFilter] = usePersistedState('library:mediaFilter', 'all');
+
+  const goToPage = useCallback((p) => {
+    setPage(p);
+  }, [setPage]);
+
+  const mediaTypeParam = mediaFilter !== 'all' ? mediaFilter : undefined;
+  const CACHE_KEY = `folder:${folderId}:${sort}:${mediaFilter}`;
   const _pc = isPageCacheValid(CACHE_KEY, signal) ? getPageCache(CACHE_KEY) : null;
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -111,16 +114,13 @@ export default function FolderPage() {
       setSearchQuery('');
       setDebouncedSearch('');
       searchRef.current = '';
-      setSort('filename');
-      sortRef.current = 'filename';
-      goToPage(0);
     }
     prevFolderIdForReset.current = folderId;
   }, [folderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const _sc0Folders = getLastFolders();
   const _sc0Folder  = _sc0Folders?.find(f => f.id === folderId) ?? null;
-  const _sc0Media   = _sc0Folder ? getLastFolderMedia(_sc0Folder.path) : null;
+  const _sc0Media   = !mediaTypeParam && !debouncedSearch && _sc0Folder ? getLastFolderMedia(_sc0Folder.path) : null;
 
   const [folders, setFolders] = useState(_pc?.data.folders ?? _sc0Folders ?? []);
   const [directMedia, setDirectMedia] = useState(_pc?.data.directMedia ?? _sc0Media?.items ?? []);
@@ -135,6 +135,7 @@ export default function FolderPage() {
   const prevSignal = useRef(signal);
   const prevSearch = useRef(debouncedSearch);
   const prevSort = useRef(sort);
+  const prevFilter = useRef(mediaFilter);
   const directMediaRef = useRef(directMedia);
   directMediaRef.current = directMedia;
 
@@ -142,17 +143,18 @@ export default function FolderPage() {
     const onlySortChanged = prevSort.current !== sort
       && prevFolderId.current === folderId
       && prevSignal.current === signal
-      && prevSearch.current === debouncedSearch;
+      && prevSearch.current === debouncedSearch
+      && prevFilter.current === mediaFilter;
     prevFolderId.current = folderId;
     prevSignal.current = signal;
     prevSearch.current = debouncedSearch;
     prevSort.current = sort;
+    prevFilter.current = mediaFilter;
 
-      if (onlySortChanged && directMediaRef.current.length > 0) {
+    if (onlySortChanged && directMediaRef.current.length > 0) {
       const sorted = applySort(directMediaRef.current, sort);
       setDirectMedia(sorted);
       setPageCache(CACHE_KEY, { folders, directMedia: sorted }, signal);
-      goToPage(0);
       return;
     }
 
@@ -175,7 +177,7 @@ export default function FolderPage() {
 
     const scFolders = getLastFolders();
     const scFolder  = scFolders?.find(f => f.id === folderId);
-    const scMedia   = !isSearching && scFolder ? getLastFolderMedia(scFolder.path) : null;
+    const scMedia   = !isSearching && !mediaTypeParam && scFolder ? getLastFolderMedia(scFolder.path) : null;
     if (!scFolders) setLoading(true);
     if (scMedia) {
       setDirectMedia(applySort(scMedia.items, sort));
@@ -194,7 +196,7 @@ export default function FolderPage() {
         if (cancelled) return;
         const found = cachedFolders.find(f => f.id === folderId);
         if (!found) return;
-        const { items } = await idbGetMedia({ folder: found.path, limit: FETCH_LIMIT, sort: sortRef.current });
+        const { items } = await idbGetMedia({ folder: found.path, limit: FETCH_LIMIT, sort, type: mediaTypeParam });
         if (cancelled || items.length === 0 || scMedia || serverLoadedRef.current) return;
         setFolders(cachedFolders);
         folderRef.current = found;
@@ -215,8 +217,8 @@ export default function FolderPage() {
           folderRef.current = found;
           const folderName = found.path.split(/[/\\]/).filter(Boolean).pop() || 'folder';
           setLoadingMessage(`'${folderName}'…`);
-          const fetchOpts = { folder: found.path, limit: FETCH_LIMIT, offset: 0 };
-          if (sort != null && sort !== '') fetchOpts.sort = sort;
+          const fetchOpts = { folder: found.path, limit: FETCH_LIMIT, offset: 0, sort };
+          if (mediaTypeParam) fetchOpts.type = mediaTypeParam;
           if (debouncedSearch) fetchOpts.search = debouncedSearch;
           const { items } = await fetchMedia(fetchOpts);
           if (!cancelled) {
@@ -233,7 +235,7 @@ export default function FolderPage() {
     };
     load();
     return () => { cancelled = true; };
-  }, [folderId, signal, debouncedSearch, sort]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [folderId, signal, debouncedSearch, sort, mediaFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
   const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId).sort(sort === 'date' ? byFolderDate : byFolderName), [folders, folderId, sort]);
@@ -246,8 +248,13 @@ export default function FolderPage() {
     ];
   }, [subfolders, directMedia, debouncedSearch]);
 
-  const totalPages = Math.ceil(allItems.length / PAGE_SIZE);
-  const displayItems = allItems.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(allItems.length / PAGE_SIZE));
+  const displayPage = Math.min(page, totalPages - 1);
+  const displayItems = allItems.slice(displayPage * PAGE_SIZE, (displayPage + 1) * PAGE_SIZE);
+
+  useEffect(() => {
+    if (displayPage !== page) setPage(displayPage);
+  }, [displayPage, page, setPage]);
 
   const breadcrumbs = useMemo(() => {
     const crumbs = [];
@@ -328,8 +335,8 @@ export default function FolderPage() {
     const total = allItems.length;
     if (total === 0) return null;
     if (totalPages <= 1) return `${total.toLocaleString()} item${total !== 1 ? 's' : ''}`;
-    const start = page * PAGE_SIZE + 1;
-    const end = Math.min((page + 1) * PAGE_SIZE, total);
+    const start = displayPage * PAGE_SIZE + 1;
+    const end = Math.min((displayPage + 1) * PAGE_SIZE, total);
     return `${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} items`;
   })();
 
@@ -395,12 +402,22 @@ export default function FolderPage() {
           )}
           <Select
             value={sort}
-            onChange={e => { const v = e.target.value; setSort(v); sortRef.current = v; goToPage(0); }}
+            onChange={e => { setSort(e.target.value); setPage(0); }}
             options={[
               { value: 'filename', label: 'Name' },
-              { value: '', label: 'Date' },
+              { value: 'date', label: 'Date' },
             ]}
             title="Sort order"
+          />
+          <Select
+            value={mediaFilter}
+            onChange={e => { setMediaFilter(e.target.value); setPage(0); }}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'image', label: 'Photos' },
+              { value: 'video', label: 'Videos' },
+            ]}
+            title="Media type"
           />
           <Button
             variant={debouncedSearch ? 'primary' : 'ghost'}
@@ -432,13 +449,13 @@ export default function FolderPage() {
           </div>
           {totalPages > 1 && (
             <div className="pagination-row">
-              <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => goToPage(page - 1)} icon={<Icon name="prev" className="icon-sm" />} />
-              {getPageNumbers(page, totalPages).map((p, i) =>
+              <Button variant="ghost" size="sm" disabled={displayPage === 0} onClick={() => goToPage(displayPage - 1)} icon={<Icon name="prev" className="icon-sm" />} />
+              {getPageNumbers(displayPage, totalPages).map((p, i) =>
                 p === '…'
                   ? <span key={`ellipsis-${i}`} className="pagination-ellipsis">…</span>
-                  : <Button key={p} variant={p === page ? 'primary' : 'ghost'} size="sm" onClick={() => goToPage(p)}>{p + 1}</Button>
+                  : <Button key={p} variant={p === displayPage ? 'primary' : 'ghost'} size="sm" onClick={() => goToPage(p)}>{p + 1}</Button>
               )}
-              <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => goToPage(page + 1)} icon={<Icon name="next" className="icon-sm" />} />
+              <Button variant="ghost" size="sm" disabled={displayPage >= totalPages - 1} onClick={() => goToPage(displayPage + 1)} icon={<Icon name="next" className="icon-sm" />} />
             </div>
           )}
         </>

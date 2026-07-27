@@ -5,11 +5,11 @@
  * Must use `function()` syntax (not arrow) to receive kojo context via `this`.
  */
 
-export default function ({ limit, offset, folder, subtree, liked, random, sort, search, tag } = {}) {
+export default function ({ limit, offset, folder, subtree, liked, random, sort, search, tag, type } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  logger.debug(`[listMedia] folder=${folder} subtree=${subtree} liked=${liked} random=${random} sort=${sort} search=${search} tag=${tag} limit=${limit} offset=${offset}`);
+  logger.debug(`[listMedia] folder=${folder} subtree=${subtree} liked=${liked} random=${random} sort=${sort} search=${search} tag=${tag} type=${type} limit=${limit} offset=${offset}`);
 
   const conditions = ['hidden = 0'];
   const params = [];
@@ -41,6 +41,12 @@ export default function ({ limit, offset, folder, subtree, liked, random, sort, 
     logger.debug(`[listMedia] filtering by tag: "${tag}"`);
     conditions.push("EXISTS (SELECT 1 FROM json_each(media.tags) WHERE value = ?)");
     params.push(tag);
+  }
+
+  if (type != null) {
+    logger.debug(`[listMedia] filtering by type: "${type}"`);
+    conditions.push('type = ?');
+    params.push(type);
   }
 
   const where = conditions.join(' AND ');

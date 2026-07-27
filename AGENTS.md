@@ -1,10 +1,8 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with code in this repository.
 
-**Important:** Read and follow `LAW.md` — it is the source of truth for project rules.
-
-## Rules for Claude
+## Rules for Agents
 
 - **Never use `cd`** in shell commands. Run everything from the working directory.
 - **Never use absolute paths** in shell commands.

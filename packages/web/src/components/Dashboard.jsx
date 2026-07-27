@@ -6,6 +6,7 @@ import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
 import { fetchFolders, fetchMedia, getLastFolders } from '../utils/api.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache.js';
+import usePersistedState from '../hooks/usePersistedState.js';
 import { idbGetFolders } from '../services/idb.js';
 import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
@@ -93,8 +94,6 @@ export default function Dashboard() {
   const [browsing, setBrowsing] = useState(false);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
 
-  const [folderSort, setFolderSort] = useState('name');
-
   const [folders, setFolders] = useState(() => {
     if (isPageCacheValid('dashboard', signal)) return getPageCache('dashboard').data.folders;
     return getLastFolders() || [];
@@ -115,6 +114,7 @@ export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchParamPage = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
   const searchPage = searchParamPage - 1;
+  const [folderSort, setFolderSort] = usePersistedState('dashboard:sort', 'name');
 
   const goSearchPage = useCallback((p) => {
     if (p === 0) { setSearchParams({}, { replace: true }); return; }
