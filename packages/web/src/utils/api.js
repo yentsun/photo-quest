@@ -111,7 +111,7 @@ export async function fetchTags() {
   return response.json();
 }
 
-export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag } = {}) {
+export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type } = {}) {
   const url = new URL(apiRoutes.media, window.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
@@ -122,8 +122,9 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   if (sort != null) url.searchParams.set('sort', sort);
   if (search != null) url.searchParams.set('search', search);
   if (tag != null) url.searchParams.set('tag', tag);
+  if (type != null) url.searchParams.set('type', type);
 
-  const opts = { limit, offset, folder, subtree, liked, random, sort, search, tag };
+  const opts = { limit, offset, folder, subtree, liked, random, sort, search, tag, type };
 
   /* IDB stores results in deterministic order — skip it for random queries. */
   if (random) {

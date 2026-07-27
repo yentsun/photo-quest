@@ -22,6 +22,7 @@ export default async (kojo, logger) => {
     const sort = url.searchParams.get('sort');
     const search = url.searchParams.get('search');
     const tag = url.searchParams.get('tag');
+    const type = url.searchParams.get('type');
 
     const opts = {};
     if (limit != null) opts.limit = Number(limit);
@@ -33,6 +34,7 @@ export default async (kojo, logger) => {
     if (sort != null) opts.sort = sort;
     if (search != null) opts.search = search;
     if (tag != null) opts.tag = tag;
+    if (type != null) opts.type = type;
 
     logger.debug(`[GET /media] opts=${JSON.stringify(opts)}`);
     const result = kojo.ops.listMedia(opts);

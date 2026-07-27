@@ -8,10 +8,12 @@ import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 export default memo(function MediaCard({ media, onClick, onLike, showLikes = true }) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
   const [thumbFailed, setThumbFailed] = useState(false);
+  const [thumbReady, setThumbReady] = useState(false);
 
   const progressSecs = useJobProgress(media.id);
   const isTranscoding = media.status === 'transcoding' || progressSecs !== null;
   const isPending = !isTranscoding && (media.status === 'pending' || media.status === 'probed');
+  const showProcessingOverlay = (isTranscoding || isPending) && !thumbReady;
 
   const pct = isTranscoding && progressSecs !== null && media.duration > 0
     ? Math.min(99, Math.round((progressSecs / media.duration) * 100))
@@ -29,6 +31,7 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
             src={getThumbUrl(media.id)}
             alt={media.title}
             loading="lazy"
+            onLoad={() => setThumbReady(true)}
             onError={() => setThumbFailed(true)}
           />
         )}
@@ -38,7 +41,7 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
             <Icon name="warning" className="icon-lg text-red" />
             <span className="media-card-overlay-text">Processing failed</span>
           </div>
-        ) : (isTranscoding || isPending) && (
+        ) : showProcessingOverlay && (
           <div className="media-card-overlay">
             {isTranscoding && progressSecs !== null ? (
               pct !== null
