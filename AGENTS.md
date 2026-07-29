@@ -57,23 +57,6 @@ Independent Node.js process that polls the SQLite job queue. Uses Node.js built-
 - `GET /jobs` — List all jobs
 - `GET /jobs/events` — SSE for real-time job updates
 
-## Section 4 — Troubleshooting
-
-**4.1** If the app is unreachable from a mobile device via WireGuard despite the tunnel being up and the servers listening on `0.0.0.0`:
-
-1. Make sure the dev stack is running (`pnpm dev`). The Vite web server listens on `config.webappPort` (default `7838`) and the API server on `config.serverPort` (default `7837`).
-2. Add a Windows Firewall rule allowing both ports:
-   ```
-   New-NetFirewallRule -DisplayName "PhotoQuest" -Direction Inbound -Protocol TCP -LocalPort 7837,7838 -Action Allow -Profile Any
-   ```
-3. Change the WireGuard network profile from Public to Private (Windows blocks inbound on Public by default):
-   ```
-   Get-NetConnectionProfile -InterfaceAlias "<WG interface>" | Set-NetConnectionProfile -NetworkCategory Private
-   ```
-   Run both commands as Administrator. To find the WG interface name, check `ipconfig /all` or `wg show`.
-
----
-
 ## Glossary
 
 - **media** — A media file (video or image) in the library. Has path, title, duration, resolution, codec, status, transcoded_path, size.
