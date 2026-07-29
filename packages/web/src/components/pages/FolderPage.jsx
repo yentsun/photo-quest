@@ -312,7 +312,9 @@ export default function FolderPage() {
     const f = folderRef.current;
     if (!f) return;
     try {
-      const { items, total } = await fetchMedia({ folder: f.path, subtree: true, random: true });
+      const fetchOpts = { folder: f.path, subtree: true, random: true };
+      if (mediaTypeParam) fetchOpts.type = mediaTypeParam;
+      const { items, total } = await fetchMedia(fetchOpts);
       if (items.length === 0) return;
       pendingShuffle.current = true;
       slideshow.start(items, { order: 'sequential', total });
