@@ -30,17 +30,40 @@ export default function (id) {
   const filePath = row ? row.path : null;
   const transcodedPath = row ? row.transcoded_path : null;
 
+  /* Check whether the transcoded file is shared by another media record
+     before deleting. Prevents accidentally deleting a file that another
+     record (e.g. a duplicate imported from the same folder) also points to. */
+  let keepTranscoded = false;
+  if (transcodedPath) {
+    const shared = db.prepare(
+      'SELECT id FROM media WHERE id != ? AND (path = ? OR transcoded_path = ?)'
+    ).get(Number(id), transcodedPath, transcodedPath);
+    if (shared) {
+      logger.debug(`[removeMedia] transcoded path ${transcodedPath} also referenced by media ${shared.id}, will not delete`);
+      keepTranscoded = true;
+    }
+  }
+
   const result = db.prepare('DELETE FROM media WHERE id = ?').run(Number(id));
   logger.debug(`[removeMedia] db delete changes=${result.changes}`);
 
   if (result.changes > 0) {
-    for (const p of [filePath, transcodedPath]) {
+    for (const p of [filePath]) {
       if (!p) continue;
       try {
         fs.unlinkSync(p);
         logger.info(`Deleted file from disk: ${p}`);
       } catch (err) {
         logger.warn(`Could not delete file from disk: ${p} — ${err.message}`);
+      }
+    }
+
+    if (transcodedPath && !keepTranscoded) {
+      try {
+        fs.unlinkSync(transcodedPath);
+        logger.info(`Deleted transcoded file from disk: ${transcodedPath}`);
+      } catch (err) {
+        logger.warn(`Could not delete transcoded file from disk: ${transcodedPath} — ${err.message}`);
       }
     }
 
