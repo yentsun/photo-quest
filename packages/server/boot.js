@@ -106,26 +106,30 @@ export default async function boot() {
 
 function cleanupThumbs(db) {
   try {
-    if (!fs.existsSync(THUMBS_DIR)) return;
+    if (!fs.existsSync(THUMBS_DIR)) {
+      console.debug(`[boot] Thumbs dir does not exist, skipping cleanup: ${THUMBS_DIR}`);
+      return;
+    }
     const files = fs.readdirSync(THUMBS_DIR);
+    let checked = 0;
     let removed = 0;
     for (const file of files) {
       if (!file.toLowerCase().endsWith('.jpg')) continue;
       const base = path.basename(file, '.jpg');
       const id = Number(base.split('_')[0]);
       if (!Number.isFinite(id)) continue;
+      checked++;
       const exists = db.prepare('SELECT 1 FROM media WHERE id = ?').get(id);
       if (exists) continue;
       try {
         fs.unlinkSync(path.join(THUMBS_DIR, file));
+        console.log(`[boot] Removed orphan thumbnail: ${file}`);
         removed++;
       } catch (err) {
         console.warn(`[boot] Could not remove orphan thumbnail ${file}: ${err.message}`);
       }
     }
-    if (removed > 0) {
-      console.log(`[boot] Removed ${removed} orphan thumbnail(s)`);
-    }
+    console.log(`[boot] Thumbnail cleanup: checked ${checked} file(s), removed ${removed} orphan(s)`);
   } catch (err) {
     console.warn(`[boot] Thumbnail cleanup failed: ${err.message}`);
   }

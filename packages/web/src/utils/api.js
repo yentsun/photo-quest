@@ -237,6 +237,9 @@ export async function likeMedia(id) {
 }
 
 export async function deleteMedia(id) {
+  const cached = _mediaCache.get(id);
+  const folderPath = cached?.folder;
+
   const response = await fetch(`/media/${id}`, {
     method: 'DELETE',
   });
@@ -245,6 +248,7 @@ export async function deleteMedia(id) {
   }
   const result = await response.json();
   _mediaCache.delete(id);
+  if (folderPath) _folderMediaCache.delete(folderPath);
   idbDeleteMedia(id).catch(() => {});
   return result;
 }
