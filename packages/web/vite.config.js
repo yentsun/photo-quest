@@ -91,7 +91,7 @@ export default defineConfig({
           },
           {
             urlPattern: /^\/thumb\//,
-            handler: 'CacheFirst',
+            handler: 'NetworkFirst',
             options: {
               cacheName: 'media-thumbs',
               expiration: {
