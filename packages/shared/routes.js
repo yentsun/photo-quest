@@ -92,6 +92,9 @@ export const apiRoutes = {
   /** GET  -- list all folders with IDs. */
   folders: '/folders',
 
+  /** PATCH / DELETE -- update or remove a single folder by its numeric ID. */
+  folderById: '/folders/:id',
+
   /** DELETE -- remove a folder from library (hides records, preserves likes). */
   mediaFolder: '/media/folder/:id',
 

@@ -1,13 +1,14 @@
-import { useEffect, useCallback, useState, useRef, useMemo } from 'react';
+import { useEffect, useCallback, useState, useRef, useMemo, useContext } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
-import { MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
+import GlobalContext from '../../globalContext.js';
+import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, getLastMediaItem, getLastFolders } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -49,7 +50,8 @@ export default function MediaPage() {
   const location = useLocation();
   const sort = location.state?.sort || 'filename';
   const { deleteMedia } = useMediaActions();
-  const { signal } = useRefresh();
+  const { signal, bump } = useRefresh();
+  const { dispatch } = useContext(GlobalContext);
   const slideshow = useSlideshow();
   const [showInfo, setShowInfo] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -277,6 +279,19 @@ export default function MediaPage() {
   }, [goNext, goPrev, showMobileNavPanel]);
 
   const { removeItem: removeSlideshowItem } = slideshow;
+
+  const handleSetFolderThumbnail = useCallback(async () => {
+    if (!item || !folder) return;
+    try {
+      await setFolderThumbnail(folder.id, item.id);
+      bump();
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Folder thumbnail updated', toastType: 'success' });
+    } catch (err) {
+      console.error('Failed to set folder thumbnail:', err);
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not set folder thumbnail', toastType: 'error' });
+    }
+  }, [item, folder, bump, dispatch]);
+
   const handleDelete = useCallback(async () => {
     if (!item) return;
     if (!confirm(`Delete "${item.title}"?\n\nThis will remove it from the library AND delete the file from disk.`)) return;
@@ -651,6 +666,9 @@ export default function MediaPage() {
           <div className="viewer-actions">
             <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
             <Button variant="ghost" size="sm" icon={<Icon name="download" className="icon-sm" />} onClick={() => downloadMedia(item)}>Download</Button>
+            {isImage && folder && (
+              <Button variant="ghost" size="sm" icon={<Icon name="image" className="icon-sm" />} onClick={handleSetFolderThumbnail}>Folder thumbnail</Button>
+            )}
             <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>
             <LikeButton count={item.likes || 0} onLike={handleLike} />
           </div>

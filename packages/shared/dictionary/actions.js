@@ -17,6 +17,12 @@ export const actions = {
    *  the auto-dismiss timeout expires. */
   ERROR_DISMISSED: 'ERROR_DISMISSED',
 
+  /** Fired to show a temporary toast message (success, error, info). */
+  TOAST_SHOWN: 'TOAST_SHOWN',
+
+  /** Fired to dismiss the current toast message. */
+  TOAST_DISMISSED: 'TOAST_DISMISSED',
+
   /** Fired when slideshow starts. */
   SLIDESHOW_START: 'SLIDESHOW_START',
 

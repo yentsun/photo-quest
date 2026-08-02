@@ -17,6 +17,7 @@ import endpoint_post_scan from '../endpoints/30_post_media_scan.js';
 import endpoint_post_add from '../endpoints/35_post_media_add.js';
 import endpoint_delete from '../endpoints/40_delete_media_id.js';
 import endpoint_delete_folder from '../endpoints/45_delete_media_folder.js';
+import endpoint_patch_folder from '../endpoints/16_patch_folder_id.js';
 
 let db;
 let kojo;
@@ -90,6 +91,7 @@ async function setup() {
   await endpoint_post_add(kojo, logger);
   await endpoint_delete(kojo, logger);
   await endpoint_delete_folder(kojo, logger);
+  await endpoint_patch_folder(kojo, logger);
 }
 
 function mockRes() {
@@ -364,6 +366,64 @@ test('DELETE /media/folder/:id', async (t) => {
     /* Other folder's media should still be visible. */
     const other = db.prepare("SELECT hidden FROM media WHERE folder = ?").get('D:\\other');
     t.assert.strictEqual(other.hidden, 0);
+  });
+});
+
+test('PATCH /folders/:id', async (t) => {
+  await setup();
+
+  await t.test('sets a folder thumbnail from media in the same folder', async (t) => {
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\photos');
+    const folderId = db.prepare("SELECT id FROM folders WHERE path = ?").get('D:\\photos').id;
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\photos\\thumb.jpg', 'Thumb', 'image', 'ready', 'D:\\photos');
+
+    const route = findRoute('PATCH', '/folders/:id');
+    const req = mockReq('PATCH', `/folders/${folderId}`, { thumbnailMediaId: mediaId });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(folderId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.thumbnailMediaId, mediaId);
+
+    const row = db.prepare('SELECT thumbnail_media_id FROM folders WHERE id = ?').get(folderId);
+    t.assert.strictEqual(row.thumbnail_media_id, mediaId);
+  });
+
+  await t.test('rejects thumbnail from a different folder', async (t) => {
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\reject');
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\other');
+    const folderId = db.prepare("SELECT id FROM folders WHERE path = ?").get('D:\\reject').id;
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\other\\thumb.jpg', 'Thumb', 'image', 'ready', 'D:\\other');
+
+    const route = findRoute('PATCH', '/folders/:id');
+    const req = mockReq('PATCH', `/folders/${folderId}`, { thumbnailMediaId: mediaId });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(folderId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 400);
+  });
+
+  await t.test('renames folder without changing thumbnail', async (t) => {
+    db.prepare("INSERT INTO folders (path, name) VALUES (?, ?)").run('D:\\rename', 'Old');
+    const folderId = db.prepare("SELECT id FROM folders WHERE path = ?").get('D:\\rename').id;
+
+    const route = findRoute('PATCH', '/folders/:id');
+    const req = mockReq('PATCH', `/folders/${folderId}`, { name: 'New' });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(folderId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.name, 'New');
+    t.assert.strictEqual(res._body.thumbnailMediaId, null);
   });
 });
 

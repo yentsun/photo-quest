@@ -140,7 +140,8 @@ export const CREATE_FOLDERS_TABLE = `
   CREATE TABLE IF NOT EXISTS folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     path TEXT NOT NULL UNIQUE,
-    name TEXT
+    name TEXT,
+    thumbnail_media_id INTEGER REFERENCES media(id) ON DELETE SET NULL
   )
 `;
 

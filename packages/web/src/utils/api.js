@@ -358,6 +358,16 @@ export async function renameFolder(folderId, name) {
   return response.json();
 }
 
+export async function setFolderThumbnail(folderId, mediaId) {
+  const response = await fetch(`/folders/${folderId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ thumbnailMediaId: mediaId }),
+  });
+  if (!response.ok) throw new Error('Failed to set folder thumbnail');
+  return response.json();
+}
+
 export async function pickLibraryFile() {
   const response = await fetch(apiRoutes.libraryPick, { method: 'POST' });
   if (!response.ok) throw new Error('Could not open file picker');
