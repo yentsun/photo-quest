@@ -314,9 +314,12 @@ export default function MediaPage() {
     if (nextItem) navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
     else navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
     if (inSlideshow) removeSlideshowItem(deletedId);
-    try { await deleteMedia(deletedId); }
+    try {
+      await deleteMedia(deletedId);
+      bump();
+    }
     catch (err) { console.error('Failed to delete media:', err); }
-  }, [item, navItems, currentIndex, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia]);
+  }, [item, navItems, currentIndex, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump]);
 
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);

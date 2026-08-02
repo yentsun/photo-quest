@@ -141,6 +141,20 @@ export async function idbGetMediaById(id) {
 }
 
 /**
+ * Delete a single media item from the IDB media store.
+ * @param {number} id
+ */
+export async function idbDeleteMedia(id) {
+  const db = await openDB();
+  const tx = db.transaction('media', 'readwrite');
+  tx.objectStore('media').delete(Number(id));
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
  * Read media items from IDB, applying the same filters as the server's
  * listMedia op (folder, subtree, liked, limit, offset).
  *

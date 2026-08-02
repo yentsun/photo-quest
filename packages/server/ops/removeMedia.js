@@ -9,6 +9,11 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const THUMBS_DIR = path.join(__dirname, '..', 'thumbs');
 
 export default function (id) {
   const [kojo, logger] = this;
@@ -37,6 +42,26 @@ export default function (id) {
       } catch (err) {
         logger.warn(`Could not delete file from disk: ${p} — ${err.message}`);
       }
+    }
+
+    /* Also remove any cached thumbnail files for this media id. */
+    try {
+      if (fs.existsSync(THUMBS_DIR)) {
+        const prefix = `${Number(id)}`;
+        for (const entry of fs.readdirSync(THUMBS_DIR)) {
+          const name = path.basename(entry);
+          if (name === `${prefix}.jpg` || name.startsWith(`${prefix}_`)) {
+            try {
+              fs.unlinkSync(path.join(THUMBS_DIR, entry));
+              logger.info(`Deleted thumbnail from disk: ${entry}`);
+            } catch (err) {
+              logger.warn(`Could not delete thumbnail from disk: ${entry} — ${err.message}`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn(`Could not clean up thumbnails for id=${id}: ${err.message}`);
     }
   } else {
     logger.debug(`[removeMedia] nothing deleted (id not found): id=${id}`);

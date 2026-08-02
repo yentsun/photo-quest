@@ -19,6 +19,7 @@ import {
   idbPutMedia,
   idbPutManyMedia,
   idbPutManyFolders,
+  idbDeleteMedia,
 } from '../services/idb.js';
 
 // ---------------------------------------------------------------------------
@@ -244,6 +245,7 @@ export async function deleteMedia(id) {
   }
   const result = await response.json();
   _mediaCache.delete(id);
+  idbDeleteMedia(id).catch(() => {});
   return result;
 }
 
