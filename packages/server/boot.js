@@ -81,13 +81,6 @@ export default async function boot() {
   const db = initDb();
   kojo.set('db', db);
 
-  /* Remove media records whose files no longer exist on disk. */
-  cleanupOrphanRecords(db);
-
-  /* Clean up thumbnail files that belong to media records which no longer
-   * exist (e.g., leftovers from deletions before cleanup was added). */
-  cleanupThumbs(db);
-
   /* Auto-discover ops/ and endpoints/. During this phase every
    * endpoint file calls kojo.ops.addHttpRoute() to register its route. */
   console.debug('[boot] Loading ops and endpoints...');
@@ -103,6 +96,12 @@ export default async function boot() {
 
   /* Resume any imports that were interrupted by a previous crash/restart. */
   resumeIncompleteScans(kojo, console);
+
+  /* Run cleanups after the server is listening so we don't block startup. */
+  setImmediate(() => {
+    cleanupOrphanRecords(db);
+    cleanupThumbs(db);
+  });
 
   return kojo;
 }
