@@ -253,8 +253,9 @@ export default function FolderPage() {
   const displayItems = allItems.slice(displayPage * PAGE_SIZE, (displayPage + 1) * PAGE_SIZE);
 
   useEffect(() => {
+    if (!contentReady) return;
     if (displayPage !== page) setPage(displayPage);
-  }, [displayPage, page, setPage]);
+  }, [displayPage, page, setPage, contentReady]);
 
   const breadcrumbs = useMemo(() => {
     const crumbs = [];
