@@ -4,28 +4,31 @@ import { actions, toasterTimeout } from '@photo-quest/shared';
 import { Icon, IconButton } from './ui/index.js';
 
 export default function ToasterMessage() {
-  const { dispatch, state: { errorMessage, errorStatus } } = useContext(GlobalContext);
+  const { dispatch, state: { errorMessage, errorStatus, toastMessage, toastType } } = useContext(GlobalContext);
+
+  const message = toastMessage || errorMessage;
+  const type = toastType || (errorStatus === 500 ? 'error' : 'info');
 
   useEffect(() => {
-    if (!errorMessage) return;
+    if (!message) return;
     const timeoutId = setTimeout(
-      () => dispatch({ type: actions.ERROR_DISMISSED }),
+      () => dispatch({ type: toastMessage ? actions.TOAST_DISMISSED : actions.ERROR_DISMISSED }),
       toasterTimeout
     );
     return () => clearTimeout(timeoutId);
-  }, [errorMessage, dispatch]);
+  }, [message, toastMessage, dispatch]);
 
-  if (!errorMessage || errorMessage === 'Unauthorized') return null;
+  if (!message || message === 'Unauthorized') return null;
 
   return (
-    <div className="toaster">
+    <div className={`toaster toaster-${type}`}>
       <p>
-        {errorStatus === 500 ? 'Server Error: ' : ''}
-        {errorMessage}
+        {errorStatus === 500 && !toastMessage ? 'Server Error: ' : ''}
+        {message}
       </p>
       <IconButton
         icon={<Icon name="close" className="icon-sm" />}
-        onClick={() => dispatch({ type: actions.ERROR_DISMISSED })}
+        onClick={() => dispatch({ type: toastMessage ? actions.TOAST_DISMISSED : actions.ERROR_DISMISSED })}
         label="Dismiss message"
         size="sm"
         className="icon-btn-overlay"

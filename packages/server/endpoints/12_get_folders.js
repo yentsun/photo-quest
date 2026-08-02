@@ -25,7 +25,7 @@ export default async (kojo, logger) => {
 
     /* Scoped query: /folders?parent=<id> */
     if (parentId) {
-      const target = db.prepare('SELECT id, path, name FROM folders WHERE id = ?').get(parentId);
+      const target = db.prepare('SELECT id, path, name, thumbnail_media_id FROM folders WHERE id = ?').get(parentId);
       if (!target) {
         json(res, 404, { error: 'Folder not found' });
         return;
@@ -42,7 +42,7 @@ export default async (kojo, logger) => {
       while (true) {
         const parentPath = path.dirname(currentPath);
         if (parentPath === currentPath) break;
-        const ancestor = db.prepare('SELECT id, path, name FROM folders WHERE path = ?').get(parentPath);
+        const ancestor = db.prepare('SELECT id, path, name, thumbnail_media_id FROM folders WHERE path = ?').get(parentPath);
         if (!ancestor) break;
         ancestors.unshift(ancestor);
         currentPath = parentPath;
@@ -51,7 +51,7 @@ export default async (kojo, logger) => {
       /* Get all descendant folders (including target). */
       const likePattern = targetPath + sep + '%';
       const descendants = db.prepare(
-        'SELECT id, path, name FROM folders WHERE path = ? OR path LIKE ?'
+        'SELECT id, path, name, thumbnail_media_id FROM folders WHERE path = ? OR path LIKE ?'
       ).all(targetPath, likePattern);
       logger.debug(`[GET /folders] scoped: ${descendants.length} descendants`);
 
@@ -73,7 +73,7 @@ export default async (kojo, logger) => {
         }
       }
 
-      /* Preview media IDs for descendant folders (path prefix matching). */
+      /* Fallback preview media IDs for descendant folders (path prefix matching). */
       const previews = db.prepare(
         `SELECT folder, id FROM media WHERE hidden = 0 AND (folder = ? OR folder LIKE ?)
          ORDER BY
@@ -97,7 +97,8 @@ export default async (kojo, logger) => {
         mediaCount: (imageCounts.get(f.path) || 0) + (videoCounts.get(f.path) || 0),
         imageCount: imageCounts.get(f.path) || 0,
         videoCount: videoCounts.get(f.path) || 0,
-        previewMediaId: previewIds.get(f.path) || null,
+        previewMediaId: f.thumbnail_media_id ?? previewIds.get(f.path) ?? null,
+        thumbnailMediaId: f.thumbnail_media_id ?? null,
       }));
 
       /* Compute subtree totals bottom-up. */
@@ -139,7 +140,8 @@ export default async (kojo, logger) => {
             mediaCount: 0,
             imageCount: 0,
             videoCount: 0,
-            previewMediaId: null,
+            previewMediaId: a.thumbnail_media_id ?? null,
+            thumbnailMediaId: a.thumbnail_media_id ?? null,
             subtreeMediaCount: 0,
             subtreeImageCount: 0,
             subtreeVideoCount: 0,
@@ -173,7 +175,7 @@ export default async (kojo, logger) => {
 
     /* Full query: /folders (no parent filter) */
     logger.debug(`[GET /folders] querying folders`);
-    const folders = db.prepare('SELECT id, path, name FROM folders ORDER BY path').all();
+    const folders = db.prepare('SELECT id, path, name, thumbnail_media_id FROM folders ORDER BY path').all();
     logger.debug(`[GET /folders] raw folder count: ${folders.length}`);
 
     /* Build path→id map for parent lookup. */
@@ -193,7 +195,7 @@ export default async (kojo, logger) => {
       }
     }
 
-    /* Get one preview media ID per folder — oldest inserted first (fast clustered index scan). */
+    /* Get one fallback preview media ID per folder — oldest inserted first (fast clustered index scan). */
     const previews = db.prepare(
       'SELECT folder, MIN(id) as id FROM media WHERE hidden = 0 GROUP BY folder'
     ).all();
@@ -211,7 +213,8 @@ export default async (kojo, logger) => {
       mediaCount: (imageCounts.get(f.path) || 0) + (videoCounts.get(f.path) || 0),
       imageCount: imageCounts.get(f.path) || 0,
       videoCount: videoCounts.get(f.path) || 0,
-      previewMediaId: previewIds.get(f.path) || null,
+      previewMediaId: f.thumbnail_media_id ?? previewIds.get(f.path) ?? null,
+      thumbnailMediaId: f.thumbnail_media_id ?? null,
     }));
 
     /* Compute subtree totals bottom-up (children before parents). */

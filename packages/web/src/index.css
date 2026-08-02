@@ -890,6 +890,9 @@ body {
   font-size: var(--fs-sm); box-shadow: 0 8px 24px rgba(0,12,16,0.4);
 }
 .toaster p { color: var(--sol-text-em); }
+.toaster-success { background: #1a3a1d; border-color: var(--sol-green); color: var(--sol-green); }
+.toaster-error { background: #3a1d1a; border-color: var(--sol-red); color: var(--sol-red); }
+.toaster-info { background: #1a2a3a; border-color: var(--sol-blue); color: var(--sol-blue); }
 
 /* ─── Search input wrapper ─── */
 .search-wrap { position: relative; }

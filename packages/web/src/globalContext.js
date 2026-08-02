@@ -16,6 +16,8 @@ export const initialState = {
   settings: {},
   errorMessage: null,
   errorStatus: null,
+  toastMessage: null,
+  toastType: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -43,6 +45,20 @@ export const reducer = (state, action) => {
         ...state,
         errorMessage: null,
         errorStatus: null
+      };
+
+    case actions.TOAST_SHOWN:
+      return {
+        ...state,
+        toastMessage: action.message,
+        toastType: action.toastType || 'info',
+      };
+
+    case actions.TOAST_DISMISSED:
+      return {
+        ...state,
+        toastMessage: null,
+        toastType: null,
       };
 
     default:

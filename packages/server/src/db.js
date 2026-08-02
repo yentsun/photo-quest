@@ -107,6 +107,7 @@ function migrateDb() {
     'ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0',
     "ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
     'ALTER TABLE folders ADD COLUMN name TEXT',
+    'ALTER TABLE folders ADD COLUMN thumbnail_media_id INTEGER REFERENCES media(id) ON DELETE SET NULL',
   ];
 
   for (const sql of migrations) {
