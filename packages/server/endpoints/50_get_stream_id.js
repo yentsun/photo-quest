@@ -31,7 +31,18 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Media not found' });
     }
 
-    const usingTranscoded = !!(row.transcoded_path && fs.existsSync(row.transcoded_path));
+    const transcodedExists = !!(row.transcoded_path && fs.existsSync(row.transcoded_path));
+    const usingTranscoded = transcodedExists;
+
+    /* If status is ready but the transcoded file is missing, reset so
+       transcodeNow will actually run, then kick off a re-transcode. */
+    if (!transcodedExists && row.status === 'ready' && row.transcoded_path) {
+      logger.info(`[GET /stream/:id] transcoded file missing for ready media ${row.id}, re-transcoding`);
+      const db = kojo.get('db');
+      db.prepare("UPDATE media SET status = 'pending', updated_at = datetime('now') WHERE id = ?").run(row.id);
+      kojo.ops.transcodeNow(row.id);
+    }
+
     const filePath = usingTranscoded ? row.transcoded_path : row.path;
     logger.debug(`[GET /stream/:id] serving ${usingTranscoded ? 'transcoded' : 'original'}: ${filePath}`);
 
