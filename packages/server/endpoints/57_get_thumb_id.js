@@ -69,6 +69,12 @@ export default async (kojo, logger) => {
 
     if (!row) return json(res, 404, { error: 'Media not found' });
 
+    /* For videos that have been transcoded, the original path may have been
+       deleted. Use the transcoded MP4 as the thumbnail source. */
+    const sourcePath = row.type === MEDIA_TYPE.VIDEO && row.transcoded_path && fs.existsSync(row.transcoded_path)
+      ? row.transcoded_path
+      : row.path;
+
     const url = new URL(req.url, `http://${req.headers.host}`);
     const timeParam = url.searchParams.get('time');
     const requestedTime = timeParam != null ? Number(timeParam) : null;
@@ -79,15 +85,15 @@ export default async (kojo, logger) => {
     const useTime = time != null && Number.isFinite(time) && time >= 0 && row.type === MEDIA_TYPE.VIDEO;
 
     /* GIFs: serve raw so animation is preserved — no JPEG conversion. */
-    if (path.extname(row.path).toLowerCase() === '.gif') {
-      if (!fs.existsSync(row.path)) return json(res, 404, { error: 'File not found on disk' });
-      const stat = fs.statSync(row.path);
+    if (path.extname(sourcePath).toLowerCase() === '.gif') {
+      if (!fs.existsSync(sourcePath)) return json(res, 404, { error: 'File not found on disk' });
+      const stat = fs.statSync(sourcePath);
       res.writeHead(200, {
         'Content-Type': 'image/gif',
         'Content-Length': stat.size,
         'Cache-Control': 'public, max-age=31536000',
       });
-      return fs.createReadStream(row.path).pipe(res);
+      return fs.createReadStream(sourcePath).pipe(res);
     }
 
     if (!fs.existsSync(THUMBS_DIR)) fs.mkdirSync(THUMBS_DIR, { recursive: true });
@@ -97,15 +103,15 @@ export default async (kojo, logger) => {
     const inFlightKey = useTime ? `${mediaId}:${time}` : String(mediaId);
 
     if (!fs.existsSync(thumbPath)) {
-      if (!fs.existsSync(row.path)) {
+      if (!fs.existsSync(sourcePath)) {
         return json(res, 404, { error: 'File not found on disk' });
       }
 
       let gen = inFlight.get(inFlightKey);
       if (!gen) {
         const work = row.type === MEDIA_TYPE.IMAGE
-          ? generateImageThumb(row.path, thumbPath)
-          : extractFrame(row.path, thumbPath, useTime ? time : null);
+          ? generateImageThumb(sourcePath, thumbPath)
+          : extractFrame(sourcePath, thumbPath, useTime ? time : null);
         gen = work.finally(() => inFlight.delete(inFlightKey));
         inFlight.set(inFlightKey, gen);
       }
