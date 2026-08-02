@@ -8,7 +8,7 @@ import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -183,7 +183,7 @@ export default function MediaPage() {
       const next = slideshow.items[slideshow.currentIndex + offset];
       if (!next || next.type !== MEDIA_TYPE.IMAGE) return [];
       const img = new Image();
-      img.src = getThumbUrl(next.id);
+      img.src = getThumbUrl(next.id, next.thumbnail_time);
       return [img];
     });
   }, [inSlideshow, slideshow.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -280,10 +280,10 @@ export default function MediaPage() {
 
   const { removeItem: removeSlideshowItem } = slideshow;
 
-  const handleSetFolderThumbnail = useCallback(async () => {
+  const handleSetFolderThumbnail = useCallback(async (time = null) => {
     if (!item || !folder) return;
     try {
-      await setFolderThumbnail(folder.id, item.id);
+      await setFolderThumbnail(folder.id, item.id, time);
       bump();
       dispatch({ type: actions.TOAST_SHOWN, message: 'Folder thumbnail updated', toastType: 'success' });
     } catch (err) {
@@ -291,6 +291,20 @@ export default function MediaPage() {
       dispatch({ type: actions.TOAST_SHOWN, message: 'Could not set folder thumbnail', toastType: 'error' });
     }
   }, [item, folder, bump, dispatch]);
+
+  const handleSetVideoThumbnail = useCallback(async () => {
+    if (!item || item.type === MEDIA_TYPE.IMAGE) return;
+    const time = playerRef.current?.getCurrentTime() ?? 0;
+    try {
+      await setVideoThumbnail(item.id, time);
+      setItem(prev => prev ? { ...prev, thumbnail_time: time } : prev);
+      bump();
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Video thumbnail updated', toastType: 'success' });
+    } catch (err) {
+      console.error('Failed to set video thumbnail:', err);
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not set video thumbnail', toastType: 'error' });
+    }
+  }, [item, bump, dispatch]);
 
   const handleDelete = useCallback(async () => {
     if (!item) return;
@@ -667,7 +681,13 @@ export default function MediaPage() {
             <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
             <Button variant="ghost" size="sm" icon={<Icon name="download" className="icon-sm" />} onClick={() => downloadMedia(item)}>Download</Button>
             {isImage && folder && (
-              <Button variant="ghost" size="sm" icon={<Icon name="image" className="icon-sm" />} onClick={handleSetFolderThumbnail}>Folder thumbnail</Button>
+              <Button variant="ghost" size="sm" icon={<Icon name="image" className="icon-sm" />} onClick={() => handleSetFolderThumbnail()}>Use as folder thumbnail</Button>
+            )}
+            {!isImage && folder && item.status === MEDIA_STATUS.READY && (
+              <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} onClick={() => handleSetFolderThumbnail(playerRef.current?.getCurrentTime())}>Use frame for folder</Button>
+            )}
+            {!isImage && item.status === MEDIA_STATUS.READY && (
+              <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} onClick={handleSetVideoThumbnail}>Use frame for video</Button>
             )}
             <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>
             <LikeButton count={item.likes || 0} onLike={handleLike} />

@@ -12,7 +12,7 @@ export default memo(function FolderCard({ folder, onRemove }) {
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const inputRef = useRef(null);
-  const thumbnailUrl = folder.previewMediaId ? getThumbUrl(folder.previewMediaId) : null;
+  const thumbnailUrl = folder.previewMediaId ? getThumbUrl(folder.previewMediaId, folder.thumbnailTime) : null;
   const imageCount = folder.subtreeImageCount ?? folder.imageCount ?? 0;
   const videoCount = folder.subtreeVideoCount ?? folder.videoCount ?? 0;
 

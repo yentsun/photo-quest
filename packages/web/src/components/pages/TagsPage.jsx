@@ -33,8 +33,8 @@ export default function TagsPage() {
         />
       ) : (
         <div className="item-grid">
-          {tags.map(({ tag, count, previewMediaId }) => (
-            <TagCard key={tag} tag={tag} count={count} previewMediaId={previewMediaId} />
+          {tags.map(({ tag, count, previewMediaId, previewThumbnailTime }) => (
+            <TagCard key={tag} tag={tag} count={count} previewMediaId={previewMediaId} previewThumbnailTime={previewThumbnailTime} />
           ))}
         </div>
       )}

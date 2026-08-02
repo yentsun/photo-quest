@@ -80,6 +80,9 @@ export const apiRoutes = {
   /** PATCH -- update the tags array for a media item. */
   mediaTags: '/media/:id/tags',
 
+  /** PATCH -- set a custom thumbnail frame for a video. */
+  mediaThumbnail: '/media/:id/thumbnail',
+
   /** POST -- trigger a directory scan.  Body: { path: "/absolute/dir" }. */
   mediaScan: '/media/scan',
 

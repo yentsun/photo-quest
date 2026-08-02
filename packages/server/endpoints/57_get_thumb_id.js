@@ -2,11 +2,12 @@
  * @file GET /thumb/:id -- Serve a thumbnail image for any media item.
  *
  * Images: resize to 400 px wide via sharp (EXIF-rotated), cache as JPEG to disk.
- * Videos: extract the first frame via ffmpeg, cache it as a JPEG to disk.
+ * Videos: extract a frame via ffmpeg, cache it as a JPEG to disk.
  *
- * In both cases the generated JPEG is written to packages/server/thumbs/<id>.jpg
- * on the first request and served from disk on all subsequent requests, so
- * neither sharp nor ffmpeg runs more than once per item.
+ * A `?time=<seconds>` query parameter can be used for videos to extract a frame
+ * at a specific offset. The generated JPEG is written to
+ * packages/server/thumbs/<id>.jpg (or <id>_<time>.jpg when a time offset is
+ * requested) on the first request and served from disk thereafter.
  */
 
 import { spawn } from 'node:child_process';
@@ -21,20 +22,21 @@ import { json } from '../src/http.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const THUMBS_DIR = path.join(__dirname, '..', 'thumbs');
 
-/** In-flight generation promises keyed by media ID — prevents duplicate work on concurrent requests. */
+/** In-flight generation promises keyed by media ID + optional time — prevents duplicate work on concurrent requests. */
 const inFlight = new Map();
 
-function extractFrame(videoPath, thumbPath) {
+function extractFrame(videoPath, thumbPath, time = null) {
+  const args = [
+    '-hide_banner',
+    '-loglevel', 'error',
+  ];
+  if (time != null) {
+    args.push('-ss', String(time));
+  }
+  args.push('-i', videoPath, '-vframes', '1', '-an', '-y', thumbPath);
+
   return new Promise((resolve, reject) => {
-    const proc = spawn(ffmpegBin, [
-      '-hide_banner',
-      '-loglevel', 'error',
-      '-i', videoPath,
-      '-vframes', '1',
-      '-an',
-      '-y',
-      thumbPath,
-    ]);
+    const proc = spawn(ffmpegBin, args);
     const stderrChunks = [];
     proc.stderr.on('data', (chunk) => stderrChunks.push(chunk));
     proc.on('close', (code) => {
@@ -67,6 +69,15 @@ export default async (kojo, logger) => {
 
     if (!row) return json(res, 404, { error: 'Media not found' });
 
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const timeParam = url.searchParams.get('time');
+    const requestedTime = timeParam != null ? Number(timeParam) : null;
+    const effectiveTime = requestedTime != null
+      ? requestedTime
+      : (row.type === MEDIA_TYPE.VIDEO ? row.thumbnail_time : null);
+    const time = effectiveTime != null ? Number(effectiveTime) : null;
+    const useTime = time != null && Number.isFinite(time) && time >= 0 && row.type === MEDIA_TYPE.VIDEO;
+
     /* GIFs: serve raw so animation is preserved — no JPEG conversion. */
     if (path.extname(row.path).toLowerCase() === '.gif') {
       if (!fs.existsSync(row.path)) return json(res, 404, { error: 'File not found on disk' });
@@ -81,25 +92,27 @@ export default async (kojo, logger) => {
 
     if (!fs.existsSync(THUMBS_DIR)) fs.mkdirSync(THUMBS_DIR, { recursive: true });
 
-    const thumbPath = path.join(THUMBS_DIR, `${mediaId}.jpg`);
+    const thumbFile = useTime ? `${mediaId}_${time}.jpg` : `${mediaId}.jpg`;
+    const thumbPath = path.join(THUMBS_DIR, thumbFile);
+    const inFlightKey = useTime ? `${mediaId}:${time}` : String(mediaId);
 
     if (!fs.existsSync(thumbPath)) {
       if (!fs.existsSync(row.path)) {
         return json(res, 404, { error: 'File not found on disk' });
       }
 
-      let gen = inFlight.get(mediaId);
+      let gen = inFlight.get(inFlightKey);
       if (!gen) {
         const work = row.type === MEDIA_TYPE.IMAGE
           ? generateImageThumb(row.path, thumbPath)
-          : extractFrame(row.path, thumbPath);
-        gen = work.finally(() => inFlight.delete(mediaId));
-        inFlight.set(mediaId, gen);
+          : extractFrame(row.path, thumbPath, useTime ? time : null);
+        gen = work.finally(() => inFlight.delete(inFlightKey));
+        inFlight.set(inFlightKey, gen);
       }
       try {
         await gen;
       } catch (err) {
-        logger.warn(`Thumb generation failed for media ${mediaId}: ${err.message}`);
+        logger.warn(`Thumb generation failed for media ${mediaId} time=${time}: ${err.message}`);
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         return res.end('No thumbnail');
       }

@@ -21,12 +21,12 @@ export default async (kojo, logger) => {
     const db = kojo.get('db');
     const folderId = Number(params.id);
 
-    const folder = db.prepare('SELECT id, path, name, thumbnail_media_id FROM folders WHERE id = ?').get(folderId);
+    const folder = db.prepare('SELECT id, path, name, thumbnail_media_id, thumbnail_time FROM folders WHERE id = ?').get(folderId);
     if (!folder) {
       return json(res, 404, { error: 'Folder not found' });
     }
 
-    const { name, thumbnailMediaId } = body;
+    const { name, thumbnailMediaId, thumbnailTime } = body;
     const updates = [];
     const values = [];
 
@@ -36,10 +36,14 @@ export default async (kojo, logger) => {
       values.push(cleanName);
     }
 
+    let targetMediaId = folder.thumbnail_media_id;
     if (thumbnailMediaId !== undefined) {
-      const thumbnailId = thumbnailMediaId != null ? Number(thumbnailMediaId) : null;
-      if (thumbnailId != null) {
-        const media = kojo.ops.getMediaById(thumbnailId);
+      targetMediaId = thumbnailMediaId != null ? Number(thumbnailMediaId) : null;
+    }
+
+    if (thumbnailMediaId !== undefined) {
+      if (targetMediaId != null) {
+        const media = kojo.ops.getMediaById(targetMediaId);
         if (!media) {
           return json(res, 404, { error: 'Media not found' });
         }
@@ -51,7 +55,32 @@ export default async (kojo, logger) => {
         }
       }
       updates.push('thumbnail_media_id = ?');
-      values.push(thumbnailId);
+      values.push(targetMediaId);
+    }
+
+    if (thumbnailTime !== undefined) {
+      const time = thumbnailTime != null ? Number(thumbnailTime) : null;
+      if (time != null) {
+        if (!Number.isFinite(time) || time < 0) {
+          return json(res, 400, { error: 'Invalid thumbnail time' });
+        }
+        const mediaId = thumbnailMediaId !== undefined ? targetMediaId : folder.thumbnail_media_id;
+        if (mediaId == null) {
+          return json(res, 400, { error: 'Thumbnail media is required when setting a time offset' });
+        }
+        const media = kojo.ops.getMediaById(mediaId);
+        if (media.type !== 'video') {
+          return json(res, 400, { error: 'Thumbnail time can only be set for video media' });
+        }
+      }
+      updates.push('thumbnail_time = ?');
+      values.push(time);
+    }
+
+    if (thumbnailMediaId !== undefined && targetMediaId == null && thumbnailTime === undefined) {
+      /* Clearing the thumbnail should also clear any stored time offset. */
+      updates.push('thumbnail_time = ?');
+      values.push(null);
     }
 
     if (updates.length === 0) {
@@ -60,7 +89,7 @@ export default async (kojo, logger) => {
 
     values.push(folderId);
     const result = db.prepare(
-      `UPDATE folders SET ${updates.join(', ')} WHERE id = ? RETURNING id, path, name, thumbnail_media_id`
+      `UPDATE folders SET ${updates.join(', ')} WHERE id = ? RETURNING id, path, name, thumbnail_media_id, thumbnail_time`
     ).get(...values);
 
     logger.debug(`[PATCH /folders/:id] updated id=${folderId} fields=[${updates.join(', ')}]`);
@@ -69,6 +98,7 @@ export default async (kojo, logger) => {
       path: result.path,
       name: result.name,
       thumbnailMediaId: result.thumbnail_media_id,
+      thumbnailTime: result.thumbnail_time,
     });
   });
 };

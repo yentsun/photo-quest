@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { getThumbUrl } from '../../utils/api.js';
 import { Icon } from '../ui/index.js';
 
-export default memo(function TagCard({ tag, count, previewMediaId }) {
+export default memo(function TagCard({ tag, count, previewMediaId, previewThumbnailTime }) {
   const navigate = useNavigate();
-  const thumbnailUrl = previewMediaId ? getThumbUrl(previewMediaId) : null;
+  const thumbnailUrl = previewMediaId ? getThumbUrl(previewMediaId, previewThumbnailTime) : null;
 
   return (
     <div className="folder-card" onClick={() => navigate(`/tags/${encodeURIComponent(tag)}`)}>
