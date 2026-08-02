@@ -24,6 +24,9 @@ const MediaPlayer = forwardRef(function MediaPlayer({
       if (!v) return;
       v.paused ? v.play().catch(() => {}) : v.pause();
     },
+    getCurrentTime() {
+      return videoRef.current?.currentTime ?? 0;
+    },
   }));
 
   useEffect(() => {

@@ -28,7 +28,7 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
           </div>
         ) : (
           <img
-            src={getThumbUrl(media.id)}
+            src={getThumbUrl(media.id, media.thumbnail_time)}
             alt={media.title}
             loading="lazy"
             onLoad={() => setThumbReady(true)}

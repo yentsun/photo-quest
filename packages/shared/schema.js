@@ -65,6 +65,7 @@ export const CREATE_MEDIA_TABLE = `
     orientation INTEGER,
     camera TEXT,
     date_taken TEXT,
+    thumbnail_time REAL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
@@ -141,7 +142,8 @@ export const CREATE_FOLDERS_TABLE = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     path TEXT NOT NULL UNIQUE,
     name TEXT,
-    thumbnail_media_id INTEGER REFERENCES media(id) ON DELETE SET NULL
+    thumbnail_media_id INTEGER REFERENCES media(id) ON DELETE SET NULL,
+    thumbnail_time REAL
   )
 `;
 

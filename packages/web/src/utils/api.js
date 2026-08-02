@@ -278,8 +278,9 @@ export function getImageUrl(id) {
   return `/image/${id}`;
 }
 
-export function getThumbUrl(id) {
-  return `/thumb/${id}`;
+export function getThumbUrl(id, time = null) {
+  if (time == null) return `/thumb/${id}`;
+  return `/thumb/${id}?time=${time}`;
 }
 
 export function getMediaUrl(media) {
@@ -358,14 +359,29 @@ export async function renameFolder(folderId, name) {
   return response.json();
 }
 
-export async function setFolderThumbnail(folderId, mediaId) {
+export async function setFolderThumbnail(folderId, mediaId, time = null) {
+  const payload = { thumbnailMediaId: mediaId };
+  if (time != null) payload.thumbnailTime = time;
   const response = await fetch(`/folders/${folderId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ thumbnailMediaId: mediaId }),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to set folder thumbnail');
   return response.json();
+}
+
+export async function setVideoThumbnail(mediaId, time) {
+  const response = await fetch(`/media/${mediaId}/thumbnail`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ thumbnailTime: time }),
+  });
+  if (!response.ok) throw new Error('Failed to set video thumbnail');
+  const item = parseTags(await response.json());
+  _mediaCache.set(item.id, item);
+  idbPutMedia(item).catch(() => {});
+  return item;
 }
 
 export async function pickLibraryFile() {

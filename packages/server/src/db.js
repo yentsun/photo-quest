@@ -108,6 +108,8 @@ function migrateDb() {
     "ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
     'ALTER TABLE folders ADD COLUMN name TEXT',
     'ALTER TABLE folders ADD COLUMN thumbnail_media_id INTEGER REFERENCES media(id) ON DELETE SET NULL',
+    'ALTER TABLE folders ADD COLUMN thumbnail_time REAL',
+    'ALTER TABLE media ADD COLUMN thumbnail_time REAL',
   ];
 
   for (const sql of migrations) {

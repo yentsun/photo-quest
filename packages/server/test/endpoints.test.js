@@ -18,6 +18,7 @@ import endpoint_post_add from '../endpoints/35_post_media_add.js';
 import endpoint_delete from '../endpoints/40_delete_media_id.js';
 import endpoint_delete_folder from '../endpoints/45_delete_media_folder.js';
 import endpoint_patch_folder from '../endpoints/16_patch_folder_id.js';
+import endpoint_patch_media_thumbnail from '../endpoints/17_patch_media_id_thumbnail.js';
 
 let db;
 let kojo;
@@ -92,6 +93,7 @@ async function setup() {
   await endpoint_delete(kojo, logger);
   await endpoint_delete_folder(kojo, logger);
   await endpoint_patch_folder(kojo, logger);
+  await endpoint_patch_media_thumbnail(kojo, logger);
 }
 
 function mockRes() {
@@ -424,6 +426,92 @@ test('PATCH /folders/:id', async (t) => {
     t.assert.strictEqual(res._status, 200);
     t.assert.strictEqual(res._body.name, 'New');
     t.assert.strictEqual(res._body.thumbnailMediaId, null);
+  });
+
+  await t.test('sets a video thumbnail with a time offset', async (t) => {
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\time');
+    const folderId = db.prepare("SELECT id FROM folders WHERE path = ?").get('D:\\time').id;
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\time\\clip.mp4', 'Clip', 'video', 'ready', 'D:\\time');
+
+    const route = findRoute('PATCH', '/folders/:id');
+    const req = mockReq('PATCH', `/folders/${folderId}`, { thumbnailMediaId: mediaId, thumbnailTime: 12.5 });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(folderId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.thumbnailMediaId, mediaId);
+    t.assert.strictEqual(res._body.thumbnailTime, 12.5);
+
+    const row = db.prepare('SELECT thumbnail_media_id, thumbnail_time FROM folders WHERE id = ?').get(folderId);
+    t.assert.strictEqual(row.thumbnail_media_id, mediaId);
+    t.assert.strictEqual(row.thumbnail_time, 12.5);
+  });
+
+  await t.test('rejects time offset for image media', async (t) => {
+    db.prepare("INSERT INTO folders (path) VALUES (?)").run('D:\\imgtime');
+    const folderId = db.prepare("SELECT id FROM folders WHERE path = ?").get('D:\\imgtime').id;
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\imgtime\\photo.jpg', 'Photo', 'image', 'ready', 'D:\\imgtime');
+
+    const route = findRoute('PATCH', '/folders/:id');
+    const req = mockReq('PATCH', `/folders/${folderId}`, { thumbnailMediaId: mediaId, thumbnailTime: 5 });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(folderId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 400);
+  });
+});
+
+test('PATCH /media/:id/thumbnail', async (t) => {
+  await setup();
+
+  await t.test('sets a custom thumbnail time for a video', async (t) => {
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\vids\\clip.mp4', 'Clip', 'video', 'ready', 'D:\\vids');
+
+    const route = findRoute('PATCH', '/media/:id/thumbnail');
+    const req = mockReq('PATCH', `/media/${mediaId}/thumbnail`, { thumbnailTime: 23.4 });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(mediaId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.thumbnail_time, 23.4);
+
+    const row = db.prepare('SELECT thumbnail_time FROM media WHERE id = ?').get(mediaId);
+    t.assert.strictEqual(row.thumbnail_time, 23.4);
+  });
+
+  await t.test('rejects thumbnail time for images', async (t) => {
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status, folder) VALUES (?, ?, ?, ?, ?)").run('D:\\pics\\photo.jpg', 'Photo', 'image', 'ready', 'D:\\pics');
+
+    const route = findRoute('PATCH', '/media/:id/thumbnail');
+    const req = mockReq('PATCH', `/media/${mediaId}/thumbnail`, { thumbnailTime: 5 });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(mediaId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 400);
+  });
+
+  await t.test('returns 404 for non-existent media', async (t) => {
+    const route = findRoute('PATCH', '/media/:id/thumbnail');
+    const req = mockReq('PATCH', '/media/99999/thumbnail', { thumbnailTime: 5 });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: '99999' });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 404);
   });
 });
 
