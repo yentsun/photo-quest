@@ -318,7 +318,10 @@ export default function MediaPage() {
       await deleteMedia(deletedId);
       bump();
     }
-    catch (err) { console.error('Failed to delete media:', err); }
+    catch (err) {
+      console.error('Failed to delete media:', err);
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
+    }
   }, [item, navItems, currentIndex, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump]);
 
   useEffect(() => {
