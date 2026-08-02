@@ -50,7 +50,14 @@ async function run(db, media, logger) {
     const dir = path.dirname(media.path);
     const base = path.basename(media.path, path.extname(media.path));
     const suffix = isMp4 ? '_converted' : '';
-    const outputPath = path.join(dir, `${base}${suffix}.mp4`);
+    let outputPath = path.join(dir, `${base}${suffix}.mp4`);
+
+    /* Avoid overwriting an existing file that may belong to another media record. */
+    let counter = 1;
+    while (fs.existsSync(outputPath)) {
+      outputPath = path.join(dir, `${base}${suffix}_${counter}.mp4`);
+      counter++;
+    }
 
     /* Stream-copy when possible; re-encode only when codec is incompatible. */
     const videoArgs = isH264
