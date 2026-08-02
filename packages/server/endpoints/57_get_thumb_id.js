@@ -91,7 +91,7 @@ export default async (kojo, logger) => {
       res.writeHead(200, {
         'Content-Type': 'image/gif',
         'Content-Length': stat.size,
-        'Cache-Control': 'public, max-age=31536000',
+        'Cache-Control': 'public, max-age=86400',
       });
       return fs.createReadStream(sourcePath).pipe(res);
     }
@@ -128,7 +128,7 @@ export default async (kojo, logger) => {
     res.writeHead(200, {
       'Content-Type': 'image/jpeg',
       'Content-Length': stat.size,
-      'Cache-Control': 'public, max-age=31536000',
+      'Cache-Control': 'public, max-age=86400',
     });
     fs.createReadStream(thumbPath).pipe(res);
   });
