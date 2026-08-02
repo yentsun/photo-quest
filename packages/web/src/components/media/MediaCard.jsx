@@ -58,6 +58,14 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
 
         <span className="media-card-corner">{isImage ? 'IMG' : 'VID'}</span>
 
+        {media.tags?.length > 0 && (
+          <div className="media-card-tags">
+            {media.tags.slice(0, 3).map(tag => (
+              <span key={tag} className="media-card-tag">{tag}</span>
+            ))}
+          </div>
+        )}
+
         {showLikes && (
           <div className="media-card-likes">
             <LikeButton count={media.likes || 0} onLike={() => onLike?.(media)} size="sm" />
