@@ -81,6 +81,9 @@ export default async function boot() {
   const db = initDb();
   kojo.set('db', db);
 
+  /* Remove media records whose files no longer exist on disk. */
+  cleanupOrphanRecords(db);
+
   /* Clean up thumbnail files that belong to media records which no longer
    * exist (e.g., leftovers from deletions before cleanup was added). */
   cleanupThumbs(db);
@@ -132,6 +135,26 @@ function cleanupThumbs(db) {
     console.log(`[boot] Thumbnail cleanup: checked ${checked} file(s), removed ${removed} orphan(s)`);
   } catch (err) {
     console.warn(`[boot] Thumbnail cleanup failed: ${err.message}`);
+  }
+}
+
+function cleanupOrphanRecords(db) {
+  try {
+    const rows = db.prepare('SELECT id, path, transcoded_path FROM media').all();
+    let removed = 0;
+    for (const row of rows) {
+      const fileExists = (row.path && fs.existsSync(row.path));
+      const transcodeExists = (row.transcoded_path && fs.existsSync(row.transcoded_path));
+      if (fileExists || transcodeExists) continue;
+      console.log(`[boot] Removing orphan media record id=${row.id}: ${row.path}`);
+      db.prepare('DELETE FROM media WHERE id = ?').run(row.id);
+      removed++;
+    }
+    if (removed > 0) {
+      console.log(`[boot] Removed ${removed} orphan media record(s)`);
+    }
+  } catch (err) {
+    console.warn(`[boot] Orphan record cleanup failed: ${err.message}`);
   }
 }
 
