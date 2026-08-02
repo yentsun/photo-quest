@@ -24,6 +24,7 @@ import fs from 'node:fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOG_PATH = path.join(__dirname, 'photo-quest.log');
+const THUMBS_DIR = path.join(__dirname, 'thumbs');
 
 /* Tee stdout/stderr to both the original stream and a log file. */
 const logStream = fs.createWriteStream(LOG_PATH, { flags: 'a' });
@@ -80,6 +81,10 @@ export default async function boot() {
   const db = initDb();
   kojo.set('db', db);
 
+  /* Clean up thumbnail files that belong to media records which no longer
+   * exist (e.g., leftovers from deletions before cleanup was added). */
+  cleanupThumbs(db);
+
   /* Auto-discover ops/ and endpoints/. During this phase every
    * endpoint file calls kojo.ops.addHttpRoute() to register its route. */
   console.debug('[boot] Loading ops and endpoints...');
@@ -97,6 +102,33 @@ export default async function boot() {
   resumeIncompleteScans(kojo, console);
 
   return kojo;
+}
+
+function cleanupThumbs(db) {
+  try {
+    if (!fs.existsSync(THUMBS_DIR)) return;
+    const files = fs.readdirSync(THUMBS_DIR);
+    let removed = 0;
+    for (const file of files) {
+      if (!file.toLowerCase().endsWith('.jpg')) continue;
+      const base = path.basename(file, '.jpg');
+      const id = Number(base.split('_')[0]);
+      if (!Number.isFinite(id)) continue;
+      const exists = db.prepare('SELECT 1 FROM media WHERE id = ?').get(id);
+      if (exists) continue;
+      try {
+        fs.unlinkSync(path.join(THUMBS_DIR, file));
+        removed++;
+      } catch (err) {
+        console.warn(`[boot] Could not remove orphan thumbnail ${file}: ${err.message}`);
+      }
+    }
+    if (removed > 0) {
+      console.log(`[boot] Removed ${removed} orphan thumbnail(s)`);
+    }
+  } catch (err) {
+    console.warn(`[boot] Thumbnail cleanup failed: ${err.message}`);
+  }
 }
 
 /* Self-invoke when run directly (e.g. `node boot.js`). */
