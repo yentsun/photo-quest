@@ -705,7 +705,7 @@ body {
   background: var(--sol-bg); border-top: 1px solid var(--sol-border);
   padding: 8px 14px;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  flex-shrink: 0; min-width: 0; position: relative;
+  flex-shrink: 0; min-width: 0; position: relative; z-index: 102;
 }
 .viewer-infobar::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
@@ -834,7 +834,7 @@ body {
 .tag-suggest {
   position: absolute; bottom: 100%; left: 0; margin-bottom: 4px; z-index: 10;
   background: var(--sol-surface); border: 1px solid var(--sol-border);
-  box-shadow: 0 8px 24px rgba(0,12,16,0.4); min-width: 140px; overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,12,16,0.4); min-width: 180px; overflow: hidden;
 }
 .tag-suggest-item {
   display: block; width: 100%; text-align: left;
