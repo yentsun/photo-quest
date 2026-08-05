@@ -1,17 +1,31 @@
-import { memo } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getThumbUrl } from '../../utils/api.js';
 import { Icon } from '../ui/index.js';
 
 export default memo(function TagCard({ tag, count, previewMediaId, previewThumbnailTime }) {
   const navigate = useNavigate();
-  const thumbnailUrl = previewMediaId ? getThumbUrl(previewMediaId, previewThumbnailTime) : null;
+  const [visible, setVisible] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { rootMargin: '200px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const thumbnailUrl = visible && previewMediaId ? getThumbUrl(previewMediaId, previewThumbnailTime) : null;
 
   return (
-    <div className="folder-card" onClick={() => navigate(`/tags/${encodeURIComponent(tag)}`)}>
+    <div className="folder-card" ref={ref} onClick={() => navigate(`/tags/${encodeURIComponent(tag)}`)}>
       <div className="folder-card-frame">
         {thumbnailUrl ? (
-          <img src={thumbnailUrl} alt={tag} loading="lazy" />
+          <img src={thumbnailUrl} alt={tag} />
         ) : (
           <div className="folder-card-empty">
             <Icon name="list" className="icon-2xl text-mut" />

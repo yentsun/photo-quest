@@ -65,6 +65,7 @@ export function initDb() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_hidden ON media(hidden)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_date_sort ON media(COALESCE(date_taken, created_at))');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_title ON media(title)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_media_updated_at ON media(updated_at)');
 
   /* Run migrations for existing databases. */
   migrateDb();

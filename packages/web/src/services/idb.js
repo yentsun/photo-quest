@@ -161,7 +161,7 @@ export async function idbDeleteMedia(id) {
  * @param {{ folder?: string, subtree?: boolean, liked?: boolean, limit?: number, offset?: number }} opts
  * @returns {Promise<{ items: Object[], total: number }>}
  */
-export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort, type } = {}) {
+export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort, search, tag, type } = {}) {
   const db = await openDB();
   let items;
 
@@ -191,6 +191,21 @@ export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort,
   /* Mirror server's type filter */
   if (type) {
     items = items.filter(m => m.type === type);
+  }
+
+  /* Mirror server's search filter */
+  if (search && search.trim() !== '') {
+    const q = search.trim().toLowerCase();
+    items = items.filter(m => (m.title || '').toLowerCase().includes(q));
+  }
+
+  /* Mirror server's tag filter */
+  if (tag) {
+    items = items.filter(m => {
+      let tags;
+      try { tags = typeof m.tags === 'string' ? JSON.parse(m.tags) : m.tags; } catch { return false; }
+      return Array.isArray(tags) && tags.includes(tag);
+    });
   }
 
   /* Mirror server's ORDER BY.
