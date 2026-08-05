@@ -122,6 +122,10 @@ export default function Dashboard() {
   }, [setSearchParams]);
 
   useEffect(() => {
+    document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [searchPage]);
+
+  useEffect(() => {
     if (isPageCacheValid('dashboard', signal)) return;
     let cancelled = false;
     idbGetFolders()

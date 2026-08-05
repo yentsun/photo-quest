@@ -257,6 +257,10 @@ export default function FolderPage() {
     if (displayPage !== page) setPage(displayPage);
   }, [displayPage, page, setPage, contentReady]);
 
+  useEffect(() => {
+    document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [displayPage]);
+
   const breadcrumbs = useMemo(() => {
     const crumbs = [];
     let current = folders.find(f => f.id === folderId);
