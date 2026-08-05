@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchMedia } from '../../utils/api.js';
-import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, Loader } from '../ui/index.js';
@@ -18,7 +17,7 @@ function getPageNumbers(current, total) {
   const sorted = [...set].sort((a, b) => a - b);
   const result = [];
   for (let i = 0; i < sorted.length; i++) {
-    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('…');
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('...');
     result.push(sorted[i]);
   }
   return result;
@@ -35,12 +34,10 @@ export default function TagPage() {
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const decodedTag = decodeURIComponent(tag);
-  const CACHE_KEY = `tag:${decodedTag}`;
-  const _pc = isPageCacheValid(CACHE_KEY, signal) ? getPageCache(CACHE_KEY) : null;
 
-  const [media, setMedia] = useState(_pc?.data.media ?? []);
-  const [total, setTotal] = useState(_pc?.data.total ?? 0);
-  const [loading, setLoading] = useState(!_pc);
+  const [media, setMedia] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const paramPage = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
@@ -58,23 +55,20 @@ export default function TagPage() {
   }, [decodedTag]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (isPageCacheValid(CACHE_KEY, signal)) return;
     let cancelled = false;
     setLoading(true);
-    fetchMedia({ tag: decodedTag })
+    fetchMedia({ tag: decodedTag, limit: PAGE_SIZE, offset: page * PAGE_SIZE })
       .then(({ items, total: t }) => {
         if (cancelled) return;
         setMedia(items);
         setTotal(t);
         setLoading(false);
-        setPageCache(CACHE_KEY, { media: items, total: t }, signal);
       })
       .catch(err => { console.error('Failed to fetch tagged media:', err); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [decodedTag, signal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [decodedTag, page, signal]);
 
-  const totalPages = Math.max(1, Math.ceil(media.length / PAGE_SIZE));
-  const displayItems = useMemo(() => media.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [media, page]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const itemLabel = (() => {
     if (total === 0) return null;
@@ -87,7 +81,7 @@ export default function TagPage() {
   const handleShuffle = () => {
     if (media.length === 0) return;
     pendingShuffle.current = true;
-    slideshow.start(media, { order: 'random', total });
+    slideshow.start(media, { order: 'random', total: media.length });
   };
 
   useEffect(() => {
@@ -97,7 +91,7 @@ export default function TagPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
-  if (loading) return <div className="page-loader"><Loader message={`"${decodedTag}"…`} /></div>;
+  if (loading) return <div className="page-loader"><Loader message={`"${decodedTag}"...`} /></div>;
 
   return (
     <div className="page">
@@ -108,19 +102,19 @@ export default function TagPage() {
             <span className="breadcrumb-sep">/</span>
             <h1 className="page-title">{decodedTag}</h1>
           </div>
-          <p className="page-subtitle">{itemLabel || `0 items`}</p>
+          <p className="page-subtitle">{itemLabel || '0 items'}</p>
         </div>
-        {media.length > 0 && (
+        {total > 0 && (
           <Button variant="ghost" size="sm" onClick={handleShuffle} icon={<Icon name="shuffle" className="icon-sm" />}>
             Shuffle
           </Button>
         )}
       </div>
 
-      {displayItems.length > 0 ? (
+      {media.length > 0 ? (
         <>
           <MediaGrid
-            items={displayItems}
+            items={media}
             onItemClick={m => navigate(`/media/${m.id}`)}
             onItemLike={likeMedia}
             emptyState={
@@ -135,8 +129,8 @@ export default function TagPage() {
             <div className="pagination-row">
               <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => goToPage(page - 1)} icon={<Icon name="prev" className="icon-sm" />} />
               {getPageNumbers(page, totalPages).map((p, i) =>
-                p === '…'
-                  ? <span key={`ellipsis-${i}`} className="pagination-ellipsis">…</span>
+                p === '...'
+                  ? <span key={`ellipsis-${i}`} className="pagination-ellipsis">...</span>
                   : <Button key={p} variant={p === page ? 'primary' : 'ghost'} size="sm" onClick={() => goToPage(p)}>{p + 1}</Button>
               )}
               <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => goToPage(page + 1)} icon={<Icon name="next" className="icon-sm" />} />

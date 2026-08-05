@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react';
-import { fetchTags } from '../../utils/api.js';
+import { fetchTags, getLastTags } from '../../utils/api.js';
 import { EmptyState } from '../layout/index.js';
 import { Icon, Loader } from '../ui/index.js';
 import { TagCard } from '../media/index.js';
 
 export default function TagsPage() {
-  const [tags, setTags] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cached = getLastTags();
+  const [tags, setTags] = useState(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     fetchTags()
       .then(data => { setTags(data); setLoading(false); })
-      .catch(err => { console.error('Failed to fetch tags:', err); setLoading(false); });
-  }, []);
+      .catch(err => { console.error('Failed to fetch tags:', err); if (!cached) setLoading(false); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="page-loader"><Loader message="tags…" /></div>;
 

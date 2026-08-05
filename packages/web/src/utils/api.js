@@ -46,6 +46,9 @@ function parseTags(item) {
 /** @type {Object[]|null} Last successfully fetched folder list. */
 let _foldersCache = null;
 
+/** @type {Object[]|null} Last successfully fetched tags list. */
+let _tagsCache = null;
+
 /** @type {Map<number, Object>} Last known version of each media item, keyed by id. */
 const _mediaCache = new Map();
 
@@ -60,6 +63,13 @@ const _folderMediaCache = new Map();
  * @returns {Object[]|null}
  */
 export function getLastFolders() { return _foldersCache; }
+
+/**
+ * Returns the last successfully loaded tags array, or null if not yet fetched.
+ *
+ * @returns {Object[]|null}
+ */
+export function getLastTags() { return _tagsCache; }
 
 /**
  * Returns the last loaded version of a media item by its numeric id, or null
@@ -109,7 +119,9 @@ async function _fetchFoldersFromServer() {
 export async function fetchTags() {
   const response = await fetch(apiRoutes.tags);
   if (!response.ok) throw new Error('Failed to fetch tags');
-  return response.json();
+  const data = await response.json();
+  _tagsCache = data;
+  return data;
 }
 
 export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type } = {}) {
@@ -206,6 +218,7 @@ export async function updateMediaTags(id, tags) {
   if (!response.ok) throw new Error('Failed to update tags');
   const item = parseTags(await response.json());
   _mediaCache.set(item.id, item);
+  _tagsCache = null; // invalidate — tag counts may have changed
   idbPutMedia(item).catch(err => console.warn('[idb] putMedia (tags) failed:', err));
   return item;
 }

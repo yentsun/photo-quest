@@ -57,6 +57,14 @@ Independent Node.js process that polls the SQLite job queue. Uses Node.js built-
 - `GET /jobs` — List all jobs
 - `GET /jobs/events` — SSE for real-time job updates
 
+## Releasing
+
+- Bump the `version` field in all 5 `package.json` files (root, web, server, shared, electron) to the new version.
+- Update the changelog in `docs/` with change notes.
+- Commit with the version number as the message (e.g. `0.6.0`), push to master.
+- Create an annotated tag `v<version>` (e.g. `git tag -a v0.6.0 -m "0.6.0"`), push the tag.
+- The GitHub Actions `build.yml` workflow triggers on `v*` tags: validates version consistency across all `package.json` files, builds the Electron installer, and publishes to GitHub Releases.
+
 ## Glossary
 
 - **media** — A media file (video or image) in the library. Has path, title, duration, resolution, codec, status, transcoded_path, size.

@@ -8,10 +8,14 @@
  * at a specific offset. The generated JPEG is written to
  * packages/server/thumbs/<id>.jpg (or <id>_<time>.jpg when a time offset is
  * requested) on the first request and served from disk thereafter.
+ *
+ * Video frame extraction is CPU-bound — it is gated behind a concurrency limiter
+ * so many parallel thumbnail requests don't spawn dozens of ffmpeg processes.
  */
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ffmpegBin from 'ffmpeg-static';
@@ -24,6 +28,34 @@ const THUMBS_DIR = path.join(__dirname, '..', 'thumbs');
 
 /** In-flight generation promises keyed by media ID + optional time — prevents duplicate work on concurrent requests. */
 const inFlight = new Map();
+
+/**
+ * Simple concurrency limiter — gates heavy operations behind a fixed-width
+ * semaphore so CPU-bound ffmpeg spawns don't overwhelm the machine.
+ */
+const MAX_GENERATORS = 3;
+let activeGenerators = 0;
+const generationQueue = [];
+
+function enqueueThumb(fn) {
+  return new Promise((resolve, reject) => {
+    const run = () => {
+      activeGenerators++;
+      fn().then(
+        (result) => { activeGenerators--; next(); resolve(result); },
+        (err) => { activeGenerators--; next(); reject(err); },
+      );
+    };
+    const next = () => {
+      if (generationQueue.length > 0) generationQueue.shift()();
+    };
+    if (activeGenerators < MAX_GENERATORS) {
+      run();
+    } else {
+      generationQueue.push(run);
+    }
+  });
+}
 
 function extractFrame(videoPath, thumbPath, time = null) {
   const args = [
@@ -69,11 +101,15 @@ export default async (kojo, logger) => {
 
     if (!row) return json(res, 404, { error: 'Media not found' });
 
-    /* For videos that have been transcoded, the original path may have been
-       deleted. Use the transcoded MP4 as the thumbnail source. */
-    const sourcePath = row.type === MEDIA_TYPE.VIDEO && row.transcoded_path && fs.existsSync(row.transcoded_path)
+    const sourcePath = row.type === MEDIA_TYPE.VIDEO && row.transcoded_path
       ? row.transcoded_path
       : row.path;
+
+    try {
+      await fsp.access(sourcePath);
+    } catch {
+      return json(res, 404, { error: 'File not found on disk' });
+    }
 
     const url = new URL(req.url, `http://${req.headers.host}`);
     const timeParam = url.searchParams.get('time');
@@ -84,10 +120,8 @@ export default async (kojo, logger) => {
     const time = effectiveTime != null ? Number(effectiveTime) : null;
     const useTime = time != null && Number.isFinite(time) && time >= 0 && row.type === MEDIA_TYPE.VIDEO;
 
-    /* GIFs: serve raw so animation is preserved — no JPEG conversion. */
     if (path.extname(sourcePath).toLowerCase() === '.gif') {
-      if (!fs.existsSync(sourcePath)) return json(res, 404, { error: 'File not found on disk' });
-      const stat = fs.statSync(sourcePath);
+      const stat = await fsp.stat(sourcePath);
       res.writeHead(200, {
         'Content-Type': 'image/gif',
         'Content-Length': stat.size,
@@ -96,22 +130,23 @@ export default async (kojo, logger) => {
       return fs.createReadStream(sourcePath).pipe(res);
     }
 
-    if (!fs.existsSync(THUMBS_DIR)) fs.mkdirSync(THUMBS_DIR, { recursive: true });
+    try { await fsp.access(THUMBS_DIR); } catch { await fsp.mkdir(THUMBS_DIR, { recursive: true }); }
 
     const thumbFile = useTime ? `${mediaId}_${time}.jpg` : `${mediaId}.jpg`;
     const thumbPath = path.join(THUMBS_DIR, thumbFile);
     const inFlightKey = useTime ? `${mediaId}:${time}` : String(mediaId);
 
-    if (!fs.existsSync(thumbPath)) {
-      if (!fs.existsSync(sourcePath)) {
-        return json(res, 404, { error: 'File not found on disk' });
-      }
-
+    let stat;
+    try {
+      stat = await fsp.stat(thumbPath);
+    } catch {
       let gen = inFlight.get(inFlightKey);
       if (!gen) {
-        const work = row.type === MEDIA_TYPE.IMAGE
-          ? generateImageThumb(sourcePath, thumbPath)
-          : extractFrame(sourcePath, thumbPath, useTime ? time : null);
+        const work = enqueueThumb(() =>
+          row.type === MEDIA_TYPE.IMAGE
+            ? generateImageThumb(sourcePath, thumbPath)
+            : extractFrame(sourcePath, thumbPath, useTime ? time : null)
+        );
         gen = work.finally(() => inFlight.delete(inFlightKey));
         inFlight.set(inFlightKey, gen);
       }
@@ -122,9 +157,9 @@ export default async (kojo, logger) => {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         return res.end('No thumbnail');
       }
+      stat = await fsp.stat(thumbPath);
     }
 
-    const stat = fs.statSync(thumbPath);
     res.writeHead(200, {
       'Content-Type': 'image/jpeg',
       'Content-Length': stat.size,

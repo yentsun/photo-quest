@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getThumbUrl } from '../../utils/api.js';
 import { Icon, Loader, ProgressBar } from '../ui/index.js';
@@ -9,6 +9,19 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
   const isImage = media.type === MEDIA_TYPE.IMAGE;
   const [thumbFailed, setThumbFailed] = useState(false);
   const [thumbReady, setThumbReady] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { rootMargin: '200px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   const progressSecs = useJobProgress(media.id);
   const isTranscoding = media.status === 'transcoding' || progressSecs !== null;
@@ -19,21 +32,24 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
     ? Math.min(99, Math.round((progressSecs / media.duration) * 100))
     : null;
 
+  const thumbSrc = visible ? getThumbUrl(media.id, media.thumbnail_time) : undefined;
+
   return (
-    <div className="media-card" onClick={() => onClick?.(media)}>
+    <div className="media-card" ref={ref} onClick={() => onClick?.(media)}>
       <div className="media-card-frame">
         {thumbFailed ? (
           <div className="media-card-placeholder">
             <Icon name={isImage ? 'image' : 'video'} className="icon-xl text-mut" />
           </div>
         ) : (
-          <img
-            src={getThumbUrl(media.id, media.thumbnail_time)}
-            alt={media.title}
-            loading="lazy"
-            onLoad={() => setThumbReady(true)}
-            onError={() => setThumbFailed(true)}
-          />
+          thumbSrc && (
+            <img
+              src={thumbSrc}
+              alt={media.title}
+              onLoad={() => setThumbReady(true)}
+              onError={() => setThumbFailed(true)}
+            />
+          )
         )}
 
         {media.status === 'error' ? (
@@ -50,7 +66,7 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
             ) : (
               <>
                 <Loader size="sm" />
-                <span className="media-card-overlay-text">{isTranscoding ? 'Transcoding…' : 'Processing…'}</span>
+                <span className="media-card-overlay-text">{isTranscoding ? 'Transcoding...' : 'Processing...'}</span>
               </>
             )}
           </div>
@@ -78,4 +94,4 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
       </div>
     </div>
   );
-})
+});
