@@ -517,9 +517,7 @@ body {
 
 .media-card-likes {
   position: absolute; bottom: 6px; right: 6px;
-  opacity: 0; transition: opacity 0.15s;
 }
-.media-card:hover .media-card-likes { opacity: 1; }
 
 .media-card-meta {
   padding: 6px 10px;
