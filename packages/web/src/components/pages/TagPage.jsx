@@ -48,6 +48,10 @@ export default function TagPage() {
     setSearchParams({ page: String(p + 1) });
   }, [setSearchParams]);
 
+  useEffect(() => {
+    document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [page]);
+
   const prevDecodedTag = useRef(decodedTag);
   useEffect(() => {
     if (prevDecodedTag.current !== decodedTag) goToPage(0);

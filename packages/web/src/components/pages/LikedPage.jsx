@@ -41,6 +41,10 @@ export default function LikedPage() {
     setSearchParams({ page: String(p + 1) });
   }, [setSearchParams]);
 
+  useEffect(() => {
+    document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [page]);
+
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const _pc = isPageCacheValid('liked', signal) ? getPageCache('liked') : null;
