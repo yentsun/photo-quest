@@ -646,6 +646,15 @@ body {
 .pagination-row { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px 0; flex-wrap: wrap; }
 .pagination-ellipsis { padding: 0 4px; color: var(--sol-text-mut); font-size: var(--fs-sm); line-height: 1; align-self: flex-end; }
 
+/* ─── Breadcrumb ─── */
+.breadcrumb-nav {
+  display: flex; align-items: center; gap: 4px;
+  font-size: var(--fs-sm); color: var(--sol-text-mut);
+  margin-bottom: 16px; overflow-x: auto; white-space: nowrap;
+}
+.breadcrumb-sep { color: var(--sol-border); margin: 0 2px; }
+.breadcrumb-current { color: var(--sol-text-em); }
+
 /* ─── Import progress (inside modal) ─── */
 .import-progress { display: flex; flex-direction: column; gap: 6px; }
 .import-progress-label { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--sol-text-mut); }
@@ -929,6 +938,9 @@ body {
 .fill-red { fill: var(--sol-red); }
 .fill-white { fill: #fff; }
 .fill-transparent { fill: transparent; }
+
+/* Viewer topbar breadcrumb override */
+.viewer-topbar .breadcrumb-nav { margin-bottom: 0; flex: 1; }
 
 /* ─── Error boundary ─── */
 .error-boundary {
