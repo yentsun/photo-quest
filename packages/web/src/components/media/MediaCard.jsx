@@ -74,13 +74,20 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
 
         <span className="media-card-corner">{isImage ? 'IMG' : 'VID'}</span>
 
-        {media.tags?.length > 0 && (
-          <div className="media-card-tags">
-            {media.tags.slice(0, 3).map(tag => (
-              <span key={tag} className="media-card-tag">{tag}</span>
-            ))}
-          </div>
-        )}
+        {(() => {
+          const tags = (() => {
+            if (Array.isArray(media.tags)) return media.tags;
+            if (typeof media.tags === 'string') { try { return JSON.parse(media.tags); } catch { return []; } }
+            return [];
+          })();
+          return tags.length > 0 && (
+            <div className="media-card-tags">
+              {tags.slice(0, 3).map(tag => (
+                <span key={tag} className="media-card-tag">{tag}</span>
+              ))}
+            </div>
+          );
+        })()}
 
         {showLikes && (
           <div className="media-card-likes">
