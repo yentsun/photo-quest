@@ -184,7 +184,10 @@ export default async (kojo, logger) => {
       const filtered = output.filter(f => f.subtreeMediaCount > 0);
       logger.debug(`[GET /folders] scoped: returning ${filtered.length} folders`);
 
-      json(res, 200, filtered);
+      json(res, 200, {
+        items: filtered,
+        chain: [...ancestorResults.filter(a => ancestorIds.has(a.id)), ...(targetFolder ? [targetFolder] : [])],
+      });
       return;
     }
 

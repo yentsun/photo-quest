@@ -123,6 +123,7 @@ export default function FolderPage() {
   const _sc0Media   = !mediaTypeParam && !debouncedSearch && _sc0Folder ? getLastFolderMedia(_sc0Folder.path) : null;
 
   const [folders, setFolders] = useState(_pc?.data.folders ?? _sc0Folders ?? []);
+  const [folderChain, setFolderChain] = useState(_pc?.data.chain ?? []);
   const [directMedia, setDirectMedia] = useState(_pc?.data.directMedia ?? _sc0Media?.items ?? []);
   const [loading, setLoading] = useState(!_pc && !_sc0Folders);
   const [loadingMessage, setLoadingMessage] = useState('Fetching folder list…');
@@ -164,8 +165,9 @@ export default function FolderPage() {
     const isSearching = Boolean(debouncedSearch);
 
     if (!isSearching && isPageCacheValid(CACHE_KEY, signal)) {
-      const { folders: pf, directMedia: pm } = getPageCache(CACHE_KEY).data;
+      const { folders: pf, directMedia: pm, chain: pc } = getPageCache(CACHE_KEY).data;
       setFolders(pf);
+      setFolderChain(pc ?? []);
       setDirectMedia(pm);
       folderRef.current = pf.find(f => f.id === folderId) ?? folderRef.current;
       contentReadyRef.current = true;
@@ -208,10 +210,11 @@ export default function FolderPage() {
     }
     const load = async () => {
       try {
-        const allFolders = await fetchFoldersForParent(folderId);
+        const { items: allFolders, chain: folderChain } = await fetchFoldersForParent(folderId);
         if (cancelled) return;
         setFolders(allFolders);
-        const found = allFolders.find(f => f.id === folderId);
+        setFolderChain(folderChain);
+        const found = folderChain[folderChain.length - 1];
         if (found) {
           folderRef.current = found;
           const folderName = found.path.split(/[/\\]/).filter(Boolean).pop() || 'folder';
@@ -225,7 +228,7 @@ export default function FolderPage() {
             const sorted = applySort(items, sort);
             setDirectMedia(sorted);
             if (!isSearching) {
-              setPageCache(CACHE_KEY, { folders: allFolders, directMedia: sorted }, signal);
+              setPageCache(CACHE_KEY, { folders: allFolders, directMedia: sorted, chain: folderChain }, signal);
             }
           }
         }
@@ -236,7 +239,7 @@ export default function FolderPage() {
     return () => { cancelled = true; };
   }, [folderId, signal, debouncedSearch, sort, mediaFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const folder = useMemo(() => folders.find(f => f.id === folderId), [folders, folderId]);
+  const folder = useMemo(() => folderChain[folderChain.length - 1] ?? null, [folderChain]);
   const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId).sort(sort === 'date' ? byFolderDate : byFolderName), [folders, folderId, sort]);
 
   const allItems = useMemo(() => {
@@ -260,15 +263,7 @@ export default function FolderPage() {
     document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
   }, [displayPage]);
 
-  const breadcrumbs = useMemo(() => {
-    const crumbs = [];
-    let current = folders.find(f => f.id === folderId);
-    while (current) {
-      crumbs.unshift(current);
-      current = current.parentId ? folders.find(f => f.id === current.parentId) : null;
-    }
-    return crumbs;
-  }, [folders, folderId]);
+  const breadcrumbs = useMemo(() => folderChain, [folderChain]);
 
   const handleRefresh = async () => {
     const f = folderRef.current;
