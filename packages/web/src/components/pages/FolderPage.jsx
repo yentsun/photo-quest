@@ -198,7 +198,6 @@ export default function FolderPage() {
         if (!found) return;
         const { items } = await idbGetMedia({ folder: found.path, limit: FETCH_LIMIT, sort, type: mediaTypeParam });
         if (cancelled || items.length === 0 || scMedia || serverLoadedRef.current) return;
-        setFolders(cachedFolders);
         folderRef.current = found;
         setDirectMedia(applySort(items, sort));
         setLoading(false);
