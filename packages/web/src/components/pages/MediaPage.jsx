@@ -474,7 +474,7 @@ export default function MediaPage() {
             {breadcrumbs.map((crumb) => {
               const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
               return (
-                <span key={crumb.id} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <span key={crumb.id} className="breadcrumb-item">
                   <span className="breadcrumb-sep">/</span>
                   <Button variant="text" onClick={() => navigate(`/folder/${crumb.id}`)}>{name}</Button>
                 </span>
