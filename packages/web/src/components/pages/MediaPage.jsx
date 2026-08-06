@@ -133,11 +133,21 @@ export default function MediaPage() {
         if (cancelled) return;
         setItem(mediaItem);
         setLoading(false);
-        if (mediaItem.folder_chain) {
-          const chain = mediaItem.folder_chain;
+
+        // Cached item may lack folder_chain (stored before the server change).
+        // Force a fresh fetch when needed so breadcrumbs show up immediately.
+        let freshItem = mediaItem;
+        if (mediaItem.folder && !mediaItem.folder_chain) {
+          freshItem = await fetchMediaById(mediaId, { skipCache: true });
+          if (cancelled) return;
+          setItem(freshItem);
+        }
+
+        if (freshItem.folder_chain) {
+          const chain = freshItem.folder_chain;
           setFolders(chain);
           setFolder(chain[chain.length - 1] || null);
-          const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, sort });
+          const { items: cachedSiblings } = await idbGetMedia({ folder: freshItem.folder, sort });
           if (!cancelled && cachedSiblings.length > 0) setFolderMedia(applySort(cachedSiblings, sort));
         }
       } catch (err) { console.error('Failed to load media:', err); if (!cancelled) setItem(null); }
