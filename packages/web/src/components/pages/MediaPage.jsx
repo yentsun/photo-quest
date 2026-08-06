@@ -8,7 +8,7 @@ import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchFolderChain } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -136,6 +136,11 @@ export default function MediaPage() {
           if (allFolders) {
             setFolders(allFolders);
             setFolder(allFolders.find(f => f.path === mediaItem.folder) || null);
+          } else {
+            fetchFolderChain(mediaItem.folder).then(chain => {
+              setFolders(chain);
+              setFolder(chain.find(f => f.path === mediaItem.folder) || null);
+            });
           }
           const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, sort });
           if (!cancelled && cachedSiblings.length > 0) setFolderMedia(applySort(cachedSiblings, sort));
