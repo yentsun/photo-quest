@@ -8,9 +8,9 @@ import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
-import { idbGetMediaById, idbGetMedia, idbGetFolders } from '../../services/idb.js';
+import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
 
 function byName(a, b) {
@@ -132,23 +132,20 @@ export default function MediaPage() {
         setItem(mediaItem);
         setLoading(false);
         if (mediaItem.folder) {
+          const allFolders = getLastFolders();
+          if (allFolders) {
+            setFolders(allFolders);
+            setFolder(allFolders.find(f => f.path === mediaItem.folder) || null);
+          }
           const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, sort });
           if (!cancelled && cachedSiblings.length > 0) setFolderMedia(applySort(cachedSiblings, sort));
-          const cachedFolders = await idbGetFolders();
-          if (!cancelled) { setFolders(cachedFolders); setFolder(cachedFolders.find(f => f.path === mediaItem.folder) || null); }
-          setLoadingMessage('folder context…');
-          const [folderResult, allFolders] = await Promise.all([fetchMedia({ folder: mediaItem.folder, sort }), fetchFolders()]);
-          if (cancelled) return;
-          setFolderMedia(applySort(folderResult.items, sort));
-          setFolders(allFolders);
-          setFolder(allFolders.find(f => f.path === mediaItem.folder) || null);
         }
       } catch (err) { console.error('Failed to load media:', err); if (!cancelled) setItem(null); }
       finally { if (!cancelled) setLoading(false); }
     };
     load();
     return () => { cancelled = true; };
-  }, [id, inSlideshow, signal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, inSlideshow]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const TERMINAL = [MEDIA_STATUS.READY, MEDIA_STATUS.ERROR];
   useEffect(() => {
