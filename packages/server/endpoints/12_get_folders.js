@@ -100,8 +100,7 @@ export default async (kojo, logger) => {
         }
       }
 
-      /* Build result for descendants (exclude ancestors, they'll be prepended). */
-      const ancestorPaths = new Set(ancestors.map(a => a.path));
+      /* Build result for descendants (ancestors are prepended separately). */
       const result = descendants.map(f => ({
         id: f.id,
         path: f.path,
@@ -140,9 +139,9 @@ export default async (kojo, logger) => {
       const children = result.filter(f => f.parentId === targetId);
       const targetFolder = result.find(f => f.id === targetId);
 
-      /* Only prepend ancestors that aren't already in the result. */
+      /* Map every ancestor; reuse the enriched row from `result` when present.
+         Duplicates are removed later by the `seen` set. */
       const ancestorResults = ancestors
-        .filter(a => !ancestorPaths.has(a.path) || a.id === targetId)
         .map(a => {
           const existing = result.find(f => f.id === a.id);
           if (existing) return existing;
@@ -184,9 +183,18 @@ export default async (kojo, logger) => {
       const filtered = output.filter(f => f.subtreeMediaCount > 0);
       logger.debug(`[GET /folders] scoped: returning ${filtered.length} folders`);
 
+      /* The current folder must always terminate the chain -- if it were ever
+         missing, the client would treat the parent as the current folder. */
+      const targetCrumb = targetFolder ?? {
+        id: target.id,
+        path: target.path,
+        name: target.name || null,
+        parentId: pathToId.get(path.dirname(target.path)) || null,
+      };
+
       json(res, 200, {
         items: filtered,
-        chain: [...ancestorResults.filter(a => ancestorIds.has(a.id)), ...(targetFolder ? [targetFolder] : [])],
+        chain: [...ancestorResults.filter(a => a.id !== targetId), targetCrumb],
       });
       return;
     }

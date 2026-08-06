@@ -214,7 +214,7 @@ export default function FolderPage() {
         if (cancelled) return;
         setFolders(allFolders);
         setFolderChain(folderChain);
-        const found = folderChain[folderChain.length - 1];
+        const found = folderChain.find(f => f.id === folderId) ?? allFolders.find(f => f.id === folderId);
         if (found) {
           folderRef.current = found;
           const folderName = found.path.split(/[/\\]/).filter(Boolean).pop() || 'folder';
@@ -239,7 +239,10 @@ export default function FolderPage() {
     return () => { cancelled = true; };
   }, [folderId, signal, debouncedSearch, sort, mediaFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const folder = useMemo(() => folderChain[folderChain.length - 1] ?? null, [folderChain]);
+  const folder = useMemo(
+    () => folderChain.find(f => f.id === folderId) ?? folders.find(f => f.id === folderId) ?? null,
+    [folderChain, folders, folderId],
+  );
   const subfolders = useMemo(() => folders.filter(f => f.parentId === folderId).sort(sort === 'date' ? byFolderDate : byFolderName), [folders, folderId, sort]);
 
   const allItems = useMemo(() => {
