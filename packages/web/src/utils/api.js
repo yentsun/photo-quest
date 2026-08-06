@@ -165,26 +165,28 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   }
 }
 
-export async function fetchMediaById(id) {
-  // IDB-first
-  let idbItem = null;
-  try {
-    idbItem = await idbGetMediaById(Number(id));
-  } catch (e) { /* ignore */ }
+export async function fetchMediaById(id, { skipCache = false } = {}) {
+  // IDB-first (unless caller needs fresh server data)
+  if (!skipCache) {
+    let idbItem = null;
+    try {
+      idbItem = await idbGetMediaById(Number(id));
+    } catch (e) { /* ignore */ }
 
-  if (idbItem) {
-    parseTags(idbItem);
-    _mediaCache.set(idbItem.id, idbItem);
-    // Refresh from server in background
-    fetch(`${apiRoutes.media}/${id}`, { headers: { 'Accept': 'application/json' } })
-      .then(async r => {
-        if (!r.ok) return;
-        const item = parseTags(await r.json());
-        _mediaCache.set(item.id, item);
-        idbPutMedia(item).catch(() => {});
-      })
-      .catch(() => {});
-    return idbItem;
+    if (idbItem) {
+      parseTags(idbItem);
+      _mediaCache.set(idbItem.id, idbItem);
+      // Refresh from server in background
+      fetch(`${apiRoutes.media}/${id}`, { headers: { 'Accept': 'application/json' } })
+        .then(async r => {
+          if (!r.ok) return;
+          const item = parseTags(await r.json());
+          _mediaCache.set(item.id, item);
+          idbPutMedia(item).catch(() => {});
+        })
+        .catch(() => {});
+      return idbItem;
+    }
   }
 
   // No IDB data — wait for the server
