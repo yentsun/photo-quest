@@ -8,7 +8,7 @@ import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchFolderChain } from '../../utils/api.js';
+import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -105,8 +105,10 @@ export default function MediaPage() {
     const currentItem = slideshow.current;
     setItem(currentItem);
     setLoading(false);
-    if (currentItem?.folder && folders.length > 0) {
-      setFolder(folders.find(f => f.path === currentItem.folder) || null);
+    if (currentItem?.folder_chain) {
+      const chain = currentItem.folder_chain;
+      setFolders(chain);
+      setFolder(chain[chain.length - 1] || null);
     } else {
       setFolder(null);
     }
@@ -131,17 +133,10 @@ export default function MediaPage() {
         if (cancelled) return;
         setItem(mediaItem);
         setLoading(false);
-        if (mediaItem.folder) {
-          const allFolders = getLastFolders();
-          if (allFolders) {
-            setFolders(allFolders);
-            setFolder(allFolders.find(f => f.path === mediaItem.folder) || null);
-          } else {
-            fetchFolderChain(mediaItem.folder).then(chain => {
-              setFolders(chain);
-              setFolder(chain.find(f => f.path === mediaItem.folder) || null);
-            });
-          }
+        if (mediaItem.folder_chain) {
+          const chain = mediaItem.folder_chain;
+          setFolders(chain);
+          setFolder(chain[chain.length - 1] || null);
           const { items: cachedSiblings } = await idbGetMedia({ folder: mediaItem.folder, sort });
           if (!cancelled && cachedSiblings.length > 0) setFolderMedia(applySort(cachedSiblings, sort));
         }
@@ -428,15 +423,8 @@ export default function MediaPage() {
   }, [showInfo, item]);
 
   const breadcrumbs = useMemo(() => {
-    if (!folder) return [];
-    const crumbs = [];
-    let current = folder;
-    while (current) {
-      crumbs.unshift(current);
-      current = current.parentId ? folders.find(f => f.id === current.parentId) : null;
-    }
-    return crumbs;
-  }, [folders, folder]);
+    return item?.folder_chain ?? [];
+  }, [item?.folder_chain]);
 
   const backTarget = folder ? `/folder/${folder.id}` : '/dashboard';
   const goBack = useCallback(() => {
@@ -474,7 +462,7 @@ export default function MediaPage() {
             {breadcrumbs.map((crumb) => {
               const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
               return (
-                <span key={crumb.id} className="breadcrumb-item">
+                <span key={crumb.id} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                   <span className="breadcrumb-sep">/</span>
                   <Button variant="text" onClick={() => navigate(`/folder/${crumb.id}`)}>{name}</Button>
                 </span>

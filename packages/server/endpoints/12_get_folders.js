@@ -23,21 +23,17 @@ export default async (kojo, logger) => {
   }, (req, res) => {
     const db = kojo.get('db');
     const url = new URL(req.url, `http://${req.headers.host}`);
-    const parentId = url.searchParams.get('parent');
+    let parentId = url.searchParams.get('parent');
     const folderPath = url.searchParams.get('path');
 
     /* Scoped by path: /folders?path=<path> — used for breadcrumbs on media viewer cold load */
-    if (folderPath) {
+    if (folderPath && !parentId) {
       const target = db.prepare('SELECT id FROM folders WHERE path = ?').get(folderPath);
       if (!target) {
         json(res, 200, []);
         return;
       }
-      const resolvedUrl = new URL(req.url, `http://${req.headers.host}`);
-      resolvedUrl.searchParams.delete('path');
-      resolvedUrl.searchParams.set('parent', target.id);
-      req.url = resolvedUrl.pathname + resolvedUrl.search;
-      /* Re-run with parent=<id> — delegate to the scoped handler below */
+      parentId = String(target.id);
     }
 
     /* Scoped query: /folders?parent=<id> */
