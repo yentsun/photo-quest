@@ -358,6 +358,19 @@ export async function fetchFoldersForParent(parentId) {
   }
 }
 
+/**
+ * Fetch a folder's ancestor chain (self + parents) by path.
+ * Uses the lightweight scoped folders endpoint in path mode.
+ *
+ * @param {string} folderPath - Absolute folder path from a media item.
+ * @returns {Promise<Object[]>}
+ */
+export async function fetchFolderChain(folderPath) {
+  const response = await fetch(`/folders?path=${encodeURIComponent(folderPath)}`);
+  if (!response.ok) throw new Error('Failed to fetch folder chain');
+  return response.json();
+}
+
 export async function removeFolder(folderId) {
   const response = await fetch(`/media/folder/${folderId}`, {
     method: 'DELETE',
