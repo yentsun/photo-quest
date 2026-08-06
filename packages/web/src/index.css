@@ -654,6 +654,7 @@ body {
 }
 .breadcrumb-sep { color: var(--sol-border); margin: 0 2px; }
 .breadcrumb-current { color: var(--sol-text-em); }
+.breadcrumb-item { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
 /* ─── Import progress (inside modal) ─── */
 .import-progress { display: flex; flex-direction: column; gap: 6px; }
@@ -940,7 +941,12 @@ body {
 .fill-transparent { fill: transparent; }
 
 /* Viewer topbar breadcrumb override */
-.viewer-topbar .breadcrumb-nav { margin-bottom: 0; flex: 1; }
+.viewer-topbar .breadcrumb-nav { margin-bottom: 0; flex: 1; min-width: 0; }
+.viewer-topbar .breadcrumb-nav .breadcrumb-item { min-width: 0; }
+.viewer-topbar .breadcrumb-nav .breadcrumb-item button {
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: block; flex-shrink: 1;
+}
 
 /* ─── Error boundary ─── */
 .error-boundary {
