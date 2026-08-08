@@ -23,7 +23,13 @@
     },
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/favicon.png"
+      "output": "single",
+      "name": "Photo Quest Media Library",
+      "shortName": "Photo Quest",
+      "themeColor": "#000000",
+      "backgroundColor": "#002b36",
+      "startUrl": "/",
+      "display": "standalone"
     },
     "plugins": [
       "expo-router"

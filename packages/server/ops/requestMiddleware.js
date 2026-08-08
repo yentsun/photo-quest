@@ -35,8 +35,8 @@ function getLocalIP() {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** Path to the built web client. */
-const STATIC_DIR = path.join(__dirname, '..', '..', 'web', 'dist');
+/** Path to the built Expo web client. */
+const STATIC_DIR = path.join(__dirname, '..', '..', 'mobile', 'dist');
 
 /** Common MIME types for static file serving. */
 const MIME_TYPES = {

@@ -53,6 +53,27 @@ fs.copyFileSync(ffprobeInstaller.path, path.join(vendorDir, 'bin', 'ffprobe' + f
 
 console.log('[build] Vendor binaries and native packages copied.')
 
+// --- Copy Expo web build -----------------------------------------------
+
+const mobileDistDir = path.resolve(__dirname, '..', 'mobile', 'dist')
+const electronMobileDir = path.join(__dirname, 'mobile')
+
+console.log('[build] Copying mobile dist...')
+fs.rmSync(electronMobileDir, { recursive: true, force: true })
+fs.mkdirSync(electronMobileDir, { recursive: true })
+if (fs.existsSync(mobileDistDir)) {
+  for (const f of fs.readdirSync(mobileDistDir)) {
+    fs.copyFileSync(path.join(mobileDistDir, f), path.join(electronMobileDir, f))
+  }
+  // Copy internal _expo static assets
+  const expoStaticDir = path.join(mobileDistDir, '_expo')
+  if (fs.existsSync(expoStaticDir)) {
+    copyDir(expoStaticDir, path.join(electronMobileDir, '_expo'))
+  }
+} else {
+  console.log('[build] WARNING: mobile/dist not found — run pnpm build:web first')
+}
+
 // --- esbuild plugins --------------------------------------------------
 
 // Replace @ffprobe-installer/ffprobe with a shim that reads FFPROBE_BIN env var.

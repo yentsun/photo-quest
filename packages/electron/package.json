@@ -48,8 +48,8 @@
         "to": "server"
       },
       {
-        "from": "../web/dist",
-        "to": "web/dist"
+        "from": "../mobile/dist",
+        "to": "mobile/dist"
       },
       {
         "from": "../../config.json",
