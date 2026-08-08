@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Photo Quest",
+    "slug": "photo-quest",
+    "version": "0.7.1",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "scheme": "photoquest",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#002b36"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.photoquest.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#002b36"
+      },
+      "package": "com.photoquest.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Photo Quest Media Library",
+      "shortName": "Photo Quest",
+      "themeColor": "#000000",
+      "backgroundColor": "#002b36",
+      "startUrl": "/",
+      "display": "standalone"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
