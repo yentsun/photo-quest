@@ -9,7 +9,7 @@ async function apiFetch(path: string, init?: RequestInit) {
   return resp.json();
 }
 
-export async function fetchMedia(params?: Record<string, string | number | undefined>) {
+export async function fetchMedia(params?: Record<string, string | number | boolean | undefined>) {
   const url = new URL(apiRoutes.media, getServerUrl());
   if (params) {
     for (const [k, v] of Object.entries(params)) {
