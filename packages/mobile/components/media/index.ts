@@ -3,3 +3,4 @@ export { ImageViewer } from './ImageViewer';
 export { MediaPlayer } from './MediaPlayer';
 export { MediaCard } from './MediaCard';
 export { MediaGrid } from './MediaGrid';
+export { FolderCard } from './FolderCard';

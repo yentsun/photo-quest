@@ -5,6 +5,8 @@ import {
   deleteMedia as deleteMediaApi,
   renameMedia as renameMediaApi,
   updateMediaTags as updateMediaTagsApi,
+  scanMedia as scanMediaApi,
+  removeFolder as removeFolderApi,
 } from '../utils/api';
 
 export function useMediaActions() {
@@ -34,5 +36,31 @@ export function useMediaActions() {
     bump();
   }, [bump]);
 
-  return { likeMedia, deleteMedia, renameMedia, updateTags };
+  const refreshLibrary = useCallback(async (folders: any[], onProgress?: (msg: string) => void) => {
+    let scannedFolders = 0;
+    let newFiles = 0;
+    for (const folder of [...new Set(folders.map((f: any) => f.path))]) {
+      try {
+        onProgress?.(`Scanning ${folder.split(/[/\\]/).pop()}...`);
+        const result = await scanMediaApi(folder);
+        newFiles += result.added || 0;
+        scannedFolders++;
+      } catch (err) {
+        console.error(`Failed to rescan ${folder}:`, err);
+      }
+    }
+    bump();
+    return { serverFolders: scannedFolders, clientFolders: 0, newFiles };
+  }, [bump]);
+
+  const removeFolder = useCallback(async (folderId: number) => {
+    await removeFolderApi(folderId);
+    bump();
+  }, [bump]);
+
+  const addFolderWithPath = useCallback(async (path: string) => {
+    return scanMediaApi(path);
+  }, []);
+
+  return { likeMedia, deleteMedia, renameMedia, updateTags, refreshLibrary, removeFolder, addFolderWithPath };
 }

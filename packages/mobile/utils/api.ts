@@ -32,12 +32,34 @@ export async function fetchFolders() {
   return apiFetch(apiRoutes.folders);
 }
 
+export async function fetchFoldersForParent(parentId: number) {
+  const resp = await fetch(`${getServerUrl()}/folders?parent=${parentId}`);
+  if (!resp.ok) throw new Error('Failed to fetch folders');
+  return resp.json();
+}
+
 export async function fetchTags() {
   return apiFetch(apiRoutes.tags);
 }
 
 export async function fetchNetworkInfo(): Promise<{ ip: string | null }> {
   return apiFetch(apiRoutes.network);
+}
+
+export async function scanMedia(path: string) {
+  const resp = await fetch(`${getServerUrl()}/media/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  if (!resp.ok) throw new Error('Failed to scan directory');
+  return resp.json();
+}
+
+export async function removeFolder(folderId: number) {
+  const resp = await fetch(`${getServerUrl()}/media/folder/${folderId}`, { method: 'DELETE' });
+  if (!resp.ok) throw new Error('Failed to remove folder');
+  return resp.json();
 }
 
 export async function likeMedia(id: number) {
@@ -82,3 +104,5 @@ export function getThumbUrl(id: number, time?: number) {
   const base = `${getServerUrl()}/thumb/${id}`;
   return time != null ? `${base}?time=${time}` : base;
 }
+
+export { getStreamUrl as getMediaUrl };
