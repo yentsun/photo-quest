@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Header } from './layout/index.js';
 import { IconButton, Icon, ProgressBar } from './ui/index.js';
@@ -9,6 +9,7 @@ import { cancelScan } from '../utils/api.js';
 
 function ImportProgressBar() {
   const [progress, setProgress] = useState(null);
+  const trackedScanRef = useRef(null);
   const { bump } = useRefresh();
   const { setIsScanning } = useScan();
   const { update: updateProgress, clear: clearProgress } = useJobProgressUpdater();
@@ -19,9 +20,11 @@ function ImportProgressBar() {
       .then(scans => {
         const active = scans.find(s => s.status === 'importing' || s.status === 'discovering');
         if (active) {
+          trackedScanRef.current = active.id;
           setProgress({ total: active.total, processed: active.processed, scanId: active.id });
           setIsScanning(true);
         } else {
+          trackedScanRef.current = null;
           setProgress(null);
           setIsScanning(false);
         }
@@ -32,7 +35,6 @@ function ImportProgressBar() {
   useEffect(() => {
     let es = null;
     let reconnectTimer = null;
-    let lastBump = 0;
     let destroyed = false;
 
     const connect = () => {
@@ -43,17 +45,36 @@ function ImportProgressBar() {
       es.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'import_started' || data.type === 'import_progress') {
+
+          if (data.type === 'import_started') {
+            if (trackedScanRef.current == null) {
+              trackedScanRef.current = data.scanId;
+              setProgress({ total: data.total, processed: data.processed, scanId: data.scanId });
+              setIsScanning(true);
+            }
+            return;
+          }
+
+          if (data.type === 'import_progress') {
+            if (data.scanId !== trackedScanRef.current) return;
             setProgress({ total: data.total, processed: data.processed, scanId: data.scanId });
             setIsScanning(true);
-            if (data.processed - lastBump >= 50) { lastBump = data.processed; bump(); }
+            if (data.processed - (progress?.lastBump ?? 0) >= 50) {
+              setProgress(p => p ? { ...p, lastBump: data.processed } : p);
+              bump();
+            }
+            return;
           }
+
           if (data.type === 'import_complete' || data.type === 'import_cancelled') {
+            if (data.scanId !== trackedScanRef.current) return;
+            trackedScanRef.current = null;
             setProgress(null);
             setIsScanning(false);
-            lastBump = 0;
             setTimeout(bump, 500);
+            return;
           }
+
           if (data.type === 'transcode_progress') {
             updateProgress(data.mediaId, data.progressSecs);
           }
@@ -70,10 +91,21 @@ function ImportProgressBar() {
     return () => { destroyed = true; clearTimeout(reconnectTimer); es?.close(); };
   }, [bump, setIsScanning, syncFromServer, updateProgress, clearProgress]);
 
+  useEffect(() => {
+    if (progress && trackedScanRef.current == null) {
+      const interval = setInterval(() => {
+        syncFromServer();
+        if (trackedScanRef.current != null) clearInterval(interval);
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [progress, syncFromServer]);
+
   const handleCancel = useCallback(async () => {
-    if (!progress?.scanId) return;
+    const scanId = progress?.scanId ?? trackedScanRef.current;
+    if (!scanId) return;
     try {
-      await cancelScan(progress.scanId);
+      await cancelScan(scanId);
     } catch (err) {
       if (!err.message?.includes('already')) console.error('Failed to cancel scan:', err);
     }
