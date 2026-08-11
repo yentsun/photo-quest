@@ -16,24 +16,35 @@ This file provides guidance to coding agents when working with code in this repo
 ## Commands
 
 - `pnpm install` — Install all workspace dependencies
-- `pnpm dev` — Run all packages (web + server + worker) in parallel
-- `pnpm dev:web` — Vite dev server (port from `config.webappPort`)
-- `pnpm dev:mobile` — Expo dev server (web + native); requires `pnpm dev:server` for API
-- `pnpm build:mobile` — Expo web export (SPA to `packages/mobile/dist/`)
+- `pnpm dev` — Run all packages (mobile + server) in parallel
+- `pnpm dev:web` / `pnpm dev:mobile` — Expo dev server (requires `pnpm dev:server` for API)
 - `pnpm dev:server` — Node HTTP server (port from `config.serverPort`)
 - `pnpm dev:worker` — Worker process
-- `pnpm build` — Production build of web package
+- `pnpm build` / `pnpm build:mobile` — Expo web export (SPA to `packages/mobile/dist/`)
 - `pnpm --filter @photo-quest/server test` — Run server tests
 
 ## Architecture
 
-Plex-like media library app. pnpm workspace monorepo with 4 packages.
+Plex-like media library app. pnpm workspace monorepo with 5 packages.
 
 ### packages/shared
 Shared constants, SQLite schema definitions, route maps. No runtime dependencies. Imported by all other packages.
 
-### packages/web
-React 18 PWA built with Vite + Tailwind CSS. Uses React Router v6 for client routing. State management via React Context + `useReducer` in `globalContext.js`. Vite proxies `/media`, `/stream`, `/jobs`, `/scans` requests to the API server.
+### packages/mobile
+Expo SDK 57 app (React Native 0.86) with react-native-web and expo-router for file-based routing. Targets Web, Android, and iOS from a single codebase. Replaces the former Vite PWA (packages/web — removed in Phase 8 per issue #27).
+
+- `app/` — expo-router file-based routes (mirror `shared/routes.js`)
+- `components/ui/` — RN port of the 9 web UI primitives (Button, IconButton, Icon, Input, Select, Badge, Modal, Loader, ProgressBar)
+- `components/media/` — MediaCard, MediaGrid, FolderCard, TagCard, LikeButton, ImageViewer, MediaPlayer
+- `components/layout/` — EmptyState
+- `components/ErrorBoundary.jsx`
+- `contexts/` — Global, Refresh, Scan, Slideshow, JobProgress (ported 1:1 from web)
+- `hooks/` — useMedia, usePersistedState (AsyncStorage)
+- `services/` — platform utilities (`baseUrl.js`, `api.js`, `storage.js`, `sse.js`)
+- `theme/` — design tokens extracted 1:1 from `index.css` (32 CSS vars, animation presets, breakpoints, icon sizes, spacing)
+- `utils/` — shuffle, pageCache, barrel
+- `metro.config.js` — Monorepo-aware Metro config (watchFolders for shared, pnpm nodeModulesPaths)
+- `app.json` — Expo configuration (slug, scheme, web bundler, PWA manifest)
 
 ### packages/server
 Uses [kojo v9](https://github.com/yentsun/kojo) (event-driven microservice framework) with Node.js `http` module. Database via Node.js built-in `node:sqlite` (DatabaseSync) with WAL mode for concurrent access.
@@ -41,25 +52,14 @@ Uses [kojo v9](https://github.com/yentsun/kojo) (event-driven microservice frame
 Kojo structure:
 - `ops/` — Flat business logic functions loaded via `functionsDir: 'ops'`. Accessed as `kojo.ops.functionName()`. Use `function()` syntax (not arrow) to receive `[kojo, logger]` via `this`.
 - `endpoints/` — Subscribers loaded via `subsDir: 'endpoints'`. Each file is named `XX_method_path.js` (e.g. `10_get_media.js`). Endpoints register routes via `kojo.ops.addHttpRoute(config, handler)`.
-- `ops/requestMiddleware.js` — HTTP server creation, CORS, URLPattern-based route dispatch, request logging.
+- `ops/requestMiddleware.js` — HTTP server creation, CORS, URLPattern-based route dispatch, request logging, static file serving (serves `packages/mobile/dist/`).
 - `ops/addHttpRoute.js` — Route registration op that compiles URLPattern and pushes to routes table.
 - `src/db.js` — SQLite database init (node:sqlite DatabaseSync, WAL mode)
 - `src/sse.js` — SSE client management and broadcast
 - `boot.js` — Entry point. Initialises kojo, db, loads ops/endpoints, starts HTTP server.
 
-### packages/mobile
-**Phase 0 (infra scaffold only).** Expo SDK 57 app (React Native 0.86) with react-native-web and expo-router for file-based routing. Targets Web, Android, and iOS from a single codebase. Full migration from the Vite PWA is tracked in issue #27 — currently the package contains a placeholder screen that proves the monorepo wiring works (fetches `GET /media` via `@photo-quest/shared`).
-
-- `app/` — expo-router file-based routes (currently only `app/index.js`)
-- `components/ui/` — RN port of the 9 web UI primitives (Button, IconButton, Icon, Input, Select, Badge, Modal, Loader, ProgressBar)
-- `contexts/` — Global, Refresh, Scan, Slideshow, JobProgress (ported 1:1 from web)
-- `hooks/` — useMedia, usePersistedState (AsyncStorage)
-- `services/` — platform utilities (`baseUrl.js`, `api.js`, `storage.js`, `sse.js`) and future API layer
-- `theme/` — design tokens extracted 1:1 from `packages/web/src/index.css` (32 CSS vars, animation presets, breakpoints, icon sizes, spacing)
-- `utils/` — shuffle, pageCache, barrel
-- `metro.config.js` — Monorepo-aware Metro config (watchFolders for shared, pnpm nodeModulesPaths)
-- `app.json` — Expo configuration (slug, scheme, web bundler)
-- `app.json` — Expo configuration (slug, scheme, web bundler)
+### packages/electron
+Headless tray app (no BrowserWindow) — spawns the server, systray menu ("Open Photo Quest" opens the RNW build in the default browser), auto-updater (electron-updater), launch-at-login. Temporary; long-term replaced by lighter tray/single-binary server (issue #18).
 
 ### packages/worker
 Independent Node.js process that polls the SQLite job queue. Uses Node.js built-in `node:sqlite` for database access. Pipeline: `ffprobe` (probe metadata) → `ffmpeg` (transcode to MP4 H.264/AAC). Communicates with server via shared SQLite database file (`packages/server/photo-quest.db`) with WAL mode for concurrent access.
@@ -75,7 +75,7 @@ Independent Node.js process that polls the SQLite job queue. Uses Node.js built-
 
 ## Releasing
 
-- Bump the `version` field in all 6 `package.json` files (root, web, server, shared, electron, mobile) to the new version.
+- Bump the `version` field in all 5 `package.json` files (root, mobile, server, shared, electron) to the new version.
 - Update the changelog in `docs/` with change notes.
 - Commit with the version number as the message (e.g. `0.6.0`), push to master.
 - Create an annotated tag `v<version>` (e.g. `git tag -a v0.6.0 -m "0.6.0"`), push the tag.

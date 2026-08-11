@@ -22,20 +22,16 @@ const SERVER_DIR = isDev
   ? path.join(__dirname, '..', 'server')
   : path.join(process.resourcesPath, 'server')
 const ICON_PATH = isDev
-  ? path.join(__dirname, '..', 'web', 'public', 'logo512.png')
-  : path.join(process.resourcesPath, 'web', 'dist', 'logo512.png')
+  ? path.join(__dirname, '..', 'mobile', 'assets', 'icon.png')
+  : path.join(process.resourcesPath, 'mobile', 'dist', 'assets', 'icon.png')
 
 const rootDir = isDev ? path.join(__dirname, '..', '..') : process.resourcesPath
 let _cfg = {}
 try { _cfg = JSON.parse(readFileSync(path.join(rootDir, 'config.json'), 'utf8')) } catch {}
 const serverPort = _cfg.serverPort ?? 7837
-const webappPort = _cfg.webappPort ?? 7838
-const APP_URL = isDev ? `http://127.0.0.1:${webappPort}` : `http://127.0.0.1:${serverPort}`
-/* In dev, Electron spawns both the Vite dev server and the API server itself.
- * Vite comes up almost instantly; the API server takes longer (SQLite init,
- * kojo ops/endpoints auto-discovery) — wait for both or the window loads
- * before the API is reachable and initial data fetches (e.g. /folders) fail. */
-const WAIT_PORTS = isDev ? [webappPort, serverPort] : [serverPort]
+const APP_URL = `http://127.0.0.1:${serverPort}`
+/* In dev, Electron spawns the API server and waits for it. */
+const WAIT_PORTS = [serverPort]
 
 // --- logging ----------------------------------------------------------
 
@@ -54,7 +50,6 @@ function log(tag, ...args) {
 
 let tray = null
 let serverProc = null
-let viteProc = null
 let isQuitting = false
 let _autoUpdater = null
 
@@ -204,15 +199,6 @@ app.whenReady().then(async () => {
   })
   serverProc.on?.('exit', (code, signal) => log('server', `exited code=${code} signal=${signal}`))
 
-  if (isDev) {
-    viteProc = spawn('cmd.exe', ['/c', 'pnpm run dev'], {
-      cwd: path.join(__dirname, '..', 'web'),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    viteProc.stdout.on('data', d => log('vite', d.toString().trim()))
-    viteProc.stderr.on('data', d => log('vite:err', d.toString().trim()))
-  }
-
   try {
     for (const port of WAIT_PORTS) {
       log('electron', `waiting for port ${port}...`)
@@ -303,5 +289,4 @@ app.on('before-quit', () => {
   isQuitting = true
   log('electron', 'quitting')
   serverProc?.kill()
-  viteProc?.kill()
 })

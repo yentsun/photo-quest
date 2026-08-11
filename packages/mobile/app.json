@@ -7,7 +7,7 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/favicon.ico",
+      "favicon": "./assets/icon.png",
       "manifest": {
         "name": "Photo Quest Media Library",
         "short_name": "Photo Quest",

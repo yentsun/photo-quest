@@ -34,7 +34,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: photo-quest-web
-          path: packages/web/dist/
+          path: packages/mobile/dist/
           retention-days: 7
 
   release:
@@ -51,7 +51,7 @@ jobs:
       - name: Verify tag matches package versions
         run: |
           $tag = '${{ github.ref_name }}'.TrimStart('v')
-          $files = 'package.json', 'packages/web/package.json', 'packages/electron/package.json', 'packages/server/package.json', 'packages/shared/package.json'
+          $files = 'package.json', 'packages/mobile/package.json', 'packages/electron/package.json', 'packages/server/package.json', 'packages/shared/package.json'
           $bad = $files | Where-Object { (Get-Content $_ -Raw | ConvertFrom-Json).version -ne $tag }
           if ($bad) { Write-Error "Version mismatch with tag v${tag}: $($bad -join ', ')" }
 
