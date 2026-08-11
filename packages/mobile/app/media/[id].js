@@ -172,7 +172,7 @@ export default function MediaPage() {
           )}
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-            {safeTags(item.tags).map(tag => (
+            {item?.tags && safeTags(item.tags).map(tag => (
               <View key={tag} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
                 <Pressable onPress={() => router.push(`/tags/${encodeURIComponent(tag)}`)}>
                   <Text style={{ fontSize: fontSize.xs, color: colors.text }}>{tag}</Text>

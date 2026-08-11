@@ -50,7 +50,7 @@ export default function Dashboard() {
   const loadMedia = async () => {
     setLoadingMedia(true);
     try {
-      const data = await fetchMedia({ limit: 60 });
+      const data = await fetchMedia({ limit: 10000 });
       setMediaItems(data.items);
       setMediaTotal(data.total);
     } catch (e) { console.error(e); }
@@ -88,6 +88,7 @@ export default function Dashboard() {
   };
 
   return (
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }}>
     <View style={{ flex: 1, padding: 16, paddingTop: 24 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <View style={{ flex: 1 }}>
@@ -124,7 +125,8 @@ export default function Dashboard() {
           items={mediaItems}
           onPress={item => router.push(`/media/${item.id}`)}
           onLike={likeMedia}
-          loading={false}
+          loading={loadingMedia}
+          nestedScroll
         />
       )}
 
@@ -144,5 +146,6 @@ export default function Dashboard() {
         </View>
       </Modal>
     </View>
+    </ScrollView>
   );
 }
