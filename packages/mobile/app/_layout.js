@@ -1,5 +1,6 @@
-import { View } from 'react-native';
+import { View, Platform } from 'react-native';
 import { Stack } from 'expo-router';
+import { useEffect } from 'react';
 import { GlobalProvider } from '../contexts/GlobalContext';
 import { RefreshProvider } from '../contexts/RefreshContext';
 import { ScanProvider } from '../contexts/ScanContext';
@@ -36,6 +37,14 @@ function CRT() {
 }
 
 export default function RootLayout() {
+  /* Register service worker in production (when served by the API server, not Metro dev). */
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    if (window.location.port && window.location.port !== '8081') {
+      navigator.serviceWorker?.register('/sw.js');
+    }
+  }, []);
+
   return (
     <GlobalProvider>
       <RefreshProvider>

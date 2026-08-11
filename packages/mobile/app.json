@@ -6,11 +6,26 @@
     "version": "0.7.1",
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "favicon": "./assets/favicon.ico",
+      "manifest": {
+        "name": "Photo Quest Media Library",
+        "short_name": "Photo Quest",
+        "start_url": "/",
+        "display": "standalone",
+        "theme_color": "#000000",
+        "background_color": "#111827",
+        "icons": [
+          { "src": "/assets/logo192.png", "sizes": "192x192", "type": "image/png" },
+          { "src": "/assets/logo512.png", "sizes": "512x512", "type": "image/png" }
+        ]
+      }
     },
     "plugins": [
       "expo-router",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-image",
+      "expo-video"
     ]
   }
 }
