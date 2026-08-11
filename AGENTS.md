@@ -51,9 +51,14 @@ Kojo structure:
 **Phase 0 (infra scaffold only).** Expo SDK 57 app (React Native 0.86) with react-native-web and expo-router for file-based routing. Targets Web, Android, and iOS from a single codebase. Full migration from the Vite PWA is tracked in issue #27 — currently the package contains a placeholder screen that proves the monorepo wiring works (fetches `GET /media` via `@photo-quest/shared`).
 
 - `app/` — expo-router file-based routes (currently only `app/index.js`)
-- `services/` — platform utilities (`baseUrl.js`) and future API layer
+- `components/ui/` — RN port of the 9 web UI primitives (Button, IconButton, Icon, Input, Select, Badge, Modal, Loader, ProgressBar)
+- `contexts/` — Global, Refresh, Scan, Slideshow, JobProgress (ported 1:1 from web)
+- `hooks/` — useMedia, usePersistedState (AsyncStorage)
+- `services/` — platform utilities (`baseUrl.js`, `api.js`, `storage.js`, `sse.js`) and future API layer
 - `theme/` — design tokens extracted 1:1 from `packages/web/src/index.css` (32 CSS vars, animation presets, breakpoints, icon sizes, spacing)
+- `utils/` — shuffle, pageCache, barrel
 - `metro.config.js` — Monorepo-aware Metro config (watchFolders for shared, pnpm nodeModulesPaths)
+- `app.json` — Expo configuration (slug, scheme, web bundler)
 - `app.json` — Expo configuration (slug, scheme, web bundler)
 
 ### packages/worker

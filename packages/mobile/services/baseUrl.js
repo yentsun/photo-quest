@@ -8,18 +8,16 @@
  */
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import config from '@photo-quest/shared/config.defaults';
 
-/* Mirrors the serverPort default in packages/shared/config.js.
- * Phase 3 splits that file into a client-safe entry (it currently imports
- * node:fs, which Metro cannot bundle); until then keep the constant local. */
-const SERVER_PORT = 7837;
+const { serverPort } = config;
 
 export function getApiBaseUrl() {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
     const { hostname, port } = window.location;
-    if (port === String(SERVER_PORT)) return '';
-    return `http://${hostname}:${SERVER_PORT}`;
+    if (port === String(serverPort)) return '';
+    return `http://${hostname}:${serverPort}`;
   }
   const host = Constants.expoConfig?.hostUri?.split(':')?.[0];
-  return `http://${host ?? 'localhost'}:${SERVER_PORT}`;
+  return `http://${host ?? 'localhost'}:${serverPort}`;
 }
