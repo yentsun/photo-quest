@@ -18,6 +18,8 @@ This file provides guidance to coding agents when working with code in this repo
 - `pnpm install` — Install all workspace dependencies
 - `pnpm dev` — Run all packages (web + server + worker) in parallel
 - `pnpm dev:web` — Vite dev server (port from `config.webappPort`)
+- `pnpm dev:mobile` — Expo dev server (web + native); requires `pnpm dev:server` for API
+- `pnpm build:mobile` — Expo web export (SPA to `packages/mobile/dist/`)
 - `pnpm dev:server` — Node HTTP server (port from `config.serverPort`)
 - `pnpm dev:worker` — Worker process
 - `pnpm build` — Production build of web package
@@ -45,6 +47,14 @@ Kojo structure:
 - `src/sse.js` — SSE client management and broadcast
 - `boot.js` — Entry point. Initialises kojo, db, loads ops/endpoints, starts HTTP server.
 
+### packages/mobile
+**Phase 0 (infra scaffold only).** Expo SDK 57 app (React Native 0.86) with react-native-web and expo-router for file-based routing. Targets Web, Android, and iOS from a single codebase. Full migration from the Vite PWA is tracked in issue #27 — currently the package contains a placeholder screen that proves the monorepo wiring works (fetches `GET /media` via `@photo-quest/shared`).
+
+- `app/` — expo-router file-based routes (currently only `app/index.js`)
+- `services/` — platform utilities (`baseUrl.js`) and future API layer
+- `metro.config.js` — Monorepo-aware Metro config (watchFolders for shared, pnpm nodeModulesPaths)
+- `app.json` — Expo configuration (slug, scheme, web bundler)
+
 ### packages/worker
 Independent Node.js process that polls the SQLite job queue. Uses Node.js built-in `node:sqlite` for database access. Pipeline: `ffprobe` (probe metadata) → `ffmpeg` (transcode to MP4 H.264/AAC). Communicates with server via shared SQLite database file (`packages/server/photo-quest.db`) with WAL mode for concurrent access.
 
@@ -59,7 +69,7 @@ Independent Node.js process that polls the SQLite job queue. Uses Node.js built-
 
 ## Releasing
 
-- Bump the `version` field in all 5 `package.json` files (root, web, server, shared, electron) to the new version.
+- Bump the `version` field in all 6 `package.json` files (root, web, server, shared, electron, mobile) to the new version.
 - Update the changelog in `docs/` with change notes.
 - Commit with the version number as the message (e.g. `0.6.0`), push to master.
 - Create an annotated tag `v<version>` (e.g. `git tag -a v0.6.0 -m "0.6.0"`), push the tag.

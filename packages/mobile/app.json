@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Photo Quest",
+    "slug": "photo-quest",
+    "scheme": "photoquest",
+    "version": "0.7.1",
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar"
+    ]
+  }
+}

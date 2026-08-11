@@ -7,6 +7,8 @@
     "dev:web": "pnpm --filter @photo-quest/web dev",
     "dev:server": "pnpm --filter @photo-quest/server dev",
     "build": "pnpm --filter @photo-quest/web build",
+    "dev:mobile": "pnpm --filter @photo-quest/mobile dev",
+    "build:mobile": "pnpm --filter @photo-quest/mobile build:web",
     "start": "pnpm --filter @photo-quest/server start",
     "test": "pnpm --filter @photo-quest/server test",
     "dev:electron": "npm --prefix packages/electron install && pnpm --filter @photo-quest/electron start",
