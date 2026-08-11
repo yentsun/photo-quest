@@ -52,6 +52,7 @@ Kojo structure:
 
 - `app/` — expo-router file-based routes (currently only `app/index.js`)
 - `services/` — platform utilities (`baseUrl.js`) and future API layer
+- `theme/` — design tokens extracted 1:1 from `packages/web/src/index.css` (32 CSS vars, animation presets, breakpoints, icon sizes, spacing)
 - `metro.config.js` — Monorepo-aware Metro config (watchFolders for shared, pnpm nodeModulesPaths)
 - `app.json` — Expo configuration (slug, scheme, web bundler)
 
