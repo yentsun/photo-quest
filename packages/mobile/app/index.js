@@ -1,52 +1,148 @@
-/**
- * @file Phase 0 placeholder screen.
- *
- * Proves the infra wiring end-to-end: Expo + react-native-web + expo-router
- * booting inside the pnpm monorepo and talking to the kojo API server via the
- * canonical route map from @photo-quest/shared. Zero design — the real UI
- * arrives in Phases 1–4 (see issue #27).
- */
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { apiRoutes } from '@photo-quest/shared';
-import { getApiBaseUrl } from '../services/baseUrl';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useMediaActions } from '../hooks/useMedia';
+import { useRefresh } from '../contexts/RefreshContext';
+import { useScan } from '../contexts/ScanContext';
+import { fetchFolders, fetchMedia, getLastFolders, scanMedia } from '../services/api';
+import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache';
+import usePersistedState from '../hooks/usePersistedState';
+import { FolderCard, MediaGrid } from '../components/media';
+import { EmptyState } from '../components/layout';
+import { Button, Icon, Input, Loader, Modal, ProgressBar } from '../components/ui';
+import { colors, fontSize, fontFamily } from '../theme/tokens';
+import { useBreakpoint } from '../theme/breakpoints';
 
-export default function Index() {
-  const [state, setState] = useState({ status: 'loading' });
+function byFolderName(a, b) {
+  const nameA = a.path.split(/[/\\]/).pop() || '';
+  const nameB = b.path.split(/[/\\]/).pop() || '';
+  return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`${getApiBaseUrl()}${apiRoutes.media}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const total = Array.isArray(data) ? data.length : (data.total ?? data.items?.length ?? 0);
-        if (!cancelled) setState({ status: 'ok', total });
-      } catch (err) {
-        if (!cancelled) setState({ status: 'error', message: err.message });
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+export default function Dashboard() {
+  const router = useRouter();
+  const { addFolderWithPath, removeFolder, refreshLibrary, likeMedia } = useMediaActions();
+  const { signal, bump } = useRefresh();
+  const { isScanning } = useScan();
+  const { width } = useBreakpoint();
+
+  const [folders, setFolders] = useState(() => getLastFolders() || []);
+  const [mediaItems, setMediaItems] = useState(() => getPageCache('dashboard', signal)?.data?.items || []);
+  const [mediaTotal, setMediaTotal] = useState(0);
+  const [loadingMedia, setLoadingMedia] = useState(true);
+  const [showAddFolder, setShowAddFolder] = useState(false);
+  const [folderPath, setFolderPath] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [refreshLabel, setRefreshLabel] = useState('Refresh');
+  const [sortOrder, setSortOrder] = usePersistedState('dashboard-sort', 'name');
+  const refreshTimer = useRef(null);
+
+  useEffect(() => { /* stop slideshow */ }, []);
+
+  const loadFolders = async () => {
+    try {
+      const data = await fetchFolders();
+      const sorted = [...data].sort(sortOrder === 'name' ? byFolderName : (a, b) => b.id - a.id);
+      setFolders(sorted);
+    } catch (e) { console.error(e); }
+  };
+
+  const loadMedia = async () => {
+    setLoadingMedia(true);
+    try {
+      const data = await fetchMedia({ limit: 60 });
+      setMediaItems(data.items);
+      setMediaTotal(data.total);
+    } catch (e) { console.error(e); }
+    setLoadingMedia(false);
+  };
+
+  useEffect(() => { loadFolders(); loadMedia(); }, [signal]);
+
+  const gridType = mediaItems?.[0]?.type;
+
+  const handleAddFolder = async () => {
+    if (!folderPath.trim()) return;
+    try {
+      setImporting(true); setShowAddFolder(false);
+      await addFolderWithPath(folderPath.trim());
+      setFolderPath('');
+      await loadFolders();
+    } catch (e) { console.error(e); }
+    setImporting(false);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshLabel('Scanning…');
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    try {
+      await refreshLibrary(folders, (msg) => setRefreshLabel(msg));
+    } catch {}
+    setRefreshLabel('Done');
+    refreshTimer.current = setTimeout(() => setRefreshLabel('Refresh'), 2000);
+    loadMedia();
+  };
+
+  const handleRemoveFolder = async (folder) => {
+    try { await removeFolder(folder.id); loadFolders(); } catch (e) { console.error(e); }
+  };
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.title}>Photo Quest — mobile shell</Text>
-      <Text style={styles.line}>packages/mobile · Phase 0 placeholder (no design yet)</Text>
-      {state.status === 'loading' && <Text style={styles.line}>Contacting API server…</Text>}
-      {state.status === 'ok' && (
-        <Text style={styles.line}>GET {apiRoutes.media} → {state.total} media items</Text>
+    <View style={{ flex: 1, padding: 16, paddingTop: 24 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm, letterSpacing: -0.01 * fontSize.xl }}>Library</Text>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Button variant="ghost" size="sm" icon={<Icon name="folder" size="xs" />} onPress={() => setShowAddFolder(true)}>Add Folder</Button>
+          <Button variant="ghost" size="sm" icon={<Icon name="refresh" size="xs" />} onPress={handleRefresh} disabled={isScanning}>{refreshLabel}</Button>
+        </View>
+      </View>
+
+      {folders.length > 0 && (
+        <View style={{ marginBottom: 24 }}>
+          <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+            {folders.map(folder => (
+              <View key={folder.id} style={{ width: 200 }}>
+                <FolderCard folder={folder} onRemove={() => handleRemoveFolder(folder)} />
+              </View>
+            ))}
+          </View>
+        </View>
       )}
-      {state.status === 'error' && (
-        <Text style={styles.line}>API unreachable: {state.message} (is `pnpm dev:server` running?)</Text>
+
+      {loadingMedia ? (
+        <Loader message="Loading library…" />
+      ) : mediaItems.length === 0 && folders.length === 0 ? (
+        <EmptyState
+          title="No media yet"
+          description="Add a folder to start building your library."
+          action={{ label: 'Add Folder', onClick: () => setShowAddFolder(true) }}
+        />
+      ) : (
+        <MediaGrid
+          items={mediaItems}
+          onPress={item => router.push(`/media/${item.id}`)}
+          onLike={likeMedia}
+          loading={false}
+        />
       )}
+
+      <Modal open={showAddFolder} onClose={() => setShowAddFolder(false)} title="Add Folder" closable={!importing}>
+        <View style={{ gap: 12 }}>
+          <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>Enter the absolute path to a media folder on this machine:</Text>
+          <Input
+            value={folderPath}
+            onChangeText={setFolderPath}
+            placeholder="e.g. C:\Users\work\Photos"
+            autoFocus
+          />
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+            <Button variant="ghost" onPress={() => setShowAddFolder(false)}>Cancel</Button>
+            <Button variant="primary" onPress={handleAddFolder} disabled={importing}>Add</Button>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 24 },
-  title: { fontSize: 16, fontWeight: '600' },
-  line: { fontSize: 13, textAlign: 'center' },
-});

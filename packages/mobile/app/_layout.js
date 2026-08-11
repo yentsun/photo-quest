@@ -1,0 +1,62 @@
+import { View } from 'react-native';
+import { Stack } from 'expo-router';
+import { GlobalProvider } from '../contexts/GlobalContext';
+import { RefreshProvider } from '../contexts/RefreshContext';
+import { ScanProvider } from '../contexts/ScanContext';
+import { SlideshowProvider } from '../contexts/SlideshowContext';
+import { JobProgressProvider } from '../contexts/JobProgressContext';
+import { colors } from '../theme/tokens';
+import { useBreakpoint } from '../theme/breakpoints';
+
+function CRT() {
+  const { isMobile } = useBreakpoint();
+  return (
+    <>
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute', inset: 0, zIndex: 100,
+          backgroundColor: 'transparent',
+          ...(typeof window === 'undefined' ? {} : {
+            backgroundImage: 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 1px, transparent 1px, transparent 3px)',
+          }),
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute', inset: 0, zIndex: 100,
+          ...(typeof window === 'undefined' ? {} : {
+            backgroundImage: 'radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.4) 100%)',
+          }),
+        }}
+      />
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <GlobalProvider>
+      <RefreshProvider>
+        <ScanProvider>
+          <SlideshowProvider>
+            <JobProgressProvider>
+              <View style={{ flex: 1, backgroundColor: colors.bg }}>
+                <CRT />
+                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="liked" />
+                  <Stack.Screen name="folder/[id]" />
+                  <Stack.Screen name="media/[id]" />
+                  <Stack.Screen name="tags/index" />
+                  <Stack.Screen name="tags/[tag]" />
+                </Stack>
+              </View>
+            </JobProgressProvider>
+          </SlideshowProvider>
+        </ScanProvider>
+      </RefreshProvider>
+    </GlobalProvider>
+  );
+}

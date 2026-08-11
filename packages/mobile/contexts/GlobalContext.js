@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useReducer } from 'react';
 import { actions } from '@photo-quest/shared';
 
 export const initialState = {
@@ -27,4 +27,12 @@ export const reducer = (state, action) => {
 };
 
 const GlobalContext = React.createContext();
+
+export function GlobalProvider({ children }) {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  return <GlobalContext.Provider value={{ state, dispatch }}>{children}</GlobalContext.Provider>;
+}
+
+export function useGlobal() { return React.useContext(GlobalContext); }
+
 export default GlobalContext;
