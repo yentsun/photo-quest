@@ -17,10 +17,10 @@ This file provides guidance to coding agents when working with code in this repo
 
 - `pnpm install` — Install all workspace dependencies
 - `pnpm dev` — Run all packages (mobile + server) in parallel
-- `pnpm dev:web` / `pnpm dev:mobile` — Expo dev server (requires `pnpm dev:server` for API)
+- `pnpm dev:mobile` — Expo dev server (requires `pnpm dev:server` for API)
 - `pnpm dev:server` — Node HTTP server (port from `config.serverPort`)
 - `pnpm dev:worker` — Worker process
-- `pnpm build` / `pnpm build:mobile` — Expo web export (SPA to `packages/mobile/dist/`)
+- `pnpm build:mobile` — Expo web export (SPA to `packages/mobile/dist/`)
 - `pnpm --filter @photo-quest/server test` — Run server tests
 
 ## Architecture

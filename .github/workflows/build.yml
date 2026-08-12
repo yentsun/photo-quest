@@ -28,7 +28,7 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Build web frontend
-        run: pnpm build
+        run: pnpm build:mobile
 
       - name: Upload web build artifact
         uses: actions/upload-artifact@v4
@@ -73,7 +73,7 @@ jobs:
           npm_config_build_from_source: true
 
       - name: Build web frontend
-        run: pnpm build
+        run: pnpm build:mobile
 
       - name: Generate ICO for installer
         run: |

@@ -23,7 +23,7 @@ A self-hosted media library PWA for browsing, organizing, and enjoying your phot
 git clone https://github.com/yentsun/photo-quest.git
 cd photo-quest
 pnpm install
-pnpm build
+pnpm build:mobile
 ```
 
 ## Running
@@ -66,7 +66,7 @@ Click **Refresh** on the dashboard to rescan all folders for new files.
 ```bash
 git pull
 pnpm install
-pnpm build
+pnpm build:mobile
 ```
 
 Then restart with `pnpm start`. Your database and media library are preserved.

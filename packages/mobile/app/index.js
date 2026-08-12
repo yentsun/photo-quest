@@ -48,8 +48,9 @@ export default function Dashboard() {
         fetchFolders().catch(() => []),
         fetchMedia({ limit: 10000 }).catch(() => ({ items: [] })),
       ]);
-      setFolders(folderData.sort(sortOrder === 'name' ? byFolderName : (a, b) => b.id - a.id));
-      setMediaItems(mediaData.items);
+      const rootFolders = folderData.filter(f => f.parentId === null);
+      setFolders(rootFolders.sort(sortOrder === 'name' ? byFolderName : (a, b) => b.id - a.id));
+      setMediaItems([]);
     } catch (e) { console.error(e); }
     setLoadingItems(false);
   };
