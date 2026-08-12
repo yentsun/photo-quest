@@ -8,32 +8,8 @@ import { SlideshowProvider, useSlideshow } from '../contexts/SlideshowContext';
 import { JobProgressProvider } from '../contexts/JobProgressContext';
 import { PlaylistProvider } from '../contexts/PlaylistContext';
 import Sidebar from '../components/Sidebar';
+import CRTOverlay from '../components/CRTOverlay';
 import { colors } from '../theme/tokens';
-
-function CRT() {
-  return (
-    <>
-      <View
-        style={{
-          position: 'absolute', inset: 0, zIndex: 100,
-          pointerEvents: 'none',
-          ...(typeof window === 'undefined' ? {} : {
-            backgroundImage: 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 1px, transparent 1px, transparent 3px)',
-          }),
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute', inset: 0, zIndex: 100,
-          pointerEvents: 'none',
-          ...(typeof window === 'undefined' ? {} : {
-            backgroundImage: 'radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.4) 100%)',
-          }),
-        }}
-      />
-    </>
-  );
-}
 
 function AppStateHandler() {
   const appState = useRef(AppState.currentState);
@@ -68,7 +44,7 @@ export default function RootLayout() {
             <PlaylistProvider>
               <JobProgressProvider>
                 <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bg }}>
-                  <CRT />
+                  <CRTOverlay />
                   <Sidebar />
                   <View style={{ flex: 1 }}>
                     <AppStateHandler />

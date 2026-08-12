@@ -11,9 +11,10 @@ import MediaPlayer from '../../components/MediaPlayer';
 import Button from '../../components/Button';
 import Icon from '../../components/Icon';
 import IconButton from '../../components/IconButton';
+import LikeButton from '../../components/LikeButton';
 import Modal from '../../components/Modal';
 import ProgressBar from '../../components/ProgressBar';
-import { getMediaUrl, fetchMediaById, fetchFolders, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia } from '../../services/api';
+import { getMediaUrl, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia, setFolderThumbnail, setVideoThumbnail } from '../../services/api';
 import { useJobProgress } from '../../contexts/JobProgressContext';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import { colors, fontSize, fontFamily, space } from '../../theme/tokens';
@@ -45,6 +46,10 @@ export default function MediaPage() {
   const [tagDraft, setTagDraft] = useState('');
   const [allTags, setAllTags] = useState([]);
   const [breadcrumbs, setBreadcrumbs] = useState([]);
+  const folder = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1] : null;
+  const [folderSiblings, setFolderSiblings] = useState([]);
+  const [tagSuggestions, setTagSuggestions] = useState([]);
+  const [suggestionIndex, setSuggestionIndex] = useState(-1);
 
   const progressSecs = useJobProgress(item?.id);
 
@@ -57,13 +62,13 @@ export default function MediaPage() {
     onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 20 && Math.abs(gs.dx) > Math.abs(gs.dy),
     onPanResponderRelease: (_, gs) => {
       if (gs.dx > 80 && playlist.ids.length > 1) {
-        goPrev();
-        const prevId = playlist.ids[(playlist.index - 1 + playlist.ids.length) % playlist.ids.length];
-        if (prevId && prevId !== Number(id)) navigateToItem(prevId);
+        const idx = playlist.ids.indexOf(Number(id));
+        const prevIdx = (idx - 1 + playlist.ids.length) % playlist.ids.length;
+        goPrev(); navigateToItem(playlist.ids[prevIdx]);
       } else if (gs.dx < -80 && playlist.ids.length > 1) {
-        goNext();
-        const nextId = playlist.ids[(playlist.index + 1) % playlist.ids.length];
-        if (nextId && nextId !== Number(id)) navigateToItem(nextId);
+        const idx = playlist.ids.indexOf(Number(id));
+        const nextIdx = (idx + 1) % playlist.ids.length;
+        goNext(); navigateToItem(playlist.ids[nextIdx]);
       }
     },
   }), [playlist, goNext, goPrev, id, navigateToItem]);
@@ -90,6 +95,11 @@ export default function MediaPage() {
           }
           setBreadcrumbs(crumbs);
         }
+        if (mediaItem.folder) {
+          fetchMedia({ folder: mediaItem.folder, limit: 10000, sort: 'filename' })
+            .then(({ items }) => { if (!cancelled) setFolderSiblings(items); })
+            .catch(() => {});
+        }
       } catch (err) { console.error(err); }
       setLoading(false);
     };
@@ -109,16 +119,51 @@ export default function MediaPage() {
     if (Platform.OS !== 'web') return;
     const handler = (e) => {
       if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
-      if (e.key === 'f') setIsFullscreen(fs => !fs);
-      if (e.key === 'i') setShowInfo(s => !s);
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const currentId = Number(id);
+        if (playlist.ids.length > 1) {
+          const idx = playlist.ids.indexOf(currentId);
+          const prevIdx = (idx - 1 + playlist.ids.length) % playlist.ids.length;
+          if (idx !== -1) navigateToItem(playlist.ids[prevIdx]);
+        } else if (folderSiblings.length > 1) {
+          const idx = folderSiblings.findIndex(m => m.id === currentId);
+          if (idx > 0) navigateToItem(folderSiblings[idx - 1].id);
+        }
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const currentId = Number(id);
+        if (playlist.ids.length > 1) {
+          const idx = playlist.ids.indexOf(currentId);
+          const nextIdx = (idx + 1) % playlist.ids.length;
+          if (idx !== -1) navigateToItem(playlist.ids[nextIdx]);
+        } else if (folderSiblings.length > 1) {
+          const idx = folderSiblings.findIndex(m => m.id === currentId);
+          if (idx >= 0 && idx < folderSiblings.length - 1) navigateToItem(folderSiblings[idx + 1].id);
+        }
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const idx = folderSiblings.findIndex(m => m.id === Number(id));
+        if (idx > 0) navigateToItem(folderSiblings[idx - 1].id);
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const idx = folderSiblings.findIndex(m => m.id === Number(id));
+        if (idx >= 0 && idx < folderSiblings.length - 1) navigateToItem(folderSiblings[idx + 1].id);
+      }
+      if (e.key === ' ') { e.preventDefault(); playerRef.current?.togglePlay(); }
+      if (e.key === 'Enter') { e.preventDefault(); handleLike(); }
+      if (e.key === 'f') { e.preventDefault(); setIsFullscreen(fs => !fs); }
+      if (e.key === 'i') { e.preventDefault(); setShowInfo(s => !s); }
       if (e.key === 't' || e.key === 'T') setAddingTag(true);
-      if (e.key === 'ArrowLeft' && playlist.ids.length > 1) { goPrev(); const prevId = playlist.ids[(playlist.index - 1 + playlist.ids.length) % playlist.ids.length]; if (prevId && prevId !== Number(id)) navigateToItem(prevId); }
-      if (e.key === 'ArrowRight' && playlist.ids.length > 1) { goNext(); const nextId = playlist.ids[(playlist.index + 1) % playlist.ids.length]; if (nextId && nextId !== Number(id)) navigateToItem(nextId); }
+      if (e.key === 'Delete') { e.preventDefault(); handleDelete(); }
       if (e.key === 'Escape') { setIsFullscreen(false); setEditingTitle(false); setAddingTag(false); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [playlist, goNext, goPrev, id, navigateToItem]);
+  }, [playlist, goNext, goPrev, id, navigateToItem, folderSiblings]);
 
   useEffect(() => {
     if (!showInfo || !item) return;
@@ -132,9 +177,8 @@ export default function MediaPage() {
 
   const handleLike = async () => {
     if (!item) return;
-    const orig = item.likes || 0;
-    setItem(p => ({ ...p, likes: orig + 1 }));
-    try { await likeMedia(item.id); bump(); } catch { setItem(p => ({ ...p, likes: orig })); }
+    setItem(p => ({ ...p, likes: (p.likes || 0) + 1 }));
+    try { await likeMedia(item.id); bump(); } catch { setItem(p => ({ ...p, likes: Math.max(0, (p.likes || 0) - 1) })); }
   };
 
   const handleDelete = async () => {
@@ -146,6 +190,28 @@ export default function MediaPage() {
       router.replace('/');
     } catch (err) {
       dispatch({ type: act.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
+    }
+  };
+
+  const handleSetFolderThumbnail = async (time = null) => {
+    if (!item || !folder?.id) return;
+    try {
+      await setFolderThumbnail(folder.id, item.id, time);
+      bump();
+    } catch (err) {
+      console.error('Failed to set folder thumbnail:', err);
+    }
+  };
+
+  const handleSetVideoThumbnail = async () => {
+    if (!item || item.type === MEDIA_TYPE.IMAGE) return;
+    const time = playerRef.current?.getCurrentTime() ?? 0;
+    try {
+      await setVideoThumbnail(item.id, time);
+      setItem(prev => prev ? { ...prev, thumbnail_time: time } : prev);
+      bump();
+    } catch (err) {
+      console.error('Failed to set video thumbnail:', err);
     }
   };
 
@@ -174,9 +240,13 @@ export default function MediaPage() {
   };
 
   useEffect(() => {
-    if (!addingTag) return;
+    if (!addingTag) { setTagSuggestions([]); setSuggestionIndex(-1); return; }
     fetchTags().then(data => setAllTags(data.map(t => t.tag))).catch(() => {});
-  }, [addingTag]);
+    const trimmed = tagDraft.trim().toLowerCase();
+    if (!trimmed) { setTagSuggestions([]); return; }
+    const existing = new Set(safeTags(item?.tags));
+    setTagSuggestions(allTags.filter(t => t.toLowerCase().includes(trimmed) && !existing.has(t)).slice(0, 6));
+  }, [addingTag, tagDraft]);
 
   if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Text style={{ color: colors.textMut }}>Loading…</Text></View>;
   if (!item) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Text style={{ color: colors.textMut }}>Media not found</Text></View>;
@@ -214,44 +284,86 @@ export default function MediaPage() {
       </View>
 
       {!isFullscreen && (
-        <View style={{ backgroundColor: colors.bg, borderTopWidth: 1, borderColor: colors.border, padding: space.gap, position: 'relative' }}>
-          {editingTitle ? (
-            <TextInput style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: fontSize.base, fontFamily: fontFamily.mono, padding: 4, height: 24 }} value={titleDraft} onChangeText={setTitleDraft} onBlur={commitTitle} onSubmitEditing={commitTitle} autoFocus selectTextOnFocus />
-          ) : (
-            <Text style={{ color: colors.textEm, fontWeight: '500', fontSize: fontSize.base }} onPress={() => { setTitleDraft(item.title); setEditingTitle(true); }} numberOfLines={1}>{item.title}</Text>
-          )}
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-            {item?.tags && safeTags(item.tags).map(tag => (
-              <View key={tag} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
-                <Pressable onPress={() => router.push(`/tags/${encodeURIComponent(tag)}`)}>
-                  <Text style={{ fontSize: fontSize.xs, color: colors.text }}>{tag}</Text>
-                </Pressable>
-                <Pressable onPress={() => handleRemoveTag(tag)}>
-                  <Text style={{ color: colors.textMut, fontSize: 14 }}>×</Text>
-                </Pressable>
+        <View style={{ backgroundColor: colors.bg, borderTopWidth: 1, borderColor: colors.border, padding: space.gap }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: space.gap }}>
+            <View style={{ flex: 1 }}>
+              {editingTitle ? (
+                <TextInput style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: fontSize.base, fontFamily: fontFamily.mono, padding: 4, height: 24 }} value={titleDraft} onChangeText={setTitleDraft} onBlur={commitTitle} onSubmitEditing={commitTitle} autoFocus selectTextOnFocus />
+              ) : (
+                <Text style={{ color: colors.textEm, fontWeight: '600', fontSize: 22, lineHeight: 28 }} onPress={() => { setTitleDraft(item.title); setEditingTitle(true); }} numberOfLines={1}>{item.title}</Text>
+              )}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                {item?.tags && safeTags(item.tags).map(tag => (
+                  <View key={tag} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+                    <Pressable onPress={() => router.push(`/tags/${encodeURIComponent(tag)}`)}>
+                      <Text style={{ fontSize: fontSize.xs, color: colors.text }}>{tag}</Text>
+                    </Pressable>
+                    <Pressable onPress={() => handleRemoveTag(tag)}>
+                      <Text style={{ color: colors.textMut, fontSize: 14 }}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+                {addingTag ? (
+                  <>
+                    <TextInput
+                      style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: fontSize.xs, paddingHorizontal: 8, paddingVertical: 1, width: 96, fontFamily: fontFamily.mono }}
+                      value={tagDraft}
+                      onChangeText={setTagDraft}
+                      onBlur={() => { setAddingTag(false); setTagDraft(''); setSuggestionIndex(-1); }}
+                      onKeyPress={(e) => {
+                        if (e.nativeEvent.key === 'ArrowDown') { e.preventDefault(); setSuggestionIndex(i => Math.min(i + 1, tagSuggestions.length - 1)); }
+                        if (e.nativeEvent.key === 'ArrowUp') { e.preventDefault(); setSuggestionIndex(i => Math.max(i - 1, -1)); }
+                        if (e.nativeEvent.key === 'Enter' || e.nativeEvent.key === ',') {
+                          e.preventDefault();
+                          if (suggestionIndex >= 0 && tagSuggestions[suggestionIndex]) {
+                            addTag(tagSuggestions[suggestionIndex]);
+                            setAddingTag(false); setTagDraft(''); setSuggestionIndex(-1);
+                          } else {
+                            setAddingTag(false); setTagDraft(''); addTag(tagDraft.trim());
+                          }
+                        }
+                        if (e.nativeEvent.key === 'Escape') { e.preventDefault(); setAddingTag(false); setTagDraft(''); setSuggestionIndex(-1); }
+                      }}
+                      autoFocus
+                      placeholder="tag name"
+                    />
+                    {tagSuggestions.length > 0 && (
+                      <View style={{ position: 'absolute', top: '100%', left: 0, zIndex: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+                        {tagSuggestions.map((t, i) => (
+                          <Pressable
+                            key={t}
+                            onPressIn={() => { addTag(t); setAddingTag(false); setTagDraft(''); setSuggestionIndex(-1); }}
+                            style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: i === suggestionIndex ? colors.dim : 'transparent' }}
+                          >
+                            <Text style={{ color: colors.textEm, fontSize: fontSize.xs, fontFamily: fontFamily.mono }}>{t}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <Pressable onPress={() => setAddingTag(true)} style={{ paddingHorizontal: 8, paddingVertical: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+                    <Text style={{ color: colors.textMut, fontSize: fontSize.xs, fontFamily: fontFamily.mono }}>+ tag</Text>
+                  </Pressable>
+                )}
               </View>
-            ))}
-            {addingTag ? (
-              <TextInput
-                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: fontSize.xs, paddingHorizontal: 8, paddingVertical: 1, width: 96, fontFamily: fontFamily.mono }}
-                value={tagDraft}
-                onChangeText={setTagDraft}
-                onBlur={() => { setAddingTag(false); setTagDraft(''); addTag(tagDraft.trim()); }}
-                onSubmitEditing={() => { setAddingTag(false); setTagDraft(''); addTag(tagDraft.trim()); }}
-                autoFocus
-                placeholder="tag name"
-              />
-            ) : (
-              <Pressable onPress={() => setAddingTag(true)} style={{ paddingHorizontal: 8, paddingVertical: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
-                <Text style={{ color: colors.textMut, fontSize: fontSize.xs, fontFamily: fontFamily.mono }}>+ tag</Text>
-              </Pressable>
-            )}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap }}>
+              <LikeButton count={item.likes || 0} onLike={handleLike} />
+            </View>
           </View>
-
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap, marginTop: 6, flexWrap: 'wrap' }}>
             <Button variant="ghost" size="sm" icon={<Icon name="info" size="sm" />} onPress={() => setShowInfo(true)}>Info</Button>
             <Button variant="ghost" size="sm" icon={<Icon name="download" size="sm" />} onPress={() => downloadMedia(item)}>Download</Button>
+            {isImage && folder?.id && (
+              <Button variant="ghost" size="sm" icon={<Icon name="image" size="sm" />} onPress={() => handleSetFolderThumbnail()}>Use as folder thumbnail</Button>
+            )}
+            {!isImage && folder?.id && item.status === MEDIA_STATUS.READY && (
+              <Button variant="ghost" size="sm" icon={<Icon name="video" size="sm" />} onPress={() => handleSetFolderThumbnail(playerRef.current?.getCurrentTime())}>Use frame for folder</Button>
+            )}
+            {!isImage && item.status === MEDIA_STATUS.READY && (
+              <Button variant="ghost" size="sm" icon={<Icon name="video" size="sm" />} onPress={handleSetVideoThumbnail}>Use frame for video</Button>
+            )}
             <Button variant="danger" size="sm" icon={<Icon name="trash" size="sm" />} onPress={handleDelete}>Delete</Button>
           </View>
         </View>
