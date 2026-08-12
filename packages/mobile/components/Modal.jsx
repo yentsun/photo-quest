@@ -81,7 +81,7 @@ export default function Modal({
               paddingRight: 8,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 8,
+              gap: space.gap,
               flexShrink: 0,
             }}>
               <Text style={{

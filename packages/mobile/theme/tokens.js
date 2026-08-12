@@ -87,10 +87,13 @@ export const layout = {
    ================================================================== */
 
 export const space = {
-  gap: 12,
+  gap: 22,
+  gridPadLeft: 32,
   padPage: 16,
   padBarH: 8,
   padModal: 14,
+  padHeaderTop: 24,
+  cardWidth: 200,
 };
 
 /* ==================================================================

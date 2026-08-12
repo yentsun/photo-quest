@@ -1,17 +1,14 @@
 import { FlatList, View } from 'react-native';
-import { useCallback } from 'react';
-import { useWindowDimensions } from 'react-native';
+import { useCallback, useState } from 'react';
 import { usePlaylist } from '../contexts/PlaylistContext';
 import { space } from '../theme/tokens';
 import MediaCard from './MediaCard';
 import FolderCard from './FolderCard';
 
-const CARD_WIDTH = 200;
-
-export default function Grid({ folders, items, onFolderPress, onFolderRemove, onMediaPress, onLike }) {
-  const { width } = useWindowDimensions();
+export default function Grid({ folders, items, onMediaPress, onLike, header }) {
+  const [containerWidth, setContainerWidth] = useState(0);
   const { set } = usePlaylist();
-  const cols = Math.max(1, Math.floor((width - space.gap) / (CARD_WIDTH + space.gap)));
+  const cols = Math.max(1, Math.floor((containerWidth - space.gap) / (space.cardWidth + space.gap))) || 3;
 
   const data = [
     ...folders.map(f => ({ _kind: 'folder', key: `folder-${f.id}`, data: f })),
@@ -24,19 +21,24 @@ export default function Grid({ folders, items, onFolderPress, onFolderRemove, on
   }, [items, onMediaPress, set]);
 
   return (
-    <FlatList
-      data={data}
-      numColumns={cols}
-      key={cols}
-      keyExtractor={d => d.key}
-      columnWrapperStyle={cols > 1 ? { gap: space.gap } : undefined}
-      contentContainerStyle={{ gap: space.gap, padding: space.gap }}
-      renderItem={({ item }) => {
-        if (item._kind === 'folder') {
-          return <FolderCard folder={item.data} onRemove={() => onFolderRemove?.(item.data)} />;
-        }
-        return <MediaCard media={item.data} onPress={() => handleMediaPress(item.data, item.index)} onLike={onLike} />;
-      }}
-    />
+    <View style={{ flex: 1 }} onLayout={e => setContainerWidth(e.nativeEvent.layout.width)}>
+      {containerWidth > 0 && (
+        <FlatList
+          data={data}
+          numColumns={cols}
+          key={cols}
+          keyExtractor={d => d.key}
+          columnWrapperStyle={cols > 1 ? { gap: space.gap } : undefined}
+          contentContainerStyle={{ gap: space.gap, paddingTop: space.gap, paddingRight: space.gap, paddingBottom: space.gap, paddingLeft: space.gridPadLeft }}
+          ListHeaderComponent={header}
+          renderItem={({ item }) => {
+            if (item._kind === 'folder') {
+              return <FolderCard folder={item.data} />;
+            }
+            return <MediaCard media={item.data} onPress={() => handleMediaPress(item.data, item.index)} onLike={onLike} />;
+          }}
+        />
+      )}
+    </View>
   );
 }

@@ -1,5 +1,5 @@
 import { Pressable, Text } from 'react-native';
-import { colors, fontSize, fontFamily, layout, accents } from '../theme/tokens';
+import { colors, fontSize, fontFamily, layout, accents, space } from '../theme/tokens';
 
 const H = layout.rowHeight;
 
@@ -7,7 +7,7 @@ const BASE = {
   flexDirection: 'row',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: 8,
+  gap: space.gap,
   height: H,
   paddingHorizontal: 12,
   borderWidth: 1,

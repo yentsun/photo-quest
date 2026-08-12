@@ -6,7 +6,7 @@ import Card from './Card';
 import Icon from './Icon';
 import LikeButton from './LikeButton';
 import { useJobProgress } from '../contexts/JobProgressContext';
-import { colors, fontSize } from '../theme/tokens';
+import { colors, fontSize, space } from '../theme/tokens';
 
 export default function MediaCard({ media, onPress, onLike, showLikes = true }) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
@@ -39,7 +39,7 @@ export default function MediaCard({ media, onPress, onLike, showLikes = true }) 
         )}
 
         {media.status === 'error' && (
-          <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', gap: space.gap }}>
             <Icon name="warning" size="lg" color={colors.accent} />
             <Text style={{ color: '#fff', fontSize: fontSize.xs }}>Processing failed</Text>
           </View>

@@ -1,20 +1,18 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, ScrollView, Platform } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMediaActions } from '../hooks/useMedia';
 import { useRefresh } from '../contexts/RefreshContext';
 import { useScan } from '../contexts/ScanContext';
-import { fetchFolders, fetchMedia, getLastFolders, scanMedia, uploadMedia } from '../services/api';
-import { usePlaylist } from '../contexts/PlaylistContext';
+import { fetchFolders, fetchMedia, getLastFolders, uploadMedia } from '../services/api';
 import usePersistedState from '../hooks/usePersistedState';
-import FolderCard from '../components/FolderCard';
 import EmptyState from '../components/EmptyState';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import Input from '../components/Input';
 import Loader from '../components/Loader';
 import Modal from '../components/Modal';
-import { colors, fontSize, fontFamily, space } from '../theme/tokens';
+import { colors, fontSize, space } from '../theme/tokens';
 import Grid from '../components/Grid';
 
 function byFolderName(a, b) {
@@ -25,7 +23,7 @@ function byFolderName(a, b) {
 
 export default function Dashboard() {
   const router = useRouter();
-  const { addFolderWithPath, removeFolder, refreshLibrary, likeMedia } = useMediaActions();
+  const { addFolderWithPath, refreshLibrary, likeMedia } = useMediaActions();
   const { signal, bump } = useRefresh();
   const { isScanning } = useScan();
 
@@ -80,10 +78,6 @@ export default function Dashboard() {
     loadData();
   };
 
-  const handleRemoveFolder = async (folder) => {
-    try { await removeFolder(folder.id); loadData(); } catch (e) { console.error(e); }
-  };
-
   const handlePickFiles = async () => {
     if (Platform.OS === 'web') return;
     try {
@@ -111,21 +105,23 @@ export default function Dashboard() {
     return <View style={{ flex: 1, backgroundColor: colors.bg }}><Loader message="Loading library…" /></View>;
   }
 
+  const header = (
+    <View style={{ paddingTop: space.padHeaderTop, paddingBottom: 0 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space.gap }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm, letterSpacing: -0.01 * fontSize.xl }}>Library</Text>
+        </View>
+        <View style={{ flexDirection: 'row', gap: space.gap }}>
+          <Button variant="ghost" size="sm" icon={<Icon name="folder" size="xs" />} onPress={() => setShowAddFolder(true)}>Add Folder</Button>
+          <Button variant="ghost" size="sm" icon={<Icon name="refresh" size="xs" />} onPress={handleRefresh} disabled={isScanning}>{refreshLabel}</Button>
+        </View>
+      </View>
+      {uploadMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm, marginBottom: space.gap }}>{uploadMsg}</Text> : null}
+    </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View style={{ padding: space.padPage, paddingTop: 24 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm, letterSpacing: -0.01 * fontSize.xl }}>Library</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button variant="ghost" size="sm" icon={<Icon name="folder" size="xs" />} onPress={() => setShowAddFolder(true)}>Add Folder</Button>
-            <Button variant="ghost" size="sm" icon={<Icon name="refresh" size="xs" />} onPress={handleRefresh} disabled={isScanning}>{refreshLabel}</Button>
-          </View>
-        </View>
-        {uploadMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm, marginBottom: 12 }}>{uploadMsg}</Text> : null}
-      </View>
-
       {folders.length === 0 && mediaItems.length === 0 ? (
         <EmptyState
           title="No media yet"
@@ -136,11 +132,9 @@ export default function Dashboard() {
         <Grid
           folders={folders}
           items={mediaItems}
-          onFolderPress={folder => router.push(`/folder/${folder.id}`)}
-          onFolderRemove={handleRemoveFolder}
           onMediaPress={item => router.push(`/media/${item.id}`)}
           onLike={likeMedia}
-          loading={loadingItems}
+          header={header}
         />
       )}
 
@@ -153,7 +147,7 @@ export default function Dashboard() {
             placeholder="e.g. C:\Users\work\Photos"
             autoFocus
           />
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space.gap }}>
             <Button variant="ghost" onPress={() => setShowAddFolder(false)}>Cancel</Button>
             {Platform.OS !== 'web' && (
               <Button variant="ghost" icon={<Icon name="folder" size="xs" />} onPress={handlePickFiles} disabled={importing || uploading}>Pick Files</Button>

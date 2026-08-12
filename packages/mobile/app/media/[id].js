@@ -167,7 +167,7 @@ export default function MediaPage() {
   return (
     <View style={{ flex: 1, backgroundColor: isFullscreen ? '#000' : colors.bg }}>
       {!isFullscreen && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, backgroundColor: colors.bg, borderBottomWidth: 1, borderColor: colors.border }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap, padding: 8, backgroundColor: colors.bg, borderBottomWidth: 1, borderColor: colors.border }}>
           <IconButton icon={<Icon name="prev" size="sm" />} onPress={() => router.back()} label="Back" />
           <Text style={{ flex: 1, fontSize: fontSize.sm, color: colors.textEm }} numberOfLines={1}>{item.title}</Text>
           <IconButton icon={<Icon name={isFullscreen ? 'minimize' : 'maximize'} size="md" />} onPress={() => { if (Platform.OS === 'web') { document.fullscreenElement ? document.exitFullscreen() : document.getElementById('viewer')?.requestFullscreen(); } }} label="Fullscreen" variant="overlay" />
@@ -228,7 +228,7 @@ export default function MediaPage() {
             )}
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap, marginTop: 6, flexWrap: 'wrap' }}>
             <Button variant="ghost" size="sm" icon={<Icon name="info" size="sm" />} onPress={() => setShowInfo(true)}>Info</Button>
             <Button variant="ghost" size="sm" icon={<Icon name="download" size="sm" />} onPress={() => downloadMedia(item)}>Download</Button>
             <Button variant="danger" size="sm" icon={<Icon name="trash" size="sm" />} onPress={handleDelete}>Delete</Button>
@@ -237,7 +237,7 @@ export default function MediaPage() {
       )}
 
       <Modal open={showInfo} onClose={() => setShowInfo(false)} title="Media Info">
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: space.gap }}>
           {[['ID', item.id], ['Title', item.title], ['Type', item.type], ['Status', item.status], ['Path', item.path], ['Codec', item.codec], ['Width', item.width], ['Height', item.height], ['Duration', item.duration && `${Math.floor(item.duration / 60)}:${String(Math.floor(item.duration % 60)).padStart(2, '0')}`], ['Camera', item.camera], ['Size', item.size && `${(item.size / 1024 / 1024).toFixed(1)} MB`]].filter(([, v]) => v != null && v !== '').map(([label, value]) => (
             <View key={label} style={{ flexDirection: 'row', gap: 14, paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.borderSoft }}>
               <Text style={{ color: colors.textMut, fontSize: fontSize.sm, minWidth: 80 }}>{label}</Text>

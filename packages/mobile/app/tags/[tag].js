@@ -9,7 +9,7 @@ import EmptyState from '../../components/EmptyState';
 import Button from '../../components/Button';
 import Icon from '../../components/Icon';
 import Loader from '../../components/Loader';
-import { colors, fontSize } from '../../theme/tokens';
+import { colors, fontSize, space } from '../../theme/tokens';
 
 export default function TagPage() {
   const { tag } = useLocalSearchParams();
@@ -39,8 +39,8 @@ export default function TagPage() {
   if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader message={`"${decodedTag}"…`} /></View>;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, padding: 16 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 24 }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg, padding: space.padPage }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap, marginBottom: space.padHeaderTop }}>
         <Button variant="text" onPress={() => router.push('/tags')}>Tags</Button>
         <Text style={{ color: colors.border }}>/</Text>
         <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm }}>{decodedTag}</Text>

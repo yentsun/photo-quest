@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import Icon from './Icon';
-import { colors, fontSize, fontFamily, layout } from '../theme/tokens';
+import { colors, fontSize, fontFamily, layout, space } from '../theme/tokens';
 import { useBreakpoint } from '../theme/breakpoints';
 const LOGO = require('../assets/icon.png');
 import usePersistedState from '../hooks/usePersistedState';
@@ -42,7 +42,7 @@ export default function Sidebar() {
         borderBottomWidth: 1,
         borderColor: colors.border,
         alignItems: showLabels ? 'flex-start' : 'center',
-        gap: 8,
+        gap: space.gap,
       }}>
         <Image source={LOGO} style={{ width: 28, height: 28, flexShrink: 0 }} resizeMode="contain" />
         {showLabels && (
@@ -63,7 +63,7 @@ export default function Sidebar() {
               style={({ hovered }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 8,
+                gap: space.gap,
                 paddingVertical: 6,
                 paddingHorizontal: showLabels ? 14 : 6,
                 backgroundColor: active ? colors.accentBg : hovered ? colors.surface : 'transparent',
