@@ -16,7 +16,8 @@
     "make-icons": "node scripts/make-icons.mjs"
   },
   "devDependencies": {
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "typescript": "^5.9.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

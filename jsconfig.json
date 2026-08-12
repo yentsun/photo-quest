@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "checkJs": false,
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@photo-quest/shared": ["./packages/shared/index.js"],
+      "@photo-quest/shared/*": ["./packages/shared/*"]
+    }
+  },
+  "include": [
+    "packages/shared/**/*.js",
+    "packages/mobile/**/*.js",
+    "packages/mobile/**/*.jsx",
+    "packages/server/**/*.js",
+    "packages/worker/**/*.js",
+    "packages/electron/**/*.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/dist",
+    "**/node_modules"
+  ]
+}
