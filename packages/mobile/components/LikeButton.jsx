@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, Text } from 'react-native';
+import { useRef } from 'react';
+import { Pressable, Text, Animated } from 'react-native';
 import Icon from './Icon';
 import { colors, fontSize } from '../theme/tokens';
 
@@ -9,14 +9,16 @@ const SIZES = {
   lg: { width: 48, height: 48, icon: 'lg' },
 };
 
-export default function LikeButton({ count = 0, onLike, size = 'md' }) {
-  const [animating, setAnimating] = useState(false);
+export default function LikeButton({ count = 0, onLike, size = 'md', overlay = false, height }) {
+  const scale = useRef(new Animated.Value(1)).current;
   const s = SIZES[size] ?? SIZES.md;
   const hasLikes = count > 0;
 
   const handlePress = () => {
-    setAnimating(true);
-    setTimeout(() => setAnimating(false), 300);
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 1.3, duration: 100, useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 1, duration: 150, useNativeDriver: true }),
+    ]).start();
     onLike?.();
   };
 
@@ -24,18 +26,22 @@ export default function LikeButton({ count = 0, onLike, size = 'md' }) {
     <Pressable
       onPress={handlePress}
       style={({ hovered }) => ({
-        width: s.width, height: s.height,
+        width: height ?? s.width, height: height ?? s.height,
         alignItems: 'center', justifyContent: 'center',
-        backgroundColor: hovered ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.5)',
+        backgroundColor: overlay ? (hovered ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.5)') : (hovered ? colors.surface : 'transparent'),
+        borderWidth: overlay ? 0 : 1,
+        borderColor: hovered ? colors.textMut : colors.border,
       })}
     >
-      <Icon
-        name="heart"
-        size={s.icon}
-        color={hasLikes ? colors.accent : '#fff'}
-      />
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <Icon
+          name={hasLikes ? 'heart-filled' : 'heart'}
+          size={s.icon}
+          color={hasLikes ? colors.accent : colors.textMut}
+        />
+      </Animated.View>
       {count > 0 && (
-        <Text style={{ color: '#fff', fontSize: fontSize.xs, fontWeight: '500', marginTop: -1 }}>
+        <Text style={{ color: overlay ? '#fff' : (hasLikes ? colors.accent : colors.textMut), fontSize: fontSize.xs, fontWeight: '500', marginTop: -1 }}>
           {count > 999 ? '999+' : count}
         </Text>
       )}

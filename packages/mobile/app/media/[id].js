@@ -11,7 +11,6 @@ import MediaPlayer from '../../components/MediaPlayer';
 import Button from '../../components/Button';
 import Icon from '../../components/Icon';
 import IconButton from '../../components/IconButton';
-import LikeButton from '../../components/LikeButton';
 import Modal from '../../components/Modal';
 import ProgressBar from '../../components/ProgressBar';
 import { getMediaUrl, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia, setFolderThumbnail, setVideoThumbnail } from '../../services/api';
@@ -348,23 +347,21 @@ export default function MediaPage() {
                 )}
               </View>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap }}>
-              <LikeButton count={item.likes || 0} onLike={handleLike} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap, flexShrink: 0 }}>
+              <Button variant="ghost" size="sm" icon={<Icon name={item.likes > 0 ? 'heart-filled' : 'heart'} size="sm" color={item.likes > 0 ? colors.accent : undefined} />} onPress={handleLike}>{item.likes > 0 ? String(item.likes) : 'Like'}</Button>
+              <Button variant="ghost" size="sm" icon={<Icon name="info" size="sm" />} onPress={() => setShowInfo(true)}>Info</Button>
+              <Button variant="ghost" size="sm" icon={<Icon name="download" size="sm" />} onPress={() => downloadMedia(item)}>Download</Button>
+              {isImage && folder?.id && (
+                <Button variant="ghost" size="sm" icon={<Icon name="image" size="sm" />} onPress={() => handleSetFolderThumbnail()}>Use as folder thumbnail</Button>
+              )}
+              {!isImage && folder?.id && item.status === MEDIA_STATUS.READY && (
+                <Button variant="ghost" size="sm" icon={<Icon name="video" size="sm" />} onPress={() => handleSetFolderThumbnail(playerRef.current?.getCurrentTime())}>Use frame for folder</Button>
+              )}
+              {!isImage && item.status === MEDIA_STATUS.READY && (
+                <Button variant="ghost" size="sm" icon={<Icon name="video" size="sm" />} onPress={handleSetVideoThumbnail}>Use frame for video</Button>
+              )}
+              <Button variant="danger" size="sm" icon={<Icon name="trash" size="sm" />} onPress={handleDelete}>Delete</Button>
             </View>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap, marginTop: 6, flexWrap: 'wrap' }}>
-            <Button variant="ghost" size="sm" icon={<Icon name="info" size="sm" />} onPress={() => setShowInfo(true)}>Info</Button>
-            <Button variant="ghost" size="sm" icon={<Icon name="download" size="sm" />} onPress={() => downloadMedia(item)}>Download</Button>
-            {isImage && folder?.id && (
-              <Button variant="ghost" size="sm" icon={<Icon name="image" size="sm" />} onPress={() => handleSetFolderThumbnail()}>Use as folder thumbnail</Button>
-            )}
-            {!isImage && folder?.id && item.status === MEDIA_STATUS.READY && (
-              <Button variant="ghost" size="sm" icon={<Icon name="video" size="sm" />} onPress={() => handleSetFolderThumbnail(playerRef.current?.getCurrentTime())}>Use frame for folder</Button>
-            )}
-            {!isImage && item.status === MEDIA_STATUS.READY && (
-              <Button variant="ghost" size="sm" icon={<Icon name="video" size="sm" />} onPress={handleSetVideoThumbnail}>Use frame for video</Button>
-            )}
-            <Button variant="danger" size="sm" icon={<Icon name="trash" size="sm" />} onPress={handleDelete}>Delete</Button>
           </View>
         </View>
       )}

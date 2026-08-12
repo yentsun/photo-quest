@@ -59,7 +59,7 @@ export default function MediaCard({ media, onPress, onLike, showLikes = true, st
 
         {showLikes && (
           <View style={{ position: 'absolute', bottom: 6, right: 6 }}>
-            <LikeButton count={media.likes || 0} onLike={() => onLike?.(media)} size="sm" />
+            <LikeButton count={media.likes || 0} onLike={() => onLike?.(media)} size="sm" overlay />
           </View>
         )}
       </Card.ImageArea>
