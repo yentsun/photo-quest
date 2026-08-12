@@ -60,15 +60,6 @@ export default function FolderPage() {
     <View style={{ paddingTop: space.padHeaderTop, paddingBottom: 0 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: space.gap }}>
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-            <Button variant="text" onPress={() => router.push('/')}>Library</Button>
-            {breadcrumbs.map((crumb, i) => (
-              <View key={crumb.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={{ color: colors.border, fontSize: fontSize.sm }}>/</Text>
-                <Button variant="text" onPress={() => router.push(`/folder/${crumb.id}`)}>{crumb.name}</Button>
-              </View>
-            ))}
-          </View>
           <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm }}>{folder?.name || breadcrumbs[breadcrumbs.length - 1]?.name || 'Folder'}</Text>
           <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{mediaItems.length} items</Text>
         </View>
@@ -77,6 +68,15 @@ export default function FolderPage() {
           onChange={setSort}
           options={[{ value: 'filename', label: 'Name' }, { value: 'date', label: 'Date' }]}
         />
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: space.gap, marginLeft: -12 }}>
+        <Button variant="text" onPress={() => router.push('/')}>Library</Button>
+        {breadcrumbs.map((crumb, i) => (
+          <View key={crumb.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ color: colors.border, fontSize: fontSize.sm }}>/</Text>
+            <Button variant="text" onPress={() => router.push(`/folder/${crumb.id}`)}>{crumb.name}</Button>
+          </View>
+        ))}
       </View>
     </View>
   );
