@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { View, Text, Animated } from 'react-native';
-import { colors, fontSize, fontFamily } from '../../theme/tokens';
-import { SPINNER_BLINK } from '../../theme/presets';
+import { colors, fontSize, fontFamily } from '../theme/tokens';
+import { SPINNER_BLINK } from '../theme/presets';
 
 export default function Loader({ message }) {
   const anim = useRef(new Animated.Value(0)).current;

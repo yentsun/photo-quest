@@ -1,6 +1,6 @@
 import { View, Text } from 'react-native';
-import { Button } from '../ui';
-import { colors, fontSize } from '../../theme/tokens';
+import Button from './Button';
+import { colors, fontSize } from '../theme/tokens';
 
 export default function EmptyState({ title, description, action, icon }) {
   return (

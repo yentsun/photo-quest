@@ -1,10 +1,12 @@
 import { useState, useCallback } from 'react';
 import { View, Text, Image, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getThumbUrl, renameFolder } from '../../services/api';
-import { useRefresh } from '../../contexts/RefreshContext';
-import { Card, Icon, IconButton } from '../ui';
-import { colors, fontSize, fontFamily } from '../../theme/tokens';
+import { getThumbUrl, renameFolder } from '../services/api';
+import { useRefresh } from '../contexts/RefreshContext';
+import Card from './Card';
+import Icon from './Icon';
+import IconButton from './IconButton';
+import { colors, fontSize, fontFamily } from '../theme/tokens';
 
 export default function FolderCard({ folder, onRemove }) {
   const router = useRouter();

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { colors, fontSize, fontFamily } from '../../theme/tokens';
+import { colors, fontSize, fontFamily } from '../theme/tokens';
 
 const BASE = {
   flexDirection: 'row',

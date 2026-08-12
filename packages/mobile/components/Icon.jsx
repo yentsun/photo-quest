@@ -1,5 +1,5 @@
 import Svg, { Path } from 'react-native-svg';
-import { iconSize } from '../../theme/tokens';
+import { iconSize } from '../theme/tokens';
 
 const paths = {
   close: { d: 'M6 18L18 6M6 6l12 12', stroke: true },

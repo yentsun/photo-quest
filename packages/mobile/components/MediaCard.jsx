@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { View, Text, Image } from 'react-native';
 import { MEDIA_TYPE } from '@photo-quest/shared';
-import { getThumbUrl } from '../../services/api';
-import { Card, Icon } from '../ui';
+import { getThumbUrl } from '../services/api';
+import Card from './Card';
+import Icon from './Icon';
 import LikeButton from './LikeButton';
-import { useJobProgress } from '../../contexts/JobProgressContext';
-import { colors, fontSize } from '../../theme/tokens';
+import { useJobProgress } from '../contexts/JobProgressContext';
+import { colors, fontSize } from '../theme/tokens';
 
 export default function MediaCard({ media, onPress, onLike, showLikes = true }) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;

@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import { TextInput } from 'react-native';
-import { colors, fontSize, fontFamily, layout, accents } from '../../theme/tokens';
+import { colors, fontSize, fontFamily, layout, accents } from '../theme/tokens';
 
 const BASE = {
   display: 'block',

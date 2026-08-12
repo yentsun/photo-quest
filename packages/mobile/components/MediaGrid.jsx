@@ -2,16 +2,15 @@ import { FlatList, Text } from 'react-native';
 import { useCallback } from 'react';
 import MediaCard from './MediaCard';
 import { useWindowDimensions } from 'react-native';
-import { usePlaylist } from '../../contexts/PlaylistContext';
-import { colors, fontSize } from '../../theme/tokens';
+import { usePlaylist } from '../contexts/PlaylistContext';
+import { colors, fontSize, space } from '../theme/tokens';
 
 const CARD_WIDTH = 200;
-const GAP = 12;
 
 export default function MediaGrid({ items, onPress, onLike, showLikes, onEndReached, loading, nestedScroll }) {
   const { width } = useWindowDimensions();
   const { set } = usePlaylist();
-  const cols = Math.max(1, Math.floor((width - GAP) / (CARD_WIDTH + GAP)));
+  const cols = Math.max(1, Math.floor((width - space.gap) / (CARD_WIDTH + space.gap)));
 
   const handlePress = useCallback((item, index) => {
     set(items.map(i => i.id), index);
@@ -24,8 +23,8 @@ export default function MediaGrid({ items, onPress, onLike, showLikes, onEndReac
       numColumns={cols}
       key={cols}
       keyExtractor={item => String(item.id)}
-      columnWrapperStyle={cols > 1 ? { gap: GAP } : undefined}
-      contentContainerStyle={{ gap: GAP, padding: GAP }}
+      columnWrapperStyle={cols > 1 ? { gap: space.gap } : undefined}
+      contentContainerStyle={{ gap: space.gap, padding: space.gap }}
       onEndReached={onEndReached}
       onEndReachedThreshold={0.5}
       scrollEnabled={!nestedScroll}

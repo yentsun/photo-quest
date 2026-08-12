@@ -4,10 +4,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMediaActions } from '../../hooks/useMedia';
 import { useRefresh } from '../../contexts/RefreshContext';
 import { fetchMedia, getLastFolders, fetchFoldersForParent } from '../../services/api';
-import { MediaGrid, FolderCard } from '../../components/media';
-import { EmptyState } from '../../components/layout';
-import { Button, Icon, Loader, Select } from '../../components/ui';
-import { colors, fontSize, fontFamily } from '../../theme/tokens';
+import MediaGrid from '../../components/MediaGrid';
+import FolderCard from '../../components/FolderCard';
+import EmptyState from '../../components/EmptyState';
+import Button from '../../components/Button';
+import Icon from '../../components/Icon';
+import Loader from '../../components/Loader';
+import Select from '../../components/Select';
+import { colors, fontSize, fontFamily, space } from '../../theme/tokens';
 import { useBreakpoint } from '../../theme/breakpoints';
 
 export default function FolderPage() {
@@ -79,7 +83,7 @@ export default function FolderPage() {
       </View>
 
       {subfolders.length > 0 && (
-        <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+        <View style={{ flexDirection: 'row', gap: space.gap, flexWrap: 'wrap', marginBottom: 24 }}>
           {subfolders.map(f => (
             <FolderCard key={f.id} folder={f} />
           ))}

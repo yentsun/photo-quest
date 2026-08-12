@@ -87,11 +87,9 @@ export const layout = {
    ================================================================== */
 
 export const space = {
-  /** Used across card meta & page default padding */
+  gap: 12,
   padPage: 16,
-  /** viewer top/bottom bar */
   padBarH: 8,
-  /** modal body */
   padModal: 14,
 };
 

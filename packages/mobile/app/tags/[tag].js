@@ -4,9 +4,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMediaActions } from '../../hooks/useMedia';
 import { useRefresh } from '../../contexts/RefreshContext';
 import { fetchMedia } from '../../services/api';
-import { MediaGrid } from '../../components/media';
-import { EmptyState } from '../../components/layout';
-import { Button, Icon, Loader } from '../../components/ui';
+import MediaGrid from '../../components/MediaGrid';
+import EmptyState from '../../components/EmptyState';
+import Button from '../../components/Button';
+import Icon from '../../components/Icon';
+import Loader from '../../components/Loader';
 import { colors, fontSize } from '../../theme/tokens';
 
 export default function TagPage() {

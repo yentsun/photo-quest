@@ -2,8 +2,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import { View, Text, Animated, Pressable, Platform } from 'react-native';
 import Icon from './Icon';
 import IconButton from './IconButton';
-import { colors, fontSize, fontFamily } from '../../theme/tokens';
-import { SCRIM_IN, MODAL_IN } from '../../theme/presets';
+import { colors, fontSize, fontFamily, space } from '../theme/tokens';
+import { SCRIM_IN, MODAL_IN } from '../theme/presets';
 
 export default function Modal({
   open,
@@ -104,7 +104,7 @@ export default function Modal({
           <View style={{
             padding: 14,
             flexDirection: 'column',
-            gap: 12,
+            gap: space.gap,
           }}>
             {children}
           </View>

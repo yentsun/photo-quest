@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
-import { Icon } from '../ui';
-import { colors, fontSize, fontFamily, layout } from '../../theme/tokens';
-import { useBreakpoint } from '../../theme/breakpoints';
-const LOGO = require('../../assets/icon.png');
-import usePersistedState from '../../hooks/usePersistedState';
+import Icon from './Icon';
+import { colors, fontSize, fontFamily, layout } from '../theme/tokens';
+import { useBreakpoint } from '../theme/breakpoints';
+const LOGO = require('../assets/icon.png');
+import usePersistedState from '../hooks/usePersistedState';
 
 const NAV_ITEMS = [
   { route: '/',          icon: 'image',   label: 'Library' },

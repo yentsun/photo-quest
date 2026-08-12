@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, Text } from 'react-native';
-import { Icon } from '../ui';
-import { colors, fontSize } from '../../theme/tokens';
+import Icon from './Icon';
+import { colors, fontSize } from '../theme/tokens';
 
 const SIZES = {
   sm: { width: 32, height: 32, icon: 'sm' },

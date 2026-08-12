@@ -6,11 +6,16 @@ import { useRefresh } from '../../contexts/RefreshContext';
 import { useGlobal } from '../../contexts/GlobalContext';
 import { usePlaylist } from '../../contexts/PlaylistContext';
 import { MEDIA_TYPE, MEDIA_STATUS, actions as act } from '@photo-quest/shared';
-import { ImageViewer, MediaPlayer } from '../../components/media';
-import { Button, Icon, IconButton, Modal, ProgressBar } from '../../components/ui';
+import ImageViewer from '../../components/ImageViewer';
+import MediaPlayer from '../../components/MediaPlayer';
+import Button from '../../components/Button';
+import Icon from '../../components/Icon';
+import IconButton from '../../components/IconButton';
+import Modal from '../../components/Modal';
+import ProgressBar from '../../components/ProgressBar';
 import { getMediaUrl, fetchMediaById, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia } from '../../services/api';
 import { useJobProgress } from '../../contexts/JobProgressContext';
-import { colors, fontSize, fontFamily } from '../../theme/tokens';
+import { colors, fontSize, fontFamily, space } from '../../theme/tokens';
 
 function safeTags(tags) {
   if (Array.isArray(tags)) return tags;
@@ -178,7 +183,7 @@ export default function MediaPage() {
             <Text style={{ color: colors.textMut, fontSize: fontSize.xs }}>{item.path}</Text>
           </View>
         ) : item.status !== MEDIA_STATUS.READY ? (
-          <View style={{ alignItems: 'center', gap: 12 }}>
+          <View style={{ alignItems: 'center', gap: space.gap }}>
             <ProgressBar value={progressSecs && item.duration ? Math.min(99, Math.round((progressSecs / item.duration) * 100)) : 0} width={20} showPct={false} indeterminate={!progressSecs} />
             <Text style={{ color: colors.textEm, fontWeight: '500' }}>{item.status === 'transcoding' ? 'Transcoding…' : 'Processing…'}</Text>
           </View>
@@ -188,7 +193,7 @@ export default function MediaPage() {
       </View>
 
       {!isFullscreen && (
-        <View style={{ backgroundColor: colors.bg, borderTopWidth: 1, borderColor: colors.border, padding: 12, position: 'relative' }}>
+        <View style={{ backgroundColor: colors.bg, borderTopWidth: 1, borderColor: colors.border, padding: space.gap, position: 'relative' }}>
           {editingTitle ? (
             <TextInput style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: fontSize.base, fontFamily: fontFamily.mono, padding: 4, height: 24 }} value={titleDraft} onChangeText={setTitleDraft} onBlur={commitTitle} onSubmitEditing={commitTitle} autoFocus selectTextOnFocus />
           ) : (

@@ -7,7 +7,7 @@ import { ScanProvider } from '../contexts/ScanContext';
 import { SlideshowProvider, useSlideshow } from '../contexts/SlideshowContext';
 import { JobProgressProvider } from '../contexts/JobProgressContext';
 import { PlaylistProvider } from '../contexts/PlaylistContext';
-import { Sidebar } from '../components/layout';
+import Sidebar from '../components/Sidebar';
 import { colors } from '../theme/tokens';
 
 function CRT() {

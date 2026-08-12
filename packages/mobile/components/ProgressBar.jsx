@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text } from 'react-native';
-import { colors, fontSize } from '../../theme/tokens';
+import { colors, fontSize } from '../theme/tokens';
 
 const SCAN_WIDTH = 3;
 

@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native';
-import { colors, fontSize, fontFamily, accents } from '../../theme/tokens';
+import { colors, fontSize, fontFamily, accents } from '../theme/tokens';
 
 const VARIANTS = {
   default: {

@@ -1,8 +1,9 @@
 import { View, Text, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getThumbUrl } from '../../services/api';
-import { Card, Icon } from '../ui';
-import { colors, fontSize, fontFamily } from '../../theme/tokens';
+import { getThumbUrl } from '../services/api';
+import Card from './Card';
+import Icon from './Icon';
+import { colors, fontSize, fontFamily } from '../theme/tokens';
 
 export default function TagCard({ tag, count, previewMediaId, previewThumbnailTime }) {
   const router = useRouter();

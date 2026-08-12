@@ -1,5 +1,5 @@
 import { Pressable } from 'react-native';
-import { colors, layout } from '../../theme/tokens';
+import { colors, layout } from '../theme/tokens';
 
 const H = layout.rowHeight;
 

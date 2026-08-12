@@ -1,8 +1,8 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { View, Text, Platform } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import Loader from '../ui/Loader';
-import { colors, fontSize } from '../../theme/tokens';
+import Loader from './Loader';
+import { colors, fontSize } from '../theme/tokens';
 
 const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '', onEnded }, ref) {
   const [buffering, setBuffering] = useState(true);

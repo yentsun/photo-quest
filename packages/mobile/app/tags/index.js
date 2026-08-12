@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { fetchTags, getLastTags } from '../../services/api';
-import { TagCard } from '../../components/media';
-import { EmptyState } from '../../components/layout';
-import { Icon, Loader } from '../../components/ui';
-import { colors, fontSize } from '../../theme/tokens';
+import TagCard from '../../components/TagCard';
+import EmptyState from '../../components/EmptyState';
+import Icon from '../../components/Icon';
+import Loader from '../../components/Loader';
+import { colors, fontSize, space } from '../../theme/tokens';
 
 export default function TagsPage() {
   const cached = getLastTags();
@@ -28,7 +29,7 @@ export default function TagsPage() {
       {tags.length === 0 ? (
         <EmptyState icon={<Icon name="list" size="2xl" />} title="No tags yet" description="Open any photo or video and click '+ tag' to start tagging." />
       ) : (
-        <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+        <View style={{ flexDirection: 'row', gap: space.gap, flexWrap: 'wrap' }}>
           {tags.map(({ tag, count, previewMediaId, previewThumbnailTime }) => (
             <TagCard key={tag} tag={tag} count={count} previewMediaId={previewMediaId} previewThumbnailTime={previewThumbnailTime} />
           ))}

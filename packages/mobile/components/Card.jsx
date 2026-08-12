@@ -1,5 +1,5 @@
 import { Pressable, View } from 'react-native';
-import { colors } from '../../theme/tokens';
+import { colors } from '../theme/tokens';
 
 const SIZES = {
   sm: 160,

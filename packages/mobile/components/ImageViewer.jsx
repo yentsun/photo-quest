@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { View, Text } from 'react-native';
 import { Image } from 'expo-image';
-import Loader from '../ui/Loader';
-import { colors, fontSize } from '../../theme/tokens';
+import Loader from './Loader';
+import { colors, fontSize } from '../theme/tokens';
 
 export default function ImageViewer({ src, alt = '' }) {
   const [status, setStatus] = useState('loading');
