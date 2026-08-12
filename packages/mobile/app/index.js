@@ -130,9 +130,7 @@ export default function Dashboard() {
         <View style={{ marginBottom: 24 }}>
           <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
             {folders.map(folder => (
-              <View key={folder.id} style={{ width: 200 }}>
-                <FolderCard folder={folder} onRemove={() => handleRemoveFolder(folder)} />
-              </View>
+              <FolderCard key={folder.id} folder={folder} onRemove={() => handleRemoveFolder(folder)} />
             ))}
           </View>
         </View>

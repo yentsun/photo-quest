@@ -1,20 +1,16 @@
 import { useState } from 'react';
-import { Pressable, View, Text, Image, Animated } from 'react-native';
+import { View, Text, Image } from 'react-native';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getThumbUrl } from '../../services/api';
-import { Icon } from '../ui';
+import { Card, Icon } from '../ui';
 import LikeButton from './LikeButton';
 import { useJobProgress } from '../../contexts/JobProgressContext';
-import { colors, fontSize, fontFamily, radius } from '../../theme/tokens';
-import { LIKE_POP } from '../../theme/presets';
+import { colors, fontSize } from '../../theme/tokens';
 
 export default function MediaCard({ media, onPress, onLike, showLikes = true }) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
   const [thumbFailed, setThumbFailed] = useState(false);
-  const [thumbReady, setThumbReady] = useState(false);
   const progressSecs = useJobProgress(media.id);
-  const isTranscoding = media.status === 'transcoding' || progressSecs !== null;
-  const isPending = !isTranscoding && (media.status === 'pending' || media.status === 'probed');
 
   const thumbSrc = getThumbUrl(media.id, media.thumbnail_time);
 
@@ -25,17 +21,8 @@ export default function MediaCard({ media, onPress, onLike, showLikes = true }) 
   })();
 
   return (
-    <Pressable
-      onPress={() => onPress?.(media)}
-      style={({ hovered }) => ({
-        borderWidth: 1,
-        borderColor: hovered ? colors.textMut : colors.border,
-        backgroundColor: colors.surface,
-        overflow: 'hidden',
-        flexDirection: 'column',
-      })}
-    >
-      <View style={{ aspectRatio: 4 / 3, backgroundColor: colors.dim, position: 'relative', overflow: 'hidden' }}>
+    <Card onPress={() => onPress?.(media)}>
+      <Card.ImageArea>
         {thumbFailed ? (
           <View style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name={isImage ? 'image' : 'video'} size="xl" color={colors.textMut} />
@@ -45,7 +32,7 @@ export default function MediaCard({ media, onPress, onLike, showLikes = true }) 
             source={{ uri: thumbSrc }}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
             resizeMode="cover"
-            onLoad={() => setThumbReady(true)}
+            onLoad={() => {}}
             onError={() => setThumbFailed(true)}
           />
         )}
@@ -74,11 +61,11 @@ export default function MediaCard({ media, onPress, onLike, showLikes = true }) 
             <LikeButton count={media.likes || 0} onLike={() => onLike?.(media)} size="sm" />
           </View>
         )}
-      </View>
+      </Card.ImageArea>
 
-      <View style={{ padding: 6, paddingHorizontal: 10, borderTopWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Card.Footer>
         <Text style={{ fontSize: fontSize.sm, color: colors.textEm, flex: 1, overflow: 'hidden' }} numberOfLines={1}>{media.title}</Text>
-      </View>
-    </Pressable>
+      </Card.Footer>
+    </Card>
   );
 }

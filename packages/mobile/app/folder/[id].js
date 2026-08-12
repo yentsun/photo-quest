@@ -81,9 +81,7 @@ export default function FolderPage() {
       {subfolders.length > 0 && (
         <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
           {subfolders.map(f => (
-            <View key={f.id} style={{ width: 200 }}>
-              <FolderCard folder={f} />
-            </View>
+            <FolderCard key={f.id} folder={f} />
           ))}
         </View>
       )}

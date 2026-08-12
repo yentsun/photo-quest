@@ -1,9 +1,9 @@
-import { useState, useRef, useCallback } from 'react';
-import { Pressable, View, Text, Image, TextInput } from 'react-native';
+import { useState, useCallback } from 'react';
+import { View, Text, Image, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { getThumbUrl, renameFolder } from '../../services/api';
 import { useRefresh } from '../../contexts/RefreshContext';
-import { Icon, IconButton } from '../ui';
+import { Card, Icon, IconButton } from '../ui';
 import { colors, fontSize, fontFamily } from '../../theme/tokens';
 
 export default function FolderCard({ folder, onRemove }) {
@@ -13,7 +13,6 @@ export default function FolderCard({ folder, onRemove }) {
   const [displayName, setDisplayName] = useState(folder.name || pathName);
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState('');
-  const inputRef = useRef(null);
   const thumbnailUrl = folder.previewMediaId ? getThumbUrl(folder.previewMediaId, folder.thumbnailTime) : null;
   const imageCount = folder.subtreeImageCount ?? folder.imageCount ?? 0;
   const videoCount = folder.subtreeVideoCount ?? folder.videoCount ?? 0;
@@ -39,17 +38,8 @@ export default function FolderCard({ folder, onRemove }) {
   };
 
   return (
-    <Pressable
-      onPress={() => !editing && router.push(`/folder/${folder.id}`)}
-      style={({ hovered }) => ({
-        borderWidth: 1,
-        borderColor: hovered ? colors.textMut : colors.border,
-        backgroundColor: colors.surface,
-        overflow: 'hidden',
-        flexDirection: 'column',
-      })}
-    >
-      <View style={{ aspectRatio: 4 / 3, backgroundColor: colors.dim, position: 'relative', overflow: 'hidden' }}>
+    <Card onPress={editing ? undefined : () => router.push(`/folder/${folder.id}`)}>
+      <Card.ImageArea>
         {thumbnailUrl ? (
           <Image source={{ uri: thumbnailUrl }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} resizeMode="cover" />
         ) : (
@@ -67,12 +57,11 @@ export default function FolderCard({ folder, onRemove }) {
             <IconButton icon={<Icon name="close" size="sm" />} onPress={onRemove} label="Remove folder" variant="overlay" size="sm" />
           </View>
         )}
-      </View>
+      </Card.ImageArea>
 
-      <View style={{ padding: 6, paddingHorizontal: 10, borderTopWidth: 1, borderColor: colors.border }}>
+      <Card.Footer>
         {editing ? (
           <TextInput
-            ref={inputRef}
             style={{ backgroundColor: colors.dim, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: fontSize.sm, fontFamily: fontFamily.mono, paddingHorizontal: 4, paddingVertical: 1 }}
             value={nameInput}
             onChangeText={setNameInput}
@@ -90,7 +79,7 @@ export default function FolderCard({ folder, onRemove }) {
             {videoCount > 0 && `${videoCount} video${videoCount !== 1 ? 's' : ''}`}
           </Text>
         )}
-      </View>
-    </Pressable>
+      </Card.Footer>
+    </Card>
   );
 }

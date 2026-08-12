@@ -30,9 +30,7 @@ export default function TagsPage() {
       ) : (
         <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
           {tags.map(({ tag, count, previewMediaId, previewThumbnailTime }) => (
-            <View key={tag} style={{ width: 200 }}>
-              <TagCard tag={tag} count={count} previewMediaId={previewMediaId} previewThumbnailTime={previewThumbnailTime} />
-            </View>
+            <TagCard key={tag} tag={tag} count={count} previewMediaId={previewMediaId} previewThumbnailTime={previewThumbnailTime} />
           ))}
         </View>
       )}
