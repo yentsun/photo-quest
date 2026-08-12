@@ -5,7 +5,7 @@ import Card from './Card';
 import Icon from './Icon';
 import { colors, fontSize, fontFamily } from '../theme/tokens';
 
-export default function FolderCard({ folder }) {
+export default function FolderCard({ folder, stretch = true }) {
   const router = useRouter();
   const pathName = folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
   const displayName = folder.name || pathName;
@@ -14,7 +14,7 @@ export default function FolderCard({ folder }) {
   const videoCount = folder.subtreeVideoCount ?? folder.videoCount ?? 0;
 
   return (
-    <Card onPress={() => router.push(`/folder/${folder.id}`)}>
+    <Card onPress={() => router.push(`/folder/${folder.id}`)} stretch={stretch}>
       <Card.ImageArea>
         {thumbnailUrl ? (
           <Image source={{ uri: thumbnailUrl }} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} resizeMode="cover" />

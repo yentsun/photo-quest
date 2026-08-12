@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMediaActions } from '../../hooks/useMedia';
 import { useRefresh } from '../../contexts/RefreshContext';
 import { fetchMedia } from '../../services/api';
-import MediaGrid from '../../components/MediaGrid';
+import Grid from '../../components/Grid';
 import EmptyState from '../../components/EmptyState';
 import Button from '../../components/Button';
 import Icon from '../../components/Icon';
@@ -26,9 +26,9 @@ export default function TagPage() {
     let cancelled = false;
     setLoading(true);
     fetchMedia({ tag: decodedTag, limit: 10000 })
-      .then(({ items, total: t }) => {
+      .then(({ items: mediaItems, total: t }) => {
         if (cancelled) return;
-        setItems(items);
+        setItems(mediaItems);
         setTotal(t);
         setLoading(false);
       })
@@ -38,16 +38,21 @@ export default function TagPage() {
 
   if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader message={`"${decodedTag}"…`} /></View>;
 
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, padding: space.padPage }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap, marginBottom: space.padHeaderTop }}>
+  const header = (
+    <View style={{ paddingTop: space.padHeaderTop, paddingBottom: 0 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap, marginBottom: space.gap }}>
         <Button variant="text" onPress={() => router.push('/tags')}>Tags</Button>
         <Text style={{ color: colors.border }}>/</Text>
         <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm }}>{decodedTag}</Text>
       </View>
-      <Text style={{ color: colors.textMut, fontSize: fontSize.sm, marginBottom: 16 }}>{total.toLocaleString()} item{total !== 1 ? 's' : ''}</Text>
+      <Text style={{ color: colors.textMut, fontSize: fontSize.sm, marginBottom: space.gap }}>{total.toLocaleString()} item{total !== 1 ? 's' : ''}</Text>
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {items.length > 0 ? (
-        <MediaGrid items={items} onPress={item => router.push(`/media/${item.id}`)} onLike={likeMedia} />
+        <Grid folders={[]} items={items} onMediaPress={item => router.push(`/media/${item.id}`)} onLike={likeMedia} header={header} />
       ) : (
         <EmptyState icon={<Icon name="list" size="2xl" />} title={`No media tagged "${decodedTag}"`} description="Tag items from the media viewer." />
       )}

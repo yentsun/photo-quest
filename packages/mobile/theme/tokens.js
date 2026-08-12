@@ -93,7 +93,7 @@ export const space = {
   padBarH: 8,
   padModal: 14,
   padHeaderTop: 24,
-  cardWidth: 200,
+  cardWidth: 225,
 };
 
 /* ==================================================================

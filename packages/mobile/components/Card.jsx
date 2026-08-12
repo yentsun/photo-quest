@@ -4,17 +4,20 @@ import { colors } from '../theme/tokens';
 const SIZES = {
   sm: 160,
   md: 200,
-  lg: 240,
+  lg: 225,
 };
 
-export default function Card({ children, onPress, size = 'md', style }) {
-  const width = typeof size === 'number' ? size : (SIZES[size] ?? SIZES.md);
+export default function Card({ children, onPress, size = 'lg', stretch = false, style }) {
+  const base = typeof size === 'number' ? size : (SIZES[size] ?? SIZES.lg);
+  const sizeStyle = stretch
+    ? { flexGrow: 1, flexBasis: base, maxWidth: base * 1.33 }
+    : { width: base };
 
   return (
     <Pressable
       onPress={onPress}
       style={({ hovered }) => ({
-        width,
+        ...sizeStyle,
         borderWidth: 1,
         borderColor: hovered ? colors.textMut : colors.border,
         backgroundColor: colors.surface,

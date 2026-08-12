@@ -8,7 +8,7 @@ import LikeButton from './LikeButton';
 import { useJobProgress } from '../contexts/JobProgressContext';
 import { colors, fontSize, space } from '../theme/tokens';
 
-export default function MediaCard({ media, onPress, onLike, showLikes = true }) {
+export default function MediaCard({ media, onPress, onLike, showLikes = true, stretch = true }) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
   const [thumbFailed, setThumbFailed] = useState(false);
   const progressSecs = useJobProgress(media.id);
@@ -22,7 +22,7 @@ export default function MediaCard({ media, onPress, onLike, showLikes = true }) 
   })();
 
   return (
-    <Card onPress={() => onPress?.(media)}>
+    <Card onPress={() => onPress?.(media)} stretch={stretch}>
       <Card.ImageArea>
         {thumbFailed ? (
           <View style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>

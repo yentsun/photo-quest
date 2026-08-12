@@ -4,12 +4,11 @@ import { useRouter } from 'expo-router';
 import { useMediaActions } from '../hooks/useMedia';
 import { useRefresh } from '../contexts/RefreshContext';
 import { fetchMedia } from '../services/api';
-import MediaGrid from '../components/MediaGrid';
+import Grid from '../components/Grid';
 import EmptyState from '../components/EmptyState';
-import Button from '../components/Button';
 import Icon from '../components/Icon';
 import Loader from '../components/Loader';
-import { colors, fontSize } from '../theme/tokens';
+import { colors, fontSize, space } from '../theme/tokens';
 
 export default function LikedPage() {
   const router = useRouter();
@@ -22,9 +21,9 @@ export default function LikedPage() {
   useEffect(() => {
     let cancelled = false;
     fetchMedia({ liked: true, limit: 10000 })
-      .then(({ items, total: t }) => {
+      .then(({ items: mediaItems, total: t }) => {
         if (cancelled) return;
-        setItems(items);
+        setItems(mediaItems);
         setTotal(t);
         setLoading(false);
       })
@@ -34,16 +33,19 @@ export default function LikedPage() {
 
   if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader message="Liked…" /></View>;
 
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, padding: 16 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <View>
-          <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm }}>Liked</Text>
-          <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{total.toLocaleString()} item{total !== 1 ? 's' : ''}</Text>
-        </View>
+  const header = (
+    <View style={{ paddingTop: space.padHeaderTop, paddingBottom: 0 }}>
+      <View style={{ marginBottom: space.gap }}>
+        <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm }}>Liked</Text>
+        <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{total.toLocaleString()} item{total !== 1 ? 's' : ''}</Text>
       </View>
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {items.length > 0 ? (
-        <MediaGrid items={items} onPress={item => router.push(`/media/${item.id}`)} onLike={likeMedia} />
+        <Grid folders={[]} items={items} onMediaPress={item => router.push(`/media/${item.id}`)} onLike={likeMedia} header={header} />
       ) : (
         <EmptyState icon={<Icon name="heart" size="2xl" />} title="No liked items" description="Like photos and videos to see them here." />
       )}
