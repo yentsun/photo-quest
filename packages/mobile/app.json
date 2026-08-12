@@ -4,6 +4,28 @@
     "slug": "photo-quest",
     "scheme": "photoquest",
     "version": "0.7.1",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.photoquest.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Photo Quest needs access to your photo library to display media.",
+        "NSPhotoLibraryAddUsageDescription": "Photo Quest needs access to save media to your library."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#000000"
+      },
+      "package": "ai.photoquest.app",
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO"
+      ]
+    },
     "web": {
       "bundler": "metro",
       "output": "single",
@@ -26,6 +48,11 @@
       "expo-status-bar",
       "expo-image",
       "expo-video"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "00000000-0000-0000-0000-000000000000"
+      }
+    }
   }
 }

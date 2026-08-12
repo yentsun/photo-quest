@@ -311,17 +311,37 @@ export async function connectLibrary(libraryPath) {
   return res.json();
 }
 
+/* ---------- upload ---------- */
+
+export async function uploadMedia(fileUri, fileName, mimeType) {
+  if (Platform.OS === 'web') return;
+
+  const { readAsStringAsync, EncodingType } = require('expo-file-system');
+  const base64 = await readAsStringAsync(fileUri, { encoding: EncodingType.Base64 });
+
+  const res = await fetch(`${B()}/media/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileName, mimeType, data: base64 }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || 'Upload failed');
+  }
+  return res.json();
+}
+
 /* ---------- download ---------- */
 
 export async function downloadMedia(media) {
   const url = getMediaUrl(media);
-  const res = await fetch(url);
-  const blob = await res.blob();
   const isImage = media.type === MEDIA_TYPE.IMAGE;
   const ext = media.path?.match(/\.[^.]+$/)?.[0] || (isImage ? '.jpg' : '.mp4');
   const filename = `${media.title}${ext}`;
 
   if (Platform.OS === 'web') {
+    const res = await fetch(url);
+    const blob = await res.blob();
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
@@ -330,5 +350,11 @@ export async function downloadMedia(media) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(objectUrl);
+  } else {
+    const { downloadAsync, cacheDirectory } = require('expo-file-system');
+    const { shareAsync } = require('expo-sharing');
+    const fileUri = `${cacheDirectory}${filename}`;
+    const { uri } = await downloadAsync(url, fileUri);
+    await shareAsync(uri, { mimeType: isImage ? 'image/jpeg' : 'video/mp4' });
   }
 }

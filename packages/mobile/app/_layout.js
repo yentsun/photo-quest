@@ -1,11 +1,12 @@
-import { View, Platform } from 'react-native';
+import { View, Platform, AppState } from 'react-native';
 import { Stack } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { GlobalProvider } from '../contexts/GlobalContext';
 import { RefreshProvider } from '../contexts/RefreshContext';
 import { ScanProvider } from '../contexts/ScanContext';
-import { SlideshowProvider } from '../contexts/SlideshowContext';
+import { SlideshowProvider, useSlideshow } from '../contexts/SlideshowContext';
 import { JobProgressProvider } from '../contexts/JobProgressContext';
+import { PlaylistProvider } from '../contexts/PlaylistContext';
 import { Sidebar } from '../components/layout';
 import { colors } from '../theme/tokens';
 
@@ -34,6 +35,23 @@ function CRT() {
   );
 }
 
+function AppStateHandler() {
+  const appState = useRef(AppState.currentState);
+  const { active: slideshowActive, stop: stopSlideshow } = useSlideshow();
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (appState.current.match(/active/) && nextState.match(/inactive|background/)) {
+        if (slideshowActive) stopSlideshow();
+      }
+      appState.current = nextState;
+    });
+    return () => sub.remove();
+  }, [slideshowActive, stopSlideshow]);
+
+  return null;
+}
+
 export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -47,22 +65,25 @@ export default function RootLayout() {
       <RefreshProvider>
         <ScanProvider>
           <SlideshowProvider>
-            <JobProgressProvider>
-              <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bg }}>
-                <CRT />
-                <Sidebar />
-                <View style={{ flex: 1 }}>
-                  <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-                    <Stack.Screen name="index" />
-                    <Stack.Screen name="liked" />
-                    <Stack.Screen name="folder/[id]" />
-                    <Stack.Screen name="media/[id]" />
-                    <Stack.Screen name="tags/index" />
-                    <Stack.Screen name="tags/[tag]" />
-                  </Stack>
+            <PlaylistProvider>
+              <JobProgressProvider>
+                <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bg }}>
+                  <CRT />
+                  <Sidebar />
+                  <View style={{ flex: 1 }}>
+                    <AppStateHandler />
+                    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+                      <Stack.Screen name="index" />
+                      <Stack.Screen name="liked" />
+                      <Stack.Screen name="folder/[id]" />
+                      <Stack.Screen name="media/[id]" />
+                      <Stack.Screen name="tags/index" />
+                      <Stack.Screen name="tags/[tag]" />
+                    </Stack>
+                  </View>
                 </View>
-              </View>
-            </JobProgressProvider>
+              </JobProgressProvider>
+            </PlaylistProvider>
           </SlideshowProvider>
         </ScanProvider>
       </RefreshProvider>

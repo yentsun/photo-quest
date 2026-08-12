@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, ScrollView } from 'react-native';
+import { View, Text, TextInput, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMediaActions } from '../hooks/useMedia';
 import { useRefresh } from '../contexts/RefreshContext';
 import { useScan } from '../contexts/ScanContext';
-import { fetchFolders, fetchMedia, getLastFolders, scanMedia } from '../services/api';
+import { fetchFolders, fetchMedia, getLastFolders, scanMedia, uploadMedia } from '../services/api';
 import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache';
 import usePersistedState from '../hooks/usePersistedState';
 import { FolderCard, MediaGrid } from '../components/media';
@@ -33,6 +33,8 @@ export default function Dashboard() {
   const [showAddFolder, setShowAddFolder] = useState(false);
   const [folderPath, setFolderPath] = useState('');
   const [importing, setImporting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
   const [refreshLabel, setRefreshLabel] = useState('Refresh');
   const [sortOrder, setSortOrder] = usePersistedState('dashboard-sort', 'name');
   const refreshTimer = useRef(null);
@@ -87,6 +89,29 @@ export default function Dashboard() {
     try { await removeFolder(folder.id); loadFolders(); } catch (e) { console.error(e); }
   };
 
+  const handlePickFiles = async () => {
+    if (Platform.OS === 'web') return;
+    try {
+      const { getDocumentAsync } = require('expo-document-picker');
+      const result = await getDocumentAsync({ type: ['image/*', 'video/*'], multiple: true, copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.length) return;
+      setUploading(true);
+      setShowAddFolder(false);
+      let uploaded = 0;
+      for (const asset of result.assets) {
+        setUploadMsg(`Uploading ${uploaded + 1}/${result.assets.length}…`);
+        try {
+          await uploadMedia(asset.uri, asset.name, asset.mimeType);
+          uploaded++;
+        } catch (e) { console.error('Upload failed:', asset.name, e); }
+      }
+      setUploadMsg(uploaded > 0 ? `Uploaded ${uploaded} file${uploaded !== 1 ? 's' : ''}` : 'No files uploaded');
+      if (uploaded > 0) await loadFolders();
+      setTimeout(() => setUploadMsg(''), 3000);
+    } catch (e) { console.error(e); }
+    setUploading(false);
+  };
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }}>
     <View style={{ flex: 1, padding: 16, paddingTop: 24 }}>
@@ -99,6 +124,7 @@ export default function Dashboard() {
           <Button variant="ghost" size="sm" icon={<Icon name="refresh" size="xs" />} onPress={handleRefresh} disabled={isScanning}>{refreshLabel}</Button>
         </View>
       </View>
+      {uploadMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm, marginBottom: 12 }}>{uploadMsg}</Text> : null}
 
       {folders.length > 0 && (
         <View style={{ marginBottom: 24 }}>
@@ -130,7 +156,7 @@ export default function Dashboard() {
         />
       )}
 
-      <Modal open={showAddFolder} onClose={() => setShowAddFolder(false)} title="Add Folder" closable={!importing}>
+      <Modal open={showAddFolder} onClose={() => setShowAddFolder(false)} title="Add Folder" closable={!importing && !uploading}>
         <View style={{ gap: 12 }}>
           <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>Enter the absolute path to a media folder on this machine:</Text>
           <Input
@@ -141,7 +167,10 @@ export default function Dashboard() {
           />
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
             <Button variant="ghost" onPress={() => setShowAddFolder(false)}>Cancel</Button>
-            <Button variant="primary" onPress={handleAddFolder} disabled={importing}>Add</Button>
+            {Platform.OS !== 'web' && (
+              <Button variant="ghost" icon={<Icon name="folder" size="xs" />} onPress={handlePickFiles} disabled={importing || uploading}>Pick Files</Button>
+            )}
+            <Button variant="primary" onPress={handleAddFolder} disabled={importing || uploading}>Add</Button>
           </View>
         </View>
       </Modal>

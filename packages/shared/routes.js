@@ -127,4 +127,7 @@ export const apiRoutes = {
 
   /** POST -- Connect to an existing library file. Body: { path }. Triggers app relaunch. */
   libraryConnect: '/library/connect',
+
+  /** POST -- Upload a media file from a mobile client. Body: { fileName, data: base64 }. */
+  mediaUpload: '/media/upload',
 };

@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, Pressable, Platform, ScrollView } from 'react-native';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { View, Text, Pressable, Platform, PanResponder } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMediaActions } from '../../hooks/useMedia';
 import { useRefresh } from '../../contexts/RefreshContext';
 import { useGlobal } from '../../contexts/GlobalContext';
+import { usePlaylist } from '../../contexts/PlaylistContext';
 import { MEDIA_TYPE, MEDIA_STATUS, actions as act } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer } from '../../components/media';
 import { Button, Icon, IconButton, Modal, ProgressBar } from '../../components/ui';
@@ -23,6 +24,7 @@ export default function MediaPage() {
   const { dispatch } = useGlobal();
   const { bump } = useRefresh();
   const { removeFolder } = useMediaActions();
+  const { playlist, goNext, goPrev } = usePlaylist();
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,26 @@ export default function MediaPage() {
   const [allTags, setAllTags] = useState([]);
 
   const progressSecs = useJobProgress(item?.id);
+
+  const navigateToItem = useCallback((targetId) => {
+    if (!targetId) return;
+    router.replace(`/media/${targetId}`);
+  }, [router]);
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 20 && Math.abs(gs.dx) > Math.abs(gs.dy),
+    onPanResponderRelease: (_, gs) => {
+      if (gs.dx > 80 && playlist.ids.length > 1) {
+        goPrev();
+        const prevId = playlist.ids[(playlist.index - 1 + playlist.ids.length) % playlist.ids.length];
+        if (prevId && prevId !== Number(id)) navigateToItem(prevId);
+      } else if (gs.dx < -80 && playlist.ids.length > 1) {
+        goNext();
+        const nextId = playlist.ids[(playlist.index + 1) % playlist.ids.length];
+        if (nextId && nextId !== Number(id)) navigateToItem(nextId);
+      }
+    },
+  }), [playlist, goNext, goPrev, id, navigateToItem]);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,11 +90,13 @@ export default function MediaPage() {
       if (e.key === 'f') setIsFullscreen(fs => !fs);
       if (e.key === 'i') setShowInfo(s => !s);
       if (e.key === 't' || e.key === 'T') setAddingTag(true);
+      if (e.key === 'ArrowLeft' && playlist.ids.length > 1) { goPrev(); const prevId = playlist.ids[(playlist.index - 1 + playlist.ids.length) % playlist.ids.length]; if (prevId && prevId !== Number(id)) navigateToItem(prevId); }
+      if (e.key === 'ArrowRight' && playlist.ids.length > 1) { goNext(); const nextId = playlist.ids[(playlist.index + 1) % playlist.ids.length]; if (nextId && nextId !== Number(id)) navigateToItem(nextId); }
       if (e.key === 'Escape') { setIsFullscreen(false); setEditingTitle(false); setAddingTag(false); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, []);
+  }, [playlist, goNext, goPrev, id, navigateToItem]);
 
   useEffect(() => {
     if (!showInfo || !item) return;
@@ -145,7 +169,7 @@ export default function MediaPage() {
         </View>
       )}
 
-      <View id="viewer" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', overflow: 'hidden', position: 'relative' }}>
+      <View id="viewer" {...panResponder.panHandlers} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', overflow: 'hidden', position: 'relative' }}>
         {isImage ? (
           <ImageViewer src={mediaUrl()} alt={item.title} />
         ) : item.status === MEDIA_STATUS.ERROR ? (
