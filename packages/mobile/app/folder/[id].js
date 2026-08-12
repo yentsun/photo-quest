@@ -5,8 +5,8 @@ import { useMediaActions } from '../../hooks/useMedia';
 import { useRefresh } from '../../contexts/RefreshContext';
 import { fetchMedia, fetchFoldersForParent } from '../../services/api';
 import Grid from '../../components/Grid';
+import Breadcrumbs from '../../components/Breadcrumbs';
 import EmptyState from '../../components/EmptyState';
-import Button from '../../components/Button';
 import Icon from '../../components/Icon';
 import Loader from '../../components/Loader';
 import Select from '../../components/Select';
@@ -69,14 +69,8 @@ export default function FolderPage() {
           options={[{ value: 'filename', label: 'Name' }, { value: 'date', label: 'Date' }]}
         />
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: space.gap, marginLeft: -12 }}>
-        <Button variant="text" onPress={() => router.push('/')}>Library</Button>
-        {breadcrumbs.map((crumb, i) => (
-          <View key={crumb.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ color: colors.border, fontSize: fontSize.sm }}>/</Text>
-            <Button variant="text" onPress={() => router.push(`/folder/${crumb.id}`)}>{crumb.name}</Button>
-          </View>
-        ))}
+      <View style={{ marginBottom: space.gap }}>
+        <Breadcrumbs items={breadcrumbs} />
       </View>
     </View>
   );

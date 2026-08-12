@@ -13,8 +13,9 @@ import Icon from '../../components/Icon';
 import IconButton from '../../components/IconButton';
 import Modal from '../../components/Modal';
 import ProgressBar from '../../components/ProgressBar';
-import { getMediaUrl, fetchMediaById, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia } from '../../services/api';
+import { getMediaUrl, fetchMediaById, fetchFolders, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia } from '../../services/api';
 import { useJobProgress } from '../../contexts/JobProgressContext';
+import Breadcrumbs from '../../components/Breadcrumbs';
 import { colors, fontSize, fontFamily, space } from '../../theme/tokens';
 
 function safeTags(tags) {
@@ -43,6 +44,7 @@ export default function MediaPage() {
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
   const [allTags, setAllTags] = useState([]);
+  const [breadcrumbs, setBreadcrumbs] = useState([]);
 
   const progressSecs = useJobProgress(item?.id);
 
@@ -73,6 +75,21 @@ export default function MediaPage() {
         const mediaItem = await fetchMediaById(Number(id));
         if (cancelled) return;
         setItem(mediaItem);
+        if (mediaItem.folder) {
+          const folders = await fetchFolders().catch(() => []);
+          if (cancelled) return;
+          const pathToId = new Map(folders.map(f => [f.path, f.id]));
+          const sep = mediaItem.folder.includes('\\') ? '\\' : '/';
+          const parts = mediaItem.folder.split(sep).filter(Boolean);
+          const crumbs = [];
+          let current = '';
+          for (const part of parts) {
+            current = current ? current + sep + part : part;
+            const folderId = pathToId.get(current);
+            crumbs.push({ id: folderId ?? null, name: part });
+          }
+          setBreadcrumbs(crumbs);
+        }
       } catch (err) { console.error(err); }
       setLoading(false);
     };
@@ -167,10 +184,14 @@ export default function MediaPage() {
   return (
     <View style={{ flex: 1, backgroundColor: isFullscreen ? '#000' : colors.bg }}>
       {!isFullscreen && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap, padding: 8, backgroundColor: colors.bg, borderBottomWidth: 1, borderColor: colors.border }}>
-          <IconButton icon={<Icon name="prev" size="sm" />} onPress={() => router.back()} label="Back" />
-          <Text style={{ flex: 1, fontSize: fontSize.sm, color: colors.textEm }} numberOfLines={1}>{item.title}</Text>
-          <IconButton icon={<Icon name={isFullscreen ? 'minimize' : 'maximize'} size="md" />} onPress={() => { if (Platform.OS === 'web') { document.fullscreenElement ? document.exitFullscreen() : document.getElementById('viewer')?.requestFullscreen(); } }} label="Fullscreen" variant="overlay" />
+        <View style={{ padding: 8, backgroundColor: colors.bg, borderBottomWidth: 1, borderColor: colors.border }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap }}>
+            <IconButton icon={<Icon name="prev" size="sm" />} onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/'); }} label="Back" />
+            <View style={{ flex: 1 }}>
+              <Breadcrumbs items={breadcrumbs} />
+            </View>
+            <IconButton icon={<Icon name={isFullscreen ? 'minimize' : 'maximize'} size="md" />} onPress={() => { if (Platform.OS === 'web') { document.fullscreenElement ? document.exitFullscreen() : document.getElementById('viewer')?.requestFullscreen(); } }} label="Fullscreen" variant="overlay" />
+          </View>
         </View>
       )}
 
