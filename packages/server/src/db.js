@@ -60,15 +60,15 @@ export function initDb() {
   db.exec(CREATE_IMPORT_QUEUE_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
 
+  /* Run migrations before creating indexes that reference migrated columns. */
+  migrateDb();
+
   /* Indexes for common query patterns. */
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_folder ON media(folder)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_hidden ON media(hidden)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_date_sort ON media(COALESCE(date_taken, created_at))');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_title ON media(title)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_updated_at ON media(updated_at)');
-
-  /* Run migrations for existing databases. */
-  migrateDb();
 
   const existed = fs.existsSync(DB_PATH);
   console.debug(`[db] Initialised (${existed ? 'loaded from disk' : 'new database'})`);

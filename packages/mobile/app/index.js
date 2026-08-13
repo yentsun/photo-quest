@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useMediaActions } from '../hooks/useMedia';
 import { useRefresh } from '../contexts/RefreshContext';
 import { useScan } from '../contexts/ScanContext';
-import { fetchFolders, fetchMedia, getLastFolders, uploadMedia } from '../services/api';
+import { fetchFolders, fetchMedia, getLastFolders, uploadMedia, waitForScan } from '../services/api';
 import usePersistedState from '../hooks/usePersistedState';
 import EmptyState from '../components/EmptyState';
 import Button from '../components/Button';
@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [importing, setImporting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState('');
+  const [scanMsg, setScanMsg] = useState('');
   const [refreshLabel, setRefreshLabel] = useState('Refresh');
   const [sortOrder, setSortOrder] = usePersistedState('dashboard-sort', 'name');
   const refreshTimer = useRef(null);
@@ -50,7 +51,7 @@ export default function Dashboard() {
       ]);
       const rootFolders = folderData.filter(f => f.parentId === null);
       setFolders(rootFolders.sort(sortOrder === 'name' ? byFolderName : (a, b) => b.id - a.id));
-      setMediaItems([]);
+      setMediaItems(mediaData.items || []);
     } catch (e) { console.error(e); }
     setLoadingItems(false);
   };
@@ -60,11 +61,16 @@ export default function Dashboard() {
   const handleAddFolder = async () => {
     if (!folderPath.trim()) return;
     try {
-      setImporting(true); setShowAddFolder(false);
-      await addFolderWithPath(folderPath.trim());
+      setImporting(true); setScanMsg('Scanning folder…'); setShowAddFolder(false);
+      const scan = await addFolderWithPath(folderPath.trim());
+      await waitForScan(scan.scanId);
       setFolderPath('');
       await loadData();
-    } catch (e) { console.error(e); }
+      setScanMsg('');
+    } catch (e) {
+      console.error(e);
+      setScanMsg(e.message || 'Folder scan failed');
+    }
     setImporting(false);
   };
 
@@ -118,6 +124,7 @@ export default function Dashboard() {
         </View>
       </View>
       {uploadMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm, marginBottom: space.gap }}>{uploadMsg}</Text> : null}
+      {scanMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm, marginBottom: space.gap }}>{scanMsg}</Text> : null}
     </View>
   );
 
@@ -127,7 +134,7 @@ export default function Dashboard() {
         <EmptyState
           title="No media yet"
           description="Add a folder to start building your library."
-          action={{ label: 'Add Folder', onClick: () => setShowAddFolder(true) }}
+          action={{ label: 'Add Folder', onPress: () => setShowAddFolder(true) }}
         />
       ) : (
         <Grid
