@@ -15,7 +15,7 @@ import IconButton from '../../components/IconButton';
 import Modal from '../../components/Modal';
 import ProgressBar from '../../components/ProgressBar';
 import Loader from '../../components/Loader';
-import { getMediaUrl, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia, setFolderThumbnail, setVideoThumbnail } from '../../services/api';
+import { getMediaUrl, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, preloadMediaById } from '../../services/api';
 import { useJobProgress } from '../../contexts/JobProgressContext';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import Tag from '../../components/Tag';
@@ -37,8 +37,8 @@ export default function MediaPage() {
   const { playlist, goNext, goPrev } = usePlaylist();
   const { fullscreen, setFullscreen } = useFullscreen();
 
-  const [item, setItem] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [item, setItem] = useState(() => getLastMediaItem(Number(id)));
+  const [loading, setLoading] = useState(() => !getLastMediaItem(Number(id)));
   const playerRef = useRef(null);
   const [showInfo, setShowInfo] = useState(false);
   const [fileStatus, setFileStatus] = useState(null);
@@ -86,7 +86,7 @@ export default function MediaPage() {
     const currentId = Number(id);
     if (playlist.ids.length > 1) {
       const idx = playlist.ids.indexOf(currentId);
-      if (idx !== -1) { goPrev(); navigateToItem(playlist.ids[(idx - 1 + playlist.ids.length) % playlist.ids.length]); }
+      if (idx > 0) { goPrev(); navigateToItem(playlist.ids[idx - 1]); }
     } else if (folderSiblings.length > 1) {
       const idx = folderSiblings.findIndex(m => m.id === currentId);
       if (idx > 0) navigateToItem(folderSiblings[idx - 1].id);
@@ -97,7 +97,7 @@ export default function MediaPage() {
     const currentId = Number(id);
     if (playlist.ids.length > 1) {
       const idx = playlist.ids.indexOf(currentId);
-      if (idx !== -1) { goNext(); navigateToItem(playlist.ids[(idx + 1) % playlist.ids.length]); }
+      if (idx !== -1 && idx < playlist.ids.length - 1) { goNext(); navigateToItem(playlist.ids[idx + 1]); }
     } else if (folderSiblings.length > 1) {
       const idx = folderSiblings.findIndex(m => m.id === currentId);
       if (idx >= 0 && idx < folderSiblings.length - 1) navigateToItem(folderSiblings[idx + 1].id);
@@ -116,6 +116,9 @@ export default function MediaPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const cached = getLastMediaItem(Number(id));
+    if (cached) { setItem(cached); setLoading(false); }
+    else setLoading(true);
     const load = async () => {
       try {
         const mediaItem = await fetchMediaById(Number(id));
@@ -151,10 +154,31 @@ export default function MediaPage() {
   useEffect(() => {
     if (!item || item.type !== MEDIA_TYPE.VIDEO || [MEDIA_STATUS.READY, MEDIA_STATUS.ERROR].includes(item.status)) return;
     const interval = setInterval(async () => {
-      try { const fresh = await fetchMediaById(Number(id)); setItem(fresh); } catch {}
+      try { const fresh = await fetchMediaById(Number(id), { skipCache: true }); setItem(fresh); } catch {}
     }, 3000);
     return () => clearInterval(interval);
   }, [id, item?.status]);
+
+  useEffect(() => {
+    const currentId = Number(id);
+    const neighbors = new Set();
+    if (playlist.ids.length > 1) {
+      const idx = playlist.ids.indexOf(currentId);
+      if (idx !== -1) {
+        if (idx > 0) neighbors.add(playlist.ids[idx - 1]);
+        if (idx < playlist.ids.length - 1) neighbors.add(playlist.ids[idx + 1]);
+      }
+    } else if (folderSiblings.length > 1) {
+      const idx = folderSiblings.findIndex(m => m.id === currentId);
+      if (idx >= 0) {
+        if (idx > 0) neighbors.add(folderSiblings[idx - 1].id);
+        if (idx < folderSiblings.length - 1) neighbors.add(folderSiblings[idx + 1].id);
+      }
+    }
+    for (const nid of neighbors) {
+      if (nid !== currentId) preloadMediaById(nid);
+    }
+  }, [id, playlist.ids, folderSiblings]);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -194,8 +218,21 @@ export default function MediaPage() {
 
   const mediaUrl = () => item ? getMediaUrl(item) : '';
   const isImage = item?.type === MEDIA_TYPE.IMAGE;
-  const canGoPrev = playlist.ids.length > 1 || (() => { const idx = folderSiblings.findIndex(m => m.id === Number(id)); return idx > 0; })();
-  const canGoNext = playlist.ids.length > 1 || (() => { const idx = folderSiblings.findIndex(m => m.id === Number(id)); return idx >= 0 && idx < folderSiblings.length - 1; })();
+  const canGoPrev = (() => {
+    if (playlist.ids.length > 1) return playlist.ids.indexOf(Number(id)) > 0;
+    return folderSiblings.findIndex(m => m.id === Number(id)) > 0;
+  })();
+  const canGoNext = (() => {
+    if (playlist.ids.length > 1) { const idx = playlist.ids.indexOf(Number(id)); return idx >= 0 && idx < playlist.ids.length - 1; }
+    const idx = folderSiblings.findIndex(m => m.id === Number(id));
+    return idx >= 0 && idx < folderSiblings.length - 1;
+  })();
+
+  const totalCount = playlist.ids.length > 1 ? playlist.ids.length : folderSiblings.length;
+  const currentIndex = playlist.ids.length > 1
+    ? playlist.ids.indexOf(Number(id))
+    : folderSiblings.findIndex(m => m.id === Number(id));
+  const positionLabel = currentIndex >= 0 && totalCount > 1 ? `${currentIndex + 1}/${totalCount}` : null;
 
   const handleLike = async () => {
     if (!item) return;
@@ -324,11 +361,16 @@ export default function MediaPage() {
         <View style={{ backgroundColor: colors.bg, borderTopWidth: 1, borderColor: colors.border, padding: space.gap }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: space.gap }}>
             <View style={{ flex: 1 }}>
-              {editingTitle ? (
-                <TextInput style={{ height: 28, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: 22, fontWeight: '600', lineHeight: 28, fontFamily: fontFamily.mono, paddingHorizontal: 4, paddingVertical: 0 }} value={titleDraft} onChangeText={setTitleDraft} onBlur={commitTitle} onSubmitEditing={commitTitle} autoFocus selectTextOnFocus />
-              ) : (
-                <Text style={{ color: colors.textEm, fontWeight: '600', fontSize: 22, lineHeight: 28 }} onPress={() => { setTitleDraft(item.title); setEditingTitle(true); }} numberOfLines={1}>{item.title}</Text>
-              )}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {editingTitle ? (
+                  <TextInput style={{ flex: 1, height: 28, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: 22, fontWeight: '600', lineHeight: 28, fontFamily: fontFamily.mono, paddingHorizontal: 4, paddingVertical: 0 }} value={titleDraft} onChangeText={setTitleDraft} onBlur={commitTitle} onSubmitEditing={commitTitle} autoFocus selectTextOnFocus />
+                ) : (
+                  <Text style={{ color: colors.textEm, fontWeight: '600', fontSize: 22, lineHeight: 28, flexShrink: 1 }} onPress={() => { setTitleDraft(item.title); setEditingTitle(true); }} numberOfLines={1}>{item.title}</Text>
+                )}
+                {positionLabel && (
+                  <Text style={{ color: colors.textMut, fontSize: fontSize.sm, fontFamily: fontFamily.mono }}>{positionLabel}</Text>
+                )}
+              </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                 {item?.tags && safeTags(item.tags).map(tag => (
                   <Tag key={tag} label={tag} onPress={() => router.push(`/tags/${encodeURIComponent(tag)}`)} onRemove={() => handleRemoveTag(tag)} />

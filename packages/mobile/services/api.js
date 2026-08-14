@@ -4,7 +4,7 @@
  * Replaced: window.location → baseUrl helper, URL.createObjectURL → platform
  * guard, services/idb.js → services/storage.js.
  */
-import { Platform } from 'react-native';
+import { Platform, Image } from 'react-native';
 import { apiRoutes, MEDIA_TYPE } from '@photo-quest/shared';
 import {
   idbGetMedia,
@@ -116,6 +116,13 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
   const url = `${base}/media/${id}`;
 
   if (!skipCache) {
+    const memItem = _mediaCache.get(Number(id));
+    if (memItem) {
+      fetch(url, { headers: { Accept: 'application/json' } })
+        .then(async r => { if (!r.ok) return; const item = parseTags(await r.json()); _mediaCache.set(item.id, item); idbPutMedia(item).catch(() => {}); })
+        .catch(() => {});
+      return memItem;
+    }
     let idbItem = null;
     try { idbItem = await idbGetMediaById(Number(id)); } catch {}
     if (idbItem) {
@@ -302,6 +309,21 @@ export function getThumbUrl(id, time = null) {
 export function getMediaUrl(media) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
   return isImage ? getImageUrl(media.id) : getStreamUrl(media.id);
+}
+
+export async function preloadMediaById(id) {
+  try {
+    const item = await fetchMediaById(id);
+    if (item?.type === MEDIA_TYPE.IMAGE) {
+      const url = getImageUrl(item.id);
+      if (Platform.OS === 'web') {
+        const NativeImage = globalThis.Image;
+        if (NativeImage) { const img = new NativeImage(); img.src = url; }
+      } else {
+        Image.prefetch?.(url)?.catch?.(() => {});
+      }
+    }
+  } catch {}
 }
 
 /* ---------- network / library ---------- */
