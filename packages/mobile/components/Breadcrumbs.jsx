@@ -10,7 +10,7 @@ export default function Breadcrumbs({ items = [] }) {
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-      <Button variant="text" onPress={() => router.push('/')}>Library</Button>
+      <Button variant="text" style={{ paddingLeft: 0 }} onPress={() => router.push('/')}>Library</Button>
       {items.map((crumb, i) => (
         <View key={`${crumb.id ?? 'seg'}-${i}`} style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={{ color: colors.border, fontSize: fontSize.sm }}>/</Text>

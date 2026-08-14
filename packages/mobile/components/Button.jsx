@@ -56,6 +56,7 @@ export default function Button({
   children,
   disabled = false,
   onPress,
+  style,
 }) {
   const [interact, setInteract] = useState(null);
   const sz = SIZE[size] ?? {};
@@ -87,6 +88,7 @@ export default function Button({
         BASE, sz,
         { backgroundColor: bg, borderColor: bd },
         disabled && { opacity: 0.45 },
+        style,
       ]}
     >
       {isValidElement(icon) ? cloneElement(icon, { color: iconColor }) : icon}
