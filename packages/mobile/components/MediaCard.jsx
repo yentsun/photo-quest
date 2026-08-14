@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, Image } from 'react-native';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getThumbUrl } from '../services/api';
@@ -14,6 +14,8 @@ export default function MediaCard({ media, onPress, onLike, showLikes = true, st
   const progressSecs = useJobProgress(media.id);
 
   const thumbSrc = getThumbUrl(media.id, media.thumbnail_time);
+
+  useEffect(() => { setThumbFailed(false); }, [thumbSrc]);
 
   const tags = (() => {
     if (Array.isArray(media.tags)) return media.tags;
