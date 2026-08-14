@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useMediaActions } from '../hooks/useMedia';
 import { useRefresh } from '../contexts/RefreshContext';
 import { useScan } from '../contexts/ScanContext';
-import { fetchFolders, fetchMedia, getLastFolders, uploadMedia, waitForScan } from '../services/api';
+import { fetchFolders, getLastFolders, uploadMedia, waitForScan } from '../services/api';
 import usePersistedState from '../hooks/usePersistedState';
 import EmptyState from '../components/EmptyState';
 import Button from '../components/Button';
@@ -28,7 +28,6 @@ export default function Dashboard() {
   const { isScanning } = useScan();
 
   const [folders, setFolders] = useState(() => getLastFolders() || []);
-  const [mediaItems, setMediaItems] = useState(() => []);
   const [loadingItems, setLoadingItems] = useState(true);
   const [showAddFolder, setShowAddFolder] = useState(false);
   const [folderPath, setFolderPath] = useState('');
@@ -45,13 +44,9 @@ export default function Dashboard() {
   const loadData = async () => {
     setLoadingItems(true);
     try {
-      const [folderData, mediaData] = await Promise.all([
-        fetchFolders().catch(() => []),
-        fetchMedia({ limit: 10000 }).catch(() => ({ items: [] })),
-      ]);
+      const folderData = await fetchFolders().catch(() => []);
       const rootFolders = folderData.filter(f => f.parentId === null);
       setFolders(rootFolders.sort(sortOrder === 'name' ? byFolderName : (a, b) => b.id - a.id));
-      setMediaItems(mediaData.items || []);
     } catch (e) { console.error(e); }
     setLoadingItems(false);
   };
@@ -66,6 +61,7 @@ export default function Dashboard() {
       await waitForScan(scan.scanId);
       setFolderPath('');
       await loadData();
+      bump();
       setScanMsg('');
     } catch (e) {
       console.error(e);
@@ -112,11 +108,14 @@ export default function Dashboard() {
     return <View style={{ flex: 1, backgroundColor: colors.bg }}><Loader message="Loading library…" /></View>;
   }
 
+  const totalMedia = folders.reduce((sum, f) => sum + (f.subtreeMediaCount || 0), 0);
+
   const header = (
     <View style={{ paddingTop: space.padHeaderTop, paddingBottom: 0 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space.gap }}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm, letterSpacing: -0.01 * fontSize.xl }}>Library</Text>
+          <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{totalMedia.toLocaleString()} item{totalMedia !== 1 ? 's' : ''}</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: space.gap }}>
           <Button variant="ghost" size="sm" icon={<Icon name="folder" size="xs" />} onPress={() => setShowAddFolder(true)}>Add Folder</Button>
@@ -130,7 +129,7 @@ export default function Dashboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {folders.length === 0 && mediaItems.length === 0 ? (
+      {folders.length === 0 ? (
         <EmptyState
           title="No media yet"
           description="Add a folder to start building your library."
@@ -139,7 +138,7 @@ export default function Dashboard() {
       ) : (
         <Grid
           folders={folders}
-          items={mediaItems}
+          items={[]}
           onMediaPress={item => router.push(`/media/${item.id}`)}
           onLike={likeMedia}
           header={header}

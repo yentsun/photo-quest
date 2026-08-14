@@ -13,7 +13,7 @@ import {
   idbPutMedia,
   idbPutManyMedia,
   idbPutManyFolders,
-  idbDeleteMedia,
+  idbClearMedia,
 } from './storage';
 import { getApiBaseUrl } from './baseUrl';
 
@@ -38,6 +38,12 @@ export function getLastFolders() { return _foldersCache; }
 export function getLastTags() { return _tagsCache; }
 export function getLastMediaItem(id) { return _mediaCache.get(id) ?? null; }
 export function getLastFolderMedia(folderPath) { return _folderMediaCache.get(folderPath) ?? null; }
+
+export async function clearMediaCache() {
+  _mediaCache.clear();
+  _folderMediaCache.clear();
+  await idbClearMedia().catch(() => {});
+}
 
 /* ---------- internal helpers ---------- */
 
@@ -72,7 +78,7 @@ export async function fetchTags() {
   return data;
 }
 
-export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type } = {}) {
+export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type, skipCache = false } = {}) {
   const base = B();
   const url = new URL(apiRoutes.media, base || 'http://localhost');
   if (!base) { url.host = ''; url.protocol = ''; } // relative when same-origin
@@ -92,11 +98,13 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
 
   if (random) return _fetchMediaFromServer(finalUrl, opts);
 
-  let idbData = null;
-  try { idbData = await idbGetMedia(opts); } catch {}
-  if (idbData?.items?.length > 0) {
-    _fetchMediaFromServer(finalUrl, opts).catch(() => {});
-    return idbData;
+  if (!skipCache) {
+    let idbData = null;
+    try { idbData = await idbGetMedia(opts); } catch {}
+    if (idbData?.items?.length > 0) {
+      _fetchMediaFromServer(finalUrl, opts).catch(() => {});
+      return idbData;
+    }
   }
   try { return await _fetchMediaFromServer(finalUrl, opts); } catch (err) {
     return idbGetMedia(opts);
@@ -170,14 +178,10 @@ export async function likeMedia(id) {
 }
 
 export async function deleteMedia(id) {
-  const cached = _mediaCache.get(id);
-  const folderPath = cached?.folder;
   const res = await fetch(`${B()}/media/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete media');
   const result = await res.json();
-  _mediaCache.delete(id);
-  if (folderPath) _folderMediaCache.delete(folderPath);
-  idbDeleteMedia(id).catch(() => {});
+  await clearMediaCache();
   return result;
 }
 
@@ -196,7 +200,7 @@ export async function waitForScan(scanId, { intervalMs = 500, maxAttempts = 120 
     const res = await fetch(`${B()}/scans?id=${encodeURIComponent(scanId)}`);
     if (!res.ok) throw new Error('Failed to read scan status');
     const scan = await res.json();
-    if (scan.status === 'completed') return scan;
+    if (scan.status === 'completed') { await clearMediaCache(); return scan; }
     if (scan.status === 'failed' || scan.status === 'cancelled') {
       throw new Error(scan.error || `Scan ${scan.status}`);
     }
@@ -217,7 +221,9 @@ export async function cancelScan(scanId) {
 export async function removeFolder(folderId) {
   const res = await fetch(`${B()}/media/folder/${folderId}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to remove folder');
-  return res.json();
+  const result = await res.json();
+  await clearMediaCache();
+  return result;
 }
 
 export async function renameFolder(folderId, name) {
@@ -342,7 +348,9 @@ export async function uploadMedia(fileUri, fileName, mimeType) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || 'Upload failed');
   }
-  return res.json();
+  const result = await res.json();
+  await clearMediaCache();
+  return result;
 }
 
 /* ---------- download ---------- */

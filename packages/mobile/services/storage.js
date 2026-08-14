@@ -17,6 +17,7 @@ export async function idbPutMedia(item)                        { return _impl().
 export async function idbPutManyMedia(items)                   { return _impl().idbPutManyMedia(items); }
 export async function idbPutManyFolders(folders)               { return _impl().idbPutManyFolders(folders); }
 export async function idbDeleteMedia(id)                       { return _impl().idbDeleteMedia(id); }
+export async function idbClearMedia()                          { return _impl().idbClearMedia(); }
 
 /* ==================================================================
    Web implementation — real IndexedDB (imported lazily)
@@ -91,6 +92,9 @@ const webImpl = {
   async idbDeleteMedia(id) {
     try { const db = await openDB(); req2p(db.transaction('media','readwrite').objectStore('media').delete(id)); } catch {}
   },
+  async idbClearMedia() {
+    try { const db = await openDB(); req2p(db.transaction('media','readwrite').objectStore('media').clear()); } catch {}
+  },
 };
 
 /* ==================================================================
@@ -118,6 +122,9 @@ const nativeImpl = {
     try { await AsyncStorage.setItem(FOLDER_KEY, JSON.stringify(folders)); } catch {}
   },
   async idbDeleteMedia() {},
+  async idbClearMedia() {
+    try { await AsyncStorage.removeItem(STORE_KEY); } catch {}
+  },
 };
 
 function _impl() { return Platform.OS === 'web' ? webImpl : nativeImpl; }

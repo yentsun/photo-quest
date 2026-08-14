@@ -4,13 +4,15 @@ import { useRouter, usePathname } from 'expo-router';
 import Icon from './Icon';
 import { colors, fontSize, fontFamily, layout, space } from '../theme/tokens';
 import { useBreakpoint } from '../theme/breakpoints';
+import { useRefresh } from '../contexts/RefreshContext';
+import { fetchMedia, fetchTags } from '../services/api';
 const LOGO = require('../assets/icon.png');
 import usePersistedState from '../hooks/usePersistedState';
 
 const NAV_ITEMS = [
-  { route: '/',          icon: 'image',   label: 'Library' },
-  { route: '/liked',     icon: 'heart',   label: 'Liked' },
-  { route: '/tags',      icon: 'list',    label: 'Tags' },
+  { route: '/',     icon: 'image', label: 'Library', countKey: 'library' },
+  { route: '/liked', icon: 'heart', label: 'Liked',  countKey: 'liked' },
+  { route: '/tags',  icon: 'list',  label: 'Tags',   countKey: 'tags' },
 ];
 
 const SIDEBAR_W = layout.sidebarWidth;
@@ -21,6 +23,22 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { isMobile } = useBreakpoint();
   const [collapsed, setCollapsed] = usePersistedState('sidebar-collapsed', false);
+  const { signal } = useRefresh();
+  const [counts, setCounts] = useState({ library: null, liked: null, tags: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const [library, liked, tags] = await Promise.all([
+        fetchMedia({ limit: 0 }).then(d => d.total).catch(() => null),
+        fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => null),
+        fetchTags().then(d => d.length).catch(() => null),
+      ]);
+      if (!cancelled) setCounts({ library, liked, tags });
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [signal]);
 
   const width = isMobile ? SIDEBAR_COLLAPSED : (collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_W);
   const showLabels = !isMobile && !collapsed;
@@ -80,6 +98,16 @@ export default function Sidebar() {
                   color: active ? colors.textEm : colors.text,
                 }}>
                   {item.label}
+                </Text>
+              )}
+              {showLabels && counts[item.countKey] != null && (
+                <Text style={{
+                  marginLeft: 'auto',
+                  fontFamily: fontFamily.mono,
+                  fontSize: fontSize.xs,
+                  color: colors.textMut,
+                }}>
+                  {counts[item.countKey].toLocaleString()}
                 </Text>
               )}
             </Pressable>

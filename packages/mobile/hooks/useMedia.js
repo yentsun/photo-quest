@@ -5,6 +5,7 @@ import {
   deleteMedia as deleteMediaApi,
   scanMedia as scanMediaApi,
   removeFolder as removeFolderApi,
+  clearMediaCache,
 } from '../services/api';
 
 export function useMediaActions() {
@@ -35,6 +36,7 @@ export function useMediaActions() {
         newFiles += result.added || 0;
       } catch (err) { console.error(err); }
     }
+    await clearMediaCache();
     bump();
     return { serverFolders: folders.length, clientFolders: 0, newFiles };
   }, [bump]);
