@@ -14,6 +14,7 @@ import Icon from '../../components/Icon';
 import IconButton from '../../components/IconButton';
 import Modal from '../../components/Modal';
 import ProgressBar from '../../components/ProgressBar';
+import Loader from '../../components/Loader';
 import { getMediaUrl, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia, setFolderThumbnail, setVideoThumbnail } from '../../services/api';
 import { useJobProgress } from '../../contexts/JobProgressContext';
 import Breadcrumbs from '../../components/Breadcrumbs';
@@ -271,7 +272,7 @@ export default function MediaPage() {
     setTagSuggestions(allTags.filter(t => t.toLowerCase().includes(trimmed) && !existing.has(t)).slice(0, 6));
   }, [addingTag, tagDraft]);
 
-  if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Text style={{ color: colors.textMut }}>Loading…</Text></View>;
+  if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader /></View>;
   if (!item) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Text style={{ color: colors.textMut }}>Media not found</Text></View>;
 
   return (

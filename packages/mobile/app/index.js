@@ -74,8 +74,10 @@ export default function Dashboard() {
     setRefreshLabel('Scanning…');
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
     try {
-      await refreshLibrary(folders, (msg) => setRefreshLabel(msg));
-    } catch {}
+      const result = await refreshLibrary(folders, (msg) => setRefreshLabel(msg));
+      setScanMsg(`Found ${result.newFiles} new file${result.newFiles !== 1 ? 's' : ''} in ${result.serverFolders} folder${result.serverFolders !== 1 ? 's' : ''}.`);
+      setTimeout(() => setScanMsg(''), 4000);
+    } catch { setScanMsg('Refresh failed'); }
     setRefreshLabel('Done');
     refreshTimer.current = setTimeout(() => setRefreshLabel('Refresh'), 2000);
     loadData();
@@ -105,7 +107,7 @@ export default function Dashboard() {
   };
 
   if (loadingItems) {
-    return <View style={{ flex: 1, backgroundColor: colors.bg }}><Loader message="Loading library…" /></View>;
+    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader message="Loading library…" /></View>;
   }
 
   const totalMedia = folders.reduce((sum, f) => sum + (f.subtreeMediaCount || 0), 0);

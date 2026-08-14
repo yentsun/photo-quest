@@ -5,6 +5,7 @@ import {
   deleteMedia as deleteMediaApi,
   scanMedia as scanMediaApi,
   removeFolder as removeFolderApi,
+  waitForScan,
   clearMediaCache,
 } from '../services/api';
 
@@ -29,16 +30,20 @@ export function useMediaActions() {
 
   const refreshLibrary = useCallback(async (folders, onProgress) => {
     let newFiles = 0;
-    for (const folderPath of [...new Set(folders.map(f => f.path))]) {
+    const folderPaths = [...new Set(folders.map(f => f.path))];
+    for (const folderPath of folderPaths) {
       try {
         onProgress?.(`Scanning ${folderPath.split(/[/\\]/).pop()}...`);
         const result = await scanMediaApi(folderPath);
-        newFiles += result.added || 0;
+        newFiles += result.total || 0;
+        if (result.scanId) {
+          try { await waitForScan(result.scanId); } catch {}
+        }
       } catch (err) { console.error(err); }
     }
     await clearMediaCache();
     bump();
-    return { serverFolders: folders.length, clientFolders: 0, newFiles };
+    return { serverFolders: folderPaths.length, clientFolders: 0, newFiles };
   }, [bump]);
 
   return { likeMedia, deleteMedia, addFolderWithPath, removeFolder, refreshLibrary };
