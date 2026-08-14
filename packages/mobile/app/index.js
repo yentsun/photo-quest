@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [searchFolders, setSearchFolders] = useState([]);
   const [searchTotal, setSearchTotal] = useState(0);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchPage, setSearchPage] = useState(0);
@@ -95,6 +96,24 @@ export default function Dashboard() {
       })
       .catch(err => console.error('Search failed:', err))
       .finally(() => { if (!cancelled) setSearchLoading(false); });
+    return () => { cancelled = true; };
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    if (!debouncedSearch) { setSearchFolders([]); return; }
+    let cancelled = false;
+    const q = debouncedSearch.trim().toLowerCase();
+    fetchFolders()
+      .then(folders => {
+        if (cancelled) return;
+        const matches = folders.filter(f => {
+          const name = (f.name || '').toLowerCase();
+          const path = (f.path || '').toLowerCase();
+          return name.includes(q) || path.includes(q);
+        });
+        setSearchFolders(matches);
+      })
+      .catch(() => { if (!cancelled) setSearchFolders([]); });
     return () => { cancelled = true; };
   }, [debouncedSearch]);
 
@@ -191,10 +210,10 @@ export default function Dashboard() {
       {debouncedSearch ? (
         searchLoading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader message="Searching…" /></View>
-        ) : searchResults.length > 0 ? (
+        ) : searchResults.length > 0 || searchFolders.length > 0 ? (
           <View style={{ flex: 1 }}>
             <Grid
-              folders={[]}
+              folders={searchFolders}
               items={searchResults}
               onMediaPress={item => router.push(`/media/${item.id}`)}
               onLike={likeMedia}
@@ -213,7 +232,7 @@ export default function Dashboard() {
             )}
           </View>
         ) : (
-          <EmptyState icon={<Icon name="search" size="2xl" />} title="No results" description={`No media matching "${debouncedSearch}".`} />
+          <EmptyState icon={<Icon name="search" size="2xl" />} title="No results" description={`No media or folders matching "${debouncedSearch}".`} />
         )
       ) : folders.length === 0 ? (
         <EmptyState
@@ -266,8 +285,8 @@ export default function Dashboard() {
           </View>
           {!!debouncedSearch && !searchLoading && (
             <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>
-              {searchTotal > 0
-                ? `${searchTotal} result${searchTotal !== 1 ? 's' : ''} — press Enter or close to view`
+              {searchTotal > 0 || searchFolders.length > 0
+                ? `${searchTotal + searchFolders.length} result${searchTotal + searchFolders.length !== 1 ? 's' : ''} — press Enter or close to view`
                 : `No results for "${debouncedSearch}"`}
             </Text>
           )}
