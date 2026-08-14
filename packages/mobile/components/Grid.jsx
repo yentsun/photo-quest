@@ -1,7 +1,9 @@
-import { FlatList, View, useWindowDimensions } from 'react-native';
-import { useCallback, useMemo } from 'react';
+import { FlatList, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
 import { usePlaylist } from '../contexts/PlaylistContext';
-import { space } from '../theme/tokens';
+import { useBreakpoint } from '../theme/breakpoints';
+import usePersistedState from '../hooks/usePersistedState';
+import { space, layout } from '../theme/tokens';
 import MediaCard from './MediaCard';
 import FolderCard from './FolderCard';
 
@@ -9,15 +11,22 @@ const CARD_MIN_WIDTH = 225;
 
 export default function Grid({ folders, items, onMediaPress, onLike, header }) {
   const { set } = usePlaylist();
-  const { width } = useWindowDimensions();
+  const { isMobile } = useBreakpoint();
+  const [collapsed] = usePersistedState('sidebar-collapsed', false);
+  const [containerWidth, setContainerWidth] = useState(0);
 
   const data = useMemo(() => [
     ...folders.map(f => ({ _kind: 'folder', key: `folder-${f.id}`, data: f })),
     ...items.map((m, i) => ({ _kind: 'media', key: `media-${m.id}`, data: m, index: i })),
   ], [folders, items]);
 
-  const cols = Math.max(1, Math.floor((width - space.gridPadLeft * 2 + space.gap) / (CARD_MIN_WIDTH + space.gap)));
-  const available = Math.max(CARD_MIN_WIDTH, width - space.gridPadLeft * 2);
+  const sidebarWidth = isMobile || collapsed ? layout.sidebarCollapsedWidth : layout.sidebarWidth;
+  const padLeft = space.gridPadLeft;
+  const padRight = space.gridPadLeft + sidebarWidth;
+  const available = Math.max(CARD_MIN_WIDTH, containerWidth - padLeft - padRight);
+  const cols = containerWidth > 0
+    ? Math.max(1, Math.floor((available + space.gap) / (CARD_MIN_WIDTH + space.gap)))
+    : 1;
   const itemWidth = cols > 1 ? (available - space.gap * (cols - 1)) / cols : available;
 
   const handleMediaPress = useCallback((item, index) => {
@@ -38,17 +47,20 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
 
   return (
     <FlatList
+      style={{ flex: 1 }}
       data={data}
       numColumns={cols}
       key={cols}
       keyExtractor={(item) => item.key}
       renderItem={renderItem}
       ListHeaderComponent={header}
+      onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
       columnWrapperStyle={cols > 1 ? { gap: space.gap } : undefined}
       contentContainerStyle={{
         gap: space.gap,
         paddingTop: space.gap,
-        paddingHorizontal: space.gridPadLeft,
+        paddingLeft: padLeft,
+        paddingRight: padRight,
         paddingBottom: space.gap,
       }}
     />
