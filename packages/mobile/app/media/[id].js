@@ -396,9 +396,9 @@ export default function MediaPage() {
       )}
 
       <Modal open={showInfo} onClose={() => setShowInfo(false)} title="Media Info">
-        <View style={{ gap: space.gap }}>
+        <View style={{ gap: 4 }}>
           {[['ID', item.id], ['Title', item.title], ['Type', item.type], ['Status', item.status], ['Path', item.path], ['Codec', item.codec], ['Width', item.width], ['Height', item.height], ['Duration', item.duration && `${Math.floor(item.duration / 60)}:${String(Math.floor(item.duration % 60)).padStart(2, '0')}`], ['Camera', item.camera], ['Size', item.size && `${(item.size / 1024 / 1024).toFixed(1)} MB`]].filter(([, v]) => v != null && v !== '').map(([label, value]) => (
-            <View key={label} style={{ flexDirection: 'row', gap: 14, paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.borderSoft }}>
+            <View key={label} style={{ flexDirection: 'row', gap: 14, paddingVertical: 4, borderBottomWidth: 1, borderColor: colors.borderSoft }}>
               <Text style={{ color: colors.textMut, fontSize: fontSize.sm, minWidth: 80 }}>{label}</Text>
               <Text style={{ color: colors.textEm, fontSize: fontSize.sm, flex: 1 }}>{String(value)}</Text>
             </View>
