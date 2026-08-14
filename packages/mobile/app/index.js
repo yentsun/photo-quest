@@ -191,8 +191,12 @@ export default function Dashboard() {
     <View style={{ paddingTop: space.padHeaderTop, paddingBottom: 0 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space.gap }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm, letterSpacing: -0.01 * fontSize.xl }}>Library</Text>
-          <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{totalMedia.toLocaleString()} item{totalMedia !== 1 ? 's' : ''}</Text>
+          <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm, letterSpacing: -0.01 * fontSize.xl }}>{debouncedSearch ? 'Search' : 'Library'}</Text>
+          <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>
+            {debouncedSearch
+              ? `"${debouncedSearch}" — ${searchTotal + searchFolders.length} result${searchTotal + searchFolders.length !== 1 ? 's' : ''}`
+              : `${totalMedia.toLocaleString()} item${totalMedia !== 1 ? 's' : ''}`}
+          </Text>
         </View>
         <View style={{ flexDirection: 'row', gap: space.gap }}>
           <Button variant="ghost" size="sm" icon={<Icon name="folder" size="xs" />} onPress={() => setShowAddFolder(true)}>Add Folder</Button>
