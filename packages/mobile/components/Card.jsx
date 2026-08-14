@@ -41,7 +41,7 @@ function ImageArea({ children, style }) {
 
 function Footer({ children, style }) {
   return (
-    <View style={[{ padding: 6, paddingHorizontal: 10, borderTopWidth: 1, borderColor: colors.border }, style]}>
+    <View style={[{ padding: 6, paddingHorizontal: 10, minHeight: 44, borderTopWidth: 1, borderColor: colors.border }, style]}>
       {children}
     </View>
   );
