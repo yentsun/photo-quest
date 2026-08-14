@@ -253,7 +253,7 @@ export default function Dashboard() {
       <Modal open={searchOpen} onClose={() => setSearchOpen(false)} title="Search">
         <View style={{ gap: space.gap }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Icon name="search" size="sm" />
+            <Icon name="search" size="sm" color={colors.textMut} />
             <View style={{ flex: 1 }}>
               <Input
                 placeholder="Search by title…"
