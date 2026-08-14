@@ -5,6 +5,7 @@ import { useMediaActions } from '../../hooks/useMedia';
 import { useRefresh } from '../../contexts/RefreshContext';
 import { useGlobal } from '../../contexts/GlobalContext';
 import { usePlaylist } from '../../contexts/PlaylistContext';
+import { useFullscreen } from '../../contexts/FullscreenContext';
 import { MEDIA_TYPE, MEDIA_STATUS, actions as act } from '@photo-quest/shared';
 import ImageViewer from '../../components/ImageViewer';
 import MediaPlayer from '../../components/MediaPlayer';
@@ -17,6 +18,7 @@ import { getMediaUrl, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeM
 import { useJobProgress } from '../../contexts/JobProgressContext';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import Tag from '../../components/Tag';
+import LikeFlash from '../../components/LikeFlash';
 import { colors, fontSize, fontFamily, space } from '../../theme/tokens';
 
 function safeTags(tags) {
@@ -32,10 +34,10 @@ export default function MediaPage() {
   const { bump } = useRefresh();
   const { removeFolder } = useMediaActions();
   const { playlist, goNext, goPrev } = usePlaylist();
+  const { fullscreen, setFullscreen } = useFullscreen();
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const playerRef = useRef(null);
   const [showInfo, setShowInfo] = useState(false);
   const [fileStatus, setFileStatus] = useState(null);
@@ -50,6 +52,7 @@ export default function MediaPage() {
   const [folderSiblings, setFolderSiblings] = useState([]);
   const [tagSuggestions, setTagSuggestions] = useState([]);
   const [suggestionIndex, setSuggestionIndex] = useState(-1);
+  const [likeFlash, setLikeFlash] = useState(null);
 
   const progressSecs = useJobProgress(item?.id);
 
@@ -57,6 +60,26 @@ export default function MediaPage() {
     if (!targetId) return;
     router.replace(`/media/${targetId}`);
   }, [router]);
+
+  const toggleFullscreen = useCallback(() => {
+    const next = !fullscreen;
+    setFullscreen(next);
+    if (Platform.OS === 'web') {
+      if (next) {
+        const el = document.getElementById('app-root');
+        el?.requestFullscreen?.()?.catch?.(() => {});
+      } else if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+    }
+  }, [fullscreen, setFullscreen]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const onFsChange = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, [setFullscreen]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 20 && Math.abs(gs.dx) > Math.abs(gs.dy),
@@ -155,15 +178,16 @@ export default function MediaPage() {
       }
       if (e.key === ' ') { e.preventDefault(); playerRef.current?.togglePlay(); }
       if (e.key === 'Enter') { e.preventDefault(); handleLike(); }
-      if (e.key === 'f') { e.preventDefault(); setIsFullscreen(fs => !fs); }
+      if (e.key === 'f') { e.preventDefault(); toggleFullscreen(); }
+      if (e.key === 'F11') { e.preventDefault(); toggleFullscreen(); }
       if (e.key === 'i') { e.preventDefault(); setShowInfo(s => !s); }
       if (e.key === 't' || e.key === 'T') setAddingTag(true);
       if (e.key === 'Delete') { e.preventDefault(); handleDelete(); }
-      if (e.key === 'Escape') { setIsFullscreen(false); setEditingTitle(false); setAddingTag(false); }
+      if (e.key === 'Escape') { setFullscreen(false); setEditingTitle(false); setAddingTag(false); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [playlist, goNext, goPrev, id, navigateToItem, folderSiblings]);
+  }, [playlist, goNext, goPrev, id, navigateToItem, folderSiblings, toggleFullscreen, setFullscreen, item]);
 
   useEffect(() => {
     if (!showInfo || !item) return;
@@ -177,7 +201,9 @@ export default function MediaPage() {
 
   const handleLike = async () => {
     if (!item) return;
-    setItem(p => ({ ...p, likes: (p.likes || 0) + 1 }));
+    const nextLikes = (item.likes || 0) + 1;
+    setItem(p => ({ ...p, likes: nextLikes }));
+    if (fullscreen) setLikeFlash({ count: nextLikes, key: Date.now() });
     try { await likeMedia(item.id); bump(); } catch { setItem(p => ({ ...p, likes: Math.max(0, (p.likes || 0) - 1) })); }
   };
 
@@ -252,15 +278,15 @@ export default function MediaPage() {
   if (!item) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Text style={{ color: colors.textMut }}>Media not found</Text></View>;
 
   return (
-    <View style={{ flex: 1, backgroundColor: isFullscreen ? '#000' : colors.bg }}>
-      {!isFullscreen && (
+    <View style={{ flex: 1, backgroundColor: fullscreen ? '#000' : colors.bg }}>
+      {!fullscreen && (
         <View style={{ padding: 8, backgroundColor: colors.bg, borderBottomWidth: 1, borderColor: colors.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap }}>
             <IconButton icon={<Icon name="prev" size="sm" />} onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/'); }} label="Back" />
             <View style={{ flex: 1 }}>
               <Breadcrumbs items={breadcrumbs} />
             </View>
-            <IconButton icon={<Icon name={isFullscreen ? 'minimize' : 'maximize'} size="md" />} onPress={() => { if (Platform.OS === 'web') { document.fullscreenElement ? document.exitFullscreen() : document.getElementById('viewer')?.requestFullscreen(); } }} label="Fullscreen" variant="overlay" />
+            <IconButton icon={<Icon name={fullscreen ? 'minimize' : 'maximize'} size="md" />} onPress={toggleFullscreen} label="Fullscreen" variant="overlay" />
           </View>
         </View>
       )}
@@ -281,9 +307,12 @@ export default function MediaPage() {
         ) : (
           <MediaPlayer ref={playerRef} src={mediaUrl()} title={item.title} />
         )}
+        {fullscreen && likeFlash && (
+          <LikeFlash key={likeFlash.key} count={likeFlash.count} onDone={() => setLikeFlash(null)} />
+        )}
       </View>
 
-      {!isFullscreen && (
+      {!fullscreen && (
         <View style={{ backgroundColor: colors.bg, borderTopWidth: 1, borderColor: colors.border, padding: space.gap }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: space.gap }}>
             <View style={{ flex: 1 }}>

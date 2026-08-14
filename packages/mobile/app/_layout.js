@@ -7,6 +7,7 @@ import { ScanProvider } from '../contexts/ScanContext';
 import { SlideshowProvider, useSlideshow } from '../contexts/SlideshowContext';
 import { JobProgressProvider } from '../contexts/JobProgressContext';
 import { PlaylistProvider } from '../contexts/PlaylistContext';
+import { FullscreenProvider, useFullscreen } from '../contexts/FullscreenContext';
 import Sidebar from '../components/Sidebar';
 import CRTOverlay from '../components/CRTOverlay';
 import { colors } from '../theme/tokens';
@@ -43,26 +44,36 @@ export default function RootLayout() {
           <SlideshowProvider>
             <PlaylistProvider>
               <JobProgressProvider>
-                <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bg }}>
-                  <CRTOverlay />
-                  <Sidebar />
-                  <View style={{ flex: 1 }}>
-                    <AppStateHandler />
-                    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-                      <Stack.Screen name="index" />
-                      <Stack.Screen name="liked" />
-                      <Stack.Screen name="folder/[id]" />
-                      <Stack.Screen name="media/[id]" />
-                      <Stack.Screen name="tags/index" />
-                      <Stack.Screen name="tags/[tag]" />
-                    </Stack>
-                  </View>
-                </View>
+                <FullscreenProvider>
+                  <LayoutShell />
+                </FullscreenProvider>
               </JobProgressProvider>
             </PlaylistProvider>
           </SlideshowProvider>
         </ScanProvider>
       </RefreshProvider>
     </GlobalProvider>
+  );
+}
+
+function LayoutShell() {
+  const { fullscreen } = useFullscreen();
+
+  return (
+    <View id="app-root" style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bg }}>
+      {!fullscreen && <CRTOverlay />}
+      {!fullscreen && <Sidebar />}
+      <View style={{ flex: 1 }}>
+        <AppStateHandler />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="liked" />
+          <Stack.Screen name="folder/[id]" />
+          <Stack.Screen name="media/[id]" />
+          <Stack.Screen name="tags/index" />
+          <Stack.Screen name="tags/[tag]" />
+        </Stack>
+      </View>
+    </View>
   );
 }
