@@ -1,9 +1,7 @@
 import { FlatList, View } from 'react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { usePlaylist } from '../contexts/PlaylistContext';
-import { useBreakpoint } from '../theme/breakpoints';
-import usePersistedState from '../hooks/usePersistedState';
-import { space, layout } from '../theme/tokens';
+import { space } from '../theme/tokens';
 import MediaCard from './MediaCard';
 import FolderCard from './FolderCard';
 
@@ -11,8 +9,6 @@ const CARD_MIN_WIDTH = 225;
 
 export default function Grid({ folders, items, onMediaPress, onLike, header }) {
   const { set } = usePlaylist();
-  const { isMobile } = useBreakpoint();
-  const [collapsed] = usePersistedState('sidebar-collapsed', false);
   const [containerWidth, setContainerWidth] = useState(0);
 
   const data = useMemo(() => [
@@ -20,10 +16,7 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
     ...items.map((m, i) => ({ _kind: 'media', key: `media-${m.id}`, data: m, index: i })),
   ], [folders, items]);
 
-  const sidebarWidth = isMobile || collapsed ? layout.sidebarCollapsedWidth : layout.sidebarWidth;
-  const padLeft = space.gridPadLeft;
-  const padRight = space.gridPadLeft + sidebarWidth;
-  const available = Math.max(CARD_MIN_WIDTH, containerWidth - padLeft - padRight);
+  const available = Math.max(CARD_MIN_WIDTH, containerWidth - space.gridPadLeft * 2);
   const cols = containerWidth > 0
     ? Math.max(1, Math.floor((available + space.gap) / (CARD_MIN_WIDTH + space.gap)))
     : 1;
@@ -59,8 +52,7 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
       contentContainerStyle={{
         gap: space.gap,
         paddingTop: space.gap,
-        paddingLeft: padLeft,
-        paddingRight: padRight,
+        paddingHorizontal: space.gridPadLeft,
         paddingBottom: space.gap,
       }}
     />
