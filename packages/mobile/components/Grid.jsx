@@ -16,7 +16,9 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
     ...items.map((m, i) => ({ _kind: 'media', key: `media-${m.id}`, data: m, index: i })),
   ], [folders, items]);
 
-  const available = Math.max(CARD_MIN_WIDTH, containerWidth - space.gridPadLeft * 2);
+  const padLeft = space.gridPadLeft;
+  const padRight = space.gridPadLeft + 16;
+  const available = Math.max(CARD_MIN_WIDTH, containerWidth - padLeft - padRight);
   const cols = containerWidth > 0
     ? Math.max(1, Math.floor((available + space.gap) / (CARD_MIN_WIDTH + space.gap)))
     : 1;
@@ -52,7 +54,8 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
       contentContainerStyle={{
         gap: space.gap,
         paddingTop: space.gap,
-        paddingHorizontal: space.gridPadLeft,
+        paddingLeft: padLeft,
+        paddingRight: padRight,
         paddingBottom: space.gap,
       }}
     />
