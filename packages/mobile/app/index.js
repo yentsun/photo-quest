@@ -264,14 +264,14 @@ export default function Dashboard() {
               />
             </View>
           </View>
-          {debouncedSearch && !searchLoading && (
+          {!!debouncedSearch && !searchLoading && (
             <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>
               {searchTotal > 0
                 ? `${searchTotal} result${searchTotal !== 1 ? 's' : ''} — press Enter or close to view`
                 : `No results for "${debouncedSearch}"`}
             </Text>
           )}
-          {debouncedSearch && (
+          {!!debouncedSearch && (
             <Button variant="text" onPress={() => { setSearchQuery(''); setDebouncedSearch(''); setSearchPage(0); }}>Clear search</Button>
           )}
         </View>
