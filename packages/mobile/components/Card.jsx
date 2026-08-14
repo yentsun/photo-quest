@@ -10,7 +10,7 @@ const SIZES = {
 export default function Card({ children, onPress, size = 'lg', stretch = false, style }) {
   const base = typeof size === 'number' ? size : (SIZES[size] ?? SIZES.lg);
   const sizeStyle = stretch
-    ? { flexGrow: 1, flexBasis: base, maxWidth: base * 1.33 }
+    ? { width: '100%' }
     : { width: base };
 
   return (
