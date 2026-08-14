@@ -59,6 +59,17 @@ const webImpl = {
       if (opts?.folder != null) all = all.filter(m => m.folder === opts.folder);
       if (opts?.liked) all = all.filter(m => m.likes > 0);
       if (opts?.type != null) all = all.filter(m => m.type === opts.type);
+      if (opts?.search != null && opts.search.trim() !== '') {
+        const q = opts.search.trim().toLowerCase();
+        all = all.filter(m => (m.title || '').toLowerCase().includes(q));
+      }
+      if (opts?.tag != null) {
+        all = all.filter(m => {
+          let tags;
+          try { tags = typeof m.tags === 'string' ? JSON.parse(m.tags) : m.tags; } catch { return false; }
+          return Array.isArray(tags) && tags.includes(opts.tag);
+        });
+      }
       all.sort((a, b) => b.createdAt?.localeCompare(a.createdAt) ?? 0);
       const total = all.length;
       if (opts?.limit != null) all = all.slice(opts.offset || 0, (opts.offset || 0) + opts.limit);

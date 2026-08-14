@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useMediaActions } from '../hooks/useMedia';
 import { useRefresh } from '../contexts/RefreshContext';
 import { useScan } from '../contexts/ScanContext';
-import { fetchFolders, getLastFolders, uploadMedia, waitForScan } from '../services/api';
+import { fetchFolders, getLastFolders, uploadMedia, waitForScan, fetchMedia } from '../services/api';
 import usePersistedState from '../hooks/usePersistedState';
 import EmptyState from '../components/EmptyState';
 import Button from '../components/Button';
@@ -12,13 +12,28 @@ import Icon from '../components/Icon';
 import Input from '../components/Input';
 import Loader from '../components/Loader';
 import Modal from '../components/Modal';
-import { colors, fontSize, space } from '../theme/tokens';
+import { colors, fontSize, space, fontFamily } from '../theme/tokens';
 import Grid from '../components/Grid';
 
 function byFolderName(a, b) {
   const nameA = a.path.split(/[/\\]/).pop() || '';
   const nameB = b.path.split(/[/\\]/).pop() || '';
   return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+const SEARCH_PAGE_SIZE = 30;
+
+function getSearchPageNumbers(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  const set = new Set([0, total - 1, current]);
+  for (let i = Math.max(0, current - 2); i <= Math.min(total - 1, current + 2); i++) set.add(i);
+  const sorted = [...set].sort((a, b) => a - b);
+  const result = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('…');
+    result.push(sorted[i]);
+  }
+  return result;
 }
 
 export default function Dashboard() {
@@ -39,6 +54,14 @@ export default function Dashboard() {
   const [sortOrder, setSortOrder] = usePersistedState('dashboard-sort', 'name');
   const refreshTimer = useRef(null);
 
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchPage, setSearchPage] = useState(0);
+
   useEffect(() => { /* stop slideshow */ }, []);
 
   const loadData = async () => {
@@ -52,6 +75,39 @@ export default function Dashboard() {
   };
 
   useEffect(() => { loadData(); }, [signal]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!debouncedSearch) { setSearchResults([]); setSearchTotal(0); return; }
+    let cancelled = false;
+    setSearchLoading(true);
+    setSearchResults([]);
+    setSearchPage(0);
+    fetchMedia({ search: debouncedSearch, limit: SEARCH_PAGE_SIZE })
+      .then(({ items, total }) => {
+        if (cancelled) return;
+        setSearchResults(items);
+        setSearchTotal(total);
+      })
+      .catch(err => console.error('Search failed:', err))
+      .finally(() => { if (!cancelled) setSearchLoading(false); });
+    return () => { cancelled = true; };
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    if (!debouncedSearch || searchPage === 0) return;
+    let cancelled = false;
+    setSearchLoading(true);
+    fetchMedia({ search: debouncedSearch, limit: SEARCH_PAGE_SIZE, offset: searchPage * SEARCH_PAGE_SIZE })
+      .then(({ items }) => { if (!cancelled) setSearchResults(items); })
+      .catch(err => console.error('Search page fetch failed:', err))
+      .finally(() => { if (!cancelled) setSearchLoading(false); });
+    return () => { cancelled = true; };
+  }, [searchPage, debouncedSearch]);
 
   const handleAddFolder = async () => {
     if (!folderPath.trim()) return;
@@ -122,6 +178,7 @@ export default function Dashboard() {
         <View style={{ flexDirection: 'row', gap: space.gap }}>
           <Button variant="ghost" size="sm" icon={<Icon name="folder" size="xs" />} onPress={() => setShowAddFolder(true)}>Add Folder</Button>
           <Button variant="ghost" size="sm" icon={<Icon name="refresh" size="xs" />} onPress={handleRefresh} disabled={isScanning}>{refreshLabel}</Button>
+          <Button variant={debouncedSearch ? 'primary' : 'ghost'} size="sm" icon={<Icon name="search" size="xs" />} onPress={() => setSearchOpen(true)}>Search</Button>
         </View>
       </View>
       {uploadMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm, marginBottom: space.gap }}>{uploadMsg}</Text> : null}
@@ -131,7 +188,34 @@ export default function Dashboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {folders.length === 0 ? (
+      {debouncedSearch ? (
+        searchLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader message="Searching…" /></View>
+        ) : searchResults.length > 0 ? (
+          <View style={{ flex: 1 }}>
+            <Grid
+              folders={[]}
+              items={searchResults}
+              onMediaPress={item => router.push(`/media/${item.id}`)}
+              onLike={likeMedia}
+              header={header}
+            />
+            {searchTotal > SEARCH_PAGE_SIZE && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 }}>
+                <Button variant="ghost" size="sm" disabled={searchPage === 0} onPress={() => setSearchPage(searchPage - 1)} icon={<Icon name="prev" size="xs" />} />
+                {getSearchPageNumbers(searchPage, Math.ceil(searchTotal / SEARCH_PAGE_SIZE)).map((p, i) =>
+                  p === '…'
+                    ? <Text key={`ellipsis-${i}`} style={{ color: colors.textMut, fontFamily: fontFamily.mono }}>…</Text>
+                    : <Button key={p} variant={p === searchPage ? 'primary' : 'ghost'} size="sm" onPress={() => setSearchPage(p)}>{p + 1}</Button>
+                )}
+                <Button variant="ghost" size="sm" disabled={searchPage >= Math.ceil(searchTotal / SEARCH_PAGE_SIZE) - 1} onPress={() => setSearchPage(searchPage + 1)} icon={<Icon name="next" size="xs" />} />
+              </View>
+            )}
+          </View>
+        ) : (
+          <EmptyState icon={<Icon name="search" size="2xl" />} title="No results" description={`No media matching "${debouncedSearch}".`} />
+        )
+      ) : folders.length === 0 ? (
         <EmptyState
           title="No media yet"
           description="Add a folder to start building your library."
@@ -163,6 +247,33 @@ export default function Dashboard() {
             )}
             <Button variant="primary" onPress={handleAddFolder} disabled={importing || uploading}>Add</Button>
           </View>
+        </View>
+      </Modal>
+
+      <Modal open={searchOpen} onClose={() => setSearchOpen(false)} title="Search">
+        <View style={{ gap: space.gap }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Icon name="search" size="sm" />
+            <View style={{ flex: 1 }}>
+              <Input
+                placeholder="Search by title…"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={() => setSearchOpen(false)}
+                autoFocus
+              />
+            </View>
+          </View>
+          {debouncedSearch && !searchLoading && (
+            <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>
+              {searchTotal > 0
+                ? `${searchTotal} result${searchTotal !== 1 ? 's' : ''} — press Enter or close to view`
+                : `No results for "${debouncedSearch}"`}
+            </Text>
+          )}
+          {debouncedSearch && (
+            <Button variant="text" onPress={() => { setSearchQuery(''); setDebouncedSearch(''); setSearchPage(0); }}>Clear search</Button>
+          )}
         </View>
       </Modal>
     </View>
