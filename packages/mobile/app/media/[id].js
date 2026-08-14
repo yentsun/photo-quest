@@ -16,6 +16,7 @@ import ProgressBar from '../../components/ProgressBar';
 import { getMediaUrl, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia, setFolderThumbnail, setVideoThumbnail } from '../../services/api';
 import { useJobProgress } from '../../contexts/JobProgressContext';
 import Breadcrumbs from '../../components/Breadcrumbs';
+import Tag from '../../components/Tag';
 import { colors, fontSize, fontFamily, space } from '../../theme/tokens';
 
 function safeTags(tags) {
@@ -287,25 +288,18 @@ export default function MediaPage() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: space.gap }}>
             <View style={{ flex: 1 }}>
               {editingTitle ? (
-                <TextInput style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: fontSize.base, fontFamily: fontFamily.mono, padding: 4, height: 24 }} value={titleDraft} onChangeText={setTitleDraft} onBlur={commitTitle} onSubmitEditing={commitTitle} autoFocus selectTextOnFocus />
+                <TextInput style={{ height: 28, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: 22, fontWeight: '600', lineHeight: 28, fontFamily: fontFamily.mono, paddingHorizontal: 4, paddingVertical: 0 }} value={titleDraft} onChangeText={setTitleDraft} onBlur={commitTitle} onSubmitEditing={commitTitle} autoFocus selectTextOnFocus />
               ) : (
                 <Text style={{ color: colors.textEm, fontWeight: '600', fontSize: 22, lineHeight: 28 }} onPress={() => { setTitleDraft(item.title); setEditingTitle(true); }} numberOfLines={1}>{item.title}</Text>
               )}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                 {item?.tags && safeTags(item.tags).map(tag => (
-                  <View key={tag} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
-                    <Pressable onPress={() => router.push(`/tags/${encodeURIComponent(tag)}`)}>
-                      <Text style={{ fontSize: fontSize.xs, color: colors.text }}>{tag}</Text>
-                    </Pressable>
-                    <Pressable onPress={() => handleRemoveTag(tag)}>
-                      <Text style={{ color: colors.textMut, fontSize: 14 }}>×</Text>
-                    </Pressable>
-                  </View>
+                  <Tag key={tag} label={tag} onPress={() => router.push(`/tags/${encodeURIComponent(tag)}`)} onRemove={() => handleRemoveTag(tag)} />
                 ))}
                 {addingTag ? (
-                  <>
+                  <View style={{ position: 'relative', flexDirection: 'row', alignItems: 'center' }}>
                     <TextInput
-                      style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: fontSize.xs, paddingHorizontal: 8, paddingVertical: 1, width: 96, fontFamily: fontFamily.mono }}
+                      style={{ height: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.accent, color: colors.textEm, fontSize: fontSize.xs, paddingHorizontal: 6, paddingVertical: 0, width: 96, fontFamily: fontFamily.mono }}
                       value={tagDraft}
                       onChangeText={setTagDraft}
                       onBlur={() => { setAddingTag(false); setTagDraft(''); setSuggestionIndex(-1); }}
@@ -327,23 +321,21 @@ export default function MediaPage() {
                       placeholder="tag name"
                     />
                     {tagSuggestions.length > 0 && (
-                      <View style={{ position: 'absolute', top: '100%', left: 0, zIndex: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+                      <View style={{ position: 'absolute', bottom: '100%', left: 0, zIndex: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
                         {tagSuggestions.map((t, i) => (
                           <Pressable
                             key={t}
                             onPressIn={() => { addTag(t); setAddingTag(false); setTagDraft(''); setSuggestionIndex(-1); }}
-                            style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: i === suggestionIndex ? colors.dim : 'transparent' }}
+                            style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: i === suggestionIndex ? colors.accentBg : 'transparent' }}
                           >
-                            <Text style={{ color: colors.textEm, fontSize: fontSize.xs, fontFamily: fontFamily.mono }}>{t}</Text>
+                            <Text style={{ color: i === suggestionIndex ? colors.textEm : colors.textMut, fontSize: fontSize.xs, fontFamily: fontFamily.mono }}>{t}</Text>
                           </Pressable>
                         ))}
                       </View>
                     )}
-                  </>
+                  </View>
                 ) : (
-                  <Pressable onPress={() => setAddingTag(true)} style={{ paddingHorizontal: 8, paddingVertical: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
-                    <Text style={{ color: colors.textMut, fontSize: fontSize.xs, fontFamily: fontFamily.mono }}>+ tag</Text>
-                  </Pressable>
+                  <Tag label="+ tag" muted onPress={() => setAddingTag(true)} />
                 )}
               </View>
             </View>

@@ -91,7 +91,7 @@ export default function Button({
     >
       {isValidElement(icon) ? cloneElement(icon, { color: iconColor }) : icon}
       {typeof children === 'string'
-        ? <Text style={[{ color: textColor }, labelStyle]}>{children}</Text>
+        ? <Text selectable={false} style={[{ color: textColor }, labelStyle]}>{children}</Text>
         : children}
     </Pressable>
   );

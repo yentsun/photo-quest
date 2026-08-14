@@ -9,7 +9,7 @@ const SIZES = {
   lg: { width: 48, height: 48, icon: 'lg' },
 };
 
-export default function LikeButton({ count = 0, onLike, size = 'md', overlay = false, height }) {
+export default function LikeButton({ count = 0, onLike, size = 'md', overlay = false, height, disabled = false }) {
   const scale = useRef(new Animated.Value(1)).current;
   const s = SIZES[size] ?? SIZES.md;
   const hasLikes = count > 0;
@@ -24,13 +24,14 @@ export default function LikeButton({ count = 0, onLike, size = 'md', overlay = f
 
   return (
     <Pressable
-      onPress={handlePress}
+      onPress={disabled ? undefined : handlePress}
       style={({ hovered }) => ({
         width: height ?? s.width, height: height ?? s.height,
         alignItems: 'center', justifyContent: 'center',
         backgroundColor: overlay ? (hovered ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.5)') : (hovered ? colors.surface : 'transparent'),
         borderWidth: overlay ? 0 : 1,
         borderColor: hovered ? colors.textMut : colors.border,
+        opacity: disabled ? 0.7 : 1,
       })}
     >
       <Animated.View style={{ transform: [{ scale }] }}>
@@ -41,7 +42,7 @@ export default function LikeButton({ count = 0, onLike, size = 'md', overlay = f
         />
       </Animated.View>
       {count > 0 && (
-        <Text style={{ color: overlay ? '#fff' : (hasLikes ? colors.accent : colors.textMut), fontSize: fontSize.xs, fontWeight: '500', marginTop: -1 }}>
+        <Text selectable={false} style={{ color: overlay ? '#fff' : (hasLikes ? colors.accent : colors.textMut), fontSize: fontSize.xs, fontWeight: '500', marginTop: -1 }}>
           {count > 999 ? '999+' : count}
         </Text>
       )}
