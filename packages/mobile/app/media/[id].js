@@ -81,20 +81,37 @@ export default function MediaPage() {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, [setFullscreen]);
 
+  const goPrevItem = useCallback(() => {
+    const currentId = Number(id);
+    if (playlist.ids.length > 1) {
+      const idx = playlist.ids.indexOf(currentId);
+      if (idx !== -1) { goPrev(); navigateToItem(playlist.ids[(idx - 1 + playlist.ids.length) % playlist.ids.length]); }
+    } else if (folderSiblings.length > 1) {
+      const idx = folderSiblings.findIndex(m => m.id === currentId);
+      if (idx > 0) navigateToItem(folderSiblings[idx - 1].id);
+    }
+  }, [id, playlist, folderSiblings, goPrev, navigateToItem]);
+
+  const goNextItem = useCallback(() => {
+    const currentId = Number(id);
+    if (playlist.ids.length > 1) {
+      const idx = playlist.ids.indexOf(currentId);
+      if (idx !== -1) { goNext(); navigateToItem(playlist.ids[(idx + 1) % playlist.ids.length]); }
+    } else if (folderSiblings.length > 1) {
+      const idx = folderSiblings.findIndex(m => m.id === currentId);
+      if (idx >= 0 && idx < folderSiblings.length - 1) navigateToItem(folderSiblings[idx + 1].id);
+    }
+  }, [id, playlist, folderSiblings, goNext, navigateToItem]);
+
+  const swipeNav = useCallback((dx) => {
+    if (dx > 80) goPrevItem();
+    else if (dx < -80) goNextItem();
+  }, [goPrevItem, goNextItem]);
+
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 20 && Math.abs(gs.dx) > Math.abs(gs.dy),
-    onPanResponderRelease: (_, gs) => {
-      if (gs.dx > 80 && playlist.ids.length > 1) {
-        const idx = playlist.ids.indexOf(Number(id));
-        const prevIdx = (idx - 1 + playlist.ids.length) % playlist.ids.length;
-        goPrev(); navigateToItem(playlist.ids[prevIdx]);
-      } else if (gs.dx < -80 && playlist.ids.length > 1) {
-        const idx = playlist.ids.indexOf(Number(id));
-        const nextIdx = (idx + 1) % playlist.ids.length;
-        goNext(); navigateToItem(playlist.ids[nextIdx]);
-      }
-    },
-  }), [playlist, goNext, goPrev, id, navigateToItem]);
+    onPanResponderRelease: (_, gs) => swipeNav(gs.dx),
+  }), [swipeNav]);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,30 +159,8 @@ export default function MediaPage() {
     if (Platform.OS !== 'web') return;
     const handler = (e) => {
       if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        const currentId = Number(id);
-        if (playlist.ids.length > 1) {
-          const idx = playlist.ids.indexOf(currentId);
-          const prevIdx = (idx - 1 + playlist.ids.length) % playlist.ids.length;
-          if (idx !== -1) navigateToItem(playlist.ids[prevIdx]);
-        } else if (folderSiblings.length > 1) {
-          const idx = folderSiblings.findIndex(m => m.id === currentId);
-          if (idx > 0) navigateToItem(folderSiblings[idx - 1].id);
-        }
-      }
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        const currentId = Number(id);
-        if (playlist.ids.length > 1) {
-          const idx = playlist.ids.indexOf(currentId);
-          const nextIdx = (idx + 1) % playlist.ids.length;
-          if (idx !== -1) navigateToItem(playlist.ids[nextIdx]);
-        } else if (folderSiblings.length > 1) {
-          const idx = folderSiblings.findIndex(m => m.id === currentId);
-          if (idx >= 0 && idx < folderSiblings.length - 1) navigateToItem(folderSiblings[idx + 1].id);
-        }
-      }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); goPrevItem(); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); goNextItem(); }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         const idx = folderSiblings.findIndex(m => m.id === Number(id));
@@ -187,7 +182,7 @@ export default function MediaPage() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [playlist, goNext, goPrev, id, navigateToItem, folderSiblings, toggleFullscreen, setFullscreen, item]);
+  }, [goPrevItem, goNextItem, id, navigateToItem, folderSiblings, toggleFullscreen, setFullscreen, item]);
 
   useEffect(() => {
     if (!showInfo || !item) return;
@@ -198,6 +193,8 @@ export default function MediaPage() {
 
   const mediaUrl = () => item ? getMediaUrl(item) : '';
   const isImage = item?.type === MEDIA_TYPE.IMAGE;
+  const canGoPrev = playlist.ids.length > 1 || (() => { const idx = folderSiblings.findIndex(m => m.id === Number(id)); return idx > 0; })();
+  const canGoNext = playlist.ids.length > 1 || (() => { const idx = folderSiblings.findIndex(m => m.id === Number(id)); return idx >= 0 && idx < folderSiblings.length - 1; })();
 
   const handleLike = async () => {
     if (!item) return;
@@ -306,6 +303,16 @@ export default function MediaPage() {
           </View>
         ) : (
           <MediaPlayer ref={playerRef} src={mediaUrl()} title={item.title} />
+        )}
+        {canGoPrev && (
+          <View style={{ position: 'absolute', left: 8, top: 0, bottom: 0, justifyContent: 'center' }}>
+            <IconButton icon={<Icon name="prev" size="md" />} onPress={goPrevItem} label="Previous" variant="overlay" />
+          </View>
+        )}
+        {canGoNext && (
+          <View style={{ position: 'absolute', right: 8, top: 0, bottom: 0, justifyContent: 'center' }}>
+            <IconButton icon={<Icon name="next" size="md" />} onPress={goNextItem} label="Next" variant="overlay" />
+          </View>
         )}
         {fullscreen && likeFlash && (
           <LikeFlash key={likeFlash.key} count={likeFlash.count} onDone={() => setLikeFlash(null)} />
