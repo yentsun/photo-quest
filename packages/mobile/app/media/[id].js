@@ -15,7 +15,7 @@ import IconButton from '../../components/IconButton';
 import Modal from '../../components/Modal';
 import ProgressBar from '../../components/ProgressBar';
 import Loader from '../../components/Loader';
-import { getMediaUrl, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, preloadMediaById } from '../../services/api';
+import { getMediaUrl, fetchMediaById, fetchMedia, fetchFolders, fetchTags, likeMedia, downloadMedia, renameMedia, updateMediaTags, deleteMedia, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, preloadMediaById, openMediaExternally } from '../../services/api';
 import { useJobProgress } from '../../contexts/JobProgressContext';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import Tag from '../../components/Tag';
@@ -254,6 +254,15 @@ export default function MediaPage() {
     }
   };
 
+  const handleOpenExternally = async () => {
+    if (!item) return;
+    try {
+      await openMediaExternally(item.id);
+    } catch (err) {
+      dispatch({ type: act.TOAST_SHOWN, message: 'Could not open media', toastType: 'error' });
+    }
+  };
+
   const handleSetFolderThumbnail = async (time = null) => {
     if (!item || !folder?.id) return;
     try {
@@ -439,10 +448,16 @@ export default function MediaPage() {
 
       <Modal open={showInfo} onClose={() => setShowInfo(false)} title="Media Info">
         <View style={{ gap: 4 }}>
-          {[['ID', item.id], ['Title', item.title], ['Type', item.type], ['Status', item.status], ['Path', item.path], ['Codec', item.codec], ['Width', item.width], ['Height', item.height], ['Duration', item.duration && `${Math.floor(item.duration / 60)}:${String(Math.floor(item.duration % 60)).padStart(2, '0')}`], ['Camera', item.camera], ['Size', item.size && `${(item.size / 1024 / 1024).toFixed(1)} MB`]].filter(([, v]) => v != null && v !== '').map(([label, value]) => (
+          {[['ID', item.id], ['Title', item.title], ['Type', item.type], ['Status', item.status], ['Path', item.path, !isImage], ['Codec', item.codec], ['Width', item.width], ['Height', item.height], ['Duration', item.duration && `${Math.floor(item.duration / 60)}:${String(Math.floor(item.duration % 60)).padStart(2, '0')}`], ['Camera', item.camera], ['Size', item.size && `${(item.size / 1024 / 1024).toFixed(1)} MB`]].filter(([, v]) => v != null && v !== '').map(([label, value, clickable]) => (
             <View key={label} style={{ flexDirection: 'row', gap: 14, paddingVertical: 4, borderBottomWidth: 1, borderColor: colors.borderSoft }}>
               <Text style={{ color: colors.textMut, fontSize: fontSize.sm, minWidth: 80 }}>{label}</Text>
-              <Text style={{ color: colors.textEm, fontSize: fontSize.sm, flex: 1 }}>{String(value)}</Text>
+              {clickable ? (
+                <Pressable onPress={handleOpenExternally} style={{ flex: 1 }}>
+                  <Text style={{ color: colors.accent, fontSize: fontSize.sm, textDecorationLine: 'underline' }} numberOfLines={1}>{String(value)}</Text>
+                </Pressable>
+              ) : (
+                <Text style={{ color: colors.textEm, fontSize: fontSize.sm, flex: 1 }}>{String(value)}</Text>
+              )}
             </View>
           ))}
         </View>

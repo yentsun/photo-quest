@@ -83,6 +83,9 @@ export const apiRoutes = {
   /** PATCH -- set a custom thumbnail frame for a video. */
   mediaThumbnail: '/media/:id/thumbnail',
 
+  /** POST -- open the media file in the OS default player (server machine). */
+  mediaOpen: '/media/:id/open',
+
   /** POST -- trigger a directory scan.  Body: { path: "/absolute/dir" }. */
   mediaScan: '/media/scan',
 

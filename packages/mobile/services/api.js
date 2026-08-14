@@ -282,6 +282,15 @@ export async function updateMediaTags(id, tags) {
   return item;
 }
 
+export async function openMediaExternally(id) {
+  const res = await fetch(`${B()}/media/${id}/open`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to open media');
+  }
+  return res.json();
+}
+
 export async function setVideoThumbnail(mediaId, time) {
   const res = await fetch(`${B()}/media/${mediaId}/thumbnail`, {
     method: 'PATCH',
