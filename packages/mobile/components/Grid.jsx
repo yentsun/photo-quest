@@ -27,6 +27,7 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
     ? Math.max(1, Math.floor((available + space.gap) / (CARD_MIN_WIDTH + space.gap)))
     : 1;
   const itemWidth = cols > 1 ? (available - space.gap * (cols - 1)) / cols : available;
+  const rowPitch = itemWidth * 0.75 + 46 + space.gap;
 
   const handleMediaPress = useCallback((item, index) => {
     set(items.map(i => i.id), index);
@@ -50,11 +51,12 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
 
   const restoreScroll = useCallback(() => {
     const saved = gridScrollOffsets.get(pathname);
-    if (saved != null && saved > 0) {
-      requestAnimationFrame(() => {
-        listRef.current?.scrollToOffset({ offset: saved, animated: false });
-      });
-    }
+    if (saved == null || saved <= 0) return;
+    const attempt = (n) => {
+      listRef.current?.scrollToOffset({ offset: saved, animated: false });
+      if (n < 3) setTimeout(() => attempt(n + 1), 100);
+    };
+    requestAnimationFrame(() => attempt(0));
   }, [pathname]);
 
   useFocusEffect(useCallback(() => {
@@ -76,6 +78,7 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
       renderItem={renderItem}
       ListHeaderComponent={header}
       onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+      getItemLayout={(data, index) => ({ length: rowPitch, offset: rowPitch * index, index })}
       onScroll={handleScroll}
       scrollEventThrottle={16}
       windowSize={5}
