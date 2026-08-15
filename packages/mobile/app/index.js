@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMediaActions } from '../hooks/useMedia';
+import { useShuffle } from '../hooks/useShuffle';
 import { useRefresh } from '../contexts/RefreshContext';
 import { useScan } from '../contexts/ScanContext';
 import { fetchFolders, getLastFolders, uploadMedia, waitForScan, fetchMedia } from '../services/api';
@@ -39,6 +40,7 @@ function getSearchPageNumbers(current, total) {
 export default function Dashboard() {
   const router = useRouter();
   const { addFolderWithPath, refreshLibrary, likeMedia } = useMediaActions();
+  const shuffle = useShuffle();
   const { signal, bump } = useRefresh();
   const { isScanning } = useScan();
 
@@ -199,6 +201,9 @@ export default function Dashboard() {
           </Text>
         </View>
         <View style={{ flexDirection: 'row', gap: space.gap }}>
+          {!debouncedSearch && (
+            <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle()} disabled={totalMedia === 0}>Shuffle</Button>
+          )}
           <Button variant="ghost" size="sm" icon={<Icon name="folder" size="xs" />} onPress={() => setShowAddFolder(true)}>Add Folder</Button>
           <Button variant="ghost" size="sm" icon={<Icon name="refresh" size="xs" />} onPress={handleRefresh} disabled={isScanning}>{refreshLabel}</Button>
           <Button variant={debouncedSearch ? 'primary' : 'ghost'} size="sm" icon={<Icon name="search" size="xs" />} onPress={() => setSearchOpen(true)}>Search</Button>

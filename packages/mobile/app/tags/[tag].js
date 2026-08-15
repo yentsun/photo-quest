@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMediaActions } from '../../hooks/useMedia';
+import { useShuffle } from '../../hooks/useShuffle';
 import { useRefresh } from '../../contexts/RefreshContext';
 import { fetchMedia } from '../../services/api';
 import Grid from '../../components/Grid';
@@ -17,6 +18,7 @@ export default function TagPage() {
   const { tag } = useLocalSearchParams();
   const router = useRouter();
   const { likeMedia } = useMediaActions();
+  const shuffle = useShuffle();
   const { signal } = useRefresh();
   const decodedTag = decodeURIComponent(tag);
 
@@ -48,7 +50,10 @@ export default function TagPage() {
         <Text style={{ color: colors.border }}>/</Text>
         <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm }}>{decodedTag}</Text>
       </View>
-      <Text style={{ color: colors.textMut, fontSize: fontSize.sm, marginBottom: space.gap }}>{total.toLocaleString()} item{total !== 1 ? 's' : ''}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.gap }}>
+        <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{total.toLocaleString()} item{total !== 1 ? 's' : ''}</Text>
+        <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ tag: decodedTag })} disabled={total === 0}>Shuffle</Button>
+      </View>
     </View>
   );
 

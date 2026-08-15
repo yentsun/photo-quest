@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMediaActions } from '../../hooks/useMedia';
+import { useShuffle } from '../../hooks/useShuffle';
 import { useRefresh } from '../../contexts/RefreshContext';
 import { fetchMedia, fetchFoldersForParent } from '../../services/api';
 import Grid from '../../components/Grid';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import EmptyState from '../../components/EmptyState';
+import Button from '../../components/Button';
 import Icon from '../../components/Icon';
 import Loader from '../../components/Loader';
 import Select from '../../components/Select';
@@ -18,6 +20,7 @@ export default function FolderPage() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { likeMedia } = useMediaActions();
+  const shuffle = useShuffle();
   const { signal } = useRefresh();
   const folderId = Number(id);
 
@@ -70,11 +73,14 @@ export default function FolderPage() {
           <Text style={{ fontSize: fontSize.xl, fontWeight: '700', color: colors.textEm }}>{folder?.name || breadcrumbs[breadcrumbs.length - 1]?.name || 'Folder'}</Text>
           <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{mediaItems.length} items</Text>
         </View>
-        <Select
-          value={sort}
-          onChange={setSort}
-          options={[{ value: 'filename', label: 'Name' }, { value: 'date', label: 'Date' }]}
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.gap }}>
+          <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ folder: folder?.path, subtree: true })} disabled={!folder?.path}>Shuffle</Button>
+          <Select
+            value={sort}
+            onChange={setSort}
+            options={[{ value: 'filename', label: 'Name' }, { value: 'date', label: 'Date' }]}
+          />
+        </View>
       </View>
       <View style={{ marginBottom: space.gap }}>
         <Breadcrumbs items={breadcrumbs} />
