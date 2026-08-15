@@ -12,6 +12,8 @@ import Loader from '../../components/Loader';
 import Select from '../../components/Select';
 import { colors, fontSize, space } from '../../theme/tokens';
 
+const folderCache = new Map();
+
 export default function FolderPage() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -19,10 +21,12 @@ export default function FolderPage() {
   const { signal } = useRefresh();
   const folderId = Number(id);
 
-  const [allFolders, setAllFolders] = useState([]);
-  const [folderChain, setFolderChain] = useState([]);
-  const [mediaItems, setMediaItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cached = folderCache.get(folderId);
+
+  const [allFolders, setAllFolders] = useState(cached?.allFolders ?? []);
+  const [folderChain, setFolderChain] = useState(cached?.folderChain ?? []);
+  const [mediaItems, setMediaItems] = useState(cached?.mediaItems ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [sort, setSort] = useState('filename');
 
   const folder = folderChain.find(f => f.id === folderId) ?? null;
@@ -31,17 +35,20 @@ export default function FolderPage() {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      setLoading(true);
       try {
         const { items: folders, chain } = await fetchFoldersForParent(folderId);
         if (cancelled) return;
         setAllFolders(folders);
         setFolderChain(chain);
         const found = chain.find(f => f.id === folderId) ?? folders.find(f => f.id === folderId);
+        let nextItems = mediaItems;
         if (found) {
-          const { items } = await fetchMedia({ folder: found.path, limit: 10000, sort });
-          if (!cancelled) setMediaItems(items);
+          const res = await fetchMedia({ folder: found.path, limit: 10000, sort });
+          if (cancelled) return;
+          nextItems = res.items;
         }
+        setMediaItems(nextItems);
+        folderCache.set(folderId, { allFolders: folders, folderChain: chain, mediaItems: nextItems });
       } catch (err) { console.error(err); }
       if (!cancelled) setLoading(false);
     };
