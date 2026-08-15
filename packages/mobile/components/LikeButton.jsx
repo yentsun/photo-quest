@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Pressable, Text, Animated } from 'react-native';
 import Icon from './Icon';
-import { colors, fontSize } from '../theme/tokens';
+import { accents, colors, fontSize } from '../theme/tokens';
 
 const SIZES = {
   sm: { width: 32, height: 32, icon: 'sm' },
@@ -28,21 +28,20 @@ export default function LikeButton({ count = 0, onLike, size = 'md', overlay = f
       style={({ hovered }) => ({
         width: height ?? s.width, height: height ?? s.height,
         alignItems: 'center', justifyContent: 'center',
-        backgroundColor: overlay ? (hovered ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.5)') : (hovered ? colors.surface : 'transparent'),
+        backgroundColor: overlay ? (hovered ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.65)') : (hovered ? colors.surface : 'transparent'),
         borderWidth: overlay ? 0 : 1,
         borderColor: hovered ? colors.textMut : colors.border,
-        opacity: disabled ? 0.7 : 1,
       })}
     >
       <Animated.View style={{ transform: [{ scale }] }}>
         <Icon
           name={hasLikes ? 'heart-filled' : 'heart'}
           size={s.icon}
-          color={hasLikes ? colors.accent : colors.textMut}
+          color={hasLikes ? accents.red : colors.textMut}
         />
       </Animated.View>
       {count > 0 && (
-        <Text selectable={false} style={{ color: overlay ? '#fff' : (hasLikes ? colors.accent : colors.textMut), fontSize: fontSize.xs, fontWeight: '500', marginTop: -1 }}>
+        <Text selectable={false} style={{ color: overlay ? '#fff' : (hasLikes ? accents.red : colors.textMut), fontSize: fontSize.xs, fontWeight: '500', marginTop: -1 }}>
           {count > 999 ? '999+' : count}
         </Text>
       )}

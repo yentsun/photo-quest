@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Text } from 'react-native';
 import Icon from './Icon';
-import { colors, fontSize } from '../theme/tokens';
+import { accents, fontSize } from '../theme/tokens';
 
 export default function LikeFlash({ count, onDone }) {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -34,7 +34,7 @@ export default function LikeFlash({ count, onDone }) {
         opacity, transform: [{ scale }],
       }}
     >
-      <Icon name="heart-filled" size="xl" color={colors.accent} />
+      <Icon name="heart-filled" size="xl" color={accents.red} />
       <Text style={{ color: '#fff', fontSize: fontSize.md, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 6 }}>{count}</Text>
     </Animated.View>
   );

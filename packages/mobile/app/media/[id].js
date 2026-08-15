@@ -20,7 +20,7 @@ import { useJobProgress } from '../../contexts/JobProgressContext';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import Tag from '../../components/Tag';
 import LikeFlash from '../../components/LikeFlash';
-import { colors, fontSize, fontFamily, space } from '../../theme/tokens';
+import { accents, colors, fontSize, fontFamily, space } from '../../theme/tokens';
 
 function safeTags(tags) {
   if (Array.isArray(tags)) return tags;
@@ -428,7 +428,7 @@ export default function MediaPage() {
               </View>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap, flexShrink: 0 }}>
-              <Button variant="ghost" size="sm" icon={<Icon name={item.likes > 0 ? 'heart-filled' : 'heart'} size="sm" color={item.likes > 0 ? colors.accent : undefined} />} onPress={handleLike}>{item.likes > 0 ? String(item.likes) : 'Like'}</Button>
+              <Button variant="ghost" size="sm" icon={<Icon name={item.likes > 0 ? 'heart-filled' : 'heart'} size="sm" color={item.likes > 0 ? accents.red : undefined} />} onPress={handleLike}>{item.likes > 0 ? String(item.likes) : 'Like'}</Button>
               <Button variant="ghost" size="sm" icon={<Icon name="info" size="sm" />} onPress={() => setShowInfo(true)}>Info</Button>
               <Button variant="ghost" size="sm" icon={<Icon name="download" size="sm" />} onPress={() => downloadMedia(item)}>Download</Button>
               {isImage && folder?.id && (
