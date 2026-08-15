@@ -59,7 +59,7 @@ export default function MediaCard({ media, onPress, onLike, showLikes = true, st
           </View>
         )}
 
-        {showLikes && (
+        {showLikes && (media.likes || 0) > 0 && (
           <View style={{ position: 'absolute', bottom: 6, right: 6 }}>
             <LikeButton count={media.likes || 0} size="sm" overlay disabled />
           </View>
