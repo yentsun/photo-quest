@@ -10,6 +10,7 @@ import { PlaylistProvider } from '../contexts/PlaylistContext';
 import { FullscreenProvider, useFullscreen } from '../contexts/FullscreenContext';
 import Sidebar from '../components/Sidebar';
 import CRTOverlay from '../components/CRTOverlay';
+import ToasterMessage from '../components/ToasterMessage';
 import { colors } from '../theme/tokens';
 
 function AppStateHandler() {
@@ -74,6 +75,7 @@ function LayoutShell() {
           <Stack.Screen name="tags/[tag]" />
         </Stack>
       </View>
+      <ToasterMessage />
     </View>
   );
 }

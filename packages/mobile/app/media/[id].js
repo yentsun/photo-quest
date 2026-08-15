@@ -267,9 +267,11 @@ export default function MediaPage() {
     if (!item || !folder?.id) return;
     try {
       await setFolderThumbnail(folder.id, item.id, time);
+      dispatch({ type: act.TOAST_SHOWN, message: 'Folder thumbnail updated', toastType: 'success' });
       bump();
     } catch (err) {
       console.error('Failed to set folder thumbnail:', err);
+      dispatch({ type: act.TOAST_SHOWN, message: 'Could not set folder thumbnail', toastType: 'error' });
     }
   };
 
@@ -279,9 +281,11 @@ export default function MediaPage() {
     try {
       await setVideoThumbnail(item.id, time);
       setItem(prev => prev ? { ...prev, thumbnail_time: time } : prev);
+      dispatch({ type: act.TOAST_SHOWN, message: 'Video thumbnail updated', toastType: 'success' });
       bump();
     } catch (err) {
       console.error('Failed to set video thumbnail:', err);
+      dispatch({ type: act.TOAST_SHOWN, message: 'Could not set video thumbnail', toastType: 'error' });
     }
   };
 
