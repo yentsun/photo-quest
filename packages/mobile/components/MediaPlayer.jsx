@@ -5,7 +5,7 @@ import Loader from './Loader';
 import ProgressBar from './ProgressBar';
 import { colors, fontSize } from '../theme/tokens';
 
-const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '' }, ref) {
+const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '', muted = false, onMutedChange }, ref) {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState(null);
   const [buffered, setBuffered] = useState(0);
@@ -13,8 +13,12 @@ const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '' }, ref) {
 
   const player = useVideoPlayer(src, player => {
     player.loop = true;
+    player.muted = muted;
     player.play();
     player.timeUpdateEventInterval = 0.5;
+    player.addListener('mutedChange', ({ muted: m }) => {
+      onMutedChange?.(m);
+    });
     player.addListener('statusChange', ({ status: s, error: e }) => {
       setStatus(s);
       if (s === 'error') setError('This video could not be played.');
@@ -27,6 +31,10 @@ const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '' }, ref) {
       }
     });
   });
+
+  useEffect(() => {
+    if (player.muted !== muted) player.muted = muted;
+  }, [player, muted]);
 
   useEffect(() => {
     player.play();

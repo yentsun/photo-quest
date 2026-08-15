@@ -21,6 +21,7 @@ import Breadcrumbs from '../../components/Breadcrumbs';
 import Tag from '../../components/Tag';
 import LikeFlash from '../../components/LikeFlash';
 import { accents, colors, fontSize, fontFamily, space } from '../../theme/tokens';
+import usePersistedState from '../../hooks/usePersistedState';
 
 function safeTags(tags) {
   if (Array.isArray(tags)) return tags;
@@ -54,6 +55,7 @@ export default function MediaPage() {
   const [tagSuggestions, setTagSuggestions] = useState([]);
   const [suggestionIndex, setSuggestionIndex] = useState(-1);
   const [likeFlash, setLikeFlash] = useState(null);
+  const [muted, setMuted] = usePersistedState('video-muted', false);
 
   const progressSecs = useJobProgress(item?.id);
 
@@ -353,7 +355,7 @@ export default function MediaPage() {
             <Text style={{ color: colors.textEm, fontWeight: '500' }}>{item.status === 'transcoding' ? 'Transcoding…' : 'Processing…'}</Text>
           </View>
         ) : (
-          <MediaPlayer ref={playerRef} src={mediaUrl()} title={item.title} />
+          <MediaPlayer ref={playerRef} src={mediaUrl()} title={item.title} muted={muted} onMutedChange={setMuted} />
         )}
         {canGoPrev && (
           <View style={{ position: 'absolute', left: 8, top: 0, bottom: 0, justifyContent: 'center' }}>
