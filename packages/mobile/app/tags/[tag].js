@@ -11,6 +11,8 @@ import Icon from '../../components/Icon';
 import Loader from '../../components/Loader';
 import { colors, fontSize, space } from '../../theme/tokens';
 
+const tagCache = new Map();
+
 export default function TagPage() {
   const { tag } = useLocalSearchParams();
   const router = useRouter();
@@ -18,18 +20,19 @@ export default function TagPage() {
   const { signal } = useRefresh();
   const decodedTag = decodeURIComponent(tag);
 
-  const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const cached = tagCache.get(decodedTag);
+  const [items, setItems] = useState(cached?.items ?? []);
+  const [total, setTotal] = useState(cached?.total ?? 0);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     fetchMedia({ tag: decodedTag, limit: 10000 })
       .then(({ items: mediaItems, total: t }) => {
         if (cancelled) return;
         setItems(mediaItems);
         setTotal(t);
+        tagCache.set(decodedTag, { items: mediaItems, total: t });
         setLoading(false);
       })
       .catch(err => { console.error(err); if (!cancelled) setLoading(false); });

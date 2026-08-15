@@ -10,13 +10,16 @@ import Icon from '../components/Icon';
 import Loader from '../components/Loader';
 import { colors, fontSize, space } from '../theme/tokens';
 
+const likedCache = new Map();
+
 export default function LikedPage() {
   const router = useRouter();
   const { likeMedia } = useMediaActions();
   const { signal } = useRefresh();
-  const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const cached = likedCache.get('liked');
+  const [items, setItems] = useState(cached?.items ?? []);
+  const [total, setTotal] = useState(cached?.total ?? 0);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,6 +28,7 @@ export default function LikedPage() {
         if (cancelled) return;
         setItems(mediaItems);
         setTotal(t);
+        likedCache.set('liked', { items: mediaItems, total: t });
         setLoading(false);
       })
       .catch(err => { console.error(err); if (!cancelled) setLoading(false); });
