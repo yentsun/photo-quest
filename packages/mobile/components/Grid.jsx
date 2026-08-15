@@ -50,6 +50,9 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
       renderItem={renderItem}
       ListHeaderComponent={header}
       onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+      windowSize={5}
+      initialNumToRender={10}
+      maxToRenderPerBatch={10}
       columnWrapperStyle={cols > 1 ? { gap: space.gap } : undefined}
       contentContainerStyle={{
         gap: space.gap,
