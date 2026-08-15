@@ -1,14 +1,18 @@
 import { FlatList, View } from 'react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, usePathname } from 'expo-router';
 import { usePlaylist } from '../contexts/PlaylistContext';
 import { space } from '../theme/tokens';
 import MediaCard from './MediaCard';
 import FolderCard from './FolderCard';
 
 const CARD_MIN_WIDTH = 225;
+const gridScrollOffsets = new Map();
 
 export default function Grid({ folders, items, onMediaPress, onLike, header }) {
   const { set } = usePlaylist();
+  const pathname = usePathname();
+  const listRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
   const data = useMemo(() => [
@@ -40,8 +44,30 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
     );
   }, [itemWidth, handleMediaPress, onLike]);
 
+  const handleScroll = useCallback((e) => {
+    gridScrollOffsets.set(pathname, e.nativeEvent.contentOffset.y);
+  }, [pathname]);
+
+  const restoreScroll = useCallback(() => {
+    const saved = gridScrollOffsets.get(pathname);
+    if (saved != null && saved > 0) {
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({ offset: saved, animated: false });
+      });
+    }
+  }, [pathname]);
+
+  useFocusEffect(useCallback(() => {
+    restoreScroll();
+  }, [restoreScroll]));
+
+  useEffect(() => {
+    restoreScroll();
+  }, [cols, restoreScroll]);
+
   return (
     <FlatList
+      ref={listRef}
       style={{ flex: 1 }}
       data={data}
       numColumns={cols}
@@ -50,6 +76,8 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
       renderItem={renderItem}
       ListHeaderComponent={header}
       onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
       windowSize={5}
       initialNumToRender={10}
       maxToRenderPerBatch={10}
