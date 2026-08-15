@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useState } from 'react';
+import { forwardRef, useImperativeHandle, useState, useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import Loader from './Loader';
@@ -27,6 +27,10 @@ const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '' }, ref) {
       }
     });
   });
+
+  useEffect(() => {
+    player.play();
+  }, [player]);
 
   const buffering = !error && status !== 'readyToPlay';
 
