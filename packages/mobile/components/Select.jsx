@@ -1,70 +1,90 @@
-import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, Text, View, Platform } from 'react-native';
+import Button from './Button';
 import { colors, fontSize, fontFamily } from '../theme/tokens';
 
-const BASE = {
-  flexDirection: 'row',
-  alignItems: 'center',
-  height: 26,
-  paddingHorizontal: 8,
-  backgroundColor: 'transparent',
-  borderWidth: 1,
-  borderColor: colors.border,
-  cursor: 'pointer',
-};
-
-const OPTION = {
-  paddingHorizontal: 10,
-  paddingVertical: 6,
-  backgroundColor: colors.surface,
-};
+const MENU_TOP = 26 + 6;
 
 export default function Select({ value, onChange, options }) {
   const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
   const selected = options.find((o) => o.value === value);
   const label = selected?.label ?? value;
 
+  useEffect(() => {
+    if (!open) return;
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const onDocDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDocDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDocDown);
+    };
+  }, [open]);
+
   return (
-    <View style={{ position: 'relative' }}>
-      <Pressable
-        style={(state) => {
-          const { pressed, hovered } = state;
-          const bg = hovered ? colors.surface : 'transparent';
-          const bd = hovered ? colors.textMut : colors.border;
-          const cl = hovered ? colors.textEm : colors.text;
-          return [BASE, { backgroundColor: bg, borderColor: bd }];
-        }}
-        onPress={() => setOpen(!open)}
-      >
-        <Text style={{ color: open ? colors.textEm : colors.text, fontSize: fontSize.sm, fontFamily: fontFamily.mono }}>
+    <View ref={wrapRef} style={{ position: 'relative' }}>
+      <Button variant="ghost" size="sm" onPress={() => setOpen((o) => !o)}>
+        <Text style={{ color: colors.textEm, fontSize: fontSize.xs, fontFamily: fontFamily.mono }} numberOfLines={1}>
           {label}
         </Text>
-      </Pressable>
+        <Text
+          style={{
+            color: colors.textMut,
+            fontSize: fontSize.xs,
+            lineHeight: fontSize.xs,
+            transform: [{ rotate: open ? '180deg' : '0deg' }],
+          }}
+        >
+          ▾
+        </Text>
+      </Button>
+
       {open && (
-        <View style={{
-          position: 'absolute',
-          top: 26 + 2,
-          left: 0,
-          right: 0,
-          zIndex: 10,
-          backgroundColor: colors.surface,
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}>
+        <View
+          style={{
+            position: 'absolute',
+            top: MENU_TOP,
+            right: 0,
+            zIndex: 60,
+            minWidth: '100%',
+            backgroundColor: colors.bg,
+            borderWidth: 1,
+            borderColor: colors.textMut,
+            padding: 5,
+            shadowColor: '#002b36',
+            shadowOffset: { width: 0, height: 10 },
+            shadowRadius: 28,
+            shadowOpacity: 0.22,
+            elevation: 8,
+          }}
+        >
           {options.map(({ value: v, label: l }) => (
             <Pressable
               key={v}
-              style={({ hovered }) => [
-                OPTION,
-                hovered && { backgroundColor: colors.dim },
-              ]}
               onPress={() => { onChange(v); setOpen(false); }}
+              style={({ hovered }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 9,
+                paddingVertical: 6,
+                paddingHorizontal: 8,
+                backgroundColor: hovered ? colors.surface : 'transparent',
+              })}
             >
-              <Text style={{
-                color: v === value ? colors.textEm : colors.text,
-                fontSize: fontSize.sm,
-                fontFamily: fontFamily.mono,
-              }}>
+              <Text
+                style={{
+                  flex: 1,
+                  color: v === value ? colors.textEm : colors.text,
+                  fontSize: fontSize.base,
+                  fontFamily: fontFamily.mono,
+                }}
+              >
                 {l}
               </Text>
             </Pressable>

@@ -96,7 +96,7 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   const opts = { limit, offset, folder, subtree, liked, random, sort, search, tag, type };
   const finalUrl = base ? url.toString() : apiRoutes.media + url.search;
 
-  if (random) return _fetchMediaFromServer(finalUrl, opts);
+  if (random || sort != null) return _fetchMediaFromServer(finalUrl, opts);
 
   if (!skipCache) {
     let idbData = null;

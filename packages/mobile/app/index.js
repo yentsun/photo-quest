@@ -15,6 +15,7 @@ import Loader from '../components/Loader';
 import Modal from '../components/Modal';
 import { colors, fontSize, space, fontFamily } from '../theme/tokens';
 import Grid from '../components/Grid';
+import Select from '../components/Select';
 
 function byFolderName(a, b) {
   const nameA = a.path.split(/[/\\]/).pop() || '';
@@ -201,6 +202,13 @@ export default function Dashboard() {
           </Text>
         </View>
         <View style={{ flexDirection: 'row', gap: space.gap }}>
+          {!debouncedSearch && (
+            <Select
+              value={sortOrder}
+              onChange={setSortOrder}
+              options={[{ value: 'name', label: 'Name' }, { value: 'date', label: 'Date' }]}
+            />
+          )}
           {!debouncedSearch && (
             <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle()} disabled={totalMedia === 0}>Shuffle</Button>
           )}
