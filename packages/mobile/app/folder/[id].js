@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMediaActions } from '../../hooks/useMedia';
 import { useShuffle } from '../../hooks/useShuffle';
 import { useRefresh } from '../../contexts/RefreshContext';
+import usePersistedState from '../../hooks/usePersistedState';
 import { fetchMedia, fetchFoldersForParent } from '../../services/api';
 import Grid from '../../components/Grid';
 import Breadcrumbs from '../../components/Breadcrumbs';
@@ -31,6 +32,7 @@ export default function FolderPage() {
   const [mediaItems, setMediaItems] = useState(cached?.mediaItems ?? []);
   const [loading, setLoading] = useState(!cached);
   const [sort, setSort] = useState('filename');
+  const [mediaFilter, setMediaFilter] = usePersistedState('library:mediaFilter', 'all');
 
   const folder = folderChain.find(f => f.id === folderId) ?? null;
   const subfolders = allFolders.filter(f => f.parentId === folderId);
@@ -46,7 +48,7 @@ export default function FolderPage() {
         const found = chain.find(f => f.id === folderId) ?? folders.find(f => f.id === folderId);
         let nextItems = mediaItems;
         if (found) {
-          const res = await fetchMedia({ folder: found.path, limit: 10000, sort });
+          const res = await fetchMedia({ folder: found.path, limit: 10000, sort, type: mediaFilter !== 'all' ? mediaFilter : undefined });
           if (cancelled) return;
           nextItems = res.items;
         }
@@ -57,7 +59,7 @@ export default function FolderPage() {
     };
     load();
     return () => { cancelled = true; };
-  }, [folderId, signal, sort]);
+  }, [folderId, signal, sort, mediaFilter]);
 
   const breadcrumbs = folderChain.map((crumb) => ({
     id: crumb.id,
@@ -79,6 +81,11 @@ export default function FolderPage() {
             value={sort}
             onChange={setSort}
             options={[{ value: 'filename', label: 'Name' }, { value: 'date', label: 'Date' }]}
+          />
+          <Select
+            value={mediaFilter}
+            onChange={setMediaFilter}
+            options={[{ value: 'all', label: 'All' }, { value: 'image', label: 'Photos' }, { value: 'video', label: 'Videos' }]}
           />
         </View>
       </View>

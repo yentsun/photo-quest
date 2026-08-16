@@ -55,6 +55,7 @@ export default function Dashboard() {
   const [scanMsg, setScanMsg] = useState('');
   const [refreshLabel, setRefreshLabel] = useState('Refresh');
   const [sortOrder, setSortOrder] = usePersistedState('dashboard-sort', 'name');
+  const [mediaFilter, setMediaFilter] = usePersistedState('library:mediaFilter', 'all');
   const refreshTimer = useRef(null);
 
   const [searchOpen, setSearchOpen] = useState(false);
@@ -207,6 +208,13 @@ export default function Dashboard() {
               value={sortOrder}
               onChange={setSortOrder}
               options={[{ value: 'name', label: 'Name' }, { value: 'date', label: 'Date' }]}
+            />
+          )}
+          {!debouncedSearch && (
+            <Select
+              value={mediaFilter}
+              onChange={setMediaFilter}
+              options={[{ value: 'all', label: 'All' }, { value: 'image', label: 'Photos' }, { value: 'video', label: 'Videos' }]}
             />
           )}
           {!debouncedSearch && (
