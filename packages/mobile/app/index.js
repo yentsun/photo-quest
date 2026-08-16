@@ -225,7 +225,7 @@ export default function Dashboard() {
             />
           )}
           {!debouncedSearch && (
-            <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle()} disabled={totalMedia === 0}>Shuffle</Button>
+            <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ type: mediaFilter !== 'all' ? mediaFilter : undefined })} disabled={totalMedia === 0}>Shuffle</Button>
           )}
           <Button variant="ghost" size="sm" icon={<Icon name="folder" size="xs" />} onPress={() => setShowAddFolder(true)}>Add Folder</Button>
           <Button variant="ghost" size="sm" icon={<Icon name="refresh" size="xs" />} onPress={handleRefresh} disabled={isScanning}>{refreshLabel}</Button>

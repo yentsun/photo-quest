@@ -81,7 +81,7 @@ export default function FolderPage() {
           <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{mediaItems.length} items</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.gap }}>
-          <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ folder: folder?.path, subtree: true })} disabled={!folder?.path}>Shuffle</Button>
+          <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ folder: folder?.path, subtree: true, type: mediaFilter !== 'all' ? mediaFilter : undefined })} disabled={!folder?.path}>Shuffle</Button>
           <Select
             value={sort}
             onChange={setSort}

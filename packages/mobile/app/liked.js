@@ -51,7 +51,7 @@ export default function LikedPage() {
           <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{total.toLocaleString()} item{total !== 1 ? 's' : ''}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.gap }}>
-          <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ liked: true })} disabled={total === 0}>Shuffle</Button>
+          <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ liked: true, type: mediaFilter !== 'all' ? mediaFilter : undefined })} disabled={total === 0}>Shuffle</Button>
           <Select
             value={mediaFilter}
             onChange={setMediaFilter}

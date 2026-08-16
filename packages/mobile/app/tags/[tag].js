@@ -56,7 +56,7 @@ export default function TagPage() {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.gap }}>
         <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{total.toLocaleString()} item{total !== 1 ? 's' : ''}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap }}>
-          <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ tag: decodedTag })} disabled={total === 0}>Shuffle</Button>
+          <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ tag: decodedTag, type: mediaFilter !== 'all' ? mediaFilter : undefined })} disabled={total === 0}>Shuffle</Button>
           <Select
             value={mediaFilter}
             onChange={setMediaFilter}
