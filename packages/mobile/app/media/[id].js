@@ -35,7 +35,7 @@ export default function MediaPage() {
   const { dispatch } = useGlobal();
   const { bump } = useRefresh();
   const { removeFolder } = useMediaActions();
-  const { playlist, goNext, goPrev } = usePlaylist();
+  const { playlist, set: setPlaylist } = usePlaylist();
   const { fullscreen, setFullscreen } = useFullscreen();
 
   const [item, setItem] = useState(() => getLastMediaItem(Number(id)));
@@ -88,23 +88,29 @@ export default function MediaPage() {
     const currentId = Number(id);
     if (playlist.ids.length > 1) {
       const idx = playlist.ids.indexOf(currentId);
-      if (idx > 0) { goPrev(); navigateToItem(playlist.ids[idx - 1]); }
+      if (idx > 0) {
+        setPlaylist(playlist.ids, idx - 1);
+        navigateToItem(playlist.ids[idx - 1]);
+      }
     } else if (folderSiblings.length > 1) {
       const idx = folderSiblings.findIndex(m => m.id === currentId);
       if (idx > 0) navigateToItem(folderSiblings[idx - 1].id);
     }
-  }, [id, playlist, folderSiblings, goPrev, navigateToItem]);
+  }, [id, playlist, folderSiblings, setPlaylist, navigateToItem]);
 
   const goNextItem = useCallback(() => {
     const currentId = Number(id);
     if (playlist.ids.length > 1) {
       const idx = playlist.ids.indexOf(currentId);
-      if (idx !== -1 && idx < playlist.ids.length - 1) { goNext(); navigateToItem(playlist.ids[idx + 1]); }
+      if (idx !== -1 && idx < playlist.ids.length - 1) {
+        setPlaylist(playlist.ids, idx + 1);
+        navigateToItem(playlist.ids[idx + 1]);
+      }
     } else if (folderSiblings.length > 1) {
       const idx = folderSiblings.findIndex(m => m.id === currentId);
       if (idx >= 0 && idx < folderSiblings.length - 1) navigateToItem(folderSiblings[idx + 1].id);
     }
-  }, [id, playlist, folderSiblings, goNext, navigateToItem]);
+  }, [id, playlist, folderSiblings, setPlaylist, navigateToItem]);
 
   const swipeNav = useCallback((dx) => {
     if (dx > 80) goPrevItem();
