@@ -96,9 +96,7 @@ export default function FolderPage() {
           />
         </View>
       </View>
-      <View style={{ marginBottom: space.gap }}>
-        <Breadcrumbs items={breadcrumbs} />
-      </View>
+      <Breadcrumbs items={breadcrumbs} />
     </View>
   );
 
