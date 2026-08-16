@@ -54,7 +54,7 @@ export default function MediaCard({ media, onPress, onLike, showLikes = true, st
         {tags.length > 0 && (
           <View style={{ position: 'absolute', bottom: 0, left: 0, padding: 4, gap: 2 }}>
             {tags.slice(0, 3).map(tag => (
-              <Text key={tag} style={{ fontSize: 10, color: '#fff', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, overflow: 'hidden', maxWidth: 80 }} numberOfLines={1}>{tag}</Text>
+              <Text key={tag} style={{ alignSelf: 'flex-start', fontSize: 10, color: '#fff', backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, overflow: 'hidden', maxWidth: 80 }} numberOfLines={1}>{tag}</Text>
             ))}
           </View>
         )}
