@@ -135,17 +135,24 @@ export default function MediaPage() {
         if (mediaItem.folder) {
           const folders = await fetchFolders().catch(() => []);
           if (cancelled) return;
-          const pathToId = new Map(folders.map(f => [f.path, f.id]));
-          const sep = mediaItem.folder.includes('\\') ? '\\' : '/';
-          const parts = mediaItem.folder.split(sep).filter(Boolean);
-          const crumbs = [];
-          let current = '';
-          for (const part of parts) {
-            current = current ? current + sep + part : part;
-            const folderId = pathToId.get(current);
-            crumbs.push({ id: folderId ?? null, name: part });
+          const byPath = new Map(folders.map(f => [f.path, f]));
+          const byId = new Map(folders.map(f => [f.id, f]));
+          const target = byPath.get(mediaItem.folder);
+          if (target) {
+            const chain = [];
+            const seen = new Set();
+            let cur = target;
+            while (cur && !seen.has(cur.id)) {
+              seen.add(cur.id);
+              chain.unshift(cur);
+              if (cur.parentId == null) break;
+              cur = byId.get(cur.parentId);
+            }
+            setBreadcrumbs(chain.map(f => ({
+              id: f.id,
+              name: f.name || f.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder',
+            })));
           }
-          setBreadcrumbs(crumbs);
         }
         if (mediaItem.folder) {
           fetchMedia({ folder: mediaItem.folder, limit: 10000, sort: 'filename' })
