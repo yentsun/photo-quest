@@ -71,7 +71,7 @@ export default function Grid({ folders, items, onMediaPress, onLike, header }) {
     <FlatList
       ref={listRef}
       style={{ flex: 1 }}
-      data={data}
+      data={containerWidth > 0 ? data : []}
       numColumns={cols}
       key={cols}
       keyExtractor={(item) => item.key}
