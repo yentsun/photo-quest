@@ -25,11 +25,12 @@ export default function LikedPage() {
   const [items, setItems] = useState(cached?.items ?? []);
   const [total, setTotal] = useState(cached?.total ?? 0);
   const [loading, setLoading] = useState(!cached);
+  const [sort, setSort] = usePersistedState('liked:sort', 'date');
   const [mediaFilter, setMediaFilter] = usePersistedState('library:mediaFilter', 'all');
 
   useEffect(() => {
     let cancelled = false;
-    fetchMedia({ liked: true, limit: 10000, type: mediaFilter !== 'all' ? mediaFilter : undefined })
+    fetchMedia({ liked: true, limit: 10000, sort, type: mediaFilter !== 'all' ? mediaFilter : undefined })
       .then(({ items: mediaItems, total: t }) => {
         if (cancelled) return;
         setItems(mediaItems);
@@ -39,7 +40,7 @@ export default function LikedPage() {
       })
       .catch(err => { console.error(err); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [signal, mediaFilter]);
+  }, [signal, sort, mediaFilter]);
 
   if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader message="Liked…" /></View>;
 
@@ -52,6 +53,12 @@ export default function LikedPage() {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.gap }}>
           <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ liked: true, type: mediaFilter !== 'all' ? mediaFilter : undefined })} disabled={total === 0}>Shuffle</Button>
+          <Select
+            value={sort}
+            onChange={setSort}
+            options={[{ value: 'date', label: 'Date' }, { value: 'likes', label: 'Likes' }, { value: 'filename', label: 'Name' }, { value: 'none', label: 'None' }]}
+            placeholder="Sort by"
+          />
           <Select
             value={mediaFilter}
             onChange={setMediaFilter}

@@ -55,7 +55,7 @@ export default function ({ limit, offset, folder, subtree, liked, random, sort, 
   const { total } = db.prepare(`SELECT COUNT(*) AS total FROM media WHERE ${where}`).get(...params);
   logger.debug(`[listMedia] total matching: ${total}`);
 
-  const orderBy = random ? 'RANDOM()' : sort === 'none' ? 'id ASC' : sort === 'filename' ? 'path ASC' : liked ? 'likes DESC' : 'COALESCE(date_taken, created_at) DESC, path DESC';
+  const orderBy = random ? 'RANDOM()' : sort === 'none' ? 'id ASC' : sort === 'filename' ? 'path ASC' : sort === 'likes' ? 'likes DESC, COALESCE(date_taken, created_at) DESC' : 'COALESCE(date_taken, created_at) DESC, path DESC';
   logger.debug(`[listMedia] orderBy: ${orderBy}`);
   let sql = `SELECT * FROM media WHERE ${where} ORDER BY ${orderBy}`;
   const queryParams = [...params];
