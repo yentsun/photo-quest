@@ -1,5 +1,5 @@
-import { forwardRef, useImperativeHandle, useState, useEffect } from 'react';
-import { View, Text } from 'react-native';
+import { forwardRef, useImperativeHandle, useState, useEffect, useRef } from 'react';
+import { View, Text, Platform } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import Loader from './Loader';
 import ProgressBar from './ProgressBar';
@@ -10,6 +10,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '', muted = f
   const [error, setError] = useState(null);
   const [buffered, setBuffered] = useState(0);
   const [duration, setDuration] = useState(0);
+  const videoViewRef = useRef(null);
 
   const player = useVideoPlayer(src, player => {
     player.loop = true;
@@ -40,6 +41,19 @@ const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '', muted = f
     player.play();
   }, [player]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = videoViewRef.current?.nativeRef?.current;
+    if (!el) return;
+    const onClick = (e) => {
+      e.preventDefault();
+      if (player.playing) player.pause();
+      else player.play();
+    };
+    el.addEventListener('click', onClick);
+    return () => el.removeEventListener('click', onClick);
+  }, [player]);
+
   const buffering = !error && status !== 'readyToPlay';
 
   useImperativeHandle(ref, () => ({
@@ -65,7 +79,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '', muted = f
           <Text style={{ color: colors.accent, fontSize: fontSize.sm }}>{error}</Text>
         </View>
       )}
-      <VideoView style={{ flex: 1, width: '100%' }} player={player} nativeControls />
+      <VideoView ref={videoViewRef} style={{ flex: 1, width: '100%' }} player={player} nativeControls />
     </View>
   );
 });
