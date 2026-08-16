@@ -91,6 +91,10 @@ packages/
   web/      - React PWA (Vite + Tailwind)
 ```
 
+## Design
+
+Design tokens, spacing, animation presets, and component implementation rules are documented in the [Glyph](https://yentsun.github.io/glyph/) reference — consult it for design implementation details. This project uses a fixed **dark theme** from Glyph.
+
 ## Supported formats
 
 **Images:** .jpg, .jpeg, .png, .gif, .webp, .bmp, .heic, .jfif

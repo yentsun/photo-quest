@@ -12,6 +12,7 @@ This file provides guidance to coding agents when working with code in this repo
 - Kojo requires **v9+** (`functionsDir` was added in v9, v8 only has `serviceDir`).
 - Reference `F:\Projects\SimpleCrew\mono\packages\backend\` for correct kojo setup patterns.
 - **Use modular components** — Never use raw HTML elements (`<button>`, `<input>`, etc.) in page components. Always use the reusable UI components from `components/ui/` (Button, IconButton, Modal, etc.).
+- **Design reference** — Design implementation details and rules (tokens, spacing, animation, component specs) are documented at https://yentsun.github.io/glyph/. This project uses a fixed **dark theme** from Glyph. Consult it before implementing or changing UI.
 
 ## Commands
 
