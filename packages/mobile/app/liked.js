@@ -56,6 +56,7 @@ export default function LikedPage() {
             value={mediaFilter}
             onChange={setMediaFilter}
             options={[{ value: 'all', label: 'All' }, { value: 'image', label: 'Photos' }, { value: 'video', label: 'Videos' }]}
+            placeholder="Type"
           />
         </View>
       </View>

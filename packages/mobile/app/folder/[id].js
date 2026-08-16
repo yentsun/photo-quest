@@ -31,7 +31,7 @@ export default function FolderPage() {
   const [folderChain, setFolderChain] = useState(cached?.folderChain ?? []);
   const [mediaItems, setMediaItems] = useState(cached?.mediaItems ?? []);
   const [loading, setLoading] = useState(!cached);
-  const [sort, setSort] = useState('filename');
+  const [sort, setSort] = useState('none');
   const [mediaFilter, setMediaFilter] = usePersistedState('library:mediaFilter', 'all');
 
   const folder = folderChain.find(f => f.id === folderId) ?? null;
@@ -80,12 +80,14 @@ export default function FolderPage() {
           <Select
             value={sort}
             onChange={setSort}
-            options={[{ value: 'filename', label: 'Name' }, { value: 'date', label: 'Date' }]}
+            options={[{ value: 'none', label: 'None' }, { value: 'filename', label: 'Name' }, { value: 'date', label: 'Date' }]}
+            placeholder="Sort by"
           />
           <Select
             value={mediaFilter}
             onChange={setMediaFilter}
             options={[{ value: 'all', label: 'All' }, { value: 'image', label: 'Photos' }, { value: 'video', label: 'Videos' }]}
+            placeholder="Type"
           />
         </View>
       </View>

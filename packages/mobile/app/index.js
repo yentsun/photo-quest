@@ -54,7 +54,7 @@ export default function Dashboard() {
   const [uploadMsg, setUploadMsg] = useState('');
   const [scanMsg, setScanMsg] = useState('');
   const [refreshLabel, setRefreshLabel] = useState('Refresh');
-  const [sortOrder, setSortOrder] = usePersistedState('dashboard-sort', 'name');
+  const [sortOrder, setSortOrder] = usePersistedState('dashboard-sort', 'none');
   const [mediaFilter, setMediaFilter] = usePersistedState('library:mediaFilter', 'all');
   const refreshTimer = useRef(null);
 
@@ -74,7 +74,9 @@ export default function Dashboard() {
     try {
       const folderData = await fetchFolders().catch(() => []);
       const rootFolders = folderData.filter(f => f.parentId === null);
-      setFolders(rootFolders.sort(sortOrder === 'name' ? byFolderName : (a, b) => b.id - a.id));
+      if (sortOrder === 'name') rootFolders.sort(byFolderName);
+      else if (sortOrder === 'date') rootFolders.sort((a, b) => b.id - a.id);
+      setFolders(rootFolders);
     } catch (e) { console.error(e); }
     setLoadingItems(false);
   };
@@ -207,7 +209,8 @@ export default function Dashboard() {
             <Select
               value={sortOrder}
               onChange={setSortOrder}
-              options={[{ value: 'name', label: 'Name' }, { value: 'date', label: 'Date' }]}
+              options={[{ value: 'none', label: 'None' }, { value: 'name', label: 'Name' }, { value: 'date', label: 'Date' }]}
+              placeholder="Sort by"
             />
           )}
           {!debouncedSearch && (
@@ -215,6 +218,7 @@ export default function Dashboard() {
               value={mediaFilter}
               onChange={setMediaFilter}
               options={[{ value: 'all', label: 'All' }, { value: 'image', label: 'Photos' }, { value: 'video', label: 'Videos' }]}
+              placeholder="Type"
             />
           )}
           {!debouncedSearch && (

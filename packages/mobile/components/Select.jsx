@@ -6,13 +6,15 @@ import { colors, fontSize, fontFamily } from '../theme/tokens';
 
 const MENU_TOP = 26 + 6;
 
-export default function Select({ value, onChange, options }) {
+export default function Select({ value, onChange, options, placeholder }) {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
   const wrapRef = useRef(null);
   const menuRef = useRef(null);
   const selected = options.find((o) => o.value === value);
-  const label = selected?.label ?? value;
+  const isNeutral = options.length > 0 && value === options[0].value;
+  const label = isNeutral && placeholder ? placeholder : selected?.label ?? value;
+  const active = options.length > 0 && !isNeutral;
 
   const toggle = () => {
     if (!open && Platform.OS === 'web' && wrapRef.current) {
@@ -99,7 +101,7 @@ export default function Select({ value, onChange, options }) {
 
   return (
     <View ref={wrapRef} style={{ position: 'relative' }}>
-      <Button variant="ghost" size="sm" onPress={toggle}>
+      <Button variant="ghost" size="sm" onPress={toggle} active={active}>
         <Text selectable={false} style={{ color: colors.textEm, fontSize: fontSize.xs, fontFamily: fontFamily.mono }} numberOfLines={1}>
           {label}
         </Text>

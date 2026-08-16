@@ -55,6 +55,7 @@ export default function Button({
   icon,
   children,
   disabled = false,
+  active = false,
   onPress,
   style,
 }) {
@@ -62,7 +63,7 @@ export default function Button({
   const sz = SIZE[size] ?? {};
   const v = VARIANTS[variant] ?? VARIANTS[''];
 
-  const key = interact;
+  const key = active ? 'pressed' : interact;
   const bg  = key ? v[key + 'Bg'] ?? v.bg : v.bg;
   const bd  = key ? v[key + 'Border'] ?? v.border : v.border;
   const textColor = disabled ? (v.disabledText ?? v.text) : key ? v[key + 'Text'] ?? v.text : v.text;
