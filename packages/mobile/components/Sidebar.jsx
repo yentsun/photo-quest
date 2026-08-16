@@ -93,7 +93,7 @@ export default function Sidebar() {
             >
               <Icon name={item.icon} size="sm" color={active || pathname.startsWith(item.route) ? colors.textEm : colors.text} />
               {showLabels && (
-                <Text style={{
+                <Text selectable={false} style={{
                   fontFamily: fontFamily.mono,
                   fontSize: fontSize.base,
                   color: active ? colors.textEm : colors.text,
