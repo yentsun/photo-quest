@@ -358,12 +358,12 @@ export default function MediaPage() {
           <MediaPlayer ref={playerRef} src={mediaUrl()} title={item.title} muted={muted} onMutedChange={setMuted} />
         )}
         {canGoPrev && (
-          <View style={{ position: 'absolute', left: 8, top: 0, bottom: 0, justifyContent: 'center' }}>
+          <View pointerEvents="box-none" style={{ position: 'absolute', left: 8, top: 0, bottom: 0, justifyContent: 'center' }}>
             <IconButton icon={<Icon name="prev" size="md" />} onPress={goPrevItem} label="Previous" variant="overlay" />
           </View>
         )}
         {canGoNext && (
-          <View style={{ position: 'absolute', right: 8, top: 0, bottom: 0, justifyContent: 'center' }}>
+          <View pointerEvents="box-none" style={{ position: 'absolute', right: 8, top: 0, bottom: 0, justifyContent: 'center' }}>
             <IconButton icon={<Icon name="next" size="md" />} onPress={goNextItem} label="Next" variant="overlay" />
           </View>
         )}
