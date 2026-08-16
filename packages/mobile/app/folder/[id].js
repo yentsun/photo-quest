@@ -35,7 +35,12 @@ export default function FolderPage() {
   const [mediaFilter, setMediaFilter] = usePersistedState('library:mediaFilter', 'all');
 
   const folder = folderChain.find(f => f.id === folderId) ?? null;
-  const subfolders = allFolders.filter(f => f.parentId === folderId);
+  const subfolders = allFolders.filter(f => {
+    if (f.parentId !== folderId) return false;
+    if (mediaFilter === 'video') return (f.subtreeVideoCount ?? 0) > 0;
+    if (mediaFilter === 'image') return (f.subtreeImageCount ?? 0) > 0;
+    return true;
+  });
 
   useEffect(() => {
     let cancelled = false;

@@ -192,6 +192,9 @@ export default function Dashboard() {
   }
 
   const totalMedia = folders.reduce((sum, f) => sum + (f.subtreeMediaCount || 0), 0);
+  const visibleFolders = mediaFilter === 'all'
+    ? folders
+    : folders.filter(f => mediaFilter === 'video' ? (f.subtreeVideoCount ?? 0) > 0 : (f.subtreeImageCount ?? 0) > 0);
 
   const header = (
     <View style={{ paddingTop: space.padHeaderTop, paddingBottom: 0 }}>
@@ -269,9 +272,15 @@ export default function Dashboard() {
           description="Add a folder to start building your library."
           action={{ label: 'Add Folder', onPress: () => setShowAddFolder(true) }}
         />
+      ) : visibleFolders.length === 0 ? (
+        <EmptyState
+          icon={<Icon name={mediaFilter === 'video' ? 'video' : 'image'} size="2xl" />}
+          title={mediaFilter === 'video' ? 'No videos' : 'No photos'}
+          description={`No folders contain ${mediaFilter === 'video' ? 'videos' : 'photos'}.`}
+        />
       ) : (
         <Grid
-          folders={folders}
+          folders={visibleFolders}
           items={[]}
           onMediaPress={item => router.push(`/media/${item.id}`)}
           onLike={likeMedia}
