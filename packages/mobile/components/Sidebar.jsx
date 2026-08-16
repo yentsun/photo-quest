@@ -55,11 +55,12 @@ export default function Sidebar() {
     }}>
       <View style={{
         padding: 14,
-        paddingVertical: showLabels ? 14 : 14,
         paddingHorizontal: showLabels ? 16 : 0,
         borderBottomWidth: 1,
         borderColor: colors.border,
-        alignItems: showLabels ? 'flex-start' : 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: showLabels ? 'flex-start' : 'center',
         gap: space.gap,
       }}>
         <Image source={LOGO} style={{ width: 28, height: 28, flexShrink: 0 }} resizeMode="contain" />

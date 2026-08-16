@@ -72,9 +72,9 @@ async function main() {
   const { buffer, width, height } = await getTransparentBuffer()
 
   const outputs = [
-    { size: 32,  path: 'packages/web/public/favicon.png' },
-    { size: 192, path: 'packages/web/public/logo192.png' },
-    { size: 512, path: 'packages/web/public/logo512.png' },
+    { size: 1024, path: 'packages/mobile/assets/icon.png' },
+    { size: 192,  path: 'packages/mobile/assets/logo192.png' },
+    { size: 512,  path: 'packages/mobile/assets/logo512.png' },
   ]
 
   for (const { size, path } of outputs) {
