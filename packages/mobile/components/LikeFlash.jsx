@@ -27,11 +27,10 @@ export default function LikeFlash({ count, onDone }) {
 
   return (
     <Animated.View
-      pointerEvents="none"
       style={{
         position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
         alignItems: 'center', justifyContent: 'center', gap: 4,
-        opacity, transform: [{ scale }],
+        opacity, transform: [{ scale }], pointerEvents: 'none',
       }}
     >
       <Icon name="heart-filled" size="xl" color={accents.red} />

@@ -13,6 +13,7 @@ This file provides guidance to coding agents when working with code in this repo
 - **Use modular components** — Never use raw HTML elements (`<button>`, `<input>`, etc.) in page components. Always use the reusable UI components from `components/ui/` (Button, IconButton, Modal, etc.).
 - **Design reference** — Design implementation details and rules (tokens, spacing, animation, component specs) are documented at https://yentsun.github.io/glyph/. This project uses a fixed **dark theme** from Glyph. Consult it before implementing or changing UI.
 - **Never leave the UI static** — whenever an async operation is running (scan/import/upload/transcode), show live progress (counts, progress bar, spinner, or at minimum a changing status message). No silent waits.
+- **Tell the user how to see the change** — after applying a fix or change, state what the user must do to observe it (restart the server, restart the client/dev server, rebuild, reload the page, re-run a scan, etc.). Don't leave them guessing.
 
 ## Commands
 

@@ -290,7 +290,7 @@ export default function Dashboard() {
                 {getSearchPageNumbers(searchPage, Math.ceil(searchTotal / SEARCH_PAGE_SIZE)).map((p, i) =>
                   p === '…'
                     ? <Text key={`ellipsis-${i}`} style={{ color: colors.textMut, fontFamily: fontFamily.mono }}>…</Text>
-                    : <Button key={p} variant={p === searchPage ? 'primary' : 'ghost'} size="sm" onPress={() => setSearchPage(p)}>{p + 1}</Button>
+                    : <Button key={p} variant={p === searchPage ? 'primary' : 'ghost'} size="sm" onPress={() => setSearchPage(p)}>{String(p + 1)}</Button>
                 )}
                 <Button variant="ghost" size="sm" disabled={searchPage >= Math.ceil(searchTotal / SEARCH_PAGE_SIZE) - 1} onPress={() => setSearchPage(searchPage + 1)} icon={<Icon name="next" size="xs" />} />
               </View>
