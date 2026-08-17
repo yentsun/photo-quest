@@ -10,9 +10,9 @@ This file provides guidance to coding agents when working with code in this repo
 - When killing ports before launch: kill the ports defined in `packages/shared/config.js` (`serverPort` and `webappPort`).
 - Tests use `test()` / `t.test()` / `t.assert` pattern (node:test). No `describe`/`it`, no standalone `assert` module.
 - Kojo requires **v9+** (`functionsDir` was added in v9, v8 only has `serviceDir`).
-- Reference `F:\Projects\SimpleCrew\mono\packages\backend\` for correct kojo setup patterns.
 - **Use modular components** — Never use raw HTML elements (`<button>`, `<input>`, etc.) in page components. Always use the reusable UI components from `components/ui/` (Button, IconButton, Modal, etc.).
 - **Design reference** — Design implementation details and rules (tokens, spacing, animation, component specs) are documented at https://yentsun.github.io/glyph/. This project uses a fixed **dark theme** from Glyph. Consult it before implementing or changing UI.
+- **Never leave the UI static** — whenever an async operation is running (scan/import/upload/transcode), show live progress (counts, progress bar, spinner, or at minimum a changing status message). No silent waits.
 
 ## Commands
 

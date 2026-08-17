@@ -89,6 +89,9 @@ export const apiRoutes = {
   /** POST -- trigger a directory scan.  Body: { path: "/absolute/dir" }. */
   mediaScan: '/media/scan',
 
+  /** POST -- open the OS folder picker on the server and return the chosen path. */
+  openFolder: '/open-folder',
+
   /** POST -- add media items from client-side folder scan. */
   mediaAdd: '/media/add',
 

@@ -263,7 +263,21 @@ export default function MediaPage() {
     try {
       await deleteMedia(item.id);
       bump();
-      router.replace('/');
+      if (playlist.ids.length > 1) {
+        const currentId = Number(id);
+        const idx = playlist.ids.indexOf(currentId);
+        const newIds = playlist.ids.filter(i => i !== currentId);
+        if (newIds.length === 0) {
+          setPlaylist([], 0);
+          router.replace('/');
+        } else {
+          const nextIdx = idx >= 0 && idx < newIds.length ? idx : 0;
+          setPlaylist(newIds, nextIdx);
+          navigateToItem(newIds[nextIdx]);
+        }
+      } else {
+        router.replace('/');
+      }
     } catch (err) {
       dispatch({ type: act.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
     }

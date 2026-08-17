@@ -202,11 +202,18 @@ export async function scanMedia(path) {
   return res.json();
 }
 
-export async function waitForScan(scanId, { intervalMs = 500, maxAttempts = 120 } = {}) {
+export async function openFolderPicker() {
+  const res = await fetch(B() + apiRoutes.openFolder, { method: 'POST' });
+  if (!res.ok) throw new Error('Could not open folder picker');
+  return res.json();
+}
+
+export async function waitForScan(scanId, { intervalMs = 500, maxAttempts = 3600, onProgress } = {}) {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const res = await fetch(`${B()}/scans?id=${encodeURIComponent(scanId)}`);
     if (!res.ok) throw new Error('Failed to read scan status');
     const scan = await res.json();
+    onProgress?.({ processed: scan.processed ?? 0, total: scan.total ?? 0 });
     if (scan.status === 'completed') { await clearMediaCache(); return scan; }
     if (scan.status === 'failed' || scan.status === 'cancelled') {
       throw new Error(scan.error || `Scan ${scan.status}`);

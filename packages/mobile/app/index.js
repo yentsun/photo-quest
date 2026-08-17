@@ -5,7 +5,7 @@ import { useMediaActions } from '../hooks/useMedia';
 import { useShuffle } from '../hooks/useShuffle';
 import { useRefresh } from '../contexts/RefreshContext';
 import { useScan } from '../contexts/ScanContext';
-import { fetchFolders, getLastFolders, uploadMedia, waitForScan, fetchMedia } from '../services/api';
+import { fetchFolders, getLastFolders, uploadMedia, waitForScan, fetchMedia, openFolderPicker } from '../services/api';
 import usePersistedState from '../hooks/usePersistedState';
 import EmptyState from '../components/EmptyState';
 import Button from '../components/Button';
@@ -13,6 +13,7 @@ import Icon from '../components/Icon';
 import Input from '../components/Input';
 import Loader from '../components/Loader';
 import Modal from '../components/Modal';
+import ProgressBar from '../components/ProgressBar';
 import { colors, fontSize, space, fontFamily } from '../theme/tokens';
 import Grid from '../components/Grid';
 import Select from '../components/Select';
@@ -53,6 +54,7 @@ export default function Dashboard() {
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState('');
   const [scanMsg, setScanMsg] = useState('');
+  const [scanProgress, setScanProgress] = useState(null);
   const [refreshLabel, setRefreshLabel] = useState('Refresh');
   const [sortOrder, setSortOrder] = usePersistedState('dashboard-sort', 'none');
   const [mediaFilter, setMediaFilter] = usePersistedState('library:mediaFilter', 'all');
@@ -134,21 +136,43 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [searchPage, debouncedSearch]);
 
-  const handleAddFolder = async () => {
-    if (!folderPath.trim()) return;
+  const handleAddFolder = async (pathOverride) => {
+    const path = typeof pathOverride === 'string' ? pathOverride : folderPath;
+    if (!path.trim()) return;
     try {
-      setImporting(true); setScanMsg('Scanning folder…'); setShowAddFolder(false);
-      const scan = await addFolderWithPath(folderPath.trim());
-      await waitForScan(scan.scanId);
+      setImporting(true); setScanMsg('Scanning folder…'); setScanProgress(null); setShowAddFolder(false);
+      const scan = await addFolderWithPath(path.trim());
+      await waitForScan(scan.scanId, {
+        onProgress: ({ processed, total }) => {
+          setScanProgress({ processed, total });
+          setScanMsg(total > 0 ? `Importing ${processed}/${total}…` : 'Scanning folder…');
+        },
+      });
       setFolderPath('');
+      setScanProgress(null);
       await loadData();
       bump();
       setScanMsg('');
     } catch (e) {
+      setScanProgress(null);
       console.error(e);
       setScanMsg(e.message || 'Folder scan failed');
     }
     setImporting(false);
+  };
+
+  const handleBrowseFolder = async () => {
+    if (importing || uploading) return;
+    try {
+      setImporting(true);
+      const result = await openFolderPicker();
+      setImporting(false);
+      if (result?.path) handleAddFolder(result.path);
+    } catch (e) {
+      setImporting(false);
+      console.error(e);
+      setScanMsg(e.message || 'Could not open folder picker');
+    }
   };
 
   const handleRefresh = async () => {
@@ -232,13 +256,22 @@ export default function Dashboard() {
           <Button variant={debouncedSearch ? 'primary' : 'ghost'} size="sm" icon={<Icon name="search" size="xs" />} onPress={() => setSearchOpen(true)}>Search</Button>
         </View>
       </View>
-      {uploadMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm, marginBottom: space.gap }}>{uploadMsg}</Text> : null}
-      {scanMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm, marginBottom: space.gap }}>{scanMsg}</Text> : null}
     </View>
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {(scanMsg || uploadMsg) && (
+        <View style={{ paddingHorizontal: space.padPage, paddingVertical: 8, gap: 6, borderBottomWidth: 1, borderColor: colors.border }}>
+          {scanProgress ? (
+            <ProgressBar value={scanProgress.processed} max={Math.max(1, scanProgress.total)} width={28} showPct={false} indeterminate={scanProgress.total === 0} />
+          ) : importing ? (
+            <ProgressBar indeterminate width={28} />
+          ) : null}
+          {scanMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm }}>{scanMsg}</Text> : null}
+          {uploadMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm }}>{uploadMsg}</Text> : null}
+        </View>
+      )}
       {debouncedSearch ? (
         searchLoading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader message="Searching…" /></View>
@@ -299,8 +332,11 @@ export default function Dashboard() {
           />
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space.gap }}>
             <Button variant="ghost" onPress={() => setShowAddFolder(false)}>Cancel</Button>
+            {Platform.OS === 'web' && (
+              <Button variant="ghost" size="sm" icon={<Icon name="folder" size="xs" />} onPress={handleBrowseFolder} disabled={importing || uploading}>Browse</Button>
+            )}
             {Platform.OS !== 'web' && (
-              <Button variant="ghost" icon={<Icon name="folder" size="xs" />} onPress={handlePickFiles} disabled={importing || uploading}>Pick Files</Button>
+              <Button variant="ghost" size="sm" icon={<Icon name="folder" size="xs" />} onPress={handlePickFiles} disabled={importing || uploading}>Pick Files</Button>
             )}
             <Button variant="primary" onPress={handleAddFolder} disabled={importing || uploading}>Add</Button>
           </View>
