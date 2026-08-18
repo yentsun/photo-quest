@@ -261,7 +261,7 @@ export default function Dashboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {(scanMsg || uploadMsg) && (
+      {(scanMsg || uploadMsg) ? (
         <View style={{ paddingHorizontal: space.padPage, paddingVertical: 8, gap: 6, borderBottomWidth: 1, borderColor: colors.border }}>
           {scanProgress ? (
             <ProgressBar value={scanProgress.processed} max={Math.max(1, scanProgress.total)} width={28} showPct={false} indeterminate={scanProgress.total === 0} />
@@ -271,7 +271,7 @@ export default function Dashboard() {
           {scanMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm }}>{scanMsg}</Text> : null}
           {uploadMsg ? <Text style={{ color: colors.accent, fontSize: fontSize.sm }}>{uploadMsg}</Text> : null}
         </View>
-      )}
+      ) : null}
       {debouncedSearch ? (
         searchLoading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader message="Searching…" /></View>
