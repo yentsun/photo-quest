@@ -25,7 +25,7 @@ export default function LikedPage() {
   const [items, setItems] = useState(cached?.items ?? []);
   const [total, setTotal] = useState(cached?.total ?? 0);
   const [loading, setLoading] = useState(!cached);
-  const [sort, setSort] = usePersistedState('liked:sort', 'date');
+  const [sort, setSort] = usePersistedState('mediaSort', 'date');
   const [mediaFilter, setMediaFilter] = usePersistedState('library:mediaFilter', 'all');
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export default function LikedPage() {
           <Select
             value={sort}
             onChange={setSort}
-            options={[{ value: 'date', label: 'Date' }, { value: 'likes', label: 'Likes' }, { value: 'filename', label: 'Name' }, { value: 'none', label: 'None' }]}
+            options={[{ value: 'none', label: 'None' }, { value: 'date', label: 'Date' }, { value: 'likes', label: 'Likes' }, { value: 'filename', label: 'Name' }]}
             placeholder="Sort by"
           />
           <Select

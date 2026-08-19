@@ -28,11 +28,12 @@ export default function TagPage() {
   const [items, setItems] = useState(cached?.items ?? []);
   const [total, setTotal] = useState(cached?.total ?? 0);
   const [loading, setLoading] = useState(!cached);
+  const [sort, setSort] = usePersistedState('mediaSort', 'date');
   const [mediaFilter, setMediaFilter] = usePersistedState('library:mediaFilter', 'all');
 
   useEffect(() => {
     let cancelled = false;
-    fetchMedia({ tag: decodedTag, limit: 10000, type: mediaFilter !== 'all' ? mediaFilter : undefined })
+    fetchMedia({ tag: decodedTag, limit: 10000, sort, type: mediaFilter !== 'all' ? mediaFilter : undefined })
       .then(({ items: mediaItems, total: t }) => {
         if (cancelled) return;
         setItems(mediaItems);
@@ -42,7 +43,7 @@ export default function TagPage() {
       })
       .catch(err => { console.error(err); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [decodedTag, signal, mediaFilter]);
+  }, [decodedTag, signal, sort, mediaFilter]);
 
   if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}><Loader message={`"${decodedTag}"…`} /></View>;
 
@@ -57,6 +58,12 @@ export default function TagPage() {
         <Text style={{ color: colors.textMut, fontSize: fontSize.sm }}>{total.toLocaleString()} item{total !== 1 ? 's' : ''}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.gap }}>
           <Button variant="ghost" size="sm" icon={<Icon name="shuffle" size="xs" />} onPress={() => shuffle({ tag: decodedTag, type: mediaFilter !== 'all' ? mediaFilter : undefined })} disabled={total === 0}>Shuffle</Button>
+          <Select
+            value={sort}
+            onChange={setSort}
+            options={[{ value: 'none', label: 'None' }, { value: 'date', label: 'Date' }, { value: 'likes', label: 'Likes' }, { value: 'filename', label: 'Name' }]}
+            placeholder="Sort by"
+          />
           <Select
             value={mediaFilter}
             onChange={setMediaFilter}
