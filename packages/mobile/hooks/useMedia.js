@@ -13,8 +13,8 @@ export function useMediaActions() {
   const { bump } = useRefresh();
 
   const likeMedia = useCallback(async (media) => {
-    try { await likeMediaApi(media.id); bump(); } catch (err) { console.error(err); }
-  }, [bump]);
+    try { await likeMediaApi(media.id); } catch (err) { console.error(err); }
+  }, []);
 
   const deleteMedia = useCallback(async (mediaId) => {
     await deleteMediaApi(mediaId); bump();

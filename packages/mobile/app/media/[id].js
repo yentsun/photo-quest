@@ -254,7 +254,7 @@ export default function MediaPage() {
     const nextLikes = (item.likes || 0) + 1;
     setItem(p => ({ ...p, likes: nextLikes }));
     if (fullscreen) setLikeFlash({ count: nextLikes, key: Date.now() });
-    try { await likeMedia(item.id); bump(); } catch { setItem(p => ({ ...p, likes: Math.max(0, (p.likes || 0) - 1) })); }
+    try { await likeMedia(item.id); } catch { setItem(p => ({ ...p, likes: Math.max(0, (p.likes || 0) - 1) })); }
   };
 
   const handleDelete = async () => {
