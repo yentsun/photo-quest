@@ -14,6 +14,8 @@ import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE } from '@photo-quest/shared';
 import listMedia from '../ops/listMedia.js';
 import getMediaById from '../ops/getMediaById.js';
 import removeMedia from '../ops/removeMedia.js';
+import likeMedia from '../ops/likeMedia.js';
+import updateTags from '../ops/updateTags.js';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -25,6 +27,7 @@ function freshDb() {
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(CREATE_MEDIA_TABLE);
   db.exec(CREATE_JOBS_TABLE);
+  db.exec("ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
   return db;
 }
 
@@ -41,6 +44,7 @@ function makeContext(db) {
     info() {},
     warn() {},
     error() {},
+    debug() {},
   };
 
   return [kojo, logger];
@@ -118,6 +122,72 @@ test('getMediaById op', async (t) => {
 
     const row = callOp(getMediaById, ctx, 9999);
     t.assert.strictEqual(row, null);
+  });
+});
+
+test('likeMedia op', async (t) => {
+  await t.test('returns likedCount on first like', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertMedia(db, '/like.jpg', 'Like');
+    const result = callOp(likeMedia, ctx, id);
+
+    t.assert.strictEqual(result.likes, 1);
+    t.assert.strictEqual(result.likedCount, 1);
+  });
+
+  await t.test('omits likedCount when re-liking an already-liked item', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertMedia(db, '/like.jpg', 'Like');
+    callOp(likeMedia, ctx, id);
+
+    const result = callOp(likeMedia, ctx, id);
+
+    t.assert.strictEqual(result.likes, 2);
+    t.assert.strictEqual('likedCount' in result, false);
+  });
+
+  await t.test('returns null for a non-existent id', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    t.assert.strictEqual(callOp(likeMedia, ctx, 9999), null);
+  });
+});
+
+test('updateTags op', async (t) => {
+  await t.test('sets tags and returns tagCount', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertMedia(db, '/tag.jpg', 'Tag');
+    const result = callOp(updateTags, ctx, id, ['nature']);
+
+    t.assert.deepStrictEqual(result.tags, ['nature']);
+    t.assert.strictEqual(result.tagCount, 1);
+  });
+
+  await t.test('counts distinct tags across media', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const a = insertMedia(db, '/a.jpg', 'A');
+    const b = insertMedia(db, '/b.jpg', 'B');
+
+    callOp(updateTags, ctx, a, ['nature', 'city']);
+    const result = callOp(updateTags, ctx, b, ['city']);
+
+    t.assert.strictEqual(result.tagCount, 2);
+  });
+
+  await t.test('returns null for a non-existent id', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    t.assert.strictEqual(callOp(updateTags, ctx, 9999, ['x']), null);
   });
 });
 

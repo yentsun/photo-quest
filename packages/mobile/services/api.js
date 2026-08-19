@@ -178,10 +178,11 @@ export async function fetchFolderChain(folderPath) {
 export async function likeMedia(id) {
   const res = await fetch(`${B()}/media/${id}/like`, { method: 'PATCH' });
   if (!res.ok) throw new Error('Failed to like media');
-  const item = await res.json();
+  const data = await res.json();
+  const { likedCount, ...item } = data;
   _mediaCache.set(item.id, item);
   idbPutMedia(item).catch(() => {});
-  return item;
+  return { item, likedCount };
 }
 
 export async function deleteMedia(id) {
@@ -282,11 +283,13 @@ export async function updateMediaTags(id, tags) {
     body: JSON.stringify({ tags }),
   });
   if (!res.ok) throw new Error('Failed to update tags');
-  const item = parseTags(await res.json());
+  const data = await res.json();
+  const { tagCount, ...item } = data;
+  parseTags(item);
   _mediaCache.set(item.id, item);
   _tagsCache = null;
   idbPutMedia(item).catch(() => {});
-  return item;
+  return { item, tagCount };
 }
 
 export async function openMediaExternally(id) {

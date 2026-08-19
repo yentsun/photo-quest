@@ -33,7 +33,7 @@ export default function MediaPage() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { dispatch } = useGlobal();
-  const { bump } = useRefresh();
+  const { bump, setLikedCount, setTagCount } = useRefresh();
   const { removeFolder } = useMediaActions();
   const { playlist, set: setPlaylist } = usePlaylist();
   const { fullscreen, setFullscreen } = useFullscreen();
@@ -254,7 +254,10 @@ export default function MediaPage() {
     const nextLikes = (item.likes || 0) + 1;
     setItem(p => ({ ...p, likes: nextLikes }));
     if (fullscreen) setLikeFlash({ count: nextLikes, key: Date.now() });
-    try { await likeMedia(item.id); } catch { setItem(p => ({ ...p, likes: Math.max(0, (p.likes || 0) - 1) })); }
+    try {
+      const { likedCount } = await likeMedia(item.id);
+      if (likedCount != null) setLikedCount(likedCount);
+    } catch { setItem(p => ({ ...p, likes: Math.max(0, (p.likes || 0) - 1) })); }
   };
 
   const handleDelete = async () => {
@@ -331,7 +334,10 @@ export default function MediaPage() {
     const orig = safeTags(item.tags);
     const next = orig.filter(t => t !== tag);
     setItem(p => ({ ...p, tags: next }));
-    try { await updateMediaTags(item.id, next); } catch { setItem(p => ({ ...p, tags: orig })); }
+    try {
+      const { tagCount } = await updateMediaTags(item.id, next);
+      if (tagCount != null) setTagCount(tagCount);
+    } catch { setItem(p => ({ ...p, tags: orig })); }
   };
 
   const addTag = async (tag) => {
@@ -339,7 +345,10 @@ export default function MediaPage() {
     const orig = safeTags(item.tags);
     const next = [...orig, tag];
     setItem(p => ({ ...p, tags: next }));
-    try { await updateMediaTags(item.id, next); } catch { setItem(p => ({ ...p, tags: orig })); }
+    try {
+      const { tagCount } = await updateMediaTags(item.id, next);
+      if (tagCount != null) setTagCount(tagCount);
+    } catch { setItem(p => ({ ...p, tags: orig })); }
   };
 
   useEffect(() => {

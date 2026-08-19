@@ -56,9 +56,16 @@ async function setup() {
         return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)) || null;
       },
       likeMedia: function(id) {
-        const result = db.prepare('UPDATE media SET likes = likes + 1 WHERE id = ?').run(Number(id));
-        if (result.changes === 0) return null;
-        return this.getMediaById(id);
+        const existing = db.prepare('SELECT likes FROM media WHERE id = ?').get(Number(id));
+        if (!existing) return null;
+        const newlyLiked = existing.likes === 0;
+        db.prepare('UPDATE media SET likes = likes + 1 WHERE id = ?').run(Number(id));
+        const media = this.getMediaById(id);
+        if (newlyLiked) {
+          const { total } = db.prepare('SELECT COUNT(*) AS total FROM media WHERE hidden = 0 AND likes > 0').get();
+          media.likedCount = total;
+        }
+        return media;
       },
       removeMedia: function(id) {
         const result = db.prepare('DELETE FROM media WHERE id = ?').run(Number(id));
@@ -211,11 +218,13 @@ test('PATCH /media/:id/like', async (t) => {
 
     t.assert.strictEqual(res._status, 200);
     t.assert.strictEqual(res._body.likes, 1);
+    t.assert.strictEqual(res._body.likedCount, 1);
 
     // Like again
     const res2 = mockRes();
     await route.handler(req, res2, { id: String(id) });
     t.assert.strictEqual(res2._body.likes, 2);
+    t.assert.strictEqual('likedCount' in res2._body, false);
   });
 
   await t.test('returns 404 for non-existent', async () => {

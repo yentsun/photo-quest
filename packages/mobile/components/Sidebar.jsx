@@ -23,8 +23,8 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { isMobile } = useBreakpoint();
   const [collapsed, setCollapsed] = usePersistedState('sidebar-collapsed', false);
-  const { signal } = useRefresh();
-  const [counts, setCounts] = useState({ library: null, liked: null, tags: null });
+  const { signal, likedCount, setLikedCount, tagCount, setTagCount } = useRefresh();
+  const [counts, setCounts] = useState({ library: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -34,11 +34,17 @@ export default function Sidebar() {
         fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => null),
         fetchTags().then(d => d.length).catch(() => null),
       ]);
-      if (!cancelled) setCounts({ library, liked, tags });
+      if (!cancelled) {
+        setCounts({ library });
+        setLikedCount(liked);
+        setTagCount(tags);
+      }
     };
     load();
     return () => { cancelled = true; };
   }, [signal]);
+
+  const displayedCounts = { library: counts.library, liked: likedCount, tags: tagCount };
 
   const width = isMobile ? SIDEBAR_COLLAPSED : (collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_W);
   const showLabels = !isMobile && !collapsed;
@@ -101,14 +107,14 @@ export default function Sidebar() {
                   {item.label}
                 </Text>
               )}
-              {showLabels && counts[item.countKey] != null && (
+              {showLabels && displayedCounts[item.countKey] != null && (
                 <Text style={{
                   marginLeft: 'auto',
                   fontFamily: fontFamily.mono,
                   fontSize: fontSize.xs,
                   color: colors.textMut,
                 }}>
-                  {counts[item.countKey].toLocaleString()}
+                  {displayedCounts[item.countKey].toLocaleString()}
                 </Text>
               )}
             </Pressable>

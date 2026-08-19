@@ -7,6 +7,7 @@ export const initialState = {
   errorStatus: null,
   toastMessage: null,
   toastType: null,
+  toastProgress: null,
 };
 
 export const reducer = (state, action) => {
@@ -18,9 +19,11 @@ export const reducer = (state, action) => {
     case actions.ERROR_DISMISSED:
       return { ...state, errorMessage: null, errorStatus: null };
     case actions.TOAST_SHOWN:
-      return { ...state, toastMessage: action.message, toastType: action.toastType || 'info' };
+      return { ...state, toastMessage: action.message, toastType: action.toastType || 'info', toastProgress: action.progress ?? null };
+    case actions.TOAST_PROGRESS:
+      return { ...state, toastMessage: action.message ?? state.toastMessage, toastProgress: action.progress ?? null };
     case actions.TOAST_DISMISSED:
-      return { ...state, toastMessage: null, toastType: null };
+      return { ...state, toastMessage: null, toastType: null, toastProgress: null };
     default:
       throw new Error('unknown action type: ' + action.type);
   }

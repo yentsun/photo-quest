@@ -5,6 +5,8 @@ import { useMediaActions } from '../hooks/useMedia';
 import { useShuffle } from '../hooks/useShuffle';
 import { useRefresh } from '../contexts/RefreshContext';
 import { useScan } from '../contexts/ScanContext';
+import { useGlobal } from '../contexts/GlobalContext';
+import { actions } from '@photo-quest/shared';
 import { fetchFolders, getLastFolders, uploadMedia, waitForScan, fetchMedia, openFolderPicker } from '../services/api';
 import usePersistedState from '../hooks/usePersistedState';
 import EmptyState from '../components/EmptyState';
@@ -45,6 +47,7 @@ export default function Dashboard() {
   const shuffle = useShuffle();
   const { signal, bump } = useRefresh();
   const { isScanning } = useScan();
+  const { dispatch } = useGlobal();
 
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [loadingItems, setLoadingItems] = useState(true);
@@ -178,11 +181,24 @@ export default function Dashboard() {
   const handleRefresh = async () => {
     setRefreshLabel('Scanning…');
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    dispatch({
+      type: actions.TOAST_SHOWN,
+      message: 'Scanning library…',
+      toastType: 'info',
+      progress: { value: 0, max: Math.max(1, folders.length) },
+    });
     try {
-      const result = await refreshLibrary(folders, (msg) => setRefreshLabel(msg));
-      setScanMsg(`Found ${result.newFiles} new file${result.newFiles !== 1 ? 's' : ''} in ${result.serverFolders} folder${result.serverFolders !== 1 ? 's' : ''}.`);
-      setTimeout(() => setScanMsg(''), 4000);
-    } catch { setScanMsg('Refresh failed'); }
+      const result = await refreshLibrary(folders, (msg, progress) => {
+        dispatch({ type: actions.TOAST_PROGRESS, message: msg, progress });
+      });
+      dispatch({
+        type: actions.TOAST_SHOWN,
+        message: `Found ${result.newFiles} new file${result.newFiles !== 1 ? 's' : ''} in ${result.serverFolders} folder${result.serverFolders !== 1 ? 's' : ''}.`,
+        toastType: 'success',
+      });
+    } catch {
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Refresh failed', toastType: 'error' });
+    }
     setRefreshLabel('Done');
     refreshTimer.current = setTimeout(() => setRefreshLabel('Refresh'), 2000);
     loadData();
