@@ -1,5 +1,6 @@
-import { forwardRef, useImperativeHandle, useState, useEffect, useRef } from 'react';
+import { forwardRef, useImperativeHandle, useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, Platform } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import Loader from './Loader';
 import ProgressBar from './ProgressBar';
@@ -11,6 +12,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '', muted = f
   const [buffered, setBuffered] = useState(0);
   const [duration, setDuration] = useState(0);
   const videoViewRef = useRef(null);
+  const wasPlayingRef = useRef(false);
 
   const player = useVideoPlayer(src, player => {
     player.loop = true;
@@ -40,6 +42,14 @@ const MediaPlayer = forwardRef(function MediaPlayer({ src, title = '', muted = f
   useEffect(() => {
     player.play();
   }, [player]);
+
+  useFocusEffect(useCallback(() => {
+    if (wasPlayingRef.current) player.play();
+    return () => {
+      wasPlayingRef.current = player.playing;
+      player.pause();
+    };
+  }, [player]));
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;

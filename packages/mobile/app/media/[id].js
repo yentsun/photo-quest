@@ -260,9 +260,10 @@ export default function MediaPage() {
     } catch { setItem(p => ({ ...p, likes: Math.max(0, (p.likes || 0) - 1) })); }
   };
 
-  const handleDelete = async () => {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const performDelete = async () => {
     if (!item) return;
-    if (Platform.OS === 'web' && !confirm(`Delete "${item.title}"?`)) return;
     try {
       await deleteMedia(item.id);
       bump();
@@ -283,6 +284,15 @@ export default function MediaPage() {
       }
     } catch (err) {
       dispatch({ type: act.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
+    }
+  };
+
+  const handleDelete = () => {
+    if (!item) return;
+    if (Platform.OS === 'web') {
+      if (confirm(`Delete "${item.title}"?`)) performDelete();
+    } else {
+      setConfirmDelete(true);
     }
   };
 
@@ -487,6 +497,14 @@ export default function MediaPage() {
           </View>
         </View>
       )}
+
+      <Modal open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete media">
+        <Text style={{ color: colors.textEm, fontSize: fontSize.sm }}>Delete "{item.title}"? This cannot be undone.</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space.gap, marginTop: 4 }}>
+          <Button variant="ghost" size="sm" onPress={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button variant="danger" size="sm" icon={<Icon name="trash" size="sm" />} onPress={() => { setConfirmDelete(false); performDelete(); }}>Delete</Button>
+        </View>
+      </Modal>
 
       <Modal open={showInfo} onClose={() => setShowInfo(false)} title="Media Info">
         <View style={{ gap: 4 }}>

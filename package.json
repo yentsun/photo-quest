@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @photo-quest/mobile --filter @photo-quest/server dev",
     "dev:mobile": "pnpm --filter @photo-quest/mobile dev",
+    "dev:mobile:clear": "pnpm --filter @photo-quest/mobile dev -- --clear",
     "dev:server": "pnpm --filter @photo-quest/server dev",
     "build:mobile": "pnpm --filter @photo-quest/mobile build:web",
     "start": "pnpm --filter @photo-quest/server start",

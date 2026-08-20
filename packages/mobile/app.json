@@ -51,8 +51,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "00000000-0000-0000-0000-000000000000"
+        "projectId": "7ce9ece8-d5cb-4499-b34f-8535f68e74f4"
       }
-    }
+    },
+    "owner": "yentsun"
   }
 }
