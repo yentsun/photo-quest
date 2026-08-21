@@ -79,7 +79,7 @@ function usePathValidation() {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { addFolderWithPath, removeFolder, refreshLibrary, likeMedia } = useMediaActions();
+  const { addFolderWithPath, removeFolder, refreshLibrary } = useMediaActions();
   const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
   const { isScanning } = useScan();
@@ -388,7 +388,6 @@ export default function Dashboard() {
             <MediaGrid
               items={searchResults}
               onItemClick={item => navigate(`/media/${item.id}`)}
-              onItemLike={likeMedia}
             />
             {searchTotal > SEARCH_PAGE_SIZE && (
               <div className="pagination-row">

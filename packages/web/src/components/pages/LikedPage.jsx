@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchMedia } from '../../utils/api.js';
@@ -28,7 +27,6 @@ function getPageNumbers(current, total) {
 
 export default function LikedPage() {
   const navigate = useNavigate();
-  const { likeMedia } = useMediaActions();
   const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
@@ -119,7 +117,6 @@ export default function LikedPage() {
       <MediaGrid
         items={displayItems}
         onItemClick={m => navigate(`/media/${m.id}`)}
-        onItemLike={likeMedia}
         emptyState={
           <EmptyState
             icon={<Icon name="heart" className="icon-2xl" />}

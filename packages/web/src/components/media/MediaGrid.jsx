@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 import MediaCard from './MediaCard.jsx';
 
-export default function MediaGrid({ items = [], onItemClick, onItemLike, emptyState, onNearEnd }) {
+export default function MediaGrid({ items = [], onItemClick, emptyState, onNearEnd }) {
   const sentinelRef = useRef(null);
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export default function MediaGrid({ items = [], onItemClick, onItemLike, emptySt
     <>
       <div className="item-grid">
         {items.map(media => (
-          <MediaCard key={media.id} media={media} onClick={onItemClick} onLike={onItemLike} />
+          <MediaCard key={media.id} media={media} onClick={onItemClick} />
         ))}
       </div>
       {onNearEnd && <div ref={sentinelRef} />}

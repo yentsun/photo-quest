@@ -2,10 +2,9 @@ import { memo, useState, useRef, useEffect } from 'react';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { getThumbUrl } from '../../utils/api.js';
 import { Icon, Loader, ProgressBar } from '../ui/index.js';
-import LikeButton from './LikeButton.jsx';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 
-export default memo(function MediaCard({ media, onClick, onLike, showLikes = true }) {
+export default memo(function MediaCard({ media, onClick, showLikes = true }) {
   const isImage = media.type === MEDIA_TYPE.IMAGE;
   const [thumbFailed, setThumbFailed] = useState(false);
   const [thumbReady, setThumbReady] = useState(false);
@@ -89,9 +88,10 @@ export default memo(function MediaCard({ media, onClick, onLike, showLikes = tru
           );
         })()}
 
-        {showLikes && (
+        {showLikes && media.likes > 0 && (
           <div className="media-card-likes">
-            <LikeButton count={media.likes || 0} onLike={() => onLike?.(media)} size="sm" />
+            <Icon name="heart" className="icon-sm text-red fill-red" strokeWidth={2} />
+            <span className="like-count">{media.likes > 999 ? '999+' : media.likes}</span>
           </div>
         )}
       </div>

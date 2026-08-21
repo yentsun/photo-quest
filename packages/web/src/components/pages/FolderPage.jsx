@@ -66,7 +66,7 @@ function byFolderDate(a, b) {
 export default function FolderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { likeMedia, removeFolder } = useMediaActions();
+  const { removeFolder } = useMediaActions();
   const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
@@ -448,7 +448,7 @@ export default function FolderPage() {
             {displayItems.map(({ kind, item }) =>
               kind === 'folder'
                 ? <FolderCard key={`f-${item.id}`} folder={item} />
-                : <MediaCard key={`m-${item.id}`} media={item} onClick={m => navigate(`/media/${m.id}`, { state: { sort } })} onLike={likeMedia} />
+                : <MediaCard key={`m-${item.id}`} media={item} onClick={m => navigate(`/media/${m.id}`, { state: { sort } })} />
             )}
           </div>
           {totalPages > 1 && (

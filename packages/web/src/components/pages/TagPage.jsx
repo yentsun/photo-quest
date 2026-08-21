@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchMedia } from '../../utils/api.js';
@@ -26,7 +25,6 @@ function getPageNumbers(current, total) {
 export default function TagPage() {
   const { tag } = useParams();
   const navigate = useNavigate();
-  const { likeMedia } = useMediaActions();
   const { signal } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
@@ -120,7 +118,6 @@ export default function TagPage() {
           <MediaGrid
             items={media}
             onItemClick={m => navigate(`/media/${m.id}`)}
-            onItemLike={likeMedia}
             emptyState={
               <EmptyState
                 icon={<Icon name="list" className="icon-2xl" />}
