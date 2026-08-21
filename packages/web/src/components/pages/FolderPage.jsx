@@ -473,7 +473,7 @@ export default function FolderPage() {
         <EmptyState
           icon={<Icon name="folder" className="icon-2xl" />}
           title={mediaFilter === 'image' ? 'No photos in this folder' : mediaFilter === 'video' ? 'No videos in this folder' : 'No media in this folder'}
-          description="Change the media type filter or browse another folder."
+          description={mediaFilter === 'image' ? 'The Photos filter is hiding videos. Switch to All or Videos to see them.' : mediaFilter === 'video' ? 'The Videos filter is hiding photos. Switch to All or Photos to see them.' : 'This folder is empty.'}
         />
       ) : (
         <EmptyState
