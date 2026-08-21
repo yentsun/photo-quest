@@ -83,8 +83,14 @@ export const apiRoutes = {
   /** PATCH -- set a custom thumbnail frame for a video. */
   mediaThumbnail: '/media/:id/thumbnail',
 
+  /** POST -- open the media file in the OS default player (server machine). */
+  mediaOpen: '/media/:id/open',
+
   /** POST -- trigger a directory scan.  Body: { path: "/absolute/dir" }. */
   mediaScan: '/media/scan',
+
+  /** POST -- open the OS folder picker on the server and return the chosen path. */
+  openFolder: '/open-folder',
 
   /** POST -- add media items from client-side folder scan. */
   mediaAdd: '/media/add',
@@ -127,4 +133,7 @@ export const apiRoutes = {
 
   /** POST -- Connect to an existing library file. Body: { path }. Triggers app relaunch. */
   libraryConnect: '/library/connect',
+
+  /** POST -- Upload a media file from a mobile client. Body: { fileName, data: base64 }. */
+  mediaUpload: '/media/upload',
 };

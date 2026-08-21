@@ -86,18 +86,13 @@ export default async (kojo, logger) => {
         }
       }
 
-      /* Fallback preview media IDs for descendant folders (path prefix matching). */
+      /* Fallback preview media IDs for descendant folders — latest added (highest id). */
       const previews = db.prepare(
-        `SELECT folder, id FROM media WHERE hidden = 0 AND (folder = ? OR folder LIKE ?)
-         ORDER BY
-           CASE WHEN LOWER(title) LIKE '%cover%' THEN 0 ELSE 1 END,
-           title ASC`
+        `SELECT folder, MAX(id) as id FROM media WHERE hidden = 0 AND (folder = ? OR folder LIKE ?) GROUP BY folder`
       ).all(targetPath, likePattern);
       const previewIds = new Map();
       for (const row of previews) {
-        if (!previewIds.has(row.folder)) {
-          previewIds.set(row.folder, row.id);
-        }
+        previewIds.set(row.folder, row.id);
       }
 
       /* Build result for descendants (ancestors are prepended separately). */
@@ -128,7 +123,7 @@ export default async (kojo, logger) => {
           parent.subtreeMediaCount += f.subtreeMediaCount;
           parent.subtreeImageCount += f.subtreeImageCount;
           parent.subtreeVideoCount += f.subtreeVideoCount;
-          if (!parent.previewMediaId && f.previewMediaId) {
+          if (parent.thumbnailMediaId == null && f.previewMediaId != null && (parent.previewMediaId == null || f.previewMediaId > parent.previewMediaId)) {
             parent.previewMediaId = f.previewMediaId;
           }
         }
@@ -221,9 +216,9 @@ export default async (kojo, logger) => {
       }
     }
 
-    /* Get one fallback preview media ID per folder — oldest inserted first (fast clustered index scan). */
+    /* Get one fallback preview media ID per folder — latest added (highest id). */
     const previews = db.prepare(
-      'SELECT folder, MIN(id) as id FROM media WHERE hidden = 0 GROUP BY folder'
+      'SELECT folder, MAX(id) as id FROM media WHERE hidden = 0 GROUP BY folder'
     ).all();
     const previewIds = new Map();
     for (const row of previews) {
@@ -259,7 +254,7 @@ export default async (kojo, logger) => {
         parent.subtreeMediaCount += f.subtreeMediaCount;
         parent.subtreeImageCount += f.subtreeImageCount;
         parent.subtreeVideoCount += f.subtreeVideoCount;
-        if (!parent.previewMediaId && f.previewMediaId) {
+        if (parent.thumbnailMediaId == null && f.previewMediaId != null && (parent.previewMediaId == null || f.previewMediaId > parent.previewMediaId)) {
           parent.previewMediaId = f.previewMediaId;
         }
       }

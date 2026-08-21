@@ -20,6 +20,9 @@ export const actions = {
   /** Fired to show a temporary toast message (success, error, info). */
   TOAST_SHOWN: 'TOAST_SHOWN',
 
+  /** Fired to update the progress of the current toast (message + progress bar). */
+  TOAST_PROGRESS: 'TOAST_PROGRESS',
+
   /** Fired to dismiss the current toast message. */
   TOAST_DISMISSED: 'TOAST_DISMISSED',
 
