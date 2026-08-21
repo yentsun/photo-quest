@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel --filter @photo-quest/web --filter @photo-quest/server dev",
+    "dev:fresh": "pnpm install && pnpm dev",
     "dev:web": "pnpm --filter @photo-quest/web dev",
     "dev:server": "pnpm --filter @photo-quest/server dev",
     "build": "pnpm --filter @photo-quest/web build",
