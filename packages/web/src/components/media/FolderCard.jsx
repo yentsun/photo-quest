@@ -45,24 +45,14 @@ export default memo(function FolderCard({ folder, onRemove }) {
 
   return (
     <div className="folder-card" onClick={() => !editing && navigate(`/folder/${folder.id}`)}>
-      <div className="folder-card-frame">
-        {thumbnailUrl ? (
-          <img src={thumbnailUrl} alt={displayName} loading="lazy" />
-        ) : (
-          <div className="folder-card-empty">
-            <Icon name="folder" className="icon-2xl text-mut" />
-          </div>
-        )}
-
-        <div className="folder-card-rename">
-          <IconButton
-            icon={<Icon name="edit" className="icon-sm" />}
-            onClick={startEdit}
-            label="Rename folder"
-            size="sm"
-            className="icon-btn-overlay"
-          />
-        </div>
+        <div className="folder-card-frame">
+          {thumbnailUrl ? (
+            <img src={thumbnailUrl} alt={displayName} loading="lazy" />
+          ) : (
+            <div className="folder-card-empty">
+              <Icon name="folder" className="icon-2xl text-mut" />
+            </div>
+          )}
 
         {onRemove && (
           <div className="folder-card-remove">
@@ -90,7 +80,7 @@ export default memo(function FolderCard({ folder, onRemove }) {
             autoFocus
           />
         ) : (
-          <p className="folder-card-name">{displayName}</p>
+          <p className="folder-card-name" onClick={e => e.stopPropagation()} onDoubleClick={startEdit}>{displayName}</p>
         )}
         {(imageCount > 0 || videoCount > 0) && (
           <p className="folder-card-counts">
