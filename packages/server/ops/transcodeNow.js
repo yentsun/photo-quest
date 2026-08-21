@@ -21,6 +21,22 @@ export function hasQueuedTranscode(id) {
   return queuedMedia.has(Number(id));
 }
 
+/** Kill the running ffmpeg child, if any. Used by pause/cancel/shutdown. */
+function killCurrentChild() {
+  if (currentChild) {
+    try { currentChild.kill('SIGKILL'); } catch {}
+    currentChild = null;
+  }
+}
+
+/* Kill any running ffmpeg when the server exits, so transcoding actually
+   stops on shutdown instead of leaving an orphaned process burning CPU. */
+for (const signal of ['SIGINT', 'SIGTERM', 'exit']) {
+  process.on(signal, () => killCurrentChild());
+}
+process.on('beforeExit', killCurrentChild);
+
+
 /** Pick the oldest pending job and start transcoding it. */
 function kick(kojo, logger) {
   if (running) return;
@@ -192,8 +208,7 @@ export function pauseAllTranscodes(kojo, logger) {
   ).run(JOB_STATUS.PAUSED, JOB_TYPE.TRANSCODE, JOB_STATUS.PENDING, JOB_STATUS.RUNNING);
 
   if (currentChild) {
-    try { currentChild.kill('SIGKILL'); } catch {}
-    currentChild = null;
+    killCurrentChild();
   }
 
   /* Any media mid-transcode should fall back to probed so it can be re-queued. */
@@ -227,8 +242,7 @@ export function cancelJob(kojo, logger, id) {
   if (!job) return { cancelled: false };
 
   if (job.status === JOB_STATUS.RUNNING && currentChild) {
-    try { currentChild.kill('SIGKILL'); } catch {}
-    currentChild = null;
+    killCurrentChild();
   }
 
   db.prepare("UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE id = ?")
