@@ -13,8 +13,8 @@ A self-hosted media library PWA for browsing, organizing, and enjoying your phot
 
 ## Requirements
 
-- Node.js 18+
-- pnpm 8+
+- Node.js 22+
+- pnpm 10+
 - Chrome or Edge browser (for File System Access API)
 
 ## Installation
@@ -32,11 +32,11 @@ pnpm build
 pnpm start
 ```
 
-This starts the server and worker. Open **http://localhost:4000** in Chrome or Edge.
+This starts the server. Open **http://localhost:7838** in Chrome or Edge.
 
 ## Usage
 
-1. Click **Add Folder** and paste the full path to a folder with photos/videos
+1. Click **Add Folder** → **Browse for folder…** to pick a folder with photos/videos (a native folder dialog opens on the server)
 2. Wait for the import to finish (progress bar shown at the top)
 3. Browse your media in the Library view
 4. Click a thumbnail to view it, or click **Shuffle** to start a slideshow
@@ -47,15 +47,18 @@ This starts the server and worker. Open **http://localhost:4000** in Chrome or E
 | Key | Action |
 |-----|--------|
 | Left/Right | Previous/next media |
+| Up/Down | Previous/next media in current folder |
 | Space | Play/pause video |
 | Enter | Like |
+| T | Add a tag |
 | F | Toggle fullscreen |
 | I | Show media info |
+| Delete | Delete media |
 | Escape | Exit fullscreen |
 
 ### Accessing from other devices
 
-The network URL is shown in the header (e.g., `http://192.168.0.105:4000`). Open it on any device on your local network.
+The network URL is shown in the header (e.g., `http://192.168.0.105:7838`). Open it on any device on your local network.
 
 ### Refreshing the library
 
@@ -74,11 +77,14 @@ Then restart with `pnpm start`. Your database and media library are preserved.
 ## Development
 
 ```bash
-# Start all services with hot reload
+# Install dependencies, then start web + server with hot reload
+pnpm dev:fresh
+
+# Or, if dependencies are already installed
 pnpm dev
 
 # Run server tests
-pnpm --filter @photo-quest/server test
+pnpm test
 ```
 
 ### Project structure
@@ -86,9 +92,9 @@ pnpm --filter @photo-quest/server test
 ```
 packages/
   shared/   - Shared constants, schema, routes
-  server/   - HTTP API server (kojo + sql.js)
-  worker/   - Background job processor (ffmpeg)
-  web/      - React PWA (Vite + Tailwind)
+  server/   - HTTP API server (kojo + node:sqlite) + scan worker thread
+  web/      - React PWA (Vite)
+  electron/ - Optional headless tray app (spawns the server)
 ```
 
 ## Supported formats
