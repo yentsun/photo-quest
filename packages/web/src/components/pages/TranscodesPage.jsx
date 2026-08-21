@@ -14,10 +14,23 @@ const STATUS_LABEL = {
   [JOB_STATUS.FAILED]: 'Failed',
 };
 
+const STATUS_ORDER = {
+  [JOB_STATUS.RUNNING]: 0,
+  [JOB_STATUS.PENDING]: 1,
+  [JOB_STATUS.PAUSED]: 2,
+  [JOB_STATUS.FAILED]: 3,
+  [JOB_STATUS.COMPLETED]: 4,
+};
+
 export default function TranscodesPage() {
   const jobs = useJobs();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+
+  /* Running first, then queued/paused, newest within each bucket. */
+  const sortedJobs = [...jobs].sort((a, b) =>
+    (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9) || b.id - a.id
+  );
 
   const hasActive = jobs.some(j => j.status === JOB_STATUS.RUNNING || j.status === JOB_STATUS.PENDING);
   const hasPaused = jobs.some(j => j.status === JOB_STATUS.PAUSED);
@@ -64,7 +77,7 @@ export default function TranscodesPage() {
           </div>
 
           <div className="transcodes-list">
-            {jobs.map(job => (
+            {sortedJobs.map(job => (
               <div key={job.id} className={`transcode-row transcode-row--${job.status}`}>
                 <button
                   className="transcode-title"

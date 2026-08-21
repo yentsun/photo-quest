@@ -5,13 +5,19 @@ import { useJobProgressUpdater } from '../contexts/JobProgressContext.jsx';
 /**
  * Keeps the transcode jobs list and per-media progress map in sync with the
  * server via SSE + periodic /jobs refresh. Rendered once, above the routes.
+ *
+ * Progress ticks are applied in-place (no /jobs refetch per tick — that would
+ * hammer the server while ffmpeg reports progress continuously). The full list
+ * is refetched only on state transitions (queued/complete/failed/paused/...).
  */
 export default function TranscodeMonitor() {
   const { setJobs, update: updateProgress, clear: clearProgress } = useJobProgressUpdater();
+  const jobsRef = useRef([]);
 
   const refreshJobs = useRef(async () => {
     try {
       const { jobs } = await fetchJobs();
+      jobsRef.current = jobs;
       setJobs(jobs);
     } catch { /* server may be down; SSE will reconnect */ }
   });
@@ -30,6 +36,7 @@ export default function TranscodeMonitor() {
       es.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+
           switch (data.type) {
             case 'transcode_queued':
             case 'transcode_complete':
@@ -39,10 +46,14 @@ export default function TranscodeMonitor() {
             case 'transcode_cancelled':
               refreshJobs.current();
               break;
-            case 'transcode_progress':
+            case 'transcode_progress': {
               updateProgress(data.mediaId, data.progressSecs);
-              refreshJobs.current();
+              /* Update the running job's progress in place — no server round-trip. */
+              setJobs(jobsRef.current.map(j =>
+                j.id === data.jobId ? { ...j, progress: data.progress, status: 'running' } : j
+              ));
               break;
+            }
             default:
               break;
           }

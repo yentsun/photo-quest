@@ -52,6 +52,13 @@ export default function transcodeNow(id) {
   if (media.status === 'ready') return null;
   if (queuedMedia.has(mediaId)) return null;
 
+  /* DB-level dedupe: skip if an active (queued/running/paused) job already
+     exists for this media — the in-memory Set is reset on restart. */
+  const active = db.prepare(
+    "SELECT id FROM jobs WHERE media_id = ? AND type = ? AND status IN (?, ?, ?) LIMIT 1"
+  ).get(mediaId, JOB_TYPE.TRANSCODE, JOB_STATUS.PENDING, JOB_STATUS.RUNNING, JOB_STATUS.PAUSED);
+  if (active) return active.id;
+
   /* Resume a previously paused job for this media if present. */
   const paused = db.prepare(
     "SELECT id FROM jobs WHERE media_id = ? AND type = ? AND status = ? LIMIT 1"
@@ -246,14 +253,16 @@ export function listTranscodeJobs(kojo) {
   ).all(JOB_TYPE.TRANSCODE);
 }
 
-/** Mark leftover jobs as pending on boot so the queue drains after a restart. */
+/** Mark leftover running jobs as pending on boot so an interrupted transcode
+ *  resumes after a restart. Pending jobs are left alone — they were created
+ *  on-demand by the user opening media, not auto-resumed. */
 export function resumePendingTranscodes(kojo, logger) {
   const db = kojo.get('db');
   const affected = db.prepare(
-    "UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE type = ? AND status IN (?, ?)"
-  ).run(JOB_STATUS.PENDING, JOB_TYPE.TRANSCODE, JOB_STATUS.RUNNING, JOB_STATUS.PENDING);
+    "UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE type = ? AND status = ?"
+  ).run(JOB_STATUS.PENDING, JOB_TYPE.TRANSCODE, JOB_STATUS.RUNNING);
   if (affected.changes > 0) {
-    logger.info(`[transcode] Re-queued ${affected.changes} job(s) from previous session`);
+    logger.info(`[transcode] Re-queued ${affected.changes} interrupted job(s) from previous session`);
     kick(kojo, logger);
   }
 }
