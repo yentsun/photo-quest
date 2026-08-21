@@ -31,7 +31,7 @@ export default function (id, tags) {
   const { total } = db.prepare(
     `SELECT COUNT(DISTINCT je.value) AS total
      FROM media m, json_each(m.tags) je
-     WHERE m.hidden = 0`
+     WHERE m.hidden = 0 AND json_valid(m.tags)`
   ).get();
   media.tagCount = total;
 

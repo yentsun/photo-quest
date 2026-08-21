@@ -257,11 +257,12 @@ export default function (dirPath) {
      Runs before the empty-directory early return so a directory whose only
      non-media files remain still gets cleaned up. */
   const dirPrefix = dirPath.endsWith(path.sep) ? dirPath : dirPath + path.sep;
+  const dirPrefixLower = dirPrefix.toLowerCase();
   const deleteMediaStmt = db.prepare('DELETE FROM media WHERE id = ?');
   let removed = 0;
   for (const row of existingRows) {
     if (!row.path.toLowerCase().endsWith('.ts')) continue;
-    if (!row.path.startsWith(dirPrefix)) continue;
+    if (!row.path.toLowerCase().startsWith(dirPrefixLower)) continue;
     if (isMediaFile(row.path)) continue;
     deleteMediaStmt.run(row.id);
     removed++;
