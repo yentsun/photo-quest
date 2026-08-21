@@ -70,6 +70,7 @@ export default function FolderPage() {
   const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
   const pendingShuffle = useRef(false);
+  const [shuffling, setShuffling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [renamingFolder, setRenamingFolder] = useState(false);
   const [renameInput, setRenameInput] = useState('');
@@ -313,14 +314,27 @@ export default function FolderPage() {
   const handleShuffle = async () => {
     const f = folderRef.current;
     if (!f) return;
+    const BATCH = 500;
+    const makeOpts = () => {
+      const opts = { folder: f.path, subtree: true, random: true, limit: BATCH };
+      if (mediaTypeParam) opts.type = mediaTypeParam;
+      return opts;
+    };
+    setShuffling(true);
     try {
-      const fetchOpts = { folder: f.path, subtree: true, random: true };
-      if (mediaTypeParam) fetchOpts.type = mediaTypeParam;
-      const { items, total } = await fetchMedia(fetchOpts);
+      const { items, total } = await fetchMedia(makeOpts());
       if (items.length === 0) return;
       pendingShuffle.current = true;
-      slideshow.start(items, { order: 'sequential', total });
+      slideshow.start(items, {
+        order: 'sequential',
+        total,
+        loadMore: async () => {
+          const res = await fetchMedia(makeOpts());
+          return res.items;
+        },
+      });
     } catch (err) { console.error('Failed to fetch subtree media for shuffle:', err); }
+    finally { setShuffling(false); }
   };
 
   useEffect(() => {
@@ -395,8 +409,8 @@ export default function FolderPage() {
         </div>
         <div className="page-actions">
           {subtreeTotal > 0 && (
-            <Button variant="ghost" size="sm" onClick={handleShuffle} icon={<Icon name="shuffle" className="icon-sm" />}>
-              <span className="sm-show">Shuffle</span>
+            <Button variant="ghost" size="sm" onClick={handleShuffle} disabled={shuffling} icon={<Icon name="shuffle" className="icon-sm" />}>
+              <span className="sm-show">{shuffling ? 'Starting…' : 'Shuffle'}</span>
             </Button>
           )}
           {folder && (

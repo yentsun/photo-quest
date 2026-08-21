@@ -84,6 +84,7 @@ export default function Dashboard() {
   const slideshow = useSlideshow();
   const { isScanning } = useScan();
   const pendingShuffle = useRef(false);
+  const [shuffling, setShuffling] = useState(false);
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -196,12 +197,22 @@ export default function Dashboard() {
 
   const handleShuffle = async () => {
     if (totalMedia === 0) return;
+    const BATCH = 500;
+    setShuffling(true);
     try {
-      const { items, total } = await fetchMedia({ random: true });
+      const { items, total } = await fetchMedia({ random: true, limit: BATCH });
       if (items.length === 0) return;
       pendingShuffle.current = true;
-      slideshow.start(items, { order: 'sequential', total });
+      slideshow.start(items, {
+        order: 'sequential',
+        total,
+        loadMore: async () => {
+          const res = await fetchMedia({ random: true, limit: BATCH });
+          return res.items;
+        },
+      });
     } catch (err) { console.error('Failed to fetch media for shuffle:', err); }
+    finally { setShuffling(false); }
   };
 
   useEffect(() => {
@@ -298,8 +309,8 @@ export default function Dashboard() {
         </div>
         <div className="page-actions">
           {totalMedia > 0 && (
-            <Button variant="ghost" size="sm" onClick={handleShuffle} disabled={isScanning} icon={<Icon name="shuffle" className="icon-sm" />}>
-              <span className="sm-show">Shuffle</span>
+            <Button variant="ghost" size="sm" onClick={handleShuffle} disabled={isScanning || shuffling} icon={<Icon name="shuffle" className="icon-sm" />}>
+              <span className="sm-show">{shuffling ? 'Starting…' : 'Shuffle'}</span>
             </Button>
           )}
           {rootFolders.length > 0 && (
