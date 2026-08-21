@@ -469,6 +469,12 @@ export default function FolderPage() {
           title="No results"
           description={`No media matching "${debouncedSearch}".`}
         />
+      ) : folder ? (
+        <EmptyState
+          icon={<Icon name="folder" className="icon-2xl" />}
+          title={mediaFilter === 'image' ? 'No photos in this folder' : mediaFilter === 'video' ? 'No videos in this folder' : 'No media in this folder'}
+          description="Change the media type filter or browse another folder."
+        />
       ) : (
         <EmptyState
           icon={<Icon name="folder" className="icon-2xl" />}
