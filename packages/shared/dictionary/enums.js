@@ -93,3 +93,34 @@ export const IMPORT_STATUS = {
   COMPLETED: 'completed',
   FAILED: 'failed'
 };
+
+/**
+ * Types of background jobs stored in the `jobs` table.
+ *
+ * @readonly
+ * @enum {string}
+ */
+export const JOB_TYPE = {
+  TRANSCODE: 'transcode',
+};
+
+/**
+ * Lifecycle states for a background job.
+ *
+ * Transition diagram (transcode):
+ *   PENDING --> RUNNING --> COMPLETED
+ *      |          |
+ *      +---> PAUSED --> PENDING (resume restarts from scratch)
+ *      |          |
+ *      +------> FAILED
+ *
+ * @readonly
+ * @enum {string}
+ */
+export const JOB_STATUS = {
+  PENDING: 'pending',
+  RUNNING: 'running',
+  PAUSED: 'paused',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+};

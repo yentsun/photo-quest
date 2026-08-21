@@ -17,6 +17,7 @@ import Kojo from 'kojo';
 import config from '@photo-quest/shared/config.js';
 import { initDb } from './src/db.js';
 import { resumeIncompleteScans } from './ops/scanMedia.js';
+import { resumePendingTranscodes } from './ops/transcodeNow.js';
 
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -96,6 +97,9 @@ export default async function boot() {
 
   /* Resume any imports that were interrupted by a previous crash/restart. */
   resumeIncompleteScans(kojo, console);
+
+  /* Re-queue any transcodes left pending/running from a previous session. */
+  resumePendingTranscodes(kojo, console);
 
   /* Run cleanups after the server is listening so we don't block startup. */
   setImmediate(() => {

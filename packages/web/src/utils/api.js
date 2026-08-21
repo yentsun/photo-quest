@@ -211,6 +211,30 @@ export async function requestTranscode(id) {
   await fetch(`/media/${id}/transcode`, { method: 'POST' });
 }
 
+export async function fetchJobs() {
+  const response = await fetch('/jobs');
+  if (!response.ok) throw new Error('Failed to fetch jobs');
+  return response.json();
+}
+
+export async function pauseJobs() {
+  const response = await fetch('/jobs/pause', { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to pause transcodes');
+  return response.json();
+}
+
+export async function resumeJobs() {
+  const response = await fetch('/jobs/resume', { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to resume transcodes');
+  return response.json();
+}
+
+export async function cancelJob(id) {
+  const response = await fetch(`/jobs/${id}/cancel`, { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to cancel job');
+  return response.json();
+}
+
 export async function updateMediaTags(id, tags) {
   const response = await fetch(`/media/${id}/tags`, {
     method: 'PATCH',

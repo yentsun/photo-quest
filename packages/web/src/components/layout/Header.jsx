@@ -92,6 +92,14 @@ export default function Header({ collapsed, onToggle }) {
             <Icon name="list" className="icon-sm" />
             <span className="nav-label">Tags</span>
           </NavLink>
+          <NavLink
+            to={clientRoutes.transcodes}
+            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+            title={collapsed ? 'Transcodes' : undefined}
+          >
+            <Icon name="refresh" className="icon-sm" />
+            <span className="nav-label">Transcodes</span>
+          </NavLink>
         </nav>
 
         <div className="sidebar-footer">
