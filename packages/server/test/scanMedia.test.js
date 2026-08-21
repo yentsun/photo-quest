@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync as Database } from 'node:sqlite';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, SCAN_STATUS, IMPORT_STATUS, MEDIA_STATUS } from '@photo-quest/shared';
 import scanMedia, { processOneItem, resumeIncompleteScans } from '../ops/scanMedia.js';
 
 /** Create a temp directory tree with nested folders and media files. */
@@ -216,7 +216,7 @@ test('scanMedia — processing phase', async (t) => {
     t.assert.strictEqual(byTitle.family.folder, path.join(root, 'other'));
   });
 
-  await t.test('creates probe jobs only for videos', async () => {
+  await t.test('sets status to ready for images and pending for videos', async () => {
     const db = makeDb();
     const { ctx } = makeContext(db);
     const scan = scanMedia.bind(ctx);
@@ -224,13 +224,14 @@ test('scanMedia — processing phase', async (t) => {
     const { scanId } = scan(root);
     await drainQueue(db, scanId, ctx[1]);
 
-    const jobs = db.prepare('SELECT j.type, m.title FROM jobs j JOIN media m ON j.media_id = m.id ORDER BY m.title').all();
+    const rows = allMedia(db);
+    const byTitle = Object.fromEntries(rows.map(r => [r.title, r]));
 
-    const jobTitles = jobs.map(j => j.title).sort();
-    t.assert.deepStrictEqual(jobTitles, ['deep_clip', 'video']);
-    for (const job of jobs) {
-      t.assert.strictEqual(job.type, 'probe');
-    }
+    t.assert.strictEqual(byTitle.photo.status, MEDIA_STATUS.READY);
+    t.assert.strictEqual(byTitle.nested.status, MEDIA_STATUS.READY);
+    t.assert.strictEqual(byTitle.family.status, MEDIA_STATUS.READY);
+    t.assert.strictEqual(byTitle.video.status, MEDIA_STATUS.PENDING);
+    t.assert.strictEqual(byTitle.deep_clip.status, MEDIA_STATUS.PENDING);
   });
 
   await t.test('marks queue items as completed after processing', async () => {
