@@ -4,7 +4,7 @@
  * Extension matching alone is ambiguous for some suffixes. Notably `.ts` is
  * both a TypeScript source file and an MPEG-TS video, so those get an extra
  * content sniff: a TypeScript file is valid UTF-8 text, a transport stream is
- * binary.
+ * binary with 0x47 sync bytes at 188-byte packet boundaries.
  */
 
 import fs from 'node:fs';
@@ -35,6 +35,31 @@ function isTextFile(filePath) {
 }
 
 /**
+ * Whether a file looks like an MPEG transport stream: 0x47 sync bytes at
+ * 188-byte packet boundaries across the first few packets.
+ */
+function isMpegTs(filePath) {
+  let fd;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(188 * 8);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    if (n < 188) return false;
+    /* Require a run of sync bytes at consecutive packet starts. */
+    let sync = 0;
+    for (let i = 0; i + 188 <= n; i += 188) {
+      if (buf[i] === 0x47) sync++;
+      else break;
+    }
+    return sync >= 2;
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) { try { fs.closeSync(fd); } catch {} }
+  }
+}
+
+/**
  * Decide whether a file should be treated as media.
  * Extension check, plus a content sniff for ambiguous extensions.
  *
@@ -44,6 +69,6 @@ function isTextFile(filePath) {
 export function isMediaFile(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   if (!SUPPORTED_EXTENSIONS.includes(ext)) return false;
-  if (ext === '.ts' && isTextFile(filePath)) return false;
+  if (ext === '.ts' && !isMpegTs(filePath) && isTextFile(filePath)) return false;
   return true;
 }

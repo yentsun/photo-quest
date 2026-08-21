@@ -71,8 +71,8 @@ export async function processOneItem(db, itemId, filePath, logger) {
   const ext = path.extname(filePath).toLowerCase();
   logger.debug(`[processOneItem] itemId=${itemId} ext=${ext} path=${filePath}`);
 
-  if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-    logger.debug(`[processOneItem] unsupported extension "${ext}", marking failed`);
+  if (!isMediaFile(filePath)) {
+    logger.debug(`[processOneItem] unsupported file "${filePath}", marking failed`);
     db.prepare(
       'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
     ).run(IMPORT_STATUS.FAILED, 'Unsupported file type', itemId);
@@ -264,6 +264,12 @@ export default function (dirPath) {
     if (!row.path.toLowerCase().endsWith('.ts')) continue;
     if (!row.path.toLowerCase().startsWith(dirPrefixLower)) continue;
     if (isMediaFile(row.path)) continue;
+    /* Safety net: never drop a record the user has interacted with, in case
+       the text sniff ever misfires on a real transport stream. */
+    const guarded = db.prepare(
+      'SELECT 1 FROM media WHERE id = ? AND (likes > 0 OR tags != \'[]\' OR transcoded_path IS NOT NULL OR type = \'image\')'
+    ).get(row.id);
+    if (guarded) continue;
     deleteMediaStmt.run(row.id);
     removed++;
   }
