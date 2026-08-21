@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
 import { broadcastSse } from '../src/sse.js';
 import { DB_PATH } from '../src/db.js';
+import { isMediaFile } from '../src/mediaFile.js';
 
 const WORKER_PATH = process.env.SCAN_WORKER_PATH
   || path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/scanWorker.js');
@@ -70,8 +71,8 @@ export async function processOneItem(db, itemId, filePath, logger) {
   const ext = path.extname(filePath).toLowerCase();
   logger.debug(`[processOneItem] itemId=${itemId} ext=${ext} path=${filePath}`);
 
-  if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-    logger.debug(`[processOneItem] unsupported extension "${ext}", marking failed`);
+  if (!isMediaFile(filePath)) {
+    logger.debug(`[processOneItem] unsupported file "${filePath}", marking failed`);
     db.prepare(
       'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
     ).run(IMPORT_STATUS.FAILED, 'Unsupported file type', itemId);
@@ -246,11 +247,33 @@ export default function (dirPath) {
   createFolderHierarchy(db, dirPath, files);
   logger.debug(`[scanMedia] folder hierarchy updated`);
 
-  const existingPaths = new Set(
-    db.prepare('SELECT path FROM media WHERE hidden = 0').all().map(r => r.path)
-  );
+  const existingRows = db.prepare('SELECT id, path FROM media WHERE hidden = 0').all();
+  const existingPaths = new Set(existingRows.map(r => r.path));
   logger.debug(`[scanMedia] library has ${existingPaths.size} existing paths`);
   const newFiles = files.filter(f => !existingPaths.has(f));
+
+  /* Remove records for files under this directory that were previously
+     mis-detected as MPEG-TS videos but are actually text (.ts source files).
+     Runs before the empty-directory early return so a directory whose only
+     non-media files remain still gets cleaned up. */
+  const dirPrefix = dirPath.endsWith(path.sep) ? dirPath : dirPath + path.sep;
+  const dirPrefixLower = dirPrefix.toLowerCase();
+  const deleteMediaStmt = db.prepare('DELETE FROM media WHERE id = ?');
+  let removed = 0;
+  for (const row of existingRows) {
+    if (!row.path.toLowerCase().endsWith('.ts')) continue;
+    if (!row.path.toLowerCase().startsWith(dirPrefixLower)) continue;
+    if (isMediaFile(row.path)) continue;
+    /* Safety net: never drop a record the user has interacted with, in case
+       the text sniff ever misfires on a real transport stream. */
+    const guarded = db.prepare(
+      'SELECT 1 FROM media WHERE id = ? AND (likes > 0 OR tags != \'[]\' OR transcoded_path IS NOT NULL OR type = \'image\')'
+    ).get(row.id);
+    if (guarded) continue;
+    deleteMediaStmt.run(row.id);
+    removed++;
+  }
+  if (removed > 0) logger.info(`Scan: removed ${removed} stale non-media record(s)`);
 
   logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
 
@@ -300,7 +323,7 @@ function findMediaFiles(dirPath) {
 
     if (entry.isDirectory()) {
       results.push(...findMediaFiles(fullPath));
-    } else if (SUPPORTED_EXTENSIONS.includes(path.extname(entry.name).toLowerCase())) {
+    } else if (isMediaFile(fullPath)) {
       results.push(fullPath);
     }
   }

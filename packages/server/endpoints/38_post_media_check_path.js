@@ -5,8 +5,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { SUPPORTED_EXTENSIONS } from '@photo-quest/shared';
 import { json, parseBody } from '../src/http.js';
+import { isMediaFile } from '../src/mediaFile.js';
 
 /**
  * Count media files recursively (quick scan, no hashing).
@@ -19,7 +19,7 @@ function countMediaFiles(dirPath) {
       const full = path.join(dirPath, entry.name);
       if (entry.isDirectory()) {
         total += countMediaFiles(full);
-      } else if (SUPPORTED_EXTENSIONS.includes(path.extname(entry.name).toLowerCase())) {
+      } else if (isMediaFile(full)) {
         total++;
       }
     }
