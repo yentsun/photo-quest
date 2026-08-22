@@ -906,6 +906,40 @@ body {
 .toaster-error { background: #3a1d1a; border-color: var(--sol-red); color: var(--sol-red); }
 .toaster-info { background: #1a2a3a; border-color: var(--sol-blue); color: var(--sol-blue); }
 
+/* Transcode toaster — non-blocking, stays while jobs are active */
+.toaster-transcode {
+  background: #1a2a1d; border-color: var(--sol-green); color: var(--sol-green);
+  min-width: 260px; gap: 10px;
+}
+.toaster-transcode-body { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.toaster-transcode-body p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toaster-transcode-queued { color: var(--sol-text-mut); font-size: var(--fs-xs); white-space: nowrap; }
+
+/* ─── Transcodes page ─── */
+.transcodes-actions { display: flex; gap: 8px; margin: 8px 0 12px; }
+.transcodes-list { display: flex; flex-direction: column; gap: 8px; max-width: 720px; }
+.transcode-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--sol-dim); border: 1px solid var(--sol-border);
+  padding: 8px 12px;
+}
+.transcode-title {
+  background: none; border: none; padding: 0; text-align: left; cursor: pointer;
+  color: var(--sol-text-em); font-size: var(--fs-sm); font-family: var(--font-mono);
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.transcode-title:hover { color: var(--sol-accent); }
+.transcode-status { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; }
+.transcode-status--running { color: var(--sol-green); }
+.transcode-status--pending { color: var(--sol-blue); }
+.transcode-status--paused { color: var(--sol-orange, #d19a4a); }
+.transcode-status--completed { color: var(--sol-text-mut); }
+.transcode-status--failed { color: var(--sol-red); }
+.transcode-row .ascii-meter { width: 160px; flex-shrink: 0; }
+.transcode-error { color: var(--sol-red); font-size: var(--fs-xs); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transcodes-hint { margin-top: 16px; font-size: var(--fs-sm); color: var(--sol-text-mut); }
+.transcodes-hint a { color: var(--sol-accent); }
+
 /* ─── Search input wrapper ─── */
 .search-wrap { position: relative; }
 .search-wrap .search-icon {

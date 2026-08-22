@@ -15,6 +15,7 @@
 
 import path from 'node:path';
 import { json } from '../src/http.js';
+import { getFolderAggregates } from '../src/folderCache.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -72,13 +73,16 @@ export default async (kojo, logger) => {
       const pathToId = new Map(descendants.map(f => [f.path, f.id]));
       for (const a of ancestors) pathToId.set(a.path, a.id);
 
-      /* Direct media counts for descendant folders (path prefix matching). */
-      const typeCounts = db.prepare(
-        'SELECT folder, type, COUNT(*) as count FROM media WHERE hidden = 0 AND (folder = ? OR folder LIKE ?) GROUP BY folder, type'
-      ).all(targetPath, likePattern);
+      /* Direct media counts for descendant folders (path prefix matching).
+         Served from the cached full aggregates, filtered in memory. */
+      const prefix = targetPath + sep;
+      const { typeCounts: allTypeCounts, previews: allPreviews } = getFolderAggregates(db);
+      const scopedType = allTypeCounts.filter(r => r.folder === targetPath || r.folder.startsWith(prefix));
+      const scopedPreviews = allPreviews.filter(r => r.folder === targetPath || r.folder.startsWith(prefix));
+
       const imageCounts = new Map();
       const videoCounts = new Map();
-      for (const row of typeCounts) {
+      for (const row of scopedType) {
         if (row.type === 'image') {
           imageCounts.set(row.folder, (imageCounts.get(row.folder) || 0) + row.count);
         } else {
@@ -86,12 +90,8 @@ export default async (kojo, logger) => {
         }
       }
 
-      /* Fallback preview media IDs for descendant folders — latest added (highest id). */
-      const previews = db.prepare(
-        `SELECT folder, MAX(id) as id FROM media WHERE hidden = 0 AND (folder = ? OR folder LIKE ?) GROUP BY folder`
-      ).all(targetPath, likePattern);
       const previewIds = new Map();
-      for (const row of previews) {
+      for (const row of scopedPreviews) {
         previewIds.set(row.folder, row.id);
       }
 
@@ -202,10 +202,8 @@ export default async (kojo, logger) => {
     /* Build path→id map for parent lookup. */
     const pathToId = new Map(folders.map(f => [f.path, f.id]));
 
-    /* Count direct media per folder, split by type. */
-    const typeCounts = db.prepare(
-      'SELECT folder, type, COUNT(*) as count FROM media WHERE hidden = 0 GROUP BY folder, type'
-    ).all();
+    /* Count direct media per folder, split by type (cached; O(1) on repeat). */
+    const { typeCounts, previews } = getFolderAggregates(db);
     const imageCounts = new Map();
     const videoCounts = new Map();
     for (const row of typeCounts) {
@@ -216,10 +214,6 @@ export default async (kojo, logger) => {
       }
     }
 
-    /* Get one fallback preview media ID per folder — latest added (highest id). */
-    const previews = db.prepare(
-      'SELECT folder, MAX(id) as id FROM media WHERE hidden = 0 GROUP BY folder'
-    ).all();
     const previewIds = new Map();
     for (const row of previews) {
       previewIds.set(row.folder, row.id);

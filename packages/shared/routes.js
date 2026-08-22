@@ -44,6 +44,9 @@ export const clientRoutes = {
 
   /** Media filtered by a single tag. */
   tag: '/tags/:tag',
+
+  /** Transcode queue management page. */
+  transcodes: '/transcodes',
 };
 
 // ---------------------------------------------------------------------------
@@ -119,6 +122,15 @@ export const apiRoutes = {
 
   /** GET  -- list all jobs (probe + transcode). */
   jobs: '/jobs',
+
+  /** POST -- pause the whole transcode pipeline. */
+  jobsPause: '/jobs/pause',
+
+  /** POST -- resume the whole transcode pipeline. */
+  jobsResume: '/jobs/resume',
+
+  /** POST -- cancel a single job by its numeric ID. */
+  jobCancel: '/jobs/:id/cancel',
 
   /** GET  -- Server-Sent Events (SSE) endpoint.  The server pushes real-time
    *  job progress updates to connected clients over this long-lived

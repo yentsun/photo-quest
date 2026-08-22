@@ -4,15 +4,15 @@ import { Header } from './layout/index.js';
 import { IconButton, Icon, ProgressBar } from './ui/index.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
-import { useJobProgressUpdater } from '../contexts/JobProgressContext.jsx';
-import { cancelScan } from '../utils/api.js';
+import { useJobs, useJobProgressUpdater } from '../contexts/JobProgressContext.jsx';
+import { fetchJobs, cancelScan } from '../utils/api.js';
+import { JOB_STATUS } from '@photo-quest/shared';
 
 function ImportProgressBar() {
   const [progress, setProgress] = useState(null);
   const trackedScanRef = useRef(null);
   const { bump } = useRefresh();
   const { setIsScanning } = useScan();
-  const { update: updateProgress, clear: clearProgress } = useJobProgressUpdater();
 
   const syncFromServer = useCallback(() => {
     fetch('/scans')
@@ -74,13 +74,6 @@ function ImportProgressBar() {
             setTimeout(bump, 500);
             return;
           }
-
-          if (data.type === 'transcode_progress') {
-            updateProgress(data.mediaId, data.progressSecs);
-          }
-          if (data.type === 'transcode_complete') {
-            clearProgress(data.mediaId);
-          }
         } catch { /* ignore parse errors */ }
       };
 
@@ -89,7 +82,7 @@ function ImportProgressBar() {
 
     connect();
     return () => { destroyed = true; clearTimeout(reconnectTimer); es?.close(); };
-  }, [bump, setIsScanning, syncFromServer, updateProgress, clearProgress]);
+  }, [bump, setIsScanning, syncFromServer]);
 
   useEffect(() => {
     if (progress && trackedScanRef.current == null) {
@@ -130,6 +123,39 @@ function ImportProgressBar() {
           onClick={handleCancel}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Non-blocking transcode indicator. Shows the currently-running job with a
+ * progress bar and a queued count, so the user can keep browsing the app.
+ * Auto-dismisses when no transcode is active.
+ */
+function TranscodeToaster() {
+  const jobs = useJobs();
+  const running = jobs.find(j => j.status === JOB_STATUS.RUNNING);
+  const queued = jobs.filter(j => j.status === JOB_STATUS.PENDING).length;
+  const active = running || queued > 0;
+
+  if (!active) return null;
+
+  return (
+    <div className="toaster toaster-transcode">
+      {running ? (
+        <>
+          <span className="spinner spinner-sm" />
+          <div className="toaster-transcode-body">
+            <p>Transcoding "{running.title}"…</p>
+            {running.progress != null
+              ? <ProgressBar value={running.progress} width={20} showPct={false} />
+              : <ProgressBar width={20} indeterminate showPct={false} />}
+          </div>
+        </>
+      ) : (
+        <span className="spinner spinner-sm" />
+      )}
+      {queued > 0 && <span className="toaster-transcode-queued">{queued} queued</span>}
     </div>
   );
 }

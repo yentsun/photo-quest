@@ -6,7 +6,7 @@
  */
 
 import { json } from '../src/http.js';
-import { inProgress as transcodeInProgress } from '../ops/transcodeNow.js';
+import { hasQueuedTranscode } from '../ops/transcodeNow.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -22,8 +22,8 @@ export default async (kojo, logger) => {
     }
 
     const INCOMPLETE = ['pending', 'probing', 'probed', 'transcoding'];
-    if (row.type === 'video' && INCOMPLETE.includes(row.status) && !transcodeInProgress.has(row.id)) {
-      logger.debug(`[GET /media/:id] triggering on-demand transcode for id=${params.id} (status=${row.status})`);
+    if (row.type === 'video' && INCOMPLETE.includes(row.status) && !hasQueuedTranscode(row.id)) {
+      logger.debug(`[GET /media/:id] queueing on-demand transcode for id=${params.id} (status=${row.status})`);
       kojo.ops.transcodeNow(row.id);
     }
 

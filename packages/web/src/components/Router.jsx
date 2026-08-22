@@ -12,8 +12,9 @@ import { JobProgressProvider } from '../contexts/JobProgressContext.jsx';
 import { clientRoutes as r } from '@photo-quest/shared';
 import ErrorBoundary from './ErrorBoundary';
 import Root from './Root';
+import TranscodeMonitor from './TranscodeMonitor';
 import Dashboard from './Dashboard';
-import { LikedPage, FolderPage, MediaPage, TagsPage, TagPage } from './pages/index.js';
+import { LikedPage, FolderPage, MediaPage, TagsPage, TagPage, TranscodesPage } from './pages/index.js';
 import ToasterMessage from './ToasterMessage';
 
 export default function Router() {
@@ -25,6 +26,7 @@ export default function Router() {
         <ScanProvider>
         <JobProgressProvider>
         <SlideshowProvider>
+          <TranscodeMonitor />
           <ToasterMessage />
 
           <ErrorBoundary>
@@ -38,6 +40,7 @@ export default function Router() {
                   <Route path={r.media} element={<MediaPage />} />
                   <Route path={r.tags} element={<TagsPage />} />
                   <Route path={r.tag} element={<TagPage />} />
+                  <Route path={r.transcodes} element={<TranscodesPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to={r.root} />} />
               </Routes>

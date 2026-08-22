@@ -519,7 +519,7 @@ export default function MediaPage() {
               const STATUS_LABEL = {
                 pending: 'Preparing…',
                 probing: 'Analysing file…',
-                probed: 'Starting transcode…',
+                probed: 'Queued for transcoding…',
               };
               return (
                 <>
