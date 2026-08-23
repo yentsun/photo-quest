@@ -687,6 +687,7 @@ export default function MediaPage() {
           </div>
 
           <div className="viewer-actions">
+            <LikeButton count={item.likes || 0} onLike={handleLike} />
             <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
             <Button variant="ghost" size="sm" icon={<Icon name="download" className="icon-sm" />} onClick={() => downloadMedia(item)}>Download</Button>
             {isImage && folder && (
@@ -699,7 +700,6 @@ export default function MediaPage() {
               <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} onClick={handleSetVideoThumbnail}>Use frame for video</Button>
             )}
             <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>
-            <LikeButton count={item.likes || 0} onLike={handleLike} />
           </div>
         </div>
       )}
