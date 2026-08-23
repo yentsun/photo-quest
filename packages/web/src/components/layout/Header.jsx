@@ -77,11 +77,27 @@ export default function Header({ collapsed, onToggle }) {
     }
   };
 
-  const handleCopyUrl = () => {
-    if (networkUrl) {
-      navigator.clipboard.writeText(networkUrl);
+  const handleCopyUrl = async () => {
+    if (!networkUrl) return;
+    try {
+      /* Clipboard API is only available in secure contexts; over plain HTTP
+         fall back to a temporary textarea + execCommand('copy'). */
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(networkUrl);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = networkUrl;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy URL:', err);
     }
   };
 
@@ -188,7 +204,7 @@ export default function Header({ collapsed, onToggle }) {
       <Modal open={showInstallHelp} onClose={() => setShowInstallHelp(false)} title="Install Photo Quest">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 'var(--fs-sm)' }}>
           <p className="text-mut">
-            Over a local HTTP connection the browser can't install the app automatically, but you can add it
+            Your browser can't show the automatic install prompt right now, but you can add Photo Quest
             to your home screen manually:
           </p>
           <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6, color: 'var(--sol-text-em)' }}>
