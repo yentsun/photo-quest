@@ -920,8 +920,6 @@ body {
 .transcode-status--failed { color: var(--sol-red); }
 .transcode-row .ascii-meter { width: 160px; flex-shrink: 0; }
 .transcode-error { color: var(--sol-red); font-size: var(--fs-xs); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.transcodes-hint { margin-top: 16px; font-size: var(--fs-sm); color: var(--sol-text-mut); }
-.transcodes-hint a { color: var(--sol-accent); }
 
 /* ─── Search input wrapper ─── */
 .search-wrap { position: relative; }

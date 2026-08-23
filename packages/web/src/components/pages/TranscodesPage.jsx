@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { clientRoutes, JOB_STATUS } from '@photo-quest/shared';
+import { JOB_STATUS } from '@photo-quest/shared';
 import { useJobs } from '../../contexts/JobProgressContext.jsx';
 import { pauseJobs, resumeJobs, cancelJob } from '../../utils/api.js';
 import { Button, Icon, ProgressBar } from '../ui/index.js';
@@ -115,10 +115,6 @@ export default function TranscodesPage() {
           </div>
         </>
       )}
-
-      <p className="transcodes-hint">
-        <a href={clientRoutes.dashboard}>Back to library</a>
-      </p>
     </div>
   );
 }
