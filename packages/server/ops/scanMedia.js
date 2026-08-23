@@ -281,7 +281,8 @@ export default async function (dirPath) {
   } catch (err) {
     if (err?.name === 'AbortError') {
       db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.CANCELLED, scanId);
-      broadcastSse({ type: 'import_cancelled', scanId, total: 0, processed: 0 });
+      /* The cancel endpoint already broadcasts import_cancelled after
+         abortDiscoveryWalk(); don't emit a second event for the same scan. */
       logger.info(`[scanMedia] discovery aborted: ${dirPath}`);
       return { scanId, total: 0, cancelled: true };
     }
@@ -320,6 +321,31 @@ export default async function (dirPath) {
     removed++;
   }
   if (removed > 0) logger.info(`Scan: removed ${removed} stale non-media record(s)`);
+
+  /* Backfill date_taken for existing records under this directory that were
+     created before the date_taken column migration (row exists but is NULL).
+     Previously the worker re-queued every file so the fast-path filled this in;
+     now only new files are queued, so do it here instead while we still have
+     the file list in hand. Uses mtime as a cheap proxy (no hash computed).
+     Guarded by a count so it is a no-op for libraries that are already filled in. */
+  const nullDateCount = db.prepare(
+    "SELECT COUNT(*) AS n FROM media WHERE hidden = 0 AND date_taken IS NULL AND (path = ? OR path LIKE ? OR path LIKE ?)"
+  ).get(dirPath, dirPath + path.sep + '%', dirPath + '/%').n;
+  if (nullDateCount > 0) {
+    const backfillStmt = db.prepare(
+      'UPDATE media SET date_taken = ? WHERE id = ? AND date_taken IS NULL'
+    );
+    for (const filePath of files) {
+      if (existingPaths.has(filePath)) {
+        try {
+          const row = db.prepare('SELECT id FROM media WHERE path = ? AND date_taken IS NULL').get(filePath);
+          if (row) {
+            backfillStmt.run(fs.statSync(filePath).mtime.toISOString(), row.id);
+          }
+        } catch { /* stat may fail if the file vanished; skip */ }
+      }
+    }
+  }
 
   logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
 
