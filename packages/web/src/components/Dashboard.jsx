@@ -4,7 +4,7 @@ import { useMediaActions } from '../hooks/useMedia.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
-import { fetchFolders, fetchMedia, getLastFolders } from '../utils/api.js';
+import { fetchFolders, fetchMedia, getLastFolders, pickLibraryFile, connectLibrary } from '../utils/api.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache.js';
 import usePersistedState from '../hooks/usePersistedState.js';
 import { idbGetFolders } from '../services/idb.js';
@@ -93,6 +93,10 @@ export default function Dashboard() {
   const [selectedPath, setSelectedPath] = useState(null);
   const [browsing, setBrowsing] = useState(false);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
+
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [pickedPath, setPickedPath] = useState(null);
+  const [libraryStatus, setLibraryStatus] = useState(null);
 
   const [folders, setFolders] = useState(() => {
     if (isPageCacheValid('dashboard', signal)) return getPageCache('dashboard').data.folders;
@@ -249,6 +253,34 @@ export default function Dashboard() {
     finally { setBrowsing(false); }
   };
 
+  const handleOpenLibrary = () => {
+    setPickedPath(null);
+    setLibraryStatus(null);
+    setShowLibrary(true);
+  };
+
+  const handlePickLibrary = async () => {
+    setLibraryStatus(null);
+    setPickedPath(null);
+    try {
+      const result = await pickLibraryFile();
+      if (!result.cancelled) setPickedPath(result.path);
+    } catch (err) {
+      setLibraryStatus({ error: err.message });
+    }
+  };
+
+  const handleConnectLibrary = async () => {
+    if (!pickedPath) return;
+    setLibraryStatus({ loading: true });
+    try {
+      await connectLibrary(pickedPath);
+      setLibraryStatus({ success: true });
+    } catch (err) {
+      setLibraryStatus({ error: err.message });
+    }
+  };
+
   const handleAddFolder = async () => {
     if (!selectedPath || !pathValid) return;
     setImportProgress(null);
@@ -324,6 +356,9 @@ export default function Dashboard() {
           )}
           <Button variant="ghost" size="sm" onClick={() => setShowAddFolder(true)} disabled={isScanning} icon={<Icon name="folder" className="icon-sm" />}>
             <span className="sm-show">Add Folder</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleOpenLibrary} title="Connect an existing library (.db) file" icon={<Icon name="folder" className="icon-sm" />}>
+            <span className="sm-show">Connect</span>
           </Button>
           <Button
             variant={debouncedSearch ? 'primary' : 'ghost'}
@@ -424,6 +459,34 @@ export default function Dashboard() {
           action={{ label: 'Add Folder', onClick: () => setShowAddFolder(true) }}
         />
       )}
+
+      <Modal open={showLibrary} onClose={() => setShowLibrary(false)} title="Connect existing library">
+        <p className="text-mut" style={{ fontSize: 'var(--fs-sm)' }}>
+          Select a <code style={{ color: 'var(--sol-text-em)' }}>.db</code> file from a previous Photo Quest installation to open that library.
+        </p>
+        <Button variant="ghost" onClick={handlePickLibrary} icon={<Icon name="folder" className="icon-sm" />}>
+          Browse…
+        </Button>
+        {pickedPath && (
+          <div className="path-preview">{pickedPath}</div>
+        )}
+        {libraryStatus?.error && (
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{libraryStatus.error}</p>
+        )}
+        {libraryStatus?.success && (
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Library connected — the app is restarting…</p>
+        )}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" onClick={() => setShowLibrary(false)}>Cancel</Button>
+          <Button
+            variant="primary"
+            onClick={handleConnectLibrary}
+            disabled={!pickedPath || libraryStatus?.loading || libraryStatus?.success}
+          >
+            {libraryStatus?.loading ? 'Connecting…' : 'Connect'}
+          </Button>
+        </div>
+      </Modal>
 
       <Modal open={searchOpen} onClose={() => setSearchOpen(false)} title="Search">
         <div className="search-wrap">

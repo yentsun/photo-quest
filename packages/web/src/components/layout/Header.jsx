@@ -2,16 +2,13 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo, pickLibraryFile, connectLibrary } from '../../utils/api.js';
+import { fetchNetworkInfo } from '../../utils/api.js';
 import { Button, Icon, Modal } from '../ui/index.js';
 
 export default function Header({ collapsed, onToggle }) {
   const [networkUrl, setNetworkUrl] = useState(null);
   const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [showLibrary, setShowLibrary] = useState(false);
-  const [pickedPath, setPickedPath] = useState(null);
-  const [libraryStatus, setLibraryStatus] = useState(null);
 
   useEffect(() => {
     fetchNetworkInfo()
@@ -29,28 +26,6 @@ export default function Header({ collapsed, onToggle }) {
       navigator.clipboard.writeText(networkUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const handlePickLibrary = async () => {
-    setLibraryStatus(null);
-    setPickedPath(null);
-    try {
-      const result = await pickLibraryFile();
-      if (!result.cancelled) setPickedPath(result.path);
-    } catch (err) {
-      setLibraryStatus({ error: err.message });
-    }
-  };
-
-  const handleConnectLibrary = async () => {
-    if (!pickedPath) return;
-    setLibraryStatus({ loading: true });
-    try {
-      await connectLibrary(pickedPath);
-      setLibraryStatus({ success: true });
-    } catch (err) {
-      setLibraryStatus({ error: err.message });
     }
   };
 
@@ -103,17 +78,6 @@ export default function Header({ collapsed, onToggle }) {
         </nav>
 
         <div className="sidebar-footer">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => { setShowLibrary(true); setPickedPath(null); setLibraryStatus(null); }}
-            title="Connect existing library"
-            icon={<Icon name="folder" className="icon-sm" />}
-            className="btn-full"
-          >
-            <span className="nav-label">Library</span>
-          </Button>
-
           {networkUrl && (
             <Button
               variant="ghost"
@@ -151,38 +115,6 @@ export default function Header({ collapsed, onToggle }) {
           </div>
         </Modal>
       )}
-
-      <Modal
-        open={showLibrary}
-        onClose={() => setShowLibrary(false)}
-        title="Connect existing library"
-      >
-        <p className="text-mut" style={{ fontSize: 'var(--fs-sm)' }}>
-          Select a <code style={{ color: 'var(--sol-text-em)' }}>.db</code> file from a previous Photo Quest installation to open that library.
-        </p>
-        <Button variant="ghost" onClick={handlePickLibrary} icon={<Icon name="folder" className="icon-sm" />}>
-          Browse…
-        </Button>
-        {pickedPath && (
-          <div className="path-preview">{pickedPath}</div>
-        )}
-        {libraryStatus?.error && (
-          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{libraryStatus.error}</p>
-        )}
-        {libraryStatus?.success && (
-          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Library connected — the app is restarting…</p>
-        )}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <Button variant="ghost" onClick={() => setShowLibrary(false)}>Cancel</Button>
-          <Button
-            variant="primary"
-            onClick={handleConnectLibrary}
-            disabled={!pickedPath || libraryStatus?.loading || libraryStatus?.success}
-          >
-            {libraryStatus?.loading ? 'Connecting…' : 'Connect'}
-          </Button>
-        </div>
-      </Modal>
     </>
   );
 }
