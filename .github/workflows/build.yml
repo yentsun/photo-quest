@@ -94,6 +94,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set release notes from changelog
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $ver = $tag.TrimStart('v')
+          $notes = [System.Collections.Generic.List[string]]::new()
+          $capturing = $false
+          Get-ChildItem 'docs/*.md' | ForEach-Object {
+            foreach ($line in Get-Content $_.FullName) {
+              if ($line -match '^##\s+\d') {
+                $capturing = $line -match ("^##\s+" + [regex]::Escape($ver) + "(?:[ (]|$)")
+              } elseif ($capturing) {
+                [void]$notes.Add($line)
+              }
+            }
+          }
+          if ($notes.Count -eq 0) {
+            Write-Warning "No changelog entry found for $tag; leaving existing release notes unchanged."
+            exit 0
+          }
+          $file = "$env:RUNNER_TEMP\release-notes.md"
+          [System.IO.File]::WriteAllText($file, ($notes -join "`n"), [System.Text.UTF8Encoding]::new($false))
+          gh release edit $tag --repo ${{ github.repository }} --notes-file $file
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: List output
         run: Get-ChildItem dist-electron/ -Recurse -Name
 
