@@ -18,6 +18,7 @@
  */
 
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { Worker } from 'node:worker_threads';
@@ -145,12 +146,33 @@ export async function processOneItem(db, itemId, filePath, logger) {
 /** The single active scan worker, or null when idle. */
 let activeWorker = null;
 
+/**
+ * Abort controllers for scans currently in the discovery (disk-walk) phase,
+ * keyed by scan id. The cancel endpoint aborts these so the synchronous-ish
+ * walk can be interrupted between directory reads. Discovery is the phase that
+ * previously ran on the request thread and blocked the event loop, making
+ * `/scans/:id/cancel` unserviceable.
+ */
+const discoveryAborts = new Map();
+
 /** Terminate the worker immediately. No-op if idle. */
 export function terminateAllScanWorkers() {
   if (activeWorker) {
     activeWorker.terminate();
     activeWorker = null;
   }
+}
+
+/**
+ * Abort any scan still in the discovery (disk-walk) phase.
+ * No-op if no discovery is in progress. Called by the cancel endpoint so the
+ * walk stops promptly rather than finishing the entire tree first.
+ */
+export function abortDiscoveryWalk() {
+  for (const controller of discoveryAborts.values()) {
+    controller.abort();
+  }
+  discoveryAborts.clear();
 }
 
 /**
@@ -221,7 +243,7 @@ function createFolderHierarchy(db, scanRoot, files) {
   }
 }
 
-export default function (dirPath) {
+export default async function (dirPath) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
@@ -240,16 +262,41 @@ export default function (dirPath) {
     throw new Error(`Not a directory: ${dirPath}`);
   }
 
-  logger.debug(`[scanMedia] walking directory tree`);
-  const files = findMediaFiles(dirPath);
+  /* Create the scan record up-front so the cancel endpoint can always find it
+     by id and stop discovery, even while the (previously synchronous) disk
+     walk is still running. Previously the record was only created after the
+     walk, which left the walk uncancellable and blocked the event loop. */
+  const scanResult = db.prepare(
+    'INSERT INTO scans (dir_path, total, status) VALUES (?, 0, ?)'
+  ).run(dirPath, SCAN_STATUS.DISCOVERING);
+  const scanId = scanResult.lastInsertRowid;
+
+  const abortController = new AbortController();
+  discoveryAborts.set(scanId, abortController);
+
+  logger.debug(`[scanMedia] walking directory tree (scan ${scanId})`);
+  let files;
+  try {
+    files = await findMediaFiles(dirPath, abortController.signal);
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.CANCELLED, scanId);
+      /* The cancel endpoint already broadcasts import_cancelled after
+         abortDiscoveryWalk(); don't emit a second event for the same scan. */
+      logger.info(`[scanMedia] discovery aborted: ${dirPath}`);
+      return { scanId, total: 0, cancelled: true };
+    }
+    db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.FAILED, scanId);
+    throw err;
+  } finally {
+    discoveryAborts.delete(scanId);
+  }
   logger.debug(`[scanMedia] discovered ${files.length} media files on disk`);
 
   createFolderHierarchy(db, dirPath, files);
-  logger.debug(`[scanMedia] folder hierarchy updated`);
 
   const existingRows = db.prepare('SELECT id, path FROM media WHERE hidden = 0').all();
   const existingPaths = new Set(existingRows.map(r => r.path));
-  logger.debug(`[scanMedia] library has ${existingPaths.size} existing paths`);
   const newFiles = files.filter(f => !existingPaths.has(f));
 
   /* Remove records for files under this directory that were previously
@@ -275,34 +322,56 @@ export default function (dirPath) {
   }
   if (removed > 0) logger.info(`Scan: removed ${removed} stale non-media record(s)`);
 
-  logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
-
-  if (files.length === 0) {
-    logger.debug(`[scanMedia] no media files found, nothing to do`);
-    return { scanId: null, total: 0 };
+  /* Backfill date_taken for existing records under this directory that were
+     created before the date_taken column migration (row exists but is NULL).
+     Previously the worker re-queued every file so the fast-path filled this in;
+     now only new files are queued, so do it here instead while we still have
+     the file list in hand. Uses mtime as a cheap proxy (no hash computed).
+     Guarded by a count scoped to this directory so it is a no-op for libraries
+     that are already filled in. Async stat (not statSync) to avoid blocking the
+     event loop, matching the async walk above. */
+  const nullDateCount = db.prepare(
+    "SELECT COUNT(*) AS n FROM media WHERE hidden = 0 AND date_taken IS NULL AND (path = ? OR path LIKE ? OR path LIKE ?)"
+  ).get(dirPath, dirPath + path.sep + '%', dirPath + '/%').n;
+  if (nullDateCount > 0) {
+    const backfillStmt = db.prepare(
+      'UPDATE media SET date_taken = ? WHERE id = ? AND date_taken IS NULL'
+    );
+    const findRow = db.prepare('SELECT id FROM media WHERE path = ? AND date_taken IS NULL');
+    for (const filePath of files) {
+      if (!existingPaths.has(filePath)) continue;
+      const row = findRow.get(filePath);
+      if (!row) continue;
+      try {
+        backfillStmt.run((await fsp.stat(filePath)).mtime.toISOString(), row.id);
+      } catch { /* stat may fail if the file vanished; skip */ }
+    }
   }
 
-  /* Create scan record — queue all files so that existing ones get date_taken
-     updated via the worker pipeline and show progress via SSE. */
-  const scanResult = db.prepare(
-    'INSERT INTO scans (dir_path, total, status) VALUES (?, ?, ?)'
-  ).run(dirPath, files.length, SCAN_STATUS.DISCOVERING);
-  const scanId = scanResult.lastInsertRowid;
+  logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
 
-  /* Queue all files. Existing files are handled by processOneItem's fast-path
-     (date_taken UPDATE only); new files go through full hash/dedup/insert. */
+  /* Nothing new to import — mark complete and skip the worker entirely. */
+  if (newFiles.length === 0) {
+    logger.debug(`[scanMedia] no new files found, nothing to do`);
+    db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.COMPLETED, scanId);
+    broadcastSse({ type: 'import_complete', scanId, total: 0, processed: 0 });
+    return { scanId, total: 0 };
+  }
+
+  /* Queue only new files. Existing files are untouched — they are not
+     re-queued, which previously re-processed the whole library on refresh. */
   const insertStmt = db.prepare(
     'INSERT INTO import_queue (scan_id, path, status) VALUES (?, ?, ?)'
   );
   db.exec('BEGIN');
-  for (const filePath of files) {
+  for (const filePath of newFiles) {
     insertStmt.run(scanId, filePath, IMPORT_STATUS.PENDING);
   }
   db.exec('COMMIT');
 
-  db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.IMPORTING, scanId);
+  db.prepare('UPDATE scans SET status = ?, total = ? WHERE id = ?').run(SCAN_STATUS.IMPORTING, newFiles.length, scanId);
 
-  broadcastSse({ type: 'import_started', scanId, total: files.length, processed: 0 });
+  broadcastSse({ type: 'import_started', scanId, total: newFiles.length, processed: 0 });
 
   /* Phase 2: Ensure the single worker thread is running — it will pick up
      the new scan's items along with any other queued work. */
@@ -313,16 +382,22 @@ export default function (dirPath) {
 
 /**
  * Recursively find all files with a supported media extension.
+ *
+ * Async so the walk yields to the event loop between directory reads — the
+ * previous synchronous `readdirSync` recursion blocked the request thread for
+ * the whole walk, making the scan uncancellable and the server unresponsive.
+ * Aborts cooperatively *after* each directory read by throwing an AbortError.
  */
-function findMediaFiles(dirPath) {
+async function findMediaFiles(dirPath, signal) {
   const results = [];
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  const entries = await fsp.readdir(dirPath, { withFileTypes: true });
 
   for (const entry of entries) {
+    if (signal?.aborted) throw new DOMException('Scan aborted', 'AbortError');
     const fullPath = path.join(dirPath, entry.name);
 
     if (entry.isDirectory()) {
-      results.push(...findMediaFiles(fullPath));
+      results.push(...await findMediaFiles(fullPath, signal));
     } else if (isMediaFile(fullPath)) {
       results.push(fullPath);
     }

@@ -27,7 +27,7 @@ export default async (kojo, logger) => {
 
     logger.debug(`[POST /media/scan] scanning path="${body.path}"`);
     try {
-      const result = kojo.ops.scanMedia(body.path);
+      const result = await kojo.ops.scanMedia(body.path);
       logger.debug(`[POST /media/scan] → scanId=${result.scanId} total=${result.total}`);
       json(res, 200, result);
     } catch (err) {
