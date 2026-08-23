@@ -219,7 +219,10 @@ export default function MediaPage() {
     folderNavInFlight.current = true;
     setFolderNavLoading(true);
     try {
-      const { items } = await fetchMedia({ folder: item.folder, sort });
+      /* Force a server fetch: IDB may only hold a partial subset of the folder
+         (e.g. after a shuffle), which would make folder up/down navigation
+         fail or collapse the controls. */
+      const { items } = await fetchMedia({ folder: item.folder, sort, skipCache: true });
       const sorted = applySort(items, sort);
       setFolderMedia(sorted);
       return sorted;

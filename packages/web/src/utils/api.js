@@ -124,7 +124,7 @@ export async function fetchTags() {
   return data;
 }
 
-export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type } = {}) {
+export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type, skipCache = false } = {}) {
   const url = new URL(apiRoutes.media, window.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
@@ -142,6 +142,17 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   /* IDB stores results in deterministic order — skip it for random queries. */
   if (random) {
     return _fetchMediaFromServer(url, opts);
+  }
+
+  /* skipCache forces a fresh server fetch (e.g. for complete folder sibling
+     lists), but still falls back to IDB when the server is unreachable. */
+  if (skipCache) {
+    try {
+      return await _fetchMediaFromServer(url, opts);
+    } catch (err) {
+      console.warn('[api] fetchMedia falling back to IDB:', err.message);
+      return idbGetMedia(opts);
+    }
   }
 
   // IDB-first: return cached data immediately if available
