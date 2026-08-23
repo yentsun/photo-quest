@@ -140,8 +140,19 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   const opts = { limit, offset, folder, subtree, liked, random, sort, search, tag, type };
 
   /* IDB stores results in deterministic order — skip it for random queries. */
-  if (random || skipCache) {
+  if (random) {
     return _fetchMediaFromServer(url, opts);
+  }
+
+  /* skipCache forces a fresh server fetch (e.g. for complete folder sibling
+     lists), but still falls back to IDB when the server is unreachable. */
+  if (skipCache) {
+    try {
+      return await _fetchMediaFromServer(url, opts);
+    } catch (err) {
+      console.warn('[api] fetchMedia falling back to IDB:', err.message);
+      return idbGetMedia(opts);
+    }
   }
 
   // IDB-first: return cached data immediately if available
