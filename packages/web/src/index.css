@@ -207,20 +207,6 @@ body {
 }
 .sidebar-toggle:hover { background: var(--sol-surface); color: var(--sol-text-em); }
 
-/* ─── Import bar ─── */
-.import-bar {
-  background: rgba(38,139,210,0.1);
-  border-bottom: 1px solid rgba(38,139,210,0.25);
-  padding: 6px 14px;
-  flex-shrink: 0;
-}
-.import-bar-inner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.import-bar-text { color: rgba(147,161,161,0.9); font-size: var(--fs-sm); }
-
 /* ─── Buttons ─── */
 .btn {
   display: inline-flex;
@@ -453,18 +439,6 @@ body {
   padding: 0 4px; outline: none; width: 100%; max-width: 400px;
 }
 .page-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
-
-/* ─── Scan notice ─── */
-.scan-notice {
-  margin-bottom: 20px;
-  padding: 10px 14px;
-  background: rgba(38,139,210,0.08);
-  border: 1px solid rgba(38,139,210,0.25);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.scan-notice p { color: var(--sol-text-em); font-size: var(--fs-sm); }
 
 /* ─── Item grid (folders + media small list) ─── */
 .item-grid {
@@ -914,6 +888,15 @@ body {
 .toaster-transcode-body { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
 .toaster-transcode-body p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toaster-transcode-queued { color: var(--sol-text-mut); font-size: var(--fs-xs); white-space: nowrap; }
+
+/* Refresh / import toaster — stacking report of scan progress + status */
+.refresh-toaster-stack {
+  position: fixed; bottom: 16px; right: 16px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+}
+.refresh-toaster { position: static; min-width: 280px; }
+.refresh-toaster-body { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.refresh-toaster-title { margin: 0; font-size: var(--fs-sm); }
 
 /* ─── Transcodes page ─── */
 .transcodes-actions { display: flex; gap: 8px; margin: 8px 0 12px; }

@@ -82,13 +82,12 @@ export default function Dashboard() {
   const { addFolderWithPath, removeFolder, refreshLibrary } = useMediaActions();
   const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
-  const { isScanning } = useScan();
+  const { isScanning, setStatusMessage } = useScan();
   const pendingShuffle = useRef(false);
   const [shuffling, setShuffling] = useState(false);
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [scanProgress, setScanProgress] = useState(null);
   const [importProgress, setImportProgress] = useState(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
   const [selectedPath, setSelectedPath] = useState(null);
@@ -224,20 +223,17 @@ export default function Dashboard() {
 
   const handleRefresh = async () => {
     if (rootFolders.length === 0) {
-      setScanProgress('No folders to refresh. Add a folder first.');
-      setTimeout(() => setScanProgress(null), 3000);
+      setStatusMessage('No folders to refresh. Add a folder first.');
       return;
     }
-    setScanProgress('Refreshing library...');
+    setStatusMessage('Refreshing library...');
     try {
-      const result = await refreshLibrary(folders, (progress) => setScanProgress(progress));
+      const result = await refreshLibrary(folders, (progress) => setStatusMessage(progress));
       const totalFolders = result.serverFolders + result.clientFolders;
-      setScanProgress(`Refreshed ${totalFolders} folder${totalFolders !== 1 ? 's' : ''}. Found ${result.newFiles} file${result.newFiles !== 1 ? 's' : ''}.`);
-      setTimeout(() => setScanProgress(null), 3000);
+      setStatusMessage(`Refreshed ${totalFolders} folder${totalFolders !== 1 ? 's' : ''}. Found ${result.newFiles} file${result.newFiles !== 1 ? 's' : ''}.`);
     } catch (err) {
       console.error('Failed to refresh library:', err);
-      setScanProgress('Refresh failed: ' + err.message);
-      setTimeout(() => setScanProgress(null), 5000);
+      setStatusMessage('Refresh failed: ' + err.message);
     }
   };
 
@@ -273,15 +269,13 @@ export default function Dashboard() {
         es.onerror = () => { es.close(); reject(new Error('Lost connection')); };
       });
       bump();
-      setScanProgress(cancelled ? 'Scan stopped.' : `Imported ${total} files.`);
+      setStatusMessage(cancelled ? 'Scan stopped.' : `Imported ${total} files.`);
       setShowAddFolder(false);
       setImportProgress(null);
-      setTimeout(() => setScanProgress(null), 3000);
     } catch (err) {
       console.error('Failed to scan folder:', err);
-      setScanProgress('Failed: ' + err.message);
+      setStatusMessage('Failed: ' + err.message);
       setImportProgress(null);
-      setTimeout(() => setScanProgress(null), 5000);
     }
   };
 
@@ -290,8 +284,7 @@ export default function Dashboard() {
     if (!confirm(`Remove "${folderName}" from library?\n\nYour likes will be preserved if you re-add this folder later.`)) return;
     try {
       const result = await removeFolder(folder.id);
-      setScanProgress(`Removed "${folderName}" (${result.hidden} items hidden)`);
-      setTimeout(() => setScanProgress(null), 3000);
+      setStatusMessage(`Removed "${folderName}" (${result.hidden} items hidden)`);
     } catch (err) {
       console.error('Failed to remove folder:', err);
       alert('Failed to remove folder: ' + err.message);
@@ -343,12 +336,6 @@ export default function Dashboard() {
           </Button>
         </div>
       </div>
-
-      {scanProgress && (
-        <div className="scan-notice">
-          <p>{scanProgress}</p>
-        </div>
-      )}
 
       <Modal open={showAddFolder} onClose={() => setShowAddFolder(false)} title="Add Folder">
         <Button

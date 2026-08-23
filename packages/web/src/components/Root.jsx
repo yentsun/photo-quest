@@ -8,11 +8,23 @@ import { useJobs, useJobProgressUpdater } from '../contexts/JobProgressContext.j
 import { fetchJobs, cancelScan } from '../utils/api.js';
 import { JOB_STATUS } from '@photo-quest/shared';
 
-function ImportProgressBar() {
+/**
+ * Global refresh/import toaster. Surfaces two things as fixed-position toasts
+ * (bottom-right, stacking on top of each other):
+ *
+ *  1. Live import progress — "Importing… N/M" with an animated progress bar and
+ *     a Stop button — shown for the duration of an active scan.
+ *  2. Transient status messages — "Refreshing library…", "Imported N files.",
+ *     refresh failures, etc. — surfaced via the ScanContext by Dashboard.
+ *
+ * Auto-dismisses: the status message clears on a timer; progress disappears
+ * when the tracked scan completes or is cancelled.
+ */
+function RefreshToaster() {
   const [progress, setProgress] = useState(null);
   const trackedScanRef = useRef(null);
   const { bump } = useRefresh();
-  const { setIsScanning } = useScan();
+  const { isScanning, setIsScanning, statusMessage } = useScan();
 
   const syncFromServer = useCallback(() => {
     fetch('/scans')
@@ -104,25 +116,34 @@ function ImportProgressBar() {
     }
   }, [progress?.scanId]);
 
-  if (!progress) return null;
-
-  const pct = progress.total ? (progress.processed / progress.total) * 100 : 0;
+  const pct = progress?.total ? (progress.processed / progress.total) * 100 : 0;
 
   return (
-    <div className="import-bar">
-      <div className="import-bar-inner">
-        <span className="spinner spinner-sm" />
-        <span className="import-bar-text">
-          Importing… {progress.processed}/{progress.total}
-        </span>
-        <ProgressBar value={pct} width={20} showPct={false} />
-        <IconButton
-          icon={<Icon name="close" className="icon-sm" />}
-          label="Stop import"
-          size="sm"
-          onClick={handleCancel}
-        />
-      </div>
+    <div className="refresh-toaster-stack">
+      {trackedScanRef.current != null && (
+        <div className="toaster toaster-info refresh-toaster">
+          <span className="spinner spinner-sm" />
+          <div className="refresh-toaster-body">
+            <p className="refresh-toaster-title">
+              Importing… {progress ? `${progress.processed}/${progress.total}` : ''}
+            </p>
+            <ProgressBar value={pct} width={20} showPct={false} />
+          </div>
+          <IconButton
+            icon={<Icon name="close" className="icon-sm" />}
+            label="Stop import"
+            size="sm"
+            onClick={handleCancel}
+          />
+        </div>
+      )}
+      {!isScanning && statusMessage && (
+        <div className="toaster toaster-info refresh-toaster">
+          <div className="refresh-toaster-body">
+            <p className="refresh-toaster-title">{statusMessage}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -177,11 +198,11 @@ export default function Root() {
     <div className={`app${isViewer ? ' app--viewer' : ''}`} style={collapsed ? { '--sidebar-w': '52px' } : undefined}>
       <Header collapsed={collapsed} onToggle={toggleSidebar} />
       <div className="app-body">
-        <ImportProgressBar />
         <main className="main-area">
           <Outlet />
         </main>
       </div>
+      <RefreshToaster />
     </div>
   );
 }
