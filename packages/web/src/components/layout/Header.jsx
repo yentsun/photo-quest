@@ -3,12 +3,14 @@ import { NavLink, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { clientRoutes } from '@photo-quest/shared';
 import { fetchNetworkInfo } from '../../utils/api.js';
+import { addKnownServer, currentServerUrl } from '../../services/serverPool.js';
 import { Button, Icon, Modal } from '../ui/index.js';
 
 export default function Header({ collapsed, onToggle }) {
   const [networkUrl, setNetworkUrl] = useState(null);
   const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
 
   useEffect(() => {
     fetchNetworkInfo()
@@ -20,6 +22,37 @@ export default function Header({ collapsed, onToggle }) {
       })
       .catch(err => console.error('Failed to fetch network info:', err));
   }, []);
+
+  /* Remember the server's reachable addresses so discovery can fall back to
+     them later if this origin becomes unreachable. */
+  useEffect(() => {
+    if (networkUrl) {
+      addKnownServer(currentServerUrl());
+      addKnownServer(networkUrl);
+    }
+  }, [networkUrl]);
+
+  /* PWA installability: capture the prompt and surface an Install button. */
+  useEffect(() => {
+    const onBeforeInstall = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    const onInstalled = () => setInstallPrompt(null);
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') setInstallPrompt(null);
+  };
 
   const handleCopyUrl = () => {
     if (networkUrl) {
@@ -78,6 +111,19 @@ export default function Header({ collapsed, onToggle }) {
         </nav>
 
         <div className="sidebar-footer">
+          {installPrompt && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleInstall}
+              title="Install Photo Quest as an app"
+              icon={<Icon name="download" className="icon-sm" />}
+              className="btn-full"
+            >
+              <span className="nav-label">Install app</span>
+            </Button>
+          )}
+
           {networkUrl && (
             <Button
               variant="ghost"
