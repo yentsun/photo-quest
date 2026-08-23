@@ -8,7 +8,7 @@
 import { SCAN_STATUS } from '@photo-quest/shared';
 import { broadcastSse } from '../src/sse.js';
 import { json } from '../src/http.js';
-import { terminateAllScanWorkers } from '../ops/scanMedia.js';
+import { terminateAllScanWorkers, abortDiscoveryWalk } from '../ops/scanMedia.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -29,8 +29,9 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: `Scan is already ${scan.status}` });
     }
 
-    /* Kill all active workers — refreshLibrary spawns one per folder. */
+    /* Kill all active workers and stop any in-progress disk walks. */
     terminateAllScanWorkers();
+    abortDiscoveryWalk();
 
     /* Mark every importing scan as cancelled in the DB. */
     db.prepare(

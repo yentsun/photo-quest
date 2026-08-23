@@ -54,7 +54,7 @@ export function useMediaActions() {
       try {
         onProgress?.(`Scanning ${folderPath.split(/[/\\]/).pop()}...`);
         const result = await scanMediaApi(folderPath);
-        newFiles += result.added || 0;
+        newFiles += result.total || 0;
         scannedFolders++;
       } catch (err) {
         console.error(`Failed to rescan ${folderPath}:`, err);
