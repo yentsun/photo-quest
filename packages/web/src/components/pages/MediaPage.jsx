@@ -319,11 +319,27 @@ export default function MediaPage() {
   const handleDelete = useCallback(async () => {
     if (!item) return;
     if (!confirm(`Delete "${item.title}"?\n\nThis will remove it from the library AND delete the file from disk.`)) return;
-    const nextItem = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
     const deletedId = item.id;
+
+    /* Up/down navigation happens within the folder sibling list, even in a
+       slideshow. Pick the next item from the same source we are navigating
+       through, so deletion continues the sequence instead of jumping to a
+       different order (or to the deleted item). */
+    const folderIdx = folderMedia.findIndex(m => m.id === deletedId);
+    const folderNext = folderIdx >= 0
+      ? (folderMedia[folderIdx + 1] ?? folderMedia[folderIdx - 1])
+      : null;
+    const slideshowNext = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
+    const nextItem = folderIdx >= 0 ? folderNext : slideshowNext;
+
     if (nextItem) navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
     else navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
+
+    /* Drop the deleted item from both the slideshow and the folder sibling
+       list so subsequent up/down navigation doesn't target a dead id. */
     if (inSlideshow) removeSlideshowItem(deletedId);
+    setFolderMedia(list => list.filter(m => m.id !== deletedId));
+
     try {
       await deleteMedia(deletedId);
       bump();
@@ -332,7 +348,7 @@ export default function MediaPage() {
       console.error('Failed to delete media:', err);
       dispatch({ type: actions.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
     }
-  }, [item, navItems, currentIndex, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump]);
+  }, [item, navItems, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump]);
 
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
