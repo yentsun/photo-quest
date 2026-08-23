@@ -6,6 +6,7 @@ import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
 import { useJobs, useJobProgressUpdater } from '../contexts/JobProgressContext.jsx';
 import { fetchJobs, cancelScan } from '../utils/api.js';
+import { discoverServer, redirectToServer } from '../services/serverPool.js';
 import { JOB_STATUS } from '@photo-quest/shared';
 
 /**
@@ -192,6 +193,17 @@ export default function Root() {
       localStorage.setItem('sidebar-collapsed', next);
       return next;
     });
+  }, []);
+
+  /* Basic server discovery: if the current origin is unreachable, probe the
+     pool of known servers and redirect to the first one that responds. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const server = await discoverServer();
+      if (!cancelled) redirectToServer(server);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   return (
