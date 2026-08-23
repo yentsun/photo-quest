@@ -13,6 +13,9 @@ export default function Header({ collapsed, onToggle }) {
   const [installPrompt, setInstallPrompt] = useState(null);
 
   useEffect(() => {
+    /* Always record the current origin — it is the server when the app is
+       served from it, even if the /network LAN probe fails. */
+    addKnownServer(currentServerUrl());
     fetchNetworkInfo()
       .then(info => {
         if (info.ip) {
@@ -26,10 +29,7 @@ export default function Header({ collapsed, onToggle }) {
   /* Remember the server's reachable addresses so discovery can fall back to
      them later if this origin becomes unreachable. */
   useEffect(() => {
-    if (networkUrl) {
-      addKnownServer(currentServerUrl());
-      addKnownServer(networkUrl);
-    }
+    if (networkUrl) addKnownServer(networkUrl);
   }, [networkUrl]);
 
   /* PWA installability: capture the prompt and surface an Install button. */
@@ -50,8 +50,11 @@ export default function Header({ collapsed, onToggle }) {
   const handleInstall = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
-    const { outcome } = await installPrompt.userChoice;
-    if (outcome === 'accepted') setInstallPrompt(null);
+    await installPrompt.userChoice;
+    /* prompt() can only be invoked once per beforeinstallprompt event; clear
+       the button regardless of outcome so a dismissed dialog doesn't leave a
+       dead button behind. */
+    setInstallPrompt(null);
   };
 
   const handleCopyUrl = () => {

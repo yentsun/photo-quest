@@ -11,7 +11,7 @@
 const STORAGE_KEY = 'photoquest.knownServers';
 const ACTIVE_KEY = 'photoquest.activeServer';
 
-/** @type {string[]} Known server base URLs (no trailing slash). */
+/** @type {string[]} Known server base URLs. */
 let known = null;
 
 function load() {
@@ -91,7 +91,7 @@ export function setActiveServer(url) {
 function isCurrentOriginReachable() {
   // A light probe: the server serves the web app, so a same-origin fetch of
   // a known endpoint that returns JSON (not the SPA fallback) confirms it.
-  return fetch('/network', { cache: 'no-store' })
+  return fetch('/network', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
     .then(r => (r.ok ? true : Promise.reject(new Error('not ok'))))
     .catch(() => false);
 }
@@ -99,10 +99,12 @@ function isCurrentOriginReachable() {
 /**
  * Probe a candidate server base URL. Resolves true if it responds.
  * Same-origin and cross-origin are both supported (server sends CORS headers).
+ * Uses a short timeout so an unroutable/stale address fails fast instead of
+ * stalling boot for the browser's default connect timeout (~20s+).
  */
 async function probeServer(base) {
   try {
-    const res = await fetch(`${base}network`, { cache: 'no-store' });
+    const res = await fetch(`${base}network`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
     return res.ok;
   } catch {
     return false;
@@ -112,7 +114,8 @@ async function probeServer(base) {
 /**
  * Basic discovery: returns the best server URL to use.
  * 1. If the current origin is reachable, prefer it.
- * 2. Otherwise probe each known server and return the first reachable one.
+ * 2. Otherwise probe every known server concurrently and return the first
+ *    reachable one.
  */
 export async function discoverServer() {
   // Try the currently-active server first (it worked last time).
@@ -126,11 +129,15 @@ export async function discoverServer() {
     return currentServerUrl();
   }
 
-  for (const candidate of load()) {
-    if (await probeServer(candidate)) {
-      setActiveServer(candidate);
-      return candidate;
-    }
+  const candidates = load();
+  const results = await Promise.all(candidates.map(async (candidate) => ({
+    candidate,
+    ok: await probeServer(candidate),
+  })));
+  const hit = results.find(r => r.ok);
+  if (hit) {
+    setActiveServer(hit.candidate);
+    return hit.candidate;
   }
 
   return currentServerUrl();
