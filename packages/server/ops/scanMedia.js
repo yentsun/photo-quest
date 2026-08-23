@@ -327,7 +327,9 @@ export default async function (dirPath) {
      Previously the worker re-queued every file so the fast-path filled this in;
      now only new files are queued, so do it here instead while we still have
      the file list in hand. Uses mtime as a cheap proxy (no hash computed).
-     Guarded by a count so it is a no-op for libraries that are already filled in. */
+     Guarded by a count scoped to this directory so it is a no-op for libraries
+     that are already filled in. Async stat (not statSync) to avoid blocking the
+     event loop, matching the async walk above. */
   const nullDateCount = db.prepare(
     "SELECT COUNT(*) AS n FROM media WHERE hidden = 0 AND date_taken IS NULL AND (path = ? OR path LIKE ? OR path LIKE ?)"
   ).get(dirPath, dirPath + path.sep + '%', dirPath + '/%').n;
@@ -335,15 +337,14 @@ export default async function (dirPath) {
     const backfillStmt = db.prepare(
       'UPDATE media SET date_taken = ? WHERE id = ? AND date_taken IS NULL'
     );
+    const findRow = db.prepare('SELECT id FROM media WHERE path = ? AND date_taken IS NULL');
     for (const filePath of files) {
-      if (existingPaths.has(filePath)) {
-        try {
-          const row = db.prepare('SELECT id FROM media WHERE path = ? AND date_taken IS NULL').get(filePath);
-          if (row) {
-            backfillStmt.run(fs.statSync(filePath).mtime.toISOString(), row.id);
-          }
-        } catch { /* stat may fail if the file vanished; skip */ }
-      }
+      if (!existingPaths.has(filePath)) continue;
+      const row = findRow.get(filePath);
+      if (!row) continue;
+      try {
+        backfillStmt.run((await fsp.stat(filePath)).mtime.toISOString(), row.id);
+      } catch { /* stat may fail if the file vanished; skip */ }
     }
   }
 
