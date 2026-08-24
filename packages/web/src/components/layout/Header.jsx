@@ -2,9 +2,16 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo } from '../../utils/api.js';
+import { fetchNetworkInfo, fetchMedia, fetchTags } from '../../utils/api.js';
 import { addKnownServer, currentServerUrl } from '../../services/serverPool.js';
+import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { Button, Icon, Modal } from '../ui/index.js';
+
+const NAV_ITEMS = [
+  { to: clientRoutes.dashboard, icon: 'folder', label: 'Library', countKey: 'library' },
+  { to: clientRoutes.liked, icon: 'heart', label: 'Liked', countKey: 'liked' },
+  { to: clientRoutes.tags, icon: 'list', label: 'Tags', countKey: 'tags' },
+];
 
 export default function Header({ collapsed, onToggle }) {
   const [networkUrl, setNetworkUrl] = useState(null);
@@ -13,6 +20,26 @@ export default function Header({ collapsed, onToggle }) {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
+  const { signal, libraryCount, setLibraryCount, likedCount, setLikedCount, tagCount, setTagCount } = useRefresh();
+
+  /* Load the per-section counts shown next to the nav items. Re-fetches on the
+     refresh signal (bump) so likes/tags/media changes are reflected. */
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const [library, liked, tags] = await Promise.all([
+        fetchMedia({ limit: 0 }).then(d => d.total).catch(() => setLibraryCount(null)),
+        fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => setLikedCount(null)),
+        fetchTags().then(d => d.length).catch(() => setTagCount(null)),
+      ]);
+      if (cancelled) return;
+      if (library !== undefined) setLibraryCount(library);
+      if (liked !== undefined) setLikedCount(liked);
+      if (tags !== undefined) setTagCount(tags);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [signal, setLibraryCount, setLikedCount, setTagCount]);
 
   useEffect(() => {
     /* Always record the current origin — it is the server when the app is
@@ -115,30 +142,27 @@ export default function Header({ collapsed, onToggle }) {
         </div>
 
         <nav className="sidebar-nav">
-          <NavLink
-            to={clientRoutes.dashboard}
-            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-            title={collapsed ? 'Library' : undefined}
-          >
-            <Icon name="folder" className="icon-sm" />
-            <span className="nav-label">Library</span>
-          </NavLink>
-          <NavLink
-            to={clientRoutes.liked}
-            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-            title={collapsed ? 'Liked' : undefined}
-          >
-            <Icon name="heart" className="icon-sm" />
-            <span className="nav-label">Liked</span>
-          </NavLink>
-          <NavLink
-            to={clientRoutes.tags}
-            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-            title={collapsed ? 'Tags' : undefined}
-          >
-            <Icon name="list" className="icon-sm" />
-            <span className="nav-label">Tags</span>
-          </NavLink>
+          {NAV_ITEMS.map((item) => {
+            const activeClass = ({ isActive }) => `nav-item${isActive ? ' active' : ''}`;
+            const count =
+              item.countKey === 'library' ? libraryCount
+              : item.countKey === 'liked' ? likedCount
+              : tagCount;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={activeClass}
+                title={collapsed ? item.label : undefined}
+              >
+                <Icon name={item.icon} className="icon-sm" />
+                <span className="nav-label">{item.label}</span>
+                {count != null && (
+                  <span className="nav-count">{count.toLocaleString()}</span>
+                )}
+              </NavLink>
+            );
+          })}
           <NavLink
             to={clientRoutes.transcodes}
             className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}

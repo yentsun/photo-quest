@@ -185,6 +185,13 @@ body {
 .nav-item:hover { background: var(--sol-surface); color: var(--sol-text-em); }
 .nav-item.active { background: var(--sol-accent-bg); color: var(--sol-text-em); border-left-color: var(--sol-accent); }
 
+/* Per-section count badge shown at the right of each sidebar nav item. */
+.nav-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--sol-text-mut);
+}
+
 .sidebar-footer {
   padding: 10px;
   border-top: 1px solid var(--sol-border);
