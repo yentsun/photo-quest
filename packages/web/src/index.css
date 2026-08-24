@@ -648,6 +648,28 @@ body {
   background: var(--sol-bg); border: 1px solid var(--sol-border);
   font-size: var(--fs-sm); color: var(--sol-text-em); word-break: break-all;
 }
+/* Library database management modal */
+.library-info {
+  padding: 12px 14px;
+  background: var(--sol-dim); border: 1px solid var(--sol-border);
+  border-radius: 6px;
+}
+.library-info-label {
+  margin: 0 0 6px; font-size: var(--fs-xs);
+  color: var(--sol-text-mut); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.library-info-name {
+  margin: 0 0 4px; font-size: var(--fs-md); color: var(--sol-text-em);
+  font-weight: 600; word-break: break-all;
+}
+.library-info-path {
+  margin: 0 0 6px; font-size: var(--fs-sm); color: var(--sol-text-mut);
+  word-break: break-all;
+}
+.library-info-meta {
+  margin: 0; font-size: var(--fs-sm); color: var(--sol-accent);
+}
+
 
 /* ─── Image viewer ─── */
 .image-viewer { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }

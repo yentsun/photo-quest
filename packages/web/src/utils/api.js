@@ -18,8 +18,9 @@ import {
   idbGetFolders,
   idbPutMedia,
   idbPutManyMedia,
-  idbPutManyFolders,
   idbDeleteMedia,
+  idbDeleteFolder,
+  idbReplaceFolders,
 } from '../services/idb.js';
 
 // ---------------------------------------------------------------------------
@@ -87,6 +88,18 @@ export function getLastMediaItem(id) { return _mediaCache.get(id) ?? null; }
  */
 export function getLastFolderMedia(folderPath) { return _folderMediaCache.get(folderPath) ?? null; }
 
+/**
+ * Clear all in-memory session caches (folders, tags, media, per-folder media).
+ * Used after a full cache purge so the next render fetches fresh from the
+ * server instead of serving stale in-memory data.
+ */
+export function resetMediaCaches() {
+  _foldersCache = null;
+  _tagsCache = null;
+  _mediaCache.clear();
+  _folderMediaCache.clear();
+}
+
 // ---------------------------------------------------------------------------
 // Internal server fetch helpers
 // ---------------------------------------------------------------------------
@@ -108,7 +121,9 @@ async function _fetchFoldersFromServer() {
   if (!response.ok) throw new Error('Failed to fetch folders');
   const folders = await response.json();
   _foldersCache = folders;
-  idbPutManyFolders(folders).catch(err => console.warn('[idb] putManyFolders failed:', err));
+  /* Replace (not merge) so stale folder rows from a previous connection/db
+     don't survive as phantom entries in the UI. */
+  idbReplaceFolders(folders).catch(err => console.warn('[idb] replaceFolders failed:', err));
   return folders;
 }
 
@@ -418,10 +433,21 @@ export async function removeFolder(folderId) {
   const response = await fetch(`/media/folder/${folderId}`, {
     method: 'DELETE',
   });
+  /* 404 means the folder isn't in the connected DB (e.g. stale cache from a
+     previous connection). Treat it as already removed and clear local state
+     instead of surfacing an error the user can't act on. */
+  if (response.status === 404) {
+    _folderMediaCache.clear();
+    idbDeleteFolder(folderId).catch(() => {});
+    return { hidden: 0 };
+  }
   if (!response.ok) {
     throw new Error('Failed to remove folder');
   }
-  return response.json();
+  const result = await response.json();
+  _folderMediaCache.clear();
+  idbDeleteFolder(folderId).catch(() => {});
+  return result;
 }
 
 export async function renameFolder(folderId, name) {
@@ -475,6 +501,12 @@ export async function connectLibrary(libraryPath) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || 'Failed to connect library');
   }
+  return response.json();
+}
+
+export async function fetchLibraryStatus() {
+  const response = await fetch(apiRoutes.libraryStatus);
+  if (!response.ok) throw new Error('Failed to fetch library status');
   return response.json();
 }
 

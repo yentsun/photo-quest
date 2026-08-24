@@ -25,7 +25,7 @@ function RefreshToaster() {
   const [progress, setProgress] = useState(null);
   const trackedScanRef = useRef(null);
   const { bump } = useRefresh();
-  const { isScanning, setIsScanning, statusMessage } = useScan();
+  const { isScanning, setIsScanning, statusMessage, abortRefresh } = useScan();
 
   const syncFromServer = useCallback(() => {
     fetch('/scans')
@@ -108,6 +108,8 @@ function RefreshToaster() {
   }, [progress, syncFromServer]);
 
   const handleCancel = useCallback(async () => {
+    /* Stop the client-side refresh loop from firing new folder scans. */
+    abortRefresh();
     const scanId = progress?.scanId ?? trackedScanRef.current;
     if (!scanId) return;
     try {
@@ -115,7 +117,7 @@ function RefreshToaster() {
     } catch (err) {
       if (!err.message?.includes('already')) console.error('Failed to cancel scan:', err);
     }
-  }, [progress?.scanId]);
+  }, [progress?.scanId, abortRefresh]);
 
   const pct = progress?.total ? (progress.processed / progress.total) * 100 : 0;
 

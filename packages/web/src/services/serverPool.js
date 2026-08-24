@@ -118,15 +118,17 @@ async function probeServer(base) {
  *    reachable one.
  */
 export async function discoverServer() {
-  // Try the currently-active server first (it worked last time).
-  const active = getActiveServer();
-  if (active && active !== currentServerUrl()) {
-    if (await probeServer(active)) return active;
-  }
-
+  // The current origin (the server that served this page) is authoritative.
+  // Only fall back to pool discovery when it is genuinely unreachable.
   if (await isCurrentOriginReachable()) {
     setActiveServer(currentServerUrl());
     return currentServerUrl();
+  }
+
+  // Otherwise try the last server we connected through, then the pool.
+  const active = getActiveServer();
+  if (active && active !== currentServerUrl()) {
+    if (await probeServer(active)) return active;
   }
 
   const candidates = load();
