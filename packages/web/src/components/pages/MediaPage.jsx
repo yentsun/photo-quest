@@ -330,7 +330,9 @@ export default function MediaPage() {
       ? (folderMedia[folderIdx + 1] ?? folderMedia[folderIdx - 1])
       : null;
     const slideshowNext = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
-    const nextItem = folderIdx >= 0 ? folderNext : slideshowNext;
+    /* When the deleted item is the sole folder sibling, keep the slideshow
+       playing by falling back to the slideshow sequence. */
+    const nextItem = folderIdx >= 0 ? (folderNext ?? slideshowNext) : slideshowNext;
 
     if (nextItem) navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
     else navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
