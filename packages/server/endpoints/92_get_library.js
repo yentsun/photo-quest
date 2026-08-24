@@ -15,7 +15,7 @@ export default async (kojo, logger) => {
     method: 'GET',
     pathname: '/library',
   }, (req, res) => {
-    const dbPath = process.env.DB_PATH || DB_PATH;
+    const dbPath = DB_PATH;
     const name = path.basename(dbPath);
     const dir = path.dirname(dbPath);
 

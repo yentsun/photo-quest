@@ -198,13 +198,13 @@ export default function MediaPage() {
   const goPrev = useCallback(() => {
     if (!hasPrev) return;
     if (inSlideshow) slideshow.prev();
-    else navigate(`/media/${navItems[currentIndex - 1].id}`, { state: location.state });
+    else navigate(`/media/${navItems[currentIndex - 1].id}`, { replace: true, state: location.state });
   }, [hasPrev, inSlideshow, slideshow, navigate, navItems, currentIndex, location.state]);
 
   const goNext = useCallback(() => {
     if (!hasNext) return;
     if (inSlideshow) slideshow.next();
-    else navigate(`/media/${navItems[currentIndex + 1].id}`, { state: location.state });
+    else navigate(`/media/${navItems[currentIndex + 1].id}`, { replace: true, state: location.state });
   }, [hasNext, inSlideshow, slideshow, navigate, navItems, currentIndex, location.state]);
 
   const [folderNavLoading, setFolderNavLoading] = useState(false);
@@ -238,14 +238,14 @@ export default function MediaPage() {
     if (!hasFolderPrev) return;
     const siblings = await ensureFolderSiblings();
     const idx = siblings.findIndex(m => m.id === Number(id));
-    if (idx > 0) { setItem(siblings[idx - 1]); navigate(`/media/${siblings[idx - 1].id}`, { state: location.state }); }
+    if (idx > 0) { setItem(siblings[idx - 1]); navigate(`/media/${siblings[idx - 1].id}`, { replace: true, state: location.state }); }
   }, [hasFolderPrev, ensureFolderSiblings, id, navigate, location.state]);
 
   const goFolderNext = useCallback(async () => {
     if (!hasFolderNext) return;
     const siblings = await ensureFolderSiblings();
     const idx = siblings.findIndex(m => m.id === Number(id));
-    if (idx >= 0 && idx < siblings.length - 1) { setItem(siblings[idx + 1]); navigate(`/media/${siblings[idx + 1].id}`, { state: location.state }); }
+    if (idx >= 0 && idx < siblings.length - 1) { setItem(siblings[idx + 1]); navigate(`/media/${siblings[idx + 1].id}`, { replace: true, state: location.state }); }
   }, [hasFolderNext, ensureFolderSiblings, id, navigate, location.state]);
 
   const toggleFullscreen = useCallback(() => {
@@ -465,9 +465,7 @@ export default function MediaPage() {
 
   const backTarget = folder ? `/folder/${folder.id}` : '/dashboard';
   const goBack = useCallback(() => {
-    /* Go to the parent folder (or dashboard), replacing the current media entry
-       so the history stack doesn't grow with duplicate folder entries. */
-    navigate(backTarget, { replace: true });
+    navigate(backTarget);
   }, [navigate, backTarget]);
 
   if (loading && !item) return <div className="page-loader"><Loader message={loadingMessage} /></div>;

@@ -267,14 +267,17 @@ export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort,
  */
 export async function idbReplaceFolders(folders) {
   const db = await openDB();
+  if (!db.objectStoreNames.contains('folders')) return;
+  /* Clear and re-put in a single transaction so a concurrent reader never
+     observes the store in an empty intermediate state. */
   await new Promise((resolve, reject) => {
-    if (!db.objectStoreNames.contains('folders')) return resolve();
     const tx = db.transaction('folders', 'readwrite');
-    tx.objectStore('folders').clear();
+    const store = tx.objectStore('folders');
+    store.clear();
+    for (const record of folders || []) store.put(record);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
-  if (folders?.length) return putMany(db, 'folders', folders);
 }
 
 /**

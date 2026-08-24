@@ -98,6 +98,7 @@ export default function Dashboard() {
   const [pickedPath, setPickedPath] = useState(null);
   const [libraryStatus, setLibraryStatus] = useState(null);
   const [libraryInfo, setLibraryInfo] = useState(null);
+  const [libraryError, setLibraryError] = useState(null);
   const [cacheStatus, setCacheStatus] = useState(null);
 
   const [folders, setFolders] = useState(() => {
@@ -259,13 +260,14 @@ export default function Dashboard() {
     setPickedPath(null);
     setLibraryStatus(null);
     setLibraryInfo(null);
+    setLibraryError(null);
     setCacheStatus(null);
     setShowLibrary(true);
     try {
       const info = await fetchLibraryStatus();
       setLibraryInfo(info);
     } catch (err) {
-      setLibraryStatus({ error: err.message });
+      setLibraryError(err.message);
     }
   };
 
@@ -495,6 +497,10 @@ export default function Dashboard() {
                 <p className="library-info-meta">{libraryInfo.items.toLocaleString()} items</p>
               )}
             </>
+          ) : libraryError ? (
+            <p className="text-mut" style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>
+              Could not load connection info: {libraryError}
+            </p>
           ) : (
             <p className="text-mut" style={{ fontSize: 'var(--fs-sm)' }}>Loading…</p>
           )}
