@@ -50,7 +50,7 @@ export default function MediaPage() {
   const location = useLocation();
   const sort = location.state?.sort || 'filename';
   const { deleteMedia } = useMediaActions();
-  const { signal, bump } = useRefresh();
+  const { signal, bump, setTagCount, setLikedCount } = useRefresh();
   const { dispatch } = useContext(GlobalContext);
   const slideshow = useSlideshow();
   const [showInfo, setShowInfo] = useState(false);
@@ -258,9 +258,13 @@ export default function MediaPage() {
     if (!item) return;
     const originalLikes = item.likes || 0;
     setItem(prev => ({ ...prev, likes: originalLikes + 1 }));
-    try { await likeMediaApi(item.id); }
+    try {
+      const { likedCount } = await likeMediaApi(item.id);
+      /* Update the sidebar liked count directly from the response. */
+      if (likedCount != null) setLikedCount(likedCount);
+    }
     catch (err) { console.error('Failed to like media:', err); setItem(prev => ({ ...prev, likes: originalLikes })); }
-  }, [item]);
+  }, [item, setLikedCount]);
 
   const handleTouchStart = useCallback((e) => {
     if (e.touches.length !== 1) return;
@@ -394,13 +398,14 @@ export default function MediaPage() {
     const newTags = originalTags.filter(t => t !== tagToRemove);
     setItem(prev => ({ ...prev, tags: newTags }));
     try {
-      const updated = await updateMediaTags(targetId, newTags);
+      const { item: updated, tagCount } = await updateMediaTags(targetId, newTags);
       setItem(prev => prev?.id === targetId ? { ...prev, ...updated } : prev);
+      if (tagCount != null) setTagCount(tagCount);
     } catch (err) {
       console.error('Failed to remove tag:', err);
       setItem(prev => prev?.id === targetId ? { ...prev, tags: originalTags } : prev);
     }
-  }, [item]);
+  }, [item, setTagCount]);
 
   const applyTag = useCallback(async (tag) => {
     if (!tag || safeTags(item?.tags).includes(tag)) return;
@@ -409,13 +414,14 @@ export default function MediaPage() {
     const newTags = [...originalTags, tag];
     setItem(prev => ({ ...prev, tags: newTags }));
     try {
-      const updated = await updateMediaTags(targetId, newTags);
+      const { item: updated, tagCount } = await updateMediaTags(targetId, newTags);
       setItem(prev => prev?.id === targetId ? { ...prev, ...updated } : prev);
+      if (tagCount != null) setTagCount(tagCount);
     } catch (err) {
       console.error('Failed to add tag:', err);
       setItem(prev => prev?.id === targetId ? { ...prev, tags: originalTags } : prev);
     }
-  }, [item]);
+  }, [item, setTagCount]);
 
   const selectSuggestion = useCallback((tag) => {
     setAddingTag(false); setTagDraft(''); setSuggestionIndex(-1); applyTag(tag);

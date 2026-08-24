@@ -18,16 +18,17 @@ import {
  * Pages fetch their own data; this hook provides shared write operations.
  */
 export function useMediaActions() {
-  const { bump } = useRefresh();
+  const { bump, setLikedCount, setTagCount } = useRefresh();
 
   const likeMedia = useCallback(async (media) => {
     try {
-      await likeMediaApi(media.id);
-      bump();
+      const { likedCount } = await likeMediaApi(media.id);
+      /* Update the sidebar count directly from the response — no extra fetch. */
+      if (likedCount != null) setLikedCount(likedCount);
     } catch (err) {
       console.error('Failed to like media:', err);
     }
-  }, [bump]);
+  }, [setLikedCount]);
 
   const deleteMedia = useCallback(async (mediaId) => {
     await deleteMediaApi(mediaId);
