@@ -70,10 +70,10 @@ async function computeFileHash(filePath, timeoutMs = 5000) {
  */
 export async function processOneItem(db, itemId, filePath, logger) {
   const ext = path.extname(filePath).toLowerCase();
-  logger.debug(`[processOneItem] itemId=${itemId} ext=${ext} path=${filePath}`);
+  logger.debug(`itemId=${itemId} ext=${ext} path=${filePath}`);
 
   if (!isMediaFile(filePath)) {
-    logger.debug(`[processOneItem] unsupported file "${filePath}", marking failed`);
+    logger.debug(`unsupported file "${filePath}", marking failed`);
     db.prepare(
       'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
     ).run(IMPORT_STATUS.FAILED, 'Unsupported file type', itemId);
@@ -85,10 +85,10 @@ export async function processOneItem(db, itemId, filePath, logger) {
   const isImage = IMAGE_EXTENSIONS.includes(ext);
   const mediaType = isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO;
   const status = isImage ? MEDIA_STATUS.READY : MEDIA_STATUS.PENDING;
-  logger.debug(`[processOneItem] type=${mediaType} status=${status} title="${title}"`);
+  logger.debug(`type=${mediaType} status=${status} title="${title}"`);
 
   if (!fs.existsSync(filePath)) {
-    logger.debug(`[processOneItem] file not found on disk, marking failed`);
+    logger.debug(`file not found on disk, marking failed`);
     db.prepare(
       'UPDATE import_queue SET status = ?, error = ? WHERE id = ?'
     ).run(IMPORT_STATUS.FAILED, 'File not found', itemId);
@@ -100,22 +100,22 @@ export async function processOneItem(db, itemId, filePath, logger) {
 
   const existing = db.prepare('SELECT id FROM media WHERE path = ? AND hidden = 0').get(filePath);
   if (existing) {
-    logger.debug(`[processOneItem] fast-path: already in library as id=${existing.id}, updating date_taken`);
+    logger.debug(`fast-path: already in library as id=${existing.id}, updating date_taken`);
     db.prepare('UPDATE media SET date_taken = ? WHERE id = ? AND date_taken IS NULL').run(dateTaken, existing.id);
     db.prepare('UPDATE import_queue SET status = ? WHERE id = ?').run(IMPORT_STATUS.COMPLETED, itemId);
     return;
   }
 
-  logger.debug(`[processOneItem] computing hash for ${filePath}`);
+  logger.debug(`computing hash for ${filePath}`);
   const hash = await computeFileHash(filePath);
-  logger.debug(`[processOneItem] hash=${hash}`);
+  logger.debug(`hash=${hash}`);
 
   db.prepare('INSERT OR IGNORE INTO folders (path) VALUES (?)').run(folder);
 
   const hidden = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 1').get(hash);
 
   if (hidden) {
-    logger.debug(`[processOneItem] restoring hidden media id=${hidden.id} with same hash`);
+    logger.debug(`restoring hidden media id=${hidden.id} with same hash`);
     db.prepare(
       `UPDATE media SET path = ?, folder = ?, hidden = 0, date_taken = ?,
        updated_at = datetime('now') WHERE id = ?`
@@ -125,22 +125,22 @@ export async function processOneItem(db, itemId, filePath, logger) {
     const exists = db.prepare('SELECT id FROM media WHERE path = ?').get(filePath);
 
     if (exists) {
-      logger.debug(`[processOneItem] path exists with id=${exists.id}, patching hash`);
+      logger.debug(`path exists with id=${exists.id}, patching hash`);
       db.prepare('UPDATE media SET hash = ?, date_taken = ? WHERE path = ? AND (hash IS NULL OR date_taken IS NULL)').run(hash, dateTaken, filePath);
     } else {
-      logger.debug(`[processOneItem] inserting new media record`);
+      logger.debug(`inserting new media record`);
       const result = db.prepare(
         `INSERT INTO media (path, title, type, folder, status, hash, date_taken)
          VALUES (?, ?, ?, ?, ?, ?, ?)`
       ).run(filePath, title, mediaType, folder, status, hash, dateTaken);
-      logger.debug(`[processOneItem] inserted media id=${result.lastInsertRowid}`);
+      logger.debug(`inserted media id=${result.lastInsertRowid}`);
     }
   }
 
   db.prepare(
     'UPDATE import_queue SET status = ? WHERE id = ?'
   ).run(IMPORT_STATUS.COMPLETED, itemId);
-  logger.debug(`[processOneItem] completed itemId=${itemId}`);
+  logger.debug(`completed itemId=${itemId}`);
 }
 
 /** The single active scan worker, or null when idle. */
@@ -247,18 +247,18 @@ export default async function (dirPath) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  logger.debug(`[scanMedia] dirPath="${dirPath}"`);
+  logger.debug(`dirPath="${dirPath}"`);
   dirPath = dirPath.replace(/^["']+|["']+$/g, '').trim();
-  logger.debug(`[scanMedia] trimmed dirPath="${dirPath}"`);
+  logger.debug(`trimmed dirPath="${dirPath}"`);
 
   if (!fs.existsSync(dirPath)) {
-    logger.debug(`[scanMedia] directory not found: ${dirPath}`);
+    logger.debug(`directory not found: ${dirPath}`);
     throw new Error(`Directory not found: ${dirPath}`);
   }
 
   const stat = fs.statSync(dirPath);
   if (!stat.isDirectory()) {
-    logger.debug(`[scanMedia] path is not a directory: ${dirPath}`);
+    logger.debug(`path is not a directory: ${dirPath}`);
     throw new Error(`Not a directory: ${dirPath}`);
   }
 
@@ -274,7 +274,7 @@ export default async function (dirPath) {
   const abortController = new AbortController();
   discoveryAborts.set(scanId, abortController);
 
-  logger.debug(`[scanMedia] walking directory tree (scan ${scanId})`);
+  logger.debug(`walking directory tree (scan ${scanId})`);
   let files;
   try {
     files = await findMediaFiles(dirPath, abortController.signal);
@@ -283,7 +283,7 @@ export default async function (dirPath) {
       db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.CANCELLED, scanId);
       /* The cancel endpoint already broadcasts import_cancelled after
          abortDiscoveryWalk(); don't emit a second event for the same scan. */
-      logger.info(`[scanMedia] discovery aborted: ${dirPath}`);
+      logger.info(`discovery aborted: ${dirPath}`);
       return { scanId, total: 0, cancelled: true };
     }
     db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.FAILED, scanId);
@@ -291,7 +291,7 @@ export default async function (dirPath) {
   } finally {
     discoveryAborts.delete(scanId);
   }
-  logger.debug(`[scanMedia] discovered ${files.length} media files on disk`);
+  logger.debug(`discovered ${files.length} media files on disk`);
 
   createFolderHierarchy(db, dirPath, files);
 
@@ -352,7 +352,7 @@ export default async function (dirPath) {
 
   /* Nothing new to import — mark complete and skip the worker entirely. */
   if (newFiles.length === 0) {
-    logger.debug(`[scanMedia] no new files found, nothing to do`);
+    logger.debug(`no new files found, nothing to do`);
     db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.COMPLETED, scanId);
     broadcastSse({ type: 'import_complete', scanId, total: 0, processed: 0 });
     return { scanId, total: 0 };

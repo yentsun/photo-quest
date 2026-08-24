@@ -253,11 +253,14 @@ export async function updateMediaTags(id, tags) {
     body: JSON.stringify({ tags }),
   });
   if (!response.ok) throw new Error('Failed to update tags');
-  const item = parseTags(await response.json());
+  const data = await response.json();
+  const item = parseTags(data);
   _mediaCache.set(item.id, item);
   _tagsCache = null; // invalidate — tag counts may have changed
   idbPutMedia(item).catch(err => console.warn('[idb] putMedia (tags) failed:', err));
-  return item;
+  /* The server returns the updated distinct tag count; surface it so the
+     sidebar can update without an extra /tags request. */
+  return { item, tagCount: data.tagCount };
 }
 
 export async function renameMedia(id, title) {
@@ -280,10 +283,13 @@ export async function likeMedia(id) {
   if (!response.ok) {
     throw new Error('Failed to like media');
   }
-  const item = await response.json();
+  const data = await response.json();
+  const { likedCount, ...item } = data;
   _mediaCache.set(item.id, item);
   idbPutMedia(item).catch(() => {});
-  return item;
+  /* The server returns the updated liked count (only when an item transitions
+     to liked); surface it so the sidebar updates without an extra request. */
+  return { item, likedCount };
 }
 
 export async function deleteMedia(id) {
