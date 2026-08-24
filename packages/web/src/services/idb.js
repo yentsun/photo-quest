@@ -155,6 +155,21 @@ export async function idbDeleteMedia(id) {
 }
 
 /**
+ * Delete a single folder from the IDB folders store.
+ * @param {number} id
+ */
+export async function idbDeleteFolder(id) {
+  const db = await openDB();
+  if (!db.objectStoreNames.contains('folders')) return;
+  const tx = db.transaction('folders', 'readwrite');
+  tx.objectStore('folders').delete(Number(id));
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
  * Read media items from IDB, applying the same filters as the server's
  * listMedia op (folder, subtree, liked, limit, offset).
  *
@@ -244,13 +259,22 @@ export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort,
 // ---------------------------------------------------------------------------
 
 /**
- * Upsert the full folders list (with server-computed fields) into IDB.
+ * Replace the entire IDB folders store with the given list. This drops stale
+ * folder rows that remain from a previous connection/database, so the UI never
+ * shows phantom folders that don't exist in the server's library.
  * @param {Object[]} folders
+ * @returns {Promise<void>}
  */
-export async function idbPutManyFolders(folders) {
-  if (!folders?.length) return;
+export async function idbReplaceFolders(folders) {
   const db = await openDB();
-  return putMany(db, 'folders', folders);
+  await new Promise((resolve, reject) => {
+    if (!db.objectStoreNames.contains('folders')) return resolve();
+    const tx = db.transaction('folders', 'readwrite');
+    tx.objectStore('folders').clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  if (folders?.length) return putMany(db, 'folders', folders);
 }
 
 /**
@@ -260,4 +284,26 @@ export async function idbPutManyFolders(folders) {
 export async function idbGetFolders() {
   const db = await openDB();
   return getAll(db, 'folders');
+}
+
+/**
+ * Purge the entire media-browser IndexedDB cache (media + folders stores).
+ * Used by the "Clean cache" action so the UI re-fetches fresh data from the
+ * server instead of showing stale snapshots from a previous connection.
+ *
+ * @returns {Promise<void>}
+ */
+export async function idbClearCache() {
+  const db = await openDB();
+  await Promise.all(
+    ['media', 'folders'].map((storeName) =>
+      new Promise((resolve, reject) => {
+        if (!db.objectStoreNames.contains(storeName)) return resolve();
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      })
+    )
+  );
 }

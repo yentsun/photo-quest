@@ -465,9 +465,10 @@ export default function MediaPage() {
 
   const backTarget = folder ? `/folder/${folder.id}` : '/dashboard';
   const goBack = useCallback(() => {
-    if (location.key !== 'default') navigate(-1);
-    else navigate(backTarget);
-  }, [location.key, navigate, backTarget]);
+    /* Go to the parent folder (or dashboard), replacing the current media entry
+       so the history stack doesn't grow with duplicate folder entries. */
+    navigate(backTarget, { replace: true });
+  }, [navigate, backTarget]);
 
   if (loading && !item) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
 

@@ -18,6 +18,9 @@ export function ScanProvider({ children }) {
   const [isScanning, setIsScanning] = useState(false);
   const [statusMessage, setStatusMessageState] = useState(null);
   const dismissTimer = useRef(null);
+  /* Set to true by the Stop/import-cancel handler so any long-running refresh
+     loop (refreshLibrary) can stop issuing new folder scans promptly. */
+  const abortRef = useRef(false);
 
   const setStatusMessage = useCallback((msg) => {
     clearTimeout(dismissTimer.current);
@@ -29,8 +32,12 @@ export function ScanProvider({ children }) {
     dismissTimer.current = setTimeout(() => setStatusMessageState(null), 5000);
   }, []);
 
+  const abortRefresh = useCallback(() => {
+    abortRef.current = true;
+  }, []);
+
   return (
-    <ScanContext.Provider value={{ isScanning, setIsScanning, statusMessage, setStatusMessage }}>
+    <ScanContext.Provider value={{ isScanning, setIsScanning, statusMessage, setStatusMessage, abortRef, abortRefresh }}>
       {children}
     </ScanContext.Provider>
   );
