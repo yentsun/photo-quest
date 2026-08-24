@@ -20,11 +20,11 @@ export default function (id) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  logger.debug(`[likeMedia] id=${id}`);
+  logger.debug(`id=${id}`);
 
   const existing = db.prepare('SELECT likes FROM media WHERE id = ?').get(Number(id));
   if (!existing) {
-    logger.debug(`[likeMedia] not found: id=${id}`);
+    logger.debug(`not found: id=${id}`);
     return null;
   }
 
@@ -43,6 +43,6 @@ export default function (id) {
     media.likedCount = total;
   }
 
-  logger.debug(`[likeMedia] liked: id=${id} new likes=${media.likes}${newlyLiked ? ` likedCount=${media.likedCount}` : ''}`);
+  logger.debug(`liked: id=${id} new likes=${media.likes}${newlyLiked ? ` likedCount=${media.likedCount}` : ''}`);
   return media;
 }

@@ -9,54 +9,54 @@ export default function ({ limit, offset, folder, subtree, liked, random, sort, 
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  logger.debug(`[listMedia] folder=${folder} subtree=${subtree} liked=${liked} random=${random} sort=${sort} search=${search} tag=${tag} type=${type} limit=${limit} offset=${offset}`);
+  logger.debug(`folder=${folder} subtree=${subtree} liked=${liked} random=${random} sort=${sort} search=${search} tag=${tag} type=${type} limit=${limit} offset=${offset}`);
 
   const conditions = ['hidden = 0'];
   const params = [];
 
   if (folder != null) {
     if (subtree) {
-      logger.debug(`[listMedia] filtering by subtree of: ${folder}`);
+      logger.debug(`filtering by subtree of: ${folder}`);
       conditions.push('(folder = ? OR folder LIKE ? OR folder LIKE ?)');
       params.push(folder, folder + '/%', folder + '\\%');
     } else {
-      logger.debug(`[listMedia] filtering by exact folder: ${folder}`);
+      logger.debug(`filtering by exact folder: ${folder}`);
       conditions.push('folder = ?');
       params.push(folder);
     }
   }
 
   if (liked) {
-    logger.debug(`[listMedia] filtering liked only`);
+    logger.debug(`filtering liked only`);
     conditions.push('likes > 0');
   }
 
   if (search != null && search.trim() !== '') {
-    logger.debug(`[listMedia] filtering by search: "${search.trim()}"`);
+    logger.debug(`filtering by search: "${search.trim()}"`);
     conditions.push('unicode_lower(title) LIKE unicode_lower(?)');
     params.push(`%${search.trim()}%`);
   }
 
   if (tag != null) {
-    logger.debug(`[listMedia] filtering by tag: "${tag}"`);
+    logger.debug(`filtering by tag: "${tag}"`);
     conditions.push("EXISTS (SELECT 1 FROM json_each(media.tags) WHERE value = ?)");
     params.push(tag);
   }
 
   if (type != null) {
-    logger.debug(`[listMedia] filtering by type: "${type}"`);
+    logger.debug(`filtering by type: "${type}"`);
     conditions.push('type = ?');
     params.push(type);
   }
 
   const where = conditions.join(' AND ');
-  logger.debug(`[listMedia] WHERE: ${where}`);
+  logger.debug(`WHERE: ${where}`);
 
   const { total } = db.prepare(`SELECT COUNT(*) AS total FROM media WHERE ${where}`).get(...params);
-  logger.debug(`[listMedia] total matching: ${total}`);
+  logger.debug(`total matching: ${total}`);
 
   const orderBy = random ? 'RANDOM()' : sort === 'none' ? 'id ASC' : sort === 'filename' ? 'path ASC' : sort === 'likes' ? 'likes DESC, COALESCE(date_taken, created_at) DESC' : liked ? 'likes DESC' : 'COALESCE(date_taken, created_at) DESC, path DESC';
-  logger.debug(`[listMedia] orderBy: ${orderBy}`);
+  logger.debug(`orderBy: ${orderBy}`);
   let sql = `SELECT * FROM media WHERE ${where} ORDER BY ${orderBy}`;
   const queryParams = [...params];
 
@@ -70,7 +70,7 @@ export default function ({ limit, offset, folder, subtree, liked, random, sort, 
   }
 
   const items = db.prepare(sql).all(...queryParams);
-  logger.debug(`[listMedia] returned ${items.length} items`);
+  logger.debug(`returned ${items.length} items`);
 
   return { items, total };
 }

@@ -12,7 +12,7 @@ export default function () {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  logger.debug(`[listTags] querying`);
+  logger.debug(`querying`);
   const tags = db.prepare(`
     WITH expanded AS (
       SELECT
@@ -33,6 +33,6 @@ export default function () {
     GROUP BY tag
     ORDER BY count DESC, tag ASC
   `).all();
-  logger.debug(`[listTags] returned ${tags.length} tags`);
+  logger.debug(`returned ${tags.length} tags`);
   return tags;
 }
