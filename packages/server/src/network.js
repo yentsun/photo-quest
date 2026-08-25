@@ -12,8 +12,12 @@
 
 import os from 'node:os';
 
-/** Interface names that indicate a VPN/tunnel and are therefore NOT stable. */
-const TUNNEL_RE = /^(wg|wireguard|tailscale|zt|tun|tap|utun|ppp|ipsec|vpn)\d*$/i;
+/* Interface names that are NOT reachable from LAN clients and should not be
+ * advertised as the canonical address. Covers VPN/tunnel NICs plus common
+ * container/virtual interfaces (Docker bridges, veth pairs, VM host-only NICs).
+ * Real host bridges (br0, etc.) are left out — they often ARE the reachable LAN
+ * interface. */
+const NON_LAN_RE = /^(wg|wireguard|tailscale|zt|tun|tap|utun|ppp|ipsec|vpn|docker|veth|vbox|vmnet|virtualbox)[a-z0-9]*$/i;
 
 /** Coerce the os.networkInterfaces() family value to a canonical check. */
 function isIPv4(iface) {
@@ -34,7 +38,7 @@ export function listReachableIPv4(interfaces = os.networkInterfaces()) {
     for (const iface of interfaces[name]) {
       if (!isIPv4(iface)) continue;
       if (iface.internal) continue;
-      const kind = TUNNEL_RE.test(name) ? 'tunnel' : 'normal';
+      const kind = NON_LAN_RE.test(name) ? 'tunnel' : 'normal';
       rows.push({ name, address: iface.address, kind });
     }
   }

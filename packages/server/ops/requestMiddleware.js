@@ -121,7 +121,10 @@ export default async function () {
   });
 
   server.listen(PORT, '0.0.0.0', () => {
-    const { canonical: localIP } = getServerAddresses();
+    const { canonical } = getServerAddresses();
+    /* canonical is null when there is no non-internal IPv4 (e.g. an IPv6-only
+       or loopback-only host); keep the log useful instead of printing null. */
+    const localIP = canonical || '127.0.0.1';
     const webPort = config.webappPort;
     logger.info(`Open app → http://localhost:${webPort}`);
     logger.info(`Network  → http://${localIP}:${webPort}`);

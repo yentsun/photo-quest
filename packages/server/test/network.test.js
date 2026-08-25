@@ -43,6 +43,14 @@ const IPV6 = {
   internal: false,
   cidr: 'fe80::1/64',
 };
+const DOCKER = {
+  address: '172.17.0.1',
+  netmask: '255.255.0.0',
+  family: 'IPv4',
+  mac: '00:00:00:00:00:05',
+  internal: false,
+  cidr: '172.17.0.1/16',
+};
 
 /** Typical host: a stable LAN eth0 plus a WG tunnel, plus loopback/IPv6. */
 function typical() {
@@ -117,5 +125,15 @@ test('getServerAddresses()', async (t) => {
       'eth0': [{ ...LAN, family: 4 }],
     });
     t.assert.strictEqual(canonical, '192.168.1.20');
+  });
+
+  await t.test('demotes container/virtual NICs below the LAN interface', (t) => {
+    const { canonical, alternatives } = getServerAddresses({
+      'eth0': [LAN],
+      'docker0': [DOCKER],
+      'wg0': [WG],
+    });
+    t.assert.strictEqual(canonical, '192.168.1.20');
+    t.assert.deepEqual(alternatives, ['172.17.0.1', '10.0.0.5']);
   });
 });
