@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo, fetchMedia, fetchTags } from '../../utils/api.js';
+import { fetchNetworkInfo, getCachedCounts, refreshCounts } from '../../utils/api.js';
 import { addKnownServer, currentServerUrl } from '../../services/serverPool.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { Button, Icon, Modal } from '../ui/index.js';
@@ -22,22 +22,25 @@ export default function Header({ collapsed, onToggle }) {
   const [isInstalled, setIsInstalled] = useState(false);
   const { signal, libraryCount, setLibraryCount, likedCount, setLikedCount, tagCount, setTagCount } = useRefresh();
 
-  /* Load the per-section counts shown next to the nav items. Re-fetches on the
-     refresh signal (bump) so likes/tags/media changes are reflected. */
+  /* Load the per-section counts shown next to the nav items. These are cached
+     (localStorage) so the badges render instantly on load, and are only
+     refreshed against the cheap server COUNT endpoints on data-change signals —
+     never by scanning the full media store. */
+  useEffect(() => {
+    const cached = getCachedCounts();
+    if (cached.library != null) setLibraryCount(cached.library);
+    if (cached.liked != null) setLikedCount(cached.liked);
+    if (cached.tags != null) setTagCount(cached.tags);
+  }, [setLibraryCount, setLikedCount, setTagCount]);
+
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
-      const [library, liked, tags] = await Promise.all([
-        fetchMedia({ limit: 0 }).then(d => d.total).catch(() => setLibraryCount(null)),
-        fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => setLikedCount(null)),
-        fetchTags().then(d => d.length).catch(() => setTagCount(null)),
-      ]);
+    refreshCounts().then((counts) => {
       if (cancelled) return;
-      if (library !== undefined) setLibraryCount(library);
-      if (liked !== undefined) setLikedCount(liked);
-      if (tags !== undefined) setTagCount(tags);
-    };
-    load();
+      if (counts.library != null) setLibraryCount(counts.library);
+      if (counts.liked != null) setLikedCount(counts.liked);
+      if (counts.tags != null) setTagCount(counts.tags);
+    });
     return () => { cancelled = true; };
   }, [signal, setLibraryCount, setLikedCount, setTagCount]);
 

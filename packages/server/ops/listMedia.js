@@ -8,6 +8,7 @@
 export default function ({ limit, offset, folder, subtree, liked, random, sort, search, tag, type } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
+  const tStart = performance.now();
 
   logger.debug(`folder=${folder} subtree=${subtree} liked=${liked} random=${random} sort=${sort} search=${search} tag=${tag} type=${type} limit=${limit} offset=${offset}`);
 
@@ -52,8 +53,9 @@ export default function ({ limit, offset, folder, subtree, liked, random, sort, 
   const where = conditions.join(' AND ');
   logger.debug(`WHERE: ${where}`);
 
+  const tCount = performance.now();
   const { total } = db.prepare(`SELECT COUNT(*) AS total FROM media WHERE ${where}`).get(...params);
-  logger.debug(`total matching: ${total}`);
+  console.log(`[DBG][listMedia] COUNT ${(performance.now() - tCount).toFixed(0)}ms total=${total} folder=${folder} type=${type} limit=${limit}`);
 
   const orderBy = random ? 'RANDOM()' : sort === 'none' ? 'id ASC' : sort === 'filename' ? 'path ASC' : sort === 'likes' ? 'likes DESC, COALESCE(date_taken, created_at) DESC' : liked ? 'likes DESC' : 'COALESCE(date_taken, created_at) DESC, path DESC';
   logger.debug(`orderBy: ${orderBy}`);
@@ -70,7 +72,7 @@ export default function ({ limit, offset, folder, subtree, liked, random, sort, 
   }
 
   const items = db.prepare(sql).all(...queryParams);
-  logger.debug(`returned ${items.length} items`);
+  console.log(`[DBG][listMedia] SELECT ${(performance.now() - tCount).toFixed(0)}ms returned=${items.length}/${total} TOTAL ${(performance.now() - tStart).toFixed(0)}ms`);
 
   return { items, total };
 }

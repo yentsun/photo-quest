@@ -101,13 +101,66 @@ export function resetMediaCaches() {
 }
 
 // ---------------------------------------------------------------------------
+// Sidebar count badges (cached — never "live" over the full library)
+// ---------------------------------------------------------------------------
+// Library / Liked / Tags counts are cached in-memory + localStorage so the
+// badges render instantly on every load and are never recomputed by scanning
+// the whole media store. They are refreshed against the cheap server COUNT
+// endpoints (which return just a total) only on data-change signals.
+
+const COUNTS_STORAGE_KEY = 'photoquest.counts-v1';
+const EMPTY_COUNTS = { library: null, liked: null, tags: null };
+
+/** @type {{ library: number|null, liked: number|null, tags: number|null }} */
+let _countsCache = null;
+
+/**
+ * Return the cached badge counts (or nulls on first run / cleared storage).
+ * @returns {{ library: number|null, liked: number|null, tags: number|null }}
+ */
+export function getCachedCounts() {
+  if (_countsCache) return _countsCache;
+  try {
+    const raw = localStorage.getItem(COUNTS_STORAGE_KEY);
+    _countsCache = raw ? { ...EMPTY_COUNTS, ...JSON.parse(raw) } : { ...EMPTY_COUNTS };
+  } catch {
+    _countsCache = { ...EMPTY_COUNTS };
+  }
+  return _countsCache;
+}
+
+function persistCounts(counts) {
+  _countsCache = counts;
+  try { localStorage.setItem(COUNTS_STORAGE_KEY, JSON.stringify(counts)); } catch { /* ignore */ }
+}
+
+/**
+ * Cheaply refresh the badge counts from the server (COUNT-only requests) and
+ * cache the result. Server-only; never touches the IDB snapshot.
+ * @returns {Promise<{ library: number|null, liked: number|null, tags: number|null }>}
+ */
+export async function refreshCounts() {
+  const [library, liked, tags] = await Promise.all([
+    fetchMedia({ limit: 0 }).then(d => d.total).catch(() => null),
+    fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => null),
+    fetchTags().then(d => d.length).catch(() => null),
+  ]);
+  const counts = { library, liked, tags };
+  persistCounts(counts);
+  return counts;
+}
+
+// ---------------------------------------------------------------------------
 // Internal server fetch helpers
 // ---------------------------------------------------------------------------
 
 async function _fetchMediaFromServer(url, opts) {
+  const t0 = performance.now();
   const response = await fetch(url, opts.random ? { cache: 'no-store' } : undefined);
   if (!response.ok) throw new Error('Failed to fetch media');
   const data = await response.json();
+  const bodySize = JSON.stringify(data.items[0] ?? {}).length * data.items.length;
+  console.log(`[DBG][api] SERVER /media ${(performance.now() - t0).toFixed(0)}ms items=${data.items.length} total=${data.total} est=${(bodySize / 1048576).toFixed(1)}MB folder=${opts.folder}`);
   for (const item of data.items) { parseTags(item); _mediaCache.set(item.id, item); }
   if (opts.folder != null && !opts.random && !opts.liked && !opts.search && (!opts.offset || opts.offset === 0)) {
     _folderMediaCache.set(opts.folder, { items: data.items, total: data.total });
@@ -154,8 +207,15 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
 
   const opts = { limit, offset, folder, subtree, liked, random, sort, search, tag, type };
 
-  /* IDB stores results in deterministic order — skip it for random queries. */
+  /* Random queries are always server-only. */
   if (random) {
+    return _fetchMediaFromServer(url, opts);
+  }
+
+  /* Count-only queries (e.g. sidebar badges / `limit: 0`) never read the IDB
+     snapshot — the full-store getAll + sort would take seconds on a large
+     library. The server's COUNT is trivially fast, so go straight to it. */
+  if (limit === 0) {
     return _fetchMediaFromServer(url, opts);
   }
 
@@ -172,9 +232,11 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
 
   // IDB-first: return cached data immediately if available
   let idbData = null;
+  const tIdb = performance.now();
   try {
     idbData = await idbGetMedia(opts);
   } catch (e) { /* ignore */ }
+  if (idbData) console.log(`[DBG][api] fetchMedia IDB-first ${(performance.now() - tIdb).toFixed(0)}ms folder=${opts.folder} items=${idbData.items.length} total=${idbData.total}`);
 
   if (idbData && idbData.items.length > 0) {
     // Refresh from server in background without blocking the UI

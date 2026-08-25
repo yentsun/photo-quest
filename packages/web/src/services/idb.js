@@ -176,8 +176,47 @@ export async function idbDeleteFolder(id) {
  * @param {{ folder?: string, subtree?: boolean, liked?: boolean, limit?: number, offset?: number }} opts
  * @returns {Promise<{ items: Object[], total: number }>}
  */
+/**
+ * Count matching media inside IDB without cloning/sorting the whole store.
+ * Used for count-only reads (e.g. the sidebar badges) where the full record
+ * list is never needed. Iterates a single key cursor over the `hidden` index.
+ *
+ * @param {IDBDatabase} db
+ * @param {{ folder?: string, liked?: boolean, type?: string, search?: string, tag?: string }} filters
+ * @returns {Promise<number>}
+ */
+function idbCountMedia(db, filters) {
+  return new Promise((resolve, reject) => {
+    const store = db.transaction('media', 'readonly').objectStore('media');
+    let count = 0;
+    const req = store.index('hidden').openCursor(IDBKeyRange.only(0));
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor) { resolve(count); return; }
+      const m = cursor.value;
+      if (
+        (!filters.folder || m.folder === filters.folder) &&
+        (!filters.liked || m.likes > 0) &&
+        (!filters.type || m.type === filters.type) &&
+        (!filters.search || (m.title || '').toLowerCase().includes(filters.search.trim().toLowerCase())) &&
+        (!filters.tag || (() => { let t; try { t = typeof m.tags === 'string' ? JSON.parse(m.tags) : m.tags; } catch { return false; } return Array.isArray(t) && t.includes(filters.tag); })())
+      ) {
+        count++;
+      }
+      cursor.continue();
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort, search, tag, type } = {}) {
   const db = await openDB();
+
+  /* Count-only reads (limit === 0): never clone/sort the whole store. */
+  if (limit === 0) {
+    return { items: [], total: await idbCountMedia(db, { folder, subtree, liked, type, search, tag }) };
+  }
+
   let items;
 
   if (folder != null && !subtree) {

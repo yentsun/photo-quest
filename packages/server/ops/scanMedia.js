@@ -246,6 +246,7 @@ function createFolderHierarchy(db, scanRoot, files) {
 export default async function (dirPath) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
+  const t0 = performance.now();
 
   logger.debug(`dirPath="${dirPath}"`);
   dirPath = dirPath.replace(/^["']+|["']+$/g, '').trim();
@@ -276,6 +277,7 @@ export default async function (dirPath) {
 
   logger.debug(`walking directory tree (scan ${scanId})`);
   let files;
+  const tWalk = performance.now();
   try {
     files = await findMediaFiles(dirPath, abortController.signal);
   } catch (err) {
@@ -292,11 +294,14 @@ export default async function (dirPath) {
     discoveryAborts.delete(scanId);
   }
   logger.debug(`discovered ${files.length} media files on disk`);
+  console.log(`[DBG][scan] WALK ${(performance.now() - tWalk).toFixed(0)}ms files=${files.length} dir=${dirPath}`);
 
   createFolderHierarchy(db, dirPath, files);
 
+  const tRows = performance.now();
   const existingRows = db.prepare('SELECT id, path FROM media WHERE hidden = 0').all();
   const existingPaths = new Set(existingRows.map(r => r.path));
+  console.log(`[DBG][scan] LOAD-ALL-ROWS ${(performance.now() - tRows).toFixed(0)}ms rows=${existingRows.length}`);
   const newFiles = files.filter(f => !existingPaths.has(f));
 
   /* Remove records for files under this directory that were previously
@@ -334,6 +339,7 @@ export default async function (dirPath) {
     "SELECT COUNT(*) AS n FROM media WHERE hidden = 0 AND date_taken IS NULL AND (path = ? OR path LIKE ? OR path LIKE ?)"
   ).get(dirPath, dirPath + path.sep + '%', dirPath + '/%').n;
   if (nullDateCount > 0) {
+    const tBackfill = performance.now();
     const backfillStmt = db.prepare(
       'UPDATE media SET date_taken = ? WHERE id = ? AND date_taken IS NULL'
     );
@@ -346,6 +352,7 @@ export default async function (dirPath) {
         backfillStmt.run((await fsp.stat(filePath)).mtime.toISOString(), row.id);
       } catch { /* stat may fail if the file vanished; skip */ }
     }
+    console.log(`[DBG][scan] BACKFILL ${(performance.now() - tBackfill).toFixed(0)}ms files=${files.length} nullDateCount=${nullDateCount}`);
   }
 
   logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
@@ -355,6 +362,7 @@ export default async function (dirPath) {
     logger.debug(`no new files found, nothing to do`);
     db.prepare('UPDATE scans SET status = ? WHERE id = ?').run(SCAN_STATUS.COMPLETED, scanId);
     broadcastSse({ type: 'import_complete', scanId, total: 0, processed: 0 });
+    console.log(`[DBG][scan] TOTAL ${(performance.now() - t0).toFixed(0)}ms (no new files)`);
     return { scanId, total: 0 };
   }
 
@@ -377,6 +385,7 @@ export default async function (dirPath) {
      the new scan's items along with any other queued work. */
   ensureScanWorker(logger);
 
+  console.log(`[DBG][scan] TOTAL ${(performance.now() - t0).toFixed(0)}ms new=${newFiles.length}`);
   return { scanId, total: newFiles.length };
 }
 

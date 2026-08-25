@@ -29,7 +29,9 @@ export default async (kojo, logger) => {
 
     /* Scoped by path: /folders?path=<path> — used for breadcrumbs on media viewer cold load */
     if (folderPath && !parentId) {
+      const t0 = performance.now();
       const target = db.prepare('SELECT id FROM folders WHERE path = ?').get(folderPath);
+      console.log(`[DBG][folders] PATH-LOOKUP ${(performance.now() - t0).toFixed(0)}ms path=${folderPath}`);
       if (!target) {
         json(res, 200, []);
         return;
@@ -39,6 +41,7 @@ export default async (kojo, logger) => {
 
     /* Scoped query: /folders?parent=<id> */
     if (parentId) {
+      const tScope = performance.now();
       const target = db.prepare('SELECT id, path, name, thumbnail_media_id, thumbnail_time FROM folders WHERE id = ?').get(parentId);
       if (!target) {
         json(res, 404, { error: 'Folder not found' });
@@ -177,6 +180,7 @@ export default async (kojo, logger) => {
 
       const filtered = output.filter(f => f.subtreeMediaCount > 0);
       logger.debug(`[GET /folders] scoped: returning ${filtered.length} folders`);
+      console.log(`[DBG][folders] SCOPED ${(performance.now() - tScope).toFixed(0)}ms parent=${parentId} items=${filtered.length}`);
 
       /* The current folder must always terminate the chain -- if it were ever
          missing, the client would treat the parent as the current folder. */
@@ -196,6 +200,7 @@ export default async (kojo, logger) => {
 
     /* Full query: /folders (no parent filter) */
     logger.debug(`[GET /folders] querying folders`);
+    const tFull = performance.now();
     const folders = db.prepare('SELECT id, path, name, thumbnail_media_id, thumbnail_time FROM folders ORDER BY path').all();
     logger.debug(`[GET /folders] raw folder count: ${folders.length}`);
 
@@ -256,6 +261,7 @@ export default async (kojo, logger) => {
 
     const filtered = result.filter(f => f.subtreeMediaCount > 0);
     logger.debug(`[GET /folders] filtered to ${filtered.length} folders with media`);
+    console.log(`[DBG][folders] FULL ${(performance.now() - tFull).toFixed(0)}ms items=${filtered.length}`);
 
     json(res, 200, filtered);
   });

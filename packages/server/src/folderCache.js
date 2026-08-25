@@ -29,6 +29,7 @@ function fingerprint(db) {
 export function getFolderAggregates(db) {
   const key = fingerprint(db);
   if (cached && cachedKey === key) return cached;
+  const t0 = performance.now();
 
   const typeCounts = db.prepare(
     'SELECT folder, type, COUNT(*) as count FROM media WHERE hidden = 0 GROUP BY folder, type'
@@ -40,6 +41,7 @@ export function getFolderAggregates(db) {
 
   cached = { typeCounts, previews };
   cachedKey = key;
+  console.log(`[DBG][folderCache] RECOMPUTE ${(performance.now() - t0).toFixed(0)}ms typeCounts=${typeCounts.length} previews=${previews.length}`);
   return cached;
 }
 

@@ -145,6 +145,7 @@ export default function FolderPage() {
   directMediaRef.current = directMedia;
 
   useEffect(() => {
+    const tLoad = performance.now();
     const onlySortChanged = prevSort.current !== sort
       && prevFolderId.current === folderId
       && prevSignal.current === signal
@@ -160,6 +161,7 @@ export default function FolderPage() {
       const sorted = applySort(directMediaRef.current, sort);
       setDirectMedia(sorted);
       setPageCache(CACHE_KEY, { folders, directMedia: sorted }, signal);
+      console.log(`[DBG][folder] onlySortChanged path, directMedia=${directMediaRef.current.length}`);
       return;
     }
 
@@ -178,6 +180,7 @@ export default function FolderPage() {
       contentReadyForIdRef.current = folderId;
       setContentReady(true);
       setLoading(false);
+      console.log(`[DBG][folder] pageCache hit signal=${signal} media=${pm.length} (+${(performance.now() - tLoad).toFixed(0)}ms)`);
       return;
     }
 
@@ -197,12 +200,15 @@ export default function FolderPage() {
       setContentReady(false);
       contentReadyRef.current = false;
     }
+    console.log(`[DBG][folder] effect scMedia=${scMedia ? scMedia.items.length : 'null'} contentReady=${contentReadyRef.current} (+${(performance.now() - tLoad).toFixed(0)}ms)`);
     if (!isSearching) {
       idbGetFolders().then(async (cachedFolders) => {
         if (cancelled) return;
         const found = cachedFolders.find(f => f.id === folderId);
         if (!found) return;
+        const tIdb = performance.now();
         const { items } = await idbGetMedia({ folder: found.path, limit: FETCH_LIMIT, sort, type: mediaTypeParam });
+        console.log(`[DBG][folder] IDB branch ${(performance.now() - tIdb).toFixed(0)}ms items=${items.length} contentReady=${contentReadyRef.current}`);
         if (cancelled || items.length === 0 || scMedia || serverLoadedRef.current) return;
         folderRef.current = found;
         setDirectMedia(applySort(items, sort));
@@ -226,7 +232,9 @@ export default function FolderPage() {
           const fetchOpts = { folder: found.path, limit: FETCH_LIMIT, offset: 0, sort };
           if (mediaTypeParam) fetchOpts.type = mediaTypeParam;
           if (debouncedSearch) fetchOpts.search = debouncedSearch;
+          const tFetch = performance.now();
           const { items } = await fetchMedia(fetchOpts);
+          console.log(`[DBG][folder] fetchMedia resolve ${(performance.now() - tFetch).toFixed(0)}ms items=${items.length} (+${(performance.now() - tLoad).toFixed(0)}ms from effect start)`);
           if (!cancelled) {
             serverLoadedRef.current = true;
             const sorted = applySort(items, sort);
@@ -355,6 +363,13 @@ export default function FolderPage() {
   }, [slideshow.active, slideshow.current, navigate]);
 
   const showPageLoader = loading && !contentReady;
+
+  useEffect(() => {
+    const was = document.querySelector('.page-loader');
+    console.log(`[DBG][folder] RENDER loader=${showPageLoader ? 'SHOW' : 'hide'} contentReady=${contentReady} loading=${loading} allItems=${allItems.length} +${Math.round(performance.now()) % 100000}ms`);
+    if (was && !showPageLoader) console.log(`[DBG][folder] SPINNER GONE at ${Math.round(performance.now()) % 100000}ms`);
+    if (!was && showPageLoader) console.log(`[DBG][folder] SPINNER STARTED at ${Math.round(performance.now()) % 100000}ms`);
+  });
 
   const folderName = folder ? getFolderName(folder) || 'Folder' : 'Folder';
   const subtreeTotal = folder?.subtreeMediaCount || 0;
