@@ -8,6 +8,7 @@ import { idbGetMedia } from '../../services/idb.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, Loader } from '../ui/index.js';
+import useSwipePagination from '../../hooks/useSwipePagination.js';
 
 const PAGE_SIZE = 30;
 const FETCH_LIMIT = 10000;
@@ -77,6 +78,11 @@ export default function LikedPage() {
   const totalPages = Math.max(1, Math.ceil(likedMedia.length / PAGE_SIZE));
   const displayItems = useMemo(() => likedMedia.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [likedMedia, page]);
 
+  const swipe = useSwipePagination({
+    onPrev: () => { if (page > 0) goToPage(page - 1); },
+    onNext: () => { if (page < totalPages - 1) goToPage(page + 1); },
+  });
+
   const handleShuffle = () => {
     if (likedMedia.length === 0) return;
     pendingShuffle.current = true;
@@ -101,7 +107,7 @@ export default function LikedPage() {
   if (loading) return <div className="page-loader"><Loader message="Fetching your liked media…" /></div>;
 
   return (
-    <div className="page">
+    <div className="page" {...swipe}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Liked</h1>

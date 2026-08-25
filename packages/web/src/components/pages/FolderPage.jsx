@@ -7,10 +7,11 @@ import { fetchMedia, getLastFolders, getLastFolderMedia, scanMedia as scanMediaA
 import { Select } from '../ui/index.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
 import usePersistedState from '../../hooks/usePersistedState.js';
+import useSwipePagination from '../../hooks/useSwipePagination.js';
 import { idbGetFolders, idbGetMedia } from '../../services/idb.js';
 import { FolderCard, MediaCard } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, Input, Loader, Modal } from '../ui/index.js';
+import { Button, Icon, IconButton, Input, Loader, Modal } from '../ui/index.js';
 
 const PAGE_SIZE = 30;
 const FETCH_LIMIT = 10000;
@@ -79,6 +80,7 @@ export default function FolderPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showRemove, setShowRemove] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const searchRef = useRef('');
 
   const folderId = Number(id);
@@ -270,6 +272,11 @@ export default function FolderPage() {
 
   const breadcrumbs = useMemo(() => folderChain, [folderChain]);
 
+  const swipe = useSwipePagination({
+    onPrev: () => { if (displayPage > 0) goToPage(displayPage - 1); },
+    onNext: () => { if (displayPage < totalPages - 1) goToPage(displayPage + 1); },
+  });
+
   const handleRefresh = async () => {
     const f = folderRef.current;
     if (!f || refreshing) return;
@@ -361,8 +368,23 @@ export default function FolderPage() {
     return `${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} items`;
   })();
 
+  /* Refresh / Remove are shared by the desktop action row and the mobile kebab
+     menu so they never drift apart. `onAction` runs after each click (the kebab
+     menu uses it to close itself). */
+  const renderRefresh = (extraClass = '', onAction = () => {}) => folder && (
+    <Button variant="ghost" size="sm" className={extraClass} onClick={() => { onAction(); handleRefresh(); }} disabled={refreshing} title="Rescan folder for new files" icon={<Icon name="refresh" className="icon-sm" />}>
+      Refresh
+    </Button>
+  );
+
+  const renderRemove = (extraClass = '', onAction = () => {}) => folder && (
+    <Button variant="danger" size="sm" className={extraClass} onClick={() => { onAction(); handleRemove(); }} title="Remove folder from library" icon={<Icon name="close" className="icon-sm" />}>
+      Remove
+    </Button>
+  );
+
   return (
-    <div className="page">
+    <div className="page" {...swipe}>
       {breadcrumbs.length > 0 && (
         <nav className="breadcrumb-nav">
           <Button variant="text" onClick={() => navigate('/dashboard')}>Library</Button>
@@ -416,11 +438,6 @@ export default function FolderPage() {
               <span className="sm-show">{shuffling ? 'Starting…' : 'Shuffle'}</span>
             </Button>
           )}
-          {folder && (
-            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing} title="Rescan folder for new files" icon={<Icon name="refresh" className="icon-sm" />}>
-              <span className="sm-show">Refresh</span>
-            </Button>
-          )}
           <Select
             value={sort}
             onChange={e => { setSort(e.target.value); setPage(0); }}
@@ -449,11 +466,15 @@ export default function FolderPage() {
           >
             <span className="sm-show">Search</span>
           </Button>
-          {folder && (
-            <Button variant="danger" size="sm" onClick={handleRemove} title="Remove folder from library" icon={<Icon name="close" className="icon-sm" />}>
-              <span className="sm-show">Remove</span>
-            </Button>
-          )}
+          {renderRefresh('page-overflow-hidden')}
+          {renderRemove('page-overflow-hidden')}
+          <IconButton
+            size="sm"
+            icon={<Icon name="kebab" className="icon-md" />}
+            label="More actions"
+            onClick={() => setShowMore(true)}
+            className="page-kebab"
+          />
         </div>
       </div>
 
@@ -530,6 +551,11 @@ export default function FolderPage() {
           <Button variant="ghost" size="sm" onClick={() => setShowRemove(false)}>Cancel</Button>
           <Button variant="danger" size="sm" icon={<Icon name="close" className="icon-sm" />} onClick={confirmRemove}>Remove</Button>
         </div>
+      </Modal>
+
+      <Modal open={showMore} onClose={() => setShowMore(false)} title="More actions" className="viewer-more-modal">
+        {renderRefresh('', () => setShowMore(false))}
+        {renderRemove('', () => setShowMore(false))}
       </Modal>
     </div>
   );

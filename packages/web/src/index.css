@@ -450,6 +450,9 @@ body {
   padding: 0 4px; outline: none; width: 100%; max-width: 400px;
 }
 .page-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+/* Kebab ("More actions") affordance is mobile-only; on desktop the Refresh and
+   Remove actions sit inline in the header. */
+.page-kebab { display: none; }
 
 /* ─── Item grid (folders + media small list) ─── */
 .item-grid {
@@ -802,9 +805,15 @@ body {
   .sidebar-footer { padding: 8px 6px; align-items: center; }
   .sidebar-footer .btn-full { width: auto; justify-content: center; }
   .sidebar-toggle { display: none; }
+  /* Let the grid pages handle horizontal swipes (pagination) instead of the
+     browser's edge back/forward gesture, while still allowing vertical scroll. */
+  .page { touch-action: pan-y; }
   /* Page header: stack title above buttons */
   .page-header { flex-direction: column; gap: 8px; margin-bottom: 16px; }
-  .page-actions { flex-wrap: wrap; }
+  .page-actions { width: 100%; flex-wrap: wrap; }
+  /* Pull Refresh / Remove into the kebab menu on mobile. */
+  .page-kebab { display: inline-flex; margin-left: auto; }
+  .page-overflow-hidden { display: none; }
   /* Viewer infobar: stack as column, actions below title */
   .viewer-infobar { flex-direction: column; align-items: stretch; overflow-y: auto; max-height: 45vh; }
   .viewer-infobar-left { width: 100%; }
