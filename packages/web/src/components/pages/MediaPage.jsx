@@ -437,6 +437,7 @@ export default function MediaPage() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT') return;
+      if (showDelete) return; /* Delete modal captures its own keys */
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
@@ -450,7 +451,18 @@ export default function MediaPage() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete, showDelete]);
+
+  /* Delete confirmation modal: Enter confirms, Escape closes. Escape already
+     works via the shared Modal component; wire Enter here. */
+  useEffect(() => {
+    if (!showDelete) return;
+    const handleDeleteKey = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); handleDelete(); }
+    };
+    document.addEventListener('keydown', handleDeleteKey);
+    return () => document.removeEventListener('keydown', handleDeleteKey);
+  }, [showDelete, handleDelete]);
 
   useEffect(() => {
     if (!showInfo || !item) return;
