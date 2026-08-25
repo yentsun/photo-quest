@@ -249,8 +249,9 @@ body {
 .btn-ghost { background: transparent; border-color: var(--sol-border); color: var(--sol-text); }
 .btn-ghost:hover { background: var(--sol-surface); color: var(--sol-text-em); border-color: var(--sol-text-mut); }
 
-.btn-danger { background: transparent; color: var(--sol-red); border-color: var(--sol-border); }
+.btn-danger { background: transparent; color: var(--sol-red); border-color: color-mix(in srgb, var(--sol-red) 45%, var(--sol-bg)); }
 .btn-danger:hover { background: #3a1d1a; border-color: var(--sol-red); }
+.btn-danger:disabled { color: var(--sol-text-mut); border-color: var(--sol-border); }
 
 .btn-text {
   background: transparent;

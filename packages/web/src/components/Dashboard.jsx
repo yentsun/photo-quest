@@ -90,6 +90,8 @@ export default function Dashboard() {
 
   const [importProgress, setImportProgress] = useState(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
+  const [showRemove, setShowRemove] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState(null);
   const [selectedPath, setSelectedPath] = useState(null);
   const [browsing, setBrowsing] = useState(false);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
@@ -337,9 +339,16 @@ export default function Dashboard() {
     }
   };
 
-  const handleRemoveFolder = async (folder) => {
+  const handleRemoveFolder = (folder) => {
+    setRemoveTarget(folder);
+    setShowRemove(true);
+  };
+
+  const confirmRemoveFolder = async () => {
+    if (!removeTarget) return;
+    const folder = removeTarget;
+    setShowRemove(false);
     const folderName = folder.name || folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
-    if (!confirm(`Remove "${folderName}" from library?\n\nYour likes will be preserved if you re-add this folder later.`)) return;
     try {
       const result = await removeFolder(folder.id);
       setStatusMessage(`Removed "${folderName}" (${result.hidden} items hidden)`);
@@ -569,6 +578,19 @@ export default function Dashboard() {
             Clear search
           </Button>
         )}
+      </Modal>
+
+      <Modal open={showRemove} onClose={() => setShowRemove(false)} title="Remove folder">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="warning" className="icon-md text-mut" />
+          <p className="text-mut">
+            Remove "<strong>{removeTarget ? removeTarget.name || removeTarget.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder' : 'this folder'}</strong>" from library? Files on disk are not deleted. Your likes will be preserved if you re-add this folder later.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => setShowRemove(false)}>Cancel</Button>
+          <Button variant="danger" size="sm" icon={<Icon name="close" className="icon-sm" />} onClick={confirmRemoveFolder}>Remove</Button>
+        </div>
       </Modal>
     </div>
   );

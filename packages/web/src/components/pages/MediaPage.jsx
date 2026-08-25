@@ -66,6 +66,7 @@ export default function MediaPage() {
   const tagInputRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const viewerRef = useRef(null);
   const mediaViewportRef = useRef(null);
   const touchStartX = useRef(null);
@@ -323,7 +324,7 @@ export default function MediaPage() {
 
   const handleDelete = useCallback(async () => {
     if (!item) return;
-    if (!confirm(`Delete "${item.title}"?\n\nThis will remove it from the library AND delete the file from disk.`)) return;
+    setShowDelete(false);
     const deletedId = item.id;
 
     /* Up/down navigation happens within the folder sibling list, even in a
@@ -444,12 +445,12 @@ export default function MediaPage() {
       if (e.key === 'Enter') { e.preventDefault(); handleLike(); }
       if (e.key === 'i') setShowInfo(prev => !prev);
       if (e.key === 'f') toggleFullscreen();
-      if (e.key === 'Delete') handleDelete();
+      if (e.key === 'Delete') setShowDelete(true);
       if (e.key === 't' || e.key === 'T') setAddingTag(true);
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, handleDelete]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete]);
 
   useEffect(() => {
     if (!showInfo || !item) return;
@@ -732,7 +733,7 @@ export default function MediaPage() {
             <LikeButton count={item.likes || 0} onLike={handleLike} />
             <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
             {renderOverflowActions('viewer-overflow-hidden')}
-            <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete} className="viewer-action-push">Delete</Button>
+            <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={() => setShowDelete(true)} className="viewer-action-push">Delete</Button>
             <IconButton
               size="sm"
               icon={<Icon name="kebab" className="icon-md" />}
@@ -797,6 +798,17 @@ export default function MediaPage() {
 
       <Modal open={showMore} onClose={() => setShowMore(false)} title="More actions" className="viewer-more-modal">
         {renderOverflowActions('', () => setShowMore(false))}
+      </Modal>
+
+      <Modal open={showDelete} onClose={() => setShowDelete(false)} title="Delete media">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="warning" className="icon-md text-mut" />
+          <p className="text-mut">Delete "<strong>{item?.title}</strong>"? This will remove it from the library and delete the file from disk.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => setShowDelete(false)}>Cancel</Button>
+          <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>
+        </div>
       </Modal>
     </div>
   );

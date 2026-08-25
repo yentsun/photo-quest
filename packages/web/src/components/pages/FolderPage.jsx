@@ -78,6 +78,7 @@ export default function FolderPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [showRemove, setShowRemove] = useState(false);
   const searchRef = useRef('');
 
   const folderId = Number(id);
@@ -278,11 +279,13 @@ export default function FolderPage() {
     finally { setRefreshing(false); }
   };
 
-  const handleRemove = async () => {
+  const handleRemove = () => setShowRemove(true);
+
+  const confirmRemove = async () => {
     const f = folderRef.current;
     if (!f) return;
+    setShowRemove(false);
     const name = f.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
-    if (!confirm(`Remove "${name}" from library?\n\nFiles on disk are not deleted.`)) return;
     try {
       await removeFolder(f.id);
       navigate('/dashboard');
@@ -447,7 +450,7 @@ export default function FolderPage() {
             <span className="sm-show">Search</span>
           </Button>
           {folder && (
-            <Button variant="danger" size="sm" onClick={handleRemove} title="Remove folder from library" icon={<Icon name="trash" className="icon-sm" />}>
+            <Button variant="danger" size="sm" onClick={handleRemove} title="Remove folder from library" icon={<Icon name="close" className="icon-sm" />}>
               <span className="sm-show">Remove</span>
             </Button>
           )}
@@ -514,6 +517,19 @@ export default function FolderPage() {
             Clear search
           </Button>
         )}
+      </Modal>
+
+      <Modal open={showRemove} onClose={() => setShowRemove(false)} title="Remove folder">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="warning" className="icon-md text-mut" />
+          <p className="text-mut">
+            Remove "<strong>{folder ? folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder' : 'this folder'}</strong>" from library? Files on disk are not deleted.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => setShowRemove(false)}>Cancel</Button>
+          <Button variant="danger" size="sm" icon={<Icon name="close" className="icon-sm" />} onClick={confirmRemove}>Remove</Button>
+        </div>
       </Modal>
     </div>
   );
