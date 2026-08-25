@@ -14,9 +14,9 @@ const PAGE_SIZE = 30;
 const FETCH_LIMIT = 10000;
 
 function getPageNumbers(current, total) {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  if (total <= 5) return Array.from({ length: total }, (_, i) => i);
   const set = new Set([0, total - 1, current]);
-  for (let i = Math.max(0, current - 2); i <= Math.min(total - 1, current + 2); i++) set.add(i);
+  for (let i = Math.max(0, current - 1); i <= Math.min(total - 1, current + 1); i++) set.add(i);
   const sorted = [...set].sort((a, b) => a - b);
   const result = [];
   for (let i = 0; i < sorted.length; i++) {
