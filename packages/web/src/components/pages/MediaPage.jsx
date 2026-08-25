@@ -65,6 +65,7 @@ export default function MediaPage() {
   const [suggestionIndex, setSuggestionIndex] = useState(-1);
   const tagInputRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const viewerRef = useRef(null);
   const mediaViewportRef = useRef(null);
   const touchStartX = useRef(null);
@@ -484,6 +485,24 @@ export default function MediaPage() {
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(item);
 
+  /* Overflow actions (Download + "Use as...") shared by the desktop action bar
+     and the mobile kebab menu so the two never drift apart. `onAction`
+     runs after each click (the kebab menu uses it to close itself). */
+  const renderOverflowActions = (extraClass = '', onAction = () => {}) => (
+    <>
+      <Button variant="ghost" size="sm" icon={<Icon name="download" className="icon-sm" />} className={extraClass} onClick={() => { onAction(); downloadMedia(item); }}>Download</Button>
+      {isImage && folder && (
+        <Button variant="ghost" size="sm" icon={<Icon name="image" className="icon-sm" />} className={extraClass} onClick={() => { onAction(); handleSetFolderThumbnail(); }}>Use as folder thumbnail</Button>
+      )}
+      {!isImage && folder && item.status === MEDIA_STATUS.READY && (
+        <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} className={extraClass} onClick={() => { onAction(); handleSetFolderThumbnail(playerRef.current?.getCurrentTime()); }}>Use frame for folder</Button>
+      )}
+      {!isImage && item.status === MEDIA_STATUS.READY && (
+        <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} className={extraClass} onClick={() => { onAction(); handleSetVideoThumbnail(); }}>Use frame for video</Button>
+      )}
+    </>
+  );
+
   return (
     <div ref={viewerRef} className={`viewer${isFullscreen ? ' viewer-fullscreen' : ''}`}>
       {!isFullscreen && (
@@ -712,17 +731,15 @@ export default function MediaPage() {
           <div className="viewer-actions">
             <LikeButton count={item.likes || 0} onLike={handleLike} />
             <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
-            <Button variant="ghost" size="sm" icon={<Icon name="download" className="icon-sm" />} onClick={() => downloadMedia(item)}>Download</Button>
-            {isImage && folder && (
-              <Button variant="ghost" size="sm" icon={<Icon name="image" className="icon-sm" />} onClick={() => handleSetFolderThumbnail()}>Use as folder thumbnail</Button>
-            )}
-            {!isImage && folder && item.status === MEDIA_STATUS.READY && (
-              <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} onClick={() => handleSetFolderThumbnail(playerRef.current?.getCurrentTime())}>Use frame for folder</Button>
-            )}
-            {!isImage && item.status === MEDIA_STATUS.READY && (
-              <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} onClick={handleSetVideoThumbnail}>Use frame for video</Button>
-            )}
-            <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>
+            {renderOverflowActions('viewer-overflow-hidden')}
+            <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete} className="viewer-action-push">Delete</Button>
+            <IconButton
+              size="sm"
+              icon={<Icon name="kebab" className="icon-md" />}
+              label="More actions"
+              onClick={() => setShowMore(true)}
+              className="viewer-kebab"
+            />
           </div>
         </div>
       )}
@@ -776,6 +793,10 @@ export default function MediaPage() {
             ))}
           </tbody>
         </table>
+      </Modal>
+
+      <Modal open={showMore} onClose={() => setShowMore(false)} title="More actions" className="viewer-more-modal">
+        {renderOverflowActions('', () => setShowMore(false))}
       </Modal>
     </div>
   );

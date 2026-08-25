@@ -748,6 +748,12 @@ body {
 .viewer-actions .like-btn:hover { background: var(--sol-surface); border-color: var(--sol-text-mut); }
 .viewer-actions .like-count { color: var(--sol-text-mut); font-size: var(--fs-sm); margin-top: 0; flex-shrink: 0; }
 .viewer-actions .like-btn .icon-md { width: 22px; height: 22px; flex-shrink: 0; }
+/* Push the destructive/menu group (Delete + kebab) to the right edge while the
+   like/info group stays at the left, leaving a gap between them. */
+.viewer-action-push { margin-left: auto; }
+/* Kebab ("More actions") affordance is mobile-only; on desktop every action
+   sits inline in the infobar. */
+.viewer-kebab { display: none; }
 
 .viewer-viewport {
   flex: 1; display: flex; align-items: center; justify-content: center;
@@ -801,8 +807,14 @@ body {
   /* Viewer infobar: stack as column, actions below title */
   .viewer-infobar { flex-direction: column; align-items: stretch; overflow-y: auto; max-height: 45vh; }
   .viewer-infobar-left { width: 100%; }
-  .viewer-actions { width: 100%; padding-top: 6px; border-top: 1px solid var(--sol-border); flex-wrap: wrap; }
+  .viewer-actions { width: 100%; padding-top: 6px; flex-wrap: wrap; }
+  /* Pull Download / "Use as..." into the kebab menu on mobile. */
+  .viewer-kebab { display: inline-flex; }
+  .viewer-overflow-hidden { display: none; }
 }
+
+/* Kebab menu ("More actions") items render full width like a list. */
+.viewer-more-modal .btn { width: 100%; justify-content: flex-start; }
 
 /* Mobile nav panel */
 .mobile-nav {
