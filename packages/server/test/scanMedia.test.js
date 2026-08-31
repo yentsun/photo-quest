@@ -385,14 +385,15 @@ test('scanMedia — .ts stale-record cleanup', async (t) => {
   t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'scan-ts-')); });
   t.afterEach(() => { cleanup(root); });
 
-  await t.test('removes a misdetected text .ts record whose stored casing differs', async () => {
+  await t.test('removes a misdetected text .ts record whose stored casing differs', { skip: process.platform !== 'win32' ? 'fixture needs a case-insensitive filesystem' : false }, async () => {
     const db = makeDb();
     const { ctx } = makeContext(db);
     const scan = scanMedia.bind(ctx);
 
     /* A text .ts file on disk (not media) — the scenario that creates a stale
        row. Insert a media record manually with a DIFFERENT-cased storage path,
-       as if it were misdetected while scanning a differently-cased root. */
+       as if it were misdetected while scanning a differently-cased root. The
+       fixture only resolves on a case-insensitive filesystem (Windows). */
     fs.writeFileSync(path.join(root, 'stale.ts'), 'const x = 1;');
 
     const upperDir = root.toUpperCase();
