@@ -250,6 +250,11 @@ export default async function (dirPath) {
 
   logger.debug(`dirPath="${dirPath}"`);
   dirPath = dirPath.replace(/^["']+|["']+$/g, '').trim();
+  /* Normalise separators so the subtree-prefix LIKE (built from dirPath with
+     path.sep) matches the OS-normalised paths produced by path.join in
+     findMediaFiles. Without this, a forward-slash dirPath on Windows would
+     miss every stored path and re-queue the whole subtree (issue #40). */
+  dirPath = path.normalize(dirPath);
   logger.debug(`trimmed dirPath="${dirPath}"`);
 
   if (!fs.existsSync(dirPath)) {
@@ -298,18 +303,24 @@ export default async function (dirPath) {
 
   createFolderHierarchy(db, dirPath, files);
 
+  /* Scope the path-diff to just this scanned subtree instead of loading every
+     media path in the library (issue #40). The .ts cleanup loop below also
+     benefits: it no longer iterates unrelated rows. */
+  const dirPrefix = dirPath.endsWith(path.sep) ? dirPath : dirPath + path.sep;
+  const dirPrefixLower = dirPrefix.toLowerCase();
+
   const tRows = performance.now();
-  const existingRows = db.prepare('SELECT id, path FROM media WHERE hidden = 0').all();
+  const existingRows = db.prepare(
+    'SELECT id, path FROM media WHERE hidden = 0 AND (path = ? OR path LIKE ?)'
+  ).all(dirPath, dirPrefix + '%');
   const existingPaths = new Set(existingRows.map(r => r.path));
-  console.log(`[DBG][scan] LOAD-ALL-ROWS ${(performance.now() - tRows).toFixed(0)}ms rows=${existingRows.length}`);
+  console.log(`[DBG][scan] LOAD-SUBTREE-ROWS ${(performance.now() - tRows).toFixed(0)}ms rows=${existingRows.length}`);
   const newFiles = files.filter(f => !existingPaths.has(f));
 
   /* Remove records for files under this directory that were previously
      mis-detected as MPEG-TS videos but are actually text (.ts source files).
      Runs before the empty-directory early return so a directory whose only
      non-media files remain still gets cleaned up. */
-  const dirPrefix = dirPath.endsWith(path.sep) ? dirPath : dirPath + path.sep;
-  const dirPrefixLower = dirPrefix.toLowerCase();
   const deleteMediaStmt = db.prepare('DELETE FROM media WHERE id = ?');
   let removed = 0;
   for (const row of existingRows) {
@@ -329,30 +340,26 @@ export default async function (dirPath) {
 
   /* Backfill date_taken for existing records under this directory that were
      created before the date_taken column migration (row exists but is NULL).
-     Previously the worker re-queued every file so the fast-path filled this in;
-     now only new files are queued, so do it here instead while we still have
-     the file list in hand. Uses mtime as a cheap proxy (no hash computed).
-     Guarded by a count scoped to this directory so it is a no-op for libraries
-     that are already filled in. Async stat (not statSync) to avoid blocking the
-     event loop, matching the async walk above. */
-  const nullDateCount = db.prepare(
-    "SELECT COUNT(*) AS n FROM media WHERE hidden = 0 AND date_taken IS NULL AND (path = ? OR path LIKE ? OR path LIKE ?)"
-  ).get(dirPath, dirPath + path.sep + '%', dirPath + '/%').n;
-  if (nullDateCount > 0) {
+     Uses mtime as a cheap proxy (no hash computed). Now scoped to a single
+     query + a stat per NULL candidate instead of a per-file DB lookup for
+     every file in the subtree (issue #40). Rows whose files no longer exist
+     on disk stay NULL. */
+  const nullRows = db.prepare(
+    "SELECT path FROM media WHERE hidden = 0 AND date_taken IS NULL AND (path = ? OR path LIKE ?)"
+  ).all(dirPath, dirPrefix + '%');
+  if (nullRows.length > 0) {
     const tBackfill = performance.now();
     const backfillStmt = db.prepare(
-      'UPDATE media SET date_taken = ? WHERE id = ? AND date_taken IS NULL'
+      'UPDATE media SET date_taken = ? WHERE path = ? AND date_taken IS NULL'
     );
-    const findRow = db.prepare('SELECT id FROM media WHERE path = ? AND date_taken IS NULL');
-    for (const filePath of files) {
-      if (!existingPaths.has(filePath)) continue;
-      const row = findRow.get(filePath);
-      if (!row) continue;
+    let filled = 0;
+    for (const { path: filePath } of nullRows) {
       try {
-        backfillStmt.run((await fsp.stat(filePath)).mtime.toISOString(), row.id);
-      } catch { /* stat may fail if the file vanished; skip */ }
+        backfillStmt.run((await fsp.stat(filePath)).mtime.toISOString(), filePath);
+        filled++;
+      } catch { /* stat may fail if the file vanished (orphan); leave NULL */ }
     }
-    console.log(`[DBG][scan] BACKFILL ${(performance.now() - tBackfill).toFixed(0)}ms files=${files.length} nullDateCount=${nullDateCount}`);
+    console.log(`[DBG][scan] BACKFILL ${(performance.now() - tBackfill).toFixed(0)}ms null=${nullRows.length} filled=${filled}`);
   }
 
   logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
