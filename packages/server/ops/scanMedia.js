@@ -250,7 +250,7 @@ export default async function (dirPath) {
 
   logger.debug(`dirPath="${dirPath}"`);
   dirPath = dirPath.replace(/^["']+|["']+$/g, '').trim();
-  /* Normalise separators so the subtree-prefix LIKE (built from dirPath with
+  /* Normalise separators so the subtree prefix (built from dirPath with
      path.sep) matches the OS-normalised paths produced by path.join in
      findMediaFiles. Without this, a forward-slash dirPath on Windows would
      miss every stored path and re-queue the whole subtree (issue #40). */
@@ -304,16 +304,21 @@ export default async function (dirPath) {
   createFolderHierarchy(db, dirPath, files);
 
   /* Scope the path-diff to just this scanned subtree instead of loading every
-     media path in the library (issue #40). Uses a substr prefix test rather
-     than LIKE so wildcards (`_`/`%`) in the path are matched literally, and to
-     stay case-sensitive consistent with the exact Set.has below. The .ts
-     cleanup loop also benefits: it no longer iterates unrelated rows. */
+     media path in the library (issue #40). Uses an index-usable prefix range:
+     `path >= dirPrefix AND path < dirPrefix + maxChar`, which is wildcard-safe
+     (`_`/`%` matched literally) and case-sensitive, consistent with the exact
+     Set.has below. The exclusive upper bound sorts below siblings like
+     `foo-bar` (since the separator `<` the next char), so only true
+     descendants match. The .ts cleanup loop also benefits: it no longer
+     iterates unrelated rows. */
   const dirPrefix = dirPath.endsWith(path.sep) ? dirPath : dirPath + path.sep;
+  /* Highest Unicode code point — exclusive upper bound for the prefix range. */
+  const dirPrefixUpper = dirPrefix + '\u{10FFFF}';
 
   const tRows = performance.now();
   const existingRows = db.prepare(
-    'SELECT id, path FROM media WHERE hidden = 0 AND substr(path, 1, length(?)) = ?'
-  ).all(dirPrefix, dirPrefix);
+    'SELECT id, path FROM media WHERE hidden = 0 AND path >= ? AND path < ?'
+  ).all(dirPrefix, dirPrefixUpper);
   const existingPaths = new Set(existingRows.map(r => r.path));
   console.log(`[DBG][scan] LOAD-SUBTREE-ROWS ${(performance.now() - tRows).toFixed(0)}ms rows=${existingRows.length}`);
   const newFiles = files.filter(f => !existingPaths.has(f));
@@ -345,8 +350,8 @@ export default async function (dirPath) {
      every file in the subtree (issue #40). Rows whose files no longer exist
      on disk stay NULL. */
   const nullRows = db.prepare(
-    'SELECT path FROM media WHERE hidden = 0 AND date_taken IS NULL AND substr(path, 1, length(?)) = ?'
-  ).all(dirPrefix, dirPrefix);
+    'SELECT path FROM media WHERE hidden = 0 AND date_taken IS NULL AND path >= ? AND path < ?'
+  ).all(dirPrefix, dirPrefixUpper);
   if (nullRows.length > 0) {
     const tBackfill = performance.now();
     const backfillStmt = db.prepare(
