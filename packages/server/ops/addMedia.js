@@ -22,7 +22,7 @@ export default function (folderId, folderName, files) {
 
   let added = 0;
 
-  logger.debug(`[addMedia] folderId=${folderId} folderName="${folderName}" files=${files.length}`);
+  logger.debug(`folderId=${folderId} folderName="${folderName}" files=${files.length}`);
 
   for (const file of files) {
     const ext = path.extname(file.name).toLowerCase();
@@ -31,7 +31,7 @@ export default function (folderId, folderName, files) {
     const mediaType = isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO;
     const mediaPath = `${folderId}:${file.path}`;
 
-    logger.debug(`[addMedia] inserting: ${file.name} type=${mediaType} path=${mediaPath}`);
+    logger.debug(`inserting: ${file.name} type=${mediaType} path=${mediaPath}`);
 
     try {
       const result = db.prepare(
@@ -40,9 +40,9 @@ export default function (folderId, folderName, files) {
 
       if (result.changes > 0) {
         added++;
-        logger.debug(`[addMedia] inserted: ${file.name}`);
+        logger.debug(`inserted: ${file.name}`);
       } else {
-        logger.debug(`[addMedia] skipped (already exists): ${mediaPath}`);
+        logger.debug(`skipped (already exists): ${mediaPath}`);
       }
     } catch (err) {
       logger.warn(`Failed to insert ${file.name}: ${err.message}`);

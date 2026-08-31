@@ -4,10 +4,10 @@ import { useMediaActions } from '../hooks/useMedia.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
-import { fetchFolders, fetchMedia, getLastFolders, pickLibraryFile, connectLibrary } from '../utils/api.js';
+import { fetchFolders, fetchMedia, getLastFolders, pickLibraryFile, connectLibrary, fetchLibraryStatus, resetMediaCaches } from '../utils/api.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache.js';
 import usePersistedState from '../hooks/usePersistedState.js';
-import { idbGetFolders } from '../services/idb.js';
+import { idbGetFolders, idbClearCache } from '../services/idb.js';
 import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
 import { Button, Icon, Input, Loader, Modal, ProgressBar, Select } from './ui/index.js';
@@ -25,9 +25,9 @@ function byFolderDate(a, b) {
 const SEARCH_PAGE_SIZE = 30;
 
 function getSearchPageNumbers(current, total) {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  if (total <= 5) return Array.from({ length: total }, (_, i) => i);
   const set = new Set([0, total - 1, current]);
-  for (let i = Math.max(0, current - 2); i <= Math.min(total - 1, current + 2); i++) set.add(i);
+  for (let i = Math.max(0, current - 1); i <= Math.min(total - 1, current + 1); i++) set.add(i);
   const sorted = [...set].sort((a, b) => a - b);
   const result = [];
   for (let i = 0; i < sorted.length; i++) {
@@ -90,6 +90,8 @@ export default function Dashboard() {
 
   const [importProgress, setImportProgress] = useState(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
+  const [showRemove, setShowRemove] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState(null);
   const [selectedPath, setSelectedPath] = useState(null);
   const [browsing, setBrowsing] = useState(false);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
@@ -97,6 +99,9 @@ export default function Dashboard() {
   const [showLibrary, setShowLibrary] = useState(false);
   const [pickedPath, setPickedPath] = useState(null);
   const [libraryStatus, setLibraryStatus] = useState(null);
+  const [libraryInfo, setLibraryInfo] = useState(null);
+  const [libraryError, setLibraryError] = useState(null);
+  const [cacheStatus, setCacheStatus] = useState(null);
 
   const [folders, setFolders] = useState(() => {
     if (isPageCacheValid('dashboard', signal)) return getPageCache('dashboard').data.folders;
@@ -253,10 +258,19 @@ export default function Dashboard() {
     finally { setBrowsing(false); }
   };
 
-  const handleOpenLibrary = () => {
+  const handleOpenLibrary = async () => {
     setPickedPath(null);
     setLibraryStatus(null);
+    setLibraryInfo(null);
+    setLibraryError(null);
+    setCacheStatus(null);
     setShowLibrary(true);
+    try {
+      const info = await fetchLibraryStatus();
+      setLibraryInfo(info);
+    } catch (err) {
+      setLibraryError(err.message);
+    }
   };
 
   const handlePickLibrary = async () => {
@@ -278,6 +292,20 @@ export default function Dashboard() {
       setLibraryStatus({ success: true });
     } catch (err) {
       setLibraryStatus({ error: err.message });
+    }
+  };
+
+  const handleClearCache = async () => {
+    setCacheStatus({ loading: true });
+    try {
+      await idbClearCache();
+      resetMediaCaches();
+      setCacheStatus({ success: true });
+      bump();
+      // Also invalidate the in-memory session cache so the next fetch is fresh.
+      setTimeout(() => setCacheStatus(null), 2500);
+    } catch (err) {
+      setCacheStatus({ error: err.message });
     }
   };
 
@@ -311,9 +339,16 @@ export default function Dashboard() {
     }
   };
 
-  const handleRemoveFolder = async (folder) => {
+  const handleRemoveFolder = (folder) => {
+    setRemoveTarget(folder);
+    setShowRemove(true);
+  };
+
+  const confirmRemoveFolder = async () => {
+    if (!removeTarget) return;
+    const folder = removeTarget;
+    setShowRemove(false);
     const folderName = folder.name || folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
-    if (!confirm(`Remove "${folderName}" from library?\n\nYour likes will be preserved if you re-add this folder later.`)) return;
     try {
       const result = await removeFolder(folder.id);
       setStatusMessage(`Removed "${folderName}" (${result.hidden} items hidden)`);
@@ -357,8 +392,8 @@ export default function Dashboard() {
           <Button variant="ghost" size="sm" onClick={() => setShowAddFolder(true)} disabled={isScanning} icon={<Icon name="folder" className="icon-sm" />}>
             <span className="sm-show">Add Folder</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleOpenLibrary} title="Connect an existing library (.db) file" icon={<Icon name="folder" className="icon-sm" />}>
-            <span className="sm-show">Connect</span>
+          <Button variant="ghost" size="sm" onClick={handleOpenLibrary} title="View or switch the connected database" icon={<Icon name="database" className="icon-sm" />}>
+            <span className="sm-show">Connections</span>
           </Button>
           <Button
             variant={debouncedSearch ? 'primary' : 'ghost'}
@@ -460,30 +495,58 @@ export default function Dashboard() {
         />
       )}
 
-      <Modal open={showLibrary} onClose={() => setShowLibrary(false)} title="Connect existing library">
-        <p className="text-mut" style={{ fontSize: 'var(--fs-sm)' }}>
-          Select a <code style={{ color: 'var(--sol-text-em)' }}>.db</code> file from a previous Photo Quest installation to open that library.
+      <Modal open={showLibrary} onClose={() => setShowLibrary(false)} title="Connections">
+        <div className="library-info">
+          <p className="library-info-label">Currently connected</p>
+          {libraryInfo ? (
+            <>
+              <p className="library-info-name">{libraryInfo.name}</p>
+              <p className="library-info-path" title={libraryInfo.path}>{libraryInfo.path}</p>
+              {libraryInfo.items != null && (
+                <p className="library-info-meta">{libraryInfo.items.toLocaleString()} items</p>
+              )}
+            </>
+          ) : libraryError ? (
+            <p className="text-mut" style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>
+              Could not load connection info: {libraryError}
+            </p>
+          ) : (
+            <p className="text-mut" style={{ fontSize: 'var(--fs-sm)' }}>Loading…</p>
+          )}
+        </div>
+
+        <p className="text-mut" style={{ fontSize: 'var(--fs-sm)', marginTop: 16 }}>
+          Open a different <code style={{ color: 'var(--sol-text-em)' }}>.db</code> file from another Photo Quest installation to switch the connection.
         </p>
-        <Button variant="ghost" onClick={handlePickLibrary} icon={<Icon name="folder" className="icon-sm" />}>
-          Browse…
+        <Button variant="ghost" onClick={handlePickLibrary} icon={<Icon name="database" className="icon-sm" />}>
+          Open another connection…
         </Button>
         {pickedPath && (
           <div className="path-preview">{pickedPath}</div>
+        )}
+        <Button variant="ghost" onClick={handleClearCache} disabled={cacheStatus?.loading} icon={<Icon name="refresh" className="icon-sm" />}>
+          {cacheStatus?.loading ? 'Clearing…' : 'Clean cache'}
+        </Button>
+        {cacheStatus?.success && (
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Cache cleared — data will reload from the server.</p>
+        )}
+        {cacheStatus?.error && (
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{cacheStatus.error}</p>
         )}
         {libraryStatus?.error && (
           <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{libraryStatus.error}</p>
         )}
         {libraryStatus?.success && (
-          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Library connected — the app is restarting…</p>
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Connection switched — the app is restarting…</p>
         )}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <Button variant="ghost" onClick={() => setShowLibrary(false)}>Cancel</Button>
+          <Button variant="ghost" onClick={() => setShowLibrary(false)}>Close</Button>
           <Button
             variant="primary"
             onClick={handleConnectLibrary}
             disabled={!pickedPath || libraryStatus?.loading || libraryStatus?.success}
           >
-            {libraryStatus?.loading ? 'Connecting…' : 'Connect'}
+            {libraryStatus?.loading ? 'Connecting…' : 'Switch to this connection'}
           </Button>
         </div>
       </Modal>
@@ -515,6 +578,19 @@ export default function Dashboard() {
             Clear search
           </Button>
         )}
+      </Modal>
+
+      <Modal open={showRemove} onClose={() => setShowRemove(false)} title="Remove folder">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="warning" className="icon-md text-mut" />
+          <p className="text-mut">
+            Remove "<strong>{removeTarget ? removeTarget.name || removeTarget.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder' : 'this folder'}</strong>" from library? Files on disk are not deleted. Your likes will be preserved if you re-add this folder later.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => setShowRemove(false)}>Cancel</Button>
+          <Button variant="danger" size="sm" icon={<Icon name="close" className="icon-sm" />} onClick={confirmRemoveFolder}>Remove</Button>
+        </div>
       </Modal>
     </div>
   );

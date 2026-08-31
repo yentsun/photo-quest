@@ -6,6 +6,7 @@
 
 import { useCallback } from 'react';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
+import { useScan } from '../contexts/ScanContext.jsx';
 import {
   likeMedia as likeMediaApi,
   deleteMedia as deleteMediaApi,
@@ -18,16 +19,18 @@ import {
  * Pages fetch their own data; this hook provides shared write operations.
  */
 export function useMediaActions() {
-  const { bump } = useRefresh();
+  const { bump, setLikedCount } = useRefresh();
+  const { abortRef } = useScan();
 
   const likeMedia = useCallback(async (media) => {
     try {
-      await likeMediaApi(media.id);
-      bump();
+      const { likedCount } = await likeMediaApi(media.id);
+      /* Update the sidebar count directly from the response — no extra fetch. */
+      if (likedCount != null) setLikedCount(likedCount);
     } catch (err) {
       console.error('Failed to like media:', err);
     }
-  }, [bump]);
+  }, [setLikedCount]);
 
   const deleteMedia = useCallback(async (mediaId) => {
     await deleteMediaApi(mediaId);
@@ -50,7 +53,14 @@ export function useMediaActions() {
 
     const folderPaths = [...new Set(folders.map(f => f.path))];
 
+    /* A fresh refresh is a fresh intent: clear any abort set by a prior
+       cancel (e.g. a previously cancelled add-folder import), otherwise the
+       first folder would be silently skipped. */
+    abortRef.current = false;
+
     for (const folderPath of folderPaths) {
+      /* If the user pressed Stop, stop firing new folder scans immediately. */
+      if (abortRef.current) break;
       try {
         onProgress?.(`Scanning ${folderPath.split(/[/\\]/).pop()}...`);
         const result = await scanMediaApi(folderPath);
@@ -61,9 +71,10 @@ export function useMediaActions() {
       }
     }
 
+    abortRef.current = false;
     bump();
     return { serverFolders: scannedFolders, clientFolders: 0, newFiles };
-  }, [bump]);
+  }, [bump, abortRef]);
 
   return { likeMedia, deleteMedia, addFolderWithPath, removeFolder, refreshLibrary };
 }

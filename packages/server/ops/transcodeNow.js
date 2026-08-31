@@ -92,7 +92,7 @@ export default function transcodeNow(id) {
   }
 
   queuedMedia.add(mediaId);
-  logger.info(`[transcode] Queued media ${mediaId}: ${media.path} (job ${jobId})`);
+  logger.info(`Queued media ${mediaId}: ${media.path} (job ${jobId})`);
   broadcastSse({ type: 'transcode_queued', mediaId, jobId });
   kick(kojo, logger);
   return jobId;
@@ -108,13 +108,13 @@ async function runJob(kojo, db, logger, job) {
   }
 
   try {
-    logger.info(`[transcode] Probing: ${media.path}`);
+    logger.info(`Probing: ${media.path}`);
     db.prepare("UPDATE media SET status = 'probing', updated_at = datetime('now') WHERE id = ?").run(media.id);
     db.prepare("UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE id = ?")
       .run(JOB_STATUS.RUNNING, job.id);
 
     const info = await probe(media.path);
-    logger.info(`[transcode] Probe done: videoCodec=${info.codec} audioCodec=${info.audioCodec} duration=${info.duration}s ${info.width}x${info.height}`);
+    logger.info(`Probe done: videoCodec=${info.codec} audioCodec=${info.audioCodec} duration=${info.duration}s ${info.width}x${info.height}`);
 
     db.prepare(
       "UPDATE media SET status = 'probed', codec = ?, duration = ?, width = ?, height = ?, updated_at = datetime('now') WHERE id = ?"
@@ -125,7 +125,7 @@ async function runJob(kojo, db, logger, job) {
     const isAac = info.audioCodec === 'aac';
 
     if (isH264 && isAac && isMp4) {
-      logger.info(`[transcode] Already H.264+AAC MP4, marking ready`);
+      logger.info(`Already H.264+AAC MP4, marking ready`);
       db.prepare("UPDATE media SET status = 'ready', updated_at = datetime('now') WHERE id = ?").run(media.id);
       db.prepare("UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE id = ?")
         .run(JOB_STATUS.COMPLETED, job.id);
@@ -154,7 +154,7 @@ async function runJob(kojo, db, logger, job) {
       ? ['-c:a', 'copy']
       : ['-c:a', 'aac', '-b:a', '192k'];
 
-    logger.info(`[transcode] video=${isH264 ? 'copy' : 'libx264/crf18'} audio=${isAac ? 'copy' : 'aac/192k'} → ${outputPath}`);
+    logger.info(`video=${isH264 ? 'copy' : 'libx264/crf18'} audio=${isAac ? 'copy' : 'aac/192k'} → ${outputPath}`);
     db.prepare("UPDATE media SET status = 'transcoding', updated_at = datetime('now') WHERE id = ?").run(media.id);
 
     await transcode(media, outputPath, videoArgs, audioArgs, (secs) => {
@@ -172,23 +172,23 @@ async function runJob(kojo, db, logger, job) {
 
     try {
       fs.unlinkSync(media.path);
-      logger.info(`[transcode] Deleted original: ${media.path}`);
+      logger.info(`Deleted original: ${media.path}`);
     } catch (err) {
-      logger.warn(`[transcode] Could not delete original: ${err.message}`);
+      logger.warn(`Could not delete original: ${err.message}`);
     }
 
     queuedMedia.delete(media.id);
     broadcastSse({ type: 'transcode_complete', mediaId: media.id, jobId: job.id });
-    logger.info(`[transcode] Done: ${outputPath}`);
+    logger.info(`Done: ${outputPath}`);
   } catch (err) {
     /* A killed (paused/cancelled) ffmpeg should not mark the job failed. */
     const jobState = db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id);
     if (jobState && (jobState.status === JOB_STATUS.PAUSED || jobState.status === JOB_STATUS.COMPLETED)) {
-      logger.info(`[transcode] Job ${job.id} stopped (${jobState.status}); skipping failure`);
+      logger.info(`Job ${job.id} stopped (${jobState.status}); skipping failure`);
       return;
     }
 
-    logger.error(`[transcode] FAILED for media ${media.id}: ${err.message}`);
+    logger.error(`FAILED for media ${media.id}: ${err.message}`);
     db.prepare("UPDATE media SET status = 'error', updated_at = datetime('now') WHERE id = ?").run(media.id);
     db.prepare(
       "UPDATE jobs SET status = ?, error = ?, updated_at = datetime('now') WHERE id = ?"
@@ -214,7 +214,7 @@ export function pauseAllTranscodes(kojo, logger) {
   /* Any media mid-transcode should fall back to probed so it can be re-queued. */
   db.prepare("UPDATE media SET status = 'probed', updated_at = datetime('now') WHERE status = 'transcoding'").run();
 
-  logger.info(`[transcode] Paused ${affected.changes} job(s)`);
+  logger.info(`Paused ${affected.changes} job(s)`);
   broadcastSse({ type: 'transcode_paused' });
   return { paused: affected.changes };
 }
@@ -227,7 +227,7 @@ export function resumeAllTranscodes(kojo, logger) {
     "UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE type = ? AND status = ?"
   ).run(JOB_STATUS.PENDING, JOB_TYPE.TRANSCODE, JOB_STATUS.PAUSED);
 
-  logger.info(`[transcode] Resumed ${affected.changes} job(s)`);
+  logger.info(`Resumed ${affected.changes} job(s)`);
   broadcastSse({ type: 'transcode_resumed' });
   kick(kojo, logger);
   return { resumed: affected.changes };
@@ -251,7 +251,7 @@ export function cancelJob(kojo, logger, id) {
 
   queuedMedia.delete(job.media_id);
   broadcastSse({ type: 'transcode_cancelled', mediaId: job.media_id, jobId });
-  logger.info(`[transcode] Cancelled job ${jobId}`);
+  logger.info(`Cancelled job ${jobId}`);
   return { cancelled: true };
 }
 
@@ -276,7 +276,7 @@ export function resumePendingTranscodes(kojo, logger) {
     "UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE type = ? AND status = ?"
   ).run(JOB_STATUS.PENDING, JOB_TYPE.TRANSCODE, JOB_STATUS.RUNNING);
   if (affected.changes > 0) {
-    logger.info(`[transcode] Re-queued ${affected.changes} interrupted job(s) from previous session`);
+    logger.info(`Re-queued ${affected.changes} interrupted job(s) from previous session`);
     kick(kojo, logger);
   }
 }

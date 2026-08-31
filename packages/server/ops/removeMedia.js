@@ -19,13 +19,13 @@ export default function (id) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  logger.debug(`[removeMedia] id=${id}`);
+  logger.debug(`id=${id}`);
 
   const row = db.prepare('SELECT path, transcoded_path FROM media WHERE id = ?').get(Number(id));
   if (!row) {
-    logger.debug(`[removeMedia] not in db: id=${id}`);
+    logger.debug(`not in db: id=${id}`);
   } else {
-    logger.debug(`[removeMedia] found: id=${id} path=${row.path} transcoded=${row.transcoded_path}`);
+    logger.debug(`found: id=${id} path=${row.path} transcoded=${row.transcoded_path}`);
   }
   const filePath = row ? row.path : null;
   const transcodedPath = row ? row.transcoded_path : null;
@@ -39,13 +39,13 @@ export default function (id) {
       'SELECT id FROM media WHERE id != ? AND (path = ? OR transcoded_path = ?)'
     ).get(Number(id), transcodedPath, transcodedPath);
     if (shared) {
-      logger.debug(`[removeMedia] transcoded path ${transcodedPath} also referenced by media ${shared.id}, will not delete`);
+      logger.debug(`transcoded path ${transcodedPath} also referenced by media ${shared.id}, will not delete`);
       keepTranscoded = true;
     }
   }
 
   const result = db.prepare('DELETE FROM media WHERE id = ?').run(Number(id));
-  logger.debug(`[removeMedia] db delete changes=${result.changes}`);
+  logger.debug(`db delete changes=${result.changes}`);
 
   if (result.changes > 0) {
     for (const p of [filePath]) {
@@ -87,7 +87,7 @@ export default function (id) {
       logger.warn(`Could not clean up thumbnails for id=${id}: ${err.message}`);
     }
   } else {
-    logger.debug(`[removeMedia] nothing deleted (id not found): id=${id}`);
+    logger.debug(`nothing deleted (id not found): id=${id}`);
   }
 
   return { deleted: result.changes > 0, path: filePath };

@@ -10,28 +10,13 @@
 
 import http from 'node:http';
 import net from 'node:net';
-import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import config from '@photo-quest/shared/config.js';
 import { json } from '../src/http.js';
+import { getServerAddresses } from '../src/network.js';
 import { destroyAllSseClients } from '../src/sse.js';
-
-/**
- * Get the local network IP address.
- */
-function getLocalIP() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return '127.0.0.1';
-}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -136,7 +121,10 @@ export default async function () {
   });
 
   server.listen(PORT, '0.0.0.0', () => {
-    const localIP = getLocalIP();
+    const { canonical } = getServerAddresses();
+    /* canonical is null when there is no non-internal IPv4 (e.g. an IPv6-only
+       or loopback-only host); keep the log useful instead of printing null. */
+    const localIP = canonical || '127.0.0.1';
     const webPort = config.webappPort;
     logger.info(`Open app → http://localhost:${webPort}`);
     logger.info(`Network  → http://${localIP}:${webPort}`);

@@ -2,20 +2,8 @@
  * @file GET /network -- Return server network info for connecting from other devices.
  */
 
-import os from 'node:os';
 import { json } from '../src/http.js';
-
-function getLocalIP() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return null;
-}
+import { getServerAddresses } from '../src/network.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -23,13 +11,18 @@ export default async (kojo, logger) => {
     pathname: '/network',
   }, (req, res) => {
     const port = kojo.get('port');
-    const ip = getLocalIP();
+    const { canonical, alternatives } = getServerAddresses();
 
     json(res, 200, {
       local: `http://localhost:${port}`,
-      network: ip ? `http://${ip}:${port}` : null,
-      ip,
+      /* Primary recommended address: a stable, non-tunnel LAN IP. */
+      network: canonical ? `http://${canonical}:${port}` : null,
+      ip: canonical,
       port,
+      /* Extended: the same stable address plus every other reachable address
+         (e.g. the WireGuard IP), so clients can pick whichever is reachable. */
+      canonical: canonical ? `http://${canonical}:${port}` : null,
+      alternatives: alternatives.map((addr) => `http://${addr}:${port}`),
     });
   });
 };

@@ -50,7 +50,7 @@ export default function MediaPage() {
   const location = useLocation();
   const sort = location.state?.sort || 'filename';
   const { deleteMedia } = useMediaActions();
-  const { signal, bump } = useRefresh();
+  const { signal, bump, setTagCount, setLikedCount } = useRefresh();
   const { dispatch } = useContext(GlobalContext);
   const slideshow = useSlideshow();
   const [showInfo, setShowInfo] = useState(false);
@@ -65,6 +65,8 @@ export default function MediaPage() {
   const [suggestionIndex, setSuggestionIndex] = useState(-1);
   const tagInputRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const viewerRef = useRef(null);
   const mediaViewportRef = useRef(null);
   const touchStartX = useRef(null);
@@ -198,13 +200,13 @@ export default function MediaPage() {
   const goPrev = useCallback(() => {
     if (!hasPrev) return;
     if (inSlideshow) slideshow.prev();
-    else navigate(`/media/${navItems[currentIndex - 1].id}`, { state: location.state });
+    else navigate(`/media/${navItems[currentIndex - 1].id}`, { replace: true, state: location.state });
   }, [hasPrev, inSlideshow, slideshow, navigate, navItems, currentIndex, location.state]);
 
   const goNext = useCallback(() => {
     if (!hasNext) return;
     if (inSlideshow) slideshow.next();
-    else navigate(`/media/${navItems[currentIndex + 1].id}`, { state: location.state });
+    else navigate(`/media/${navItems[currentIndex + 1].id}`, { replace: true, state: location.state });
   }, [hasNext, inSlideshow, slideshow, navigate, navItems, currentIndex, location.state]);
 
   const [folderNavLoading, setFolderNavLoading] = useState(false);
@@ -238,14 +240,14 @@ export default function MediaPage() {
     if (!hasFolderPrev) return;
     const siblings = await ensureFolderSiblings();
     const idx = siblings.findIndex(m => m.id === Number(id));
-    if (idx > 0) { setItem(siblings[idx - 1]); navigate(`/media/${siblings[idx - 1].id}`, { state: location.state }); }
+    if (idx > 0) { setItem(siblings[idx - 1]); navigate(`/media/${siblings[idx - 1].id}`, { replace: true, state: location.state }); }
   }, [hasFolderPrev, ensureFolderSiblings, id, navigate, location.state]);
 
   const goFolderNext = useCallback(async () => {
     if (!hasFolderNext) return;
     const siblings = await ensureFolderSiblings();
     const idx = siblings.findIndex(m => m.id === Number(id));
-    if (idx >= 0 && idx < siblings.length - 1) { setItem(siblings[idx + 1]); navigate(`/media/${siblings[idx + 1].id}`, { state: location.state }); }
+    if (idx >= 0 && idx < siblings.length - 1) { setItem(siblings[idx + 1]); navigate(`/media/${siblings[idx + 1].id}`, { replace: true, state: location.state }); }
   }, [hasFolderNext, ensureFolderSiblings, id, navigate, location.state]);
 
   const toggleFullscreen = useCallback(() => {
@@ -258,9 +260,13 @@ export default function MediaPage() {
     if (!item) return;
     const originalLikes = item.likes || 0;
     setItem(prev => ({ ...prev, likes: originalLikes + 1 }));
-    try { await likeMediaApi(item.id); }
+    try {
+      const { likedCount } = await likeMediaApi(item.id);
+      /* Update the sidebar liked count directly from the response. */
+      if (likedCount != null) setLikedCount(likedCount);
+    }
     catch (err) { console.error('Failed to like media:', err); setItem(prev => ({ ...prev, likes: originalLikes })); }
-  }, [item]);
+  }, [item, setLikedCount]);
 
   const handleTouchStart = useCallback((e) => {
     if (e.touches.length !== 1) return;
@@ -318,7 +324,7 @@ export default function MediaPage() {
 
   const handleDelete = useCallback(async () => {
     if (!item) return;
-    if (!confirm(`Delete "${item.title}"?\n\nThis will remove it from the library AND delete the file from disk.`)) return;
+    setShowDelete(false);
     const deletedId = item.id;
 
     /* Up/down navigation happens within the folder sibling list, even in a
@@ -394,13 +400,14 @@ export default function MediaPage() {
     const newTags = originalTags.filter(t => t !== tagToRemove);
     setItem(prev => ({ ...prev, tags: newTags }));
     try {
-      const updated = await updateMediaTags(targetId, newTags);
+      const { item: updated, tagCount } = await updateMediaTags(targetId, newTags);
       setItem(prev => prev?.id === targetId ? { ...prev, ...updated } : prev);
+      if (tagCount != null) setTagCount(tagCount);
     } catch (err) {
       console.error('Failed to remove tag:', err);
       setItem(prev => prev?.id === targetId ? { ...prev, tags: originalTags } : prev);
     }
-  }, [item]);
+  }, [item, setTagCount]);
 
   const applyTag = useCallback(async (tag) => {
     if (!tag || safeTags(item?.tags).includes(tag)) return;
@@ -409,13 +416,14 @@ export default function MediaPage() {
     const newTags = [...originalTags, tag];
     setItem(prev => ({ ...prev, tags: newTags }));
     try {
-      const updated = await updateMediaTags(targetId, newTags);
+      const { item: updated, tagCount } = await updateMediaTags(targetId, newTags);
       setItem(prev => prev?.id === targetId ? { ...prev, ...updated } : prev);
+      if (tagCount != null) setTagCount(tagCount);
     } catch (err) {
       console.error('Failed to add tag:', err);
       setItem(prev => prev?.id === targetId ? { ...prev, tags: originalTags } : prev);
     }
-  }, [item]);
+  }, [item, setTagCount]);
 
   const selectSuggestion = useCallback((tag) => {
     setAddingTag(false); setTagDraft(''); setSuggestionIndex(-1); applyTag(tag);
@@ -429,6 +437,7 @@ export default function MediaPage() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT') return;
+      if (showDelete) return; /* Delete modal captures its own keys */
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
@@ -437,12 +446,23 @@ export default function MediaPage() {
       if (e.key === 'Enter') { e.preventDefault(); handleLike(); }
       if (e.key === 'i') setShowInfo(prev => !prev);
       if (e.key === 'f') toggleFullscreen();
-      if (e.key === 'Delete') handleDelete();
+      if (e.key === 'Delete') setShowDelete(true);
       if (e.key === 't' || e.key === 'T') setAddingTag(true);
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, handleDelete]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete, showDelete]);
+
+  /* Delete confirmation modal: Enter confirms, Escape closes. Escape already
+     works via the shared Modal component; wire Enter here. */
+  useEffect(() => {
+    if (!showDelete) return;
+    const handleDeleteKey = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); handleDelete(); }
+    };
+    document.addEventListener('keydown', handleDeleteKey);
+    return () => document.removeEventListener('keydown', handleDeleteKey);
+  }, [showDelete, handleDelete]);
 
   useEffect(() => {
     if (!showInfo || !item) return;
@@ -459,9 +479,8 @@ export default function MediaPage() {
 
   const backTarget = folder ? `/folder/${folder.id}` : '/dashboard';
   const goBack = useCallback(() => {
-    if (location.key !== 'default') navigate(-1);
-    else navigate(backTarget);
-  }, [location.key, navigate, backTarget]);
+    navigate(backTarget);
+  }, [navigate, backTarget]);
 
   if (loading && !item) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
 
@@ -478,6 +497,24 @@ export default function MediaPage() {
 
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(item);
+
+  /* Overflow actions (Download + "Use as...") shared by the desktop action bar
+     and the mobile kebab menu so the two never drift apart. `onAction`
+     runs after each click (the kebab menu uses it to close itself). */
+  const renderOverflowActions = (extraClass = '', onAction = () => {}) => (
+    <>
+      <Button variant="ghost" size="sm" icon={<Icon name="download" className="icon-sm" />} className={extraClass} onClick={() => { onAction(); downloadMedia(item); }}>Download</Button>
+      {isImage && folder && (
+        <Button variant="ghost" size="sm" icon={<Icon name="image" className="icon-sm" />} className={extraClass} onClick={() => { onAction(); handleSetFolderThumbnail(); }}>Use as folder thumbnail</Button>
+      )}
+      {!isImage && folder && item.status === MEDIA_STATUS.READY && (
+        <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} className={extraClass} onClick={() => { onAction(); handleSetFolderThumbnail(playerRef.current?.getCurrentTime()); }}>Use frame for folder</Button>
+      )}
+      {!isImage && item.status === MEDIA_STATUS.READY && (
+        <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} className={extraClass} onClick={() => { onAction(); handleSetVideoThumbnail(); }}>Use frame for video</Button>
+      )}
+    </>
+  );
 
   return (
     <div ref={viewerRef} className={`viewer${isFullscreen ? ' viewer-fullscreen' : ''}`}>
@@ -707,17 +744,15 @@ export default function MediaPage() {
           <div className="viewer-actions">
             <LikeButton count={item.likes || 0} onLike={handleLike} />
             <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
-            <Button variant="ghost" size="sm" icon={<Icon name="download" className="icon-sm" />} onClick={() => downloadMedia(item)}>Download</Button>
-            {isImage && folder && (
-              <Button variant="ghost" size="sm" icon={<Icon name="image" className="icon-sm" />} onClick={() => handleSetFolderThumbnail()}>Use as folder thumbnail</Button>
-            )}
-            {!isImage && folder && item.status === MEDIA_STATUS.READY && (
-              <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} onClick={() => handleSetFolderThumbnail(playerRef.current?.getCurrentTime())}>Use frame for folder</Button>
-            )}
-            {!isImage && item.status === MEDIA_STATUS.READY && (
-              <Button variant="ghost" size="sm" icon={<Icon name="video" className="icon-sm" />} onClick={handleSetVideoThumbnail}>Use frame for video</Button>
-            )}
-            <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>
+            {renderOverflowActions('viewer-overflow-hidden')}
+            <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={() => setShowDelete(true)} className="viewer-action-push">Delete</Button>
+            <IconButton
+              size="sm"
+              icon={<Icon name="kebab" className="icon-md" />}
+              label="More actions"
+              onClick={() => setShowMore(true)}
+              className="viewer-kebab"
+            />
           </div>
         </div>
       )}
@@ -771,6 +806,21 @@ export default function MediaPage() {
             ))}
           </tbody>
         </table>
+      </Modal>
+
+      <Modal open={showMore} onClose={() => setShowMore(false)} title="More actions" className="viewer-more-modal">
+        {renderOverflowActions('', () => setShowMore(false))}
+      </Modal>
+
+      <Modal open={showDelete} onClose={() => setShowDelete(false)} title="Delete media">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="warning" className="icon-md text-mut" />
+          <p className="text-mut">Delete "<strong>{item?.title}</strong>"? This will remove it from the library and delete the file from disk.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => setShowDelete(false)}>Cancel</Button>
+          <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>
+        </div>
       </Modal>
     </div>
   );

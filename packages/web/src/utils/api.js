@@ -18,8 +18,9 @@ import {
   idbGetFolders,
   idbPutMedia,
   idbPutManyMedia,
-  idbPutManyFolders,
   idbDeleteMedia,
+  idbDeleteFolder,
+  idbReplaceFolders,
 } from '../services/idb.js';
 
 // ---------------------------------------------------------------------------
@@ -87,14 +88,79 @@ export function getLastMediaItem(id) { return _mediaCache.get(id) ?? null; }
  */
 export function getLastFolderMedia(folderPath) { return _folderMediaCache.get(folderPath) ?? null; }
 
+/**
+ * Clear all in-memory session caches (folders, tags, media, per-folder media).
+ * Used after a full cache purge so the next render fetches fresh from the
+ * server instead of serving stale in-memory data.
+ */
+export function resetMediaCaches() {
+  _foldersCache = null;
+  _tagsCache = null;
+  _mediaCache.clear();
+  _folderMediaCache.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar count badges (cached — never "live" over the full library)
+// ---------------------------------------------------------------------------
+// Library / Liked / Tags counts are cached in-memory + localStorage so the
+// badges render instantly on every load and are never recomputed by scanning
+// the whole media store. They are refreshed against the cheap server COUNT
+// endpoints (which return just a total) only on data-change signals.
+
+const COUNTS_STORAGE_KEY = 'photoquest.counts-v1';
+const EMPTY_COUNTS = { library: null, liked: null, tags: null };
+
+/** @type {{ library: number|null, liked: number|null, tags: number|null }} */
+let _countsCache = null;
+
+/**
+ * Return the cached badge counts (or nulls on first run / cleared storage).
+ * @returns {{ library: number|null, liked: number|null, tags: number|null }}
+ */
+export function getCachedCounts() {
+  if (_countsCache) return _countsCache;
+  try {
+    const raw = localStorage.getItem(COUNTS_STORAGE_KEY);
+    _countsCache = raw ? { ...EMPTY_COUNTS, ...JSON.parse(raw) } : { ...EMPTY_COUNTS };
+  } catch {
+    _countsCache = { ...EMPTY_COUNTS };
+  }
+  return _countsCache;
+}
+
+function persistCounts(counts) {
+  _countsCache = counts;
+  try { localStorage.setItem(COUNTS_STORAGE_KEY, JSON.stringify(counts)); } catch { /* ignore */ }
+}
+
+/**
+ * Cheaply refresh the badge counts from the server (COUNT-only requests) and
+ * cache the result. Server-only; never touches the IDB snapshot.
+ * @returns {Promise<{ library: number|null, liked: number|null, tags: number|null }>}
+ */
+export async function refreshCounts() {
+  const [library, liked, tags] = await Promise.all([
+    fetchMedia({ limit: 0 }).then(d => d.total).catch(() => null),
+    fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => null),
+    fetchTags().then(d => d.length).catch(() => null),
+  ]);
+  const counts = { library, liked, tags };
+  persistCounts(counts);
+  return counts;
+}
+
 // ---------------------------------------------------------------------------
 // Internal server fetch helpers
 // ---------------------------------------------------------------------------
 
 async function _fetchMediaFromServer(url, opts) {
+  const t0 = performance.now();
   const response = await fetch(url, opts.random ? { cache: 'no-store' } : undefined);
   if (!response.ok) throw new Error('Failed to fetch media');
   const data = await response.json();
+  const bodySize = JSON.stringify(data.items[0] ?? {}).length * data.items.length;
+  console.log(`[DBG][api] SERVER /media ${(performance.now() - t0).toFixed(0)}ms items=${data.items.length} total=${data.total} est=${(bodySize / 1048576).toFixed(1)}MB folder=${opts.folder}`);
   for (const item of data.items) { parseTags(item); _mediaCache.set(item.id, item); }
   if (opts.folder != null && !opts.random && !opts.liked && !opts.search && (!opts.offset || opts.offset === 0)) {
     _folderMediaCache.set(opts.folder, { items: data.items, total: data.total });
@@ -108,7 +174,9 @@ async function _fetchFoldersFromServer() {
   if (!response.ok) throw new Error('Failed to fetch folders');
   const folders = await response.json();
   _foldersCache = folders;
-  idbPutManyFolders(folders).catch(err => console.warn('[idb] putManyFolders failed:', err));
+  /* Replace (not merge) so stale folder rows from a previous connection/db
+     don't survive as phantom entries in the UI. */
+  idbReplaceFolders(folders).catch(err => console.warn('[idb] replaceFolders failed:', err));
   return folders;
 }
 
@@ -139,8 +207,15 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
 
   const opts = { limit, offset, folder, subtree, liked, random, sort, search, tag, type };
 
-  /* IDB stores results in deterministic order — skip it for random queries. */
+  /* Random queries are always server-only. */
   if (random) {
+    return _fetchMediaFromServer(url, opts);
+  }
+
+  /* Count-only queries (e.g. sidebar badges / `limit: 0`) never read the IDB
+     snapshot — the full-store getAll + sort would take seconds on a large
+     library. The server's COUNT is trivially fast, so go straight to it. */
+  if (limit === 0) {
     return _fetchMediaFromServer(url, opts);
   }
 
@@ -157,9 +232,11 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
 
   // IDB-first: return cached data immediately if available
   let idbData = null;
+  const tIdb = performance.now();
   try {
     idbData = await idbGetMedia(opts);
   } catch (e) { /* ignore */ }
+  if (idbData) console.log(`[DBG][api] fetchMedia IDB-first ${(performance.now() - tIdb).toFixed(0)}ms folder=${opts.folder} items=${idbData.items.length} total=${idbData.total}`);
 
   if (idbData && idbData.items.length > 0) {
     // Refresh from server in background without blocking the UI
@@ -253,11 +330,14 @@ export async function updateMediaTags(id, tags) {
     body: JSON.stringify({ tags }),
   });
   if (!response.ok) throw new Error('Failed to update tags');
-  const item = parseTags(await response.json());
+  const data = await response.json();
+  const item = parseTags(data);
   _mediaCache.set(item.id, item);
   _tagsCache = null; // invalidate — tag counts may have changed
   idbPutMedia(item).catch(err => console.warn('[idb] putMedia (tags) failed:', err));
-  return item;
+  /* The server returns the updated distinct tag count; surface it so the
+     sidebar can update without an extra /tags request. */
+  return { item, tagCount: data.tagCount };
 }
 
 export async function renameMedia(id, title) {
@@ -280,10 +360,13 @@ export async function likeMedia(id) {
   if (!response.ok) {
     throw new Error('Failed to like media');
   }
-  const item = await response.json();
+  const data = await response.json();
+  const { likedCount, ...item } = data;
   _mediaCache.set(item.id, item);
   idbPutMedia(item).catch(() => {});
-  return item;
+  /* The server returns the updated liked count (only when an item transitions
+     to liked); surface it so the sidebar updates without an extra request. */
+  return { item, likedCount };
 }
 
 export async function deleteMedia(id) {
@@ -412,10 +495,21 @@ export async function removeFolder(folderId) {
   const response = await fetch(`/media/folder/${folderId}`, {
     method: 'DELETE',
   });
+  /* 404 means the folder isn't in the connected DB (e.g. stale cache from a
+     previous connection). Treat it as already removed and clear local state
+     instead of surfacing an error the user can't act on. */
+  if (response.status === 404) {
+    _folderMediaCache.clear();
+    idbDeleteFolder(folderId).catch(() => {});
+    return { hidden: 0 };
+  }
   if (!response.ok) {
     throw new Error('Failed to remove folder');
   }
-  return response.json();
+  const result = await response.json();
+  _folderMediaCache.clear();
+  idbDeleteFolder(folderId).catch(() => {});
+  return result;
 }
 
 export async function renameFolder(folderId, name) {
@@ -469,6 +563,12 @@ export async function connectLibrary(libraryPath) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || 'Failed to connect library');
   }
+  return response.json();
+}
+
+export async function fetchLibraryStatus() {
+  const response = await fetch(apiRoutes.libraryStatus);
+  if (!response.ok) throw new Error('Failed to fetch library status');
   return response.json();
 }
 

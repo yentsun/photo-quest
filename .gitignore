@@ -44,3 +44,6 @@ packages/server/dist/
 
 # Test output
 test-*.txt
+
+# Playwright browser test artifacts
+.playwright-mcp/
