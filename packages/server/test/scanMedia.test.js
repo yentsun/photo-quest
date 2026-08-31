@@ -376,6 +376,61 @@ test('scanMedia — deduplication', async (t) => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  .ts stale-record cleanup tests                                     */
+/* ------------------------------------------------------------------ */
+
+test('scanMedia — .ts stale-record cleanup', async (t) => {
+  let root;
+
+  t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'scan-ts-')); });
+  t.afterEach(() => { cleanup(root); });
+
+  await t.test('removes a misdetected text .ts record whose stored casing differs', async () => {
+    const db = makeDb();
+    const { ctx } = makeContext(db);
+    const scan = scanMedia.bind(ctx);
+
+    /* A text .ts file on disk (not media) — the scenario that creates a stale
+       row. Insert a media record manually with a DIFFERENT-cased storage path,
+       as if it were misdetected while scanning a differently-cased root. */
+    fs.writeFileSync(path.join(root, 'stale.ts'), 'const x = 1;');
+
+    const upperDir = root.toUpperCase();
+    const tsPath = path.join(upperDir, 'stale.ts');
+    db.prepare(
+      'INSERT INTO media (path, title, type, folder, status) VALUES (?, ?, ?, ?, ?)'
+    ).run(tsPath, 'stale', 'video', upperDir, 'ready');
+
+    /* Scan using the lowercased root to exercise the case-insensitive range. */
+    await scan(root.toLowerCase());
+
+    const row = db.prepare('SELECT id FROM media WHERE path = ?').get(tsPath);
+    t.assert.strictEqual(row, undefined, 'stale .ts record should be removed');
+  });
+
+  await t.test('does not remove a genuine MPEG-TS record', async () => {
+    const db = makeDb();
+    const { ctx } = makeContext(db);
+    const scan = scanMedia.bind(ctx);
+
+    /* MPEG-TS sync bytes (0x47) at 188-byte packet boundaries. */
+    const buf = Buffer.alloc(188 * 8);
+    for (let i = 0; i + 188 <= buf.length; i += 188) buf[i] = 0x47;
+    fs.writeFileSync(path.join(root, 'real.ts'), buf);
+
+    const tsPath = path.join(root, 'real.ts');
+    db.prepare(
+      'INSERT INTO media (path, title, type, folder, status) VALUES (?, ?, ?, ?, ?)'
+    ).run(tsPath, 'real', 'video', root, 'ready');
+
+    await scan(root);
+
+    const row = db.prepare('SELECT id FROM media WHERE path = ?').get(tsPath);
+    t.assert.ok(row, 'genuine MPEG-TS record should be kept');
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /*  Resume tests                                                       */
 /* ------------------------------------------------------------------ */
 

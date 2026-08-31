@@ -326,10 +326,15 @@ export default async function (dirPath) {
   /* Remove records for files under this directory that were previously
      mis-detected as MPEG-TS videos but are actually text (.ts source files).
      Runs before the empty-directory early return so a directory whose only
-     non-media files remain still gets cleaned up. */
+     non-media files remain still gets cleaned up. Uses a case-insensitive
+     (NOCASE) range so a stale record whose stored casing differs from this
+     scan's dirPath is still found. */
   const deleteMediaStmt = db.prepare('DELETE FROM media WHERE id = ?');
+  const tsStaleRows = db.prepare(
+    'SELECT id, path FROM media WHERE hidden = 0 AND path COLLATE NOCASE >= ? AND path COLLATE NOCASE < ?'
+  ).all(dirPrefix, dirPrefixUpper);
   let removed = 0;
-  for (const row of existingRows) {
+  for (const row of tsStaleRows) {
     if (!row.path.toLowerCase().endsWith('.ts')) continue;
     if (isMediaFile(row.path)) continue;
     /* Safety net: never drop a record the user has interacted with, in case
