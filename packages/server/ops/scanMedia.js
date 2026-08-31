@@ -304,15 +304,17 @@ export default async function (dirPath) {
   createFolderHierarchy(db, dirPath, files);
 
   /* Scope the path-diff to just this scanned subtree instead of loading every
-     media path in the library (issue #40). The .ts cleanup loop below also
-     benefits: it no longer iterates unrelated rows. */
+     media path in the library (issue #40). Uses a substr prefix test rather
+     than LIKE so wildcards (`_`/`%`) in the path are matched literally, and to
+     stay case-sensitive consistent with the exact Set.has below. The .ts
+     cleanup loop also benefits: it no longer iterates unrelated rows. */
   const dirPrefix = dirPath.endsWith(path.sep) ? dirPath : dirPath + path.sep;
   const dirPrefixLower = dirPrefix.toLowerCase();
 
   const tRows = performance.now();
   const existingRows = db.prepare(
-    'SELECT id, path FROM media WHERE hidden = 0 AND (path = ? OR path LIKE ?)'
-  ).all(dirPath, dirPrefix + '%');
+    'SELECT id, path FROM media WHERE hidden = 0 AND substr(path, 1, length(?)) = ?'
+  ).all(dirPrefix, dirPrefix);
   const existingPaths = new Set(existingRows.map(r => r.path));
   console.log(`[DBG][scan] LOAD-SUBTREE-ROWS ${(performance.now() - tRows).toFixed(0)}ms rows=${existingRows.length}`);
   const newFiles = files.filter(f => !existingPaths.has(f));
@@ -345,12 +347,12 @@ export default async function (dirPath) {
      every file in the subtree (issue #40). Rows whose files no longer exist
      on disk stay NULL. */
   const nullRows = db.prepare(
-    "SELECT path FROM media WHERE hidden = 0 AND date_taken IS NULL AND (path = ? OR path LIKE ?)"
-  ).all(dirPath, dirPrefix + '%');
+    'SELECT path FROM media WHERE hidden = 0 AND date_taken IS NULL AND substr(path, 1, length(?)) = ?'
+  ).all(dirPrefix, dirPrefix);
   if (nullRows.length > 0) {
     const tBackfill = performance.now();
     const backfillStmt = db.prepare(
-      'UPDATE media SET date_taken = ? WHERE path = ? AND date_taken IS NULL'
+      'UPDATE media SET date_taken = ? WHERE path = ? AND date_taken IS NULL AND hidden = 0'
     );
     let filled = 0;
     for (const { path: filePath } of nullRows) {
