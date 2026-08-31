@@ -51,18 +51,19 @@ export function useMediaActions() {
     let scannedFolders = 0;
     let newFiles = 0;
 
-    const folderPaths = [...new Set(folders.map(f => f.path))];
+    const folderPaths = [...new Set(folders.map(f => f.path).filter(Boolean))];
 
     /* A fresh refresh is a fresh intent: clear any abort set by a prior
        cancel (e.g. a previously cancelled add-folder import), otherwise the
        first folder would be silently skipped. */
     abortRef.current = false;
 
-    for (const folderPath of folderPaths) {
+    for (let i = 0; i < folderPaths.length; i++) {
       /* If the user pressed Stop, stop firing new folder scans immediately. */
       if (abortRef.current) break;
+      const folderPath = folderPaths[i];
       try {
-        onProgress?.(`Scanning ${folderPath.split(/[/\\]/).pop()}...`);
+        onProgress?.(`Scanning ${folderPath.split(/[/\\]/).pop()} (${i + 1}/${folderPaths.length})...`);
         const result = await scanMediaApi(folderPath);
         newFiles += result.total || 0;
         scannedFolders++;

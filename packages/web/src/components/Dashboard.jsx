@@ -237,7 +237,7 @@ export default function Dashboard() {
     }
     setStatusMessage('Refreshing library...');
     try {
-      const result = await refreshLibrary(folders, (progress) => setStatusMessage(progress));
+      const result = await refreshLibrary(rootFolders, (progress) => setStatusMessage(progress));
       const totalFolders = result.serverFolders + result.clientFolders;
       setStatusMessage(`Refreshed ${totalFolders} folder${totalFolders !== 1 ? 's' : ''}. Found ${result.newFiles} file${result.newFiles !== 1 ? 's' : ''}.`);
     } catch (err) {
