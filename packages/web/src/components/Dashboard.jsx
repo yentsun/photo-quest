@@ -239,7 +239,9 @@ export default function Dashboard() {
     try {
       const result = await refreshLibrary(rootFolders, (progress) => setStatusMessage(progress));
       const totalFolders = result.serverFolders + result.clientFolders;
-      setStatusMessage(`Refreshed ${totalFolders} folder${totalFolders !== 1 ? 's' : ''}. Found ${result.newFiles} file${result.newFiles !== 1 ? 's' : ''}.`);
+      const failed = result.failedFolders || 0;
+      const base = `Refreshed ${totalFolders} folder${totalFolders !== 1 ? 's' : ''}. Found ${result.newFiles} file${result.newFiles !== 1 ? 's' : ''}.`;
+      setStatusMessage(failed > 0 ? `${base} ${failed} folder${failed !== 1 ? 's' : ''} failed to scan.` : base);
     } catch (err) {
       console.error('Failed to refresh library:', err);
       setStatusMessage('Refresh failed: ' + err.message);

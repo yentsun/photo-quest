@@ -50,6 +50,7 @@ export function useMediaActions() {
   const refreshLibrary = useCallback(async (folders, onProgress) => {
     let scannedFolders = 0;
     let newFiles = 0;
+    let failedFolders = 0;
 
     const folderPaths = [...new Set(folders.map(f => f.path).filter(Boolean))];
 
@@ -69,12 +70,13 @@ export function useMediaActions() {
         scannedFolders++;
       } catch (err) {
         console.error(`Failed to rescan ${folderPath}:`, err);
+        failedFolders++;
       }
     }
 
     abortRef.current = false;
     bump();
-    return { serverFolders: scannedFolders, clientFolders: 0, newFiles };
+    return { serverFolders: scannedFolders, clientFolders: 0, newFiles, failedFolders };
   }, [bump, abortRef]);
 
   return { likeMedia, deleteMedia, addFolderWithPath, removeFolder, refreshLibrary };
