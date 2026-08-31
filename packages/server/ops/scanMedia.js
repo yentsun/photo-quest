@@ -309,7 +309,6 @@ export default async function (dirPath) {
      stay case-sensitive consistent with the exact Set.has below. The .ts
      cleanup loop also benefits: it no longer iterates unrelated rows. */
   const dirPrefix = dirPath.endsWith(path.sep) ? dirPath : dirPath + path.sep;
-  const dirPrefixLower = dirPrefix.toLowerCase();
 
   const tRows = performance.now();
   const existingRows = db.prepare(
@@ -327,7 +326,6 @@ export default async function (dirPath) {
   let removed = 0;
   for (const row of existingRows) {
     if (!row.path.toLowerCase().endsWith('.ts')) continue;
-    if (!row.path.toLowerCase().startsWith(dirPrefixLower)) continue;
     if (isMediaFile(row.path)) continue;
     /* Safety net: never drop a record the user has interacted with, in case
        the text sniff ever misfires on a real transport stream. */
