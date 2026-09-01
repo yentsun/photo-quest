@@ -13,7 +13,6 @@ import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import config from '@photo-quest/shared/config.js';
 import { json } from '../src/http.js';
 import { getServerAddresses } from '../src/network.js';
 import { destroyAllSseClients } from '../src/sse.js';
@@ -125,9 +124,8 @@ export default async function () {
     /* canonical is null when there is no non-internal IPv4 (e.g. an IPv6-only
        or loopback-only host); keep the log useful instead of printing null. */
     const localIP = canonical || '127.0.0.1';
-    const webPort = config.webappPort;
-    logger.info(`Open app → http://localhost:${webPort}`);
-    logger.info(`Network  → http://${localIP}:${webPort}`);
+    logger.info(`Open app → http://localhost:${PORT}`);
+    logger.info(`Network  → http://${localIP}:${PORT}`);
   });
 
   function shutdown() {

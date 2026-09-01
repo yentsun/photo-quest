@@ -14,8 +14,8 @@ A self-hosted media library PWA for browsing, organizing, and enjoying your phot
 ## Requirements
 
 - Node.js 22+
-- pnpm 10+
-- Chrome or Edge browser (for File System Access API)
+- pnpm 11+
+- Chrome or Edge browser
 
 ## Installation
 
@@ -29,10 +29,15 @@ pnpm build
 ## Running
 
 ```bash
-pnpm start
+pnpm build   # build the web client (required once, and after updates)
+pnpm start   # serve the built app + API on a single port
 ```
 
-This starts the server. Open **http://localhost:7838** in Chrome or Edge.
+The server serves the built client and API on **http://localhost:7837**. The
+local network URL is shown in the app header.
+
+For development with hot reload (web on port 7838, proxying the API on 7837),
+use `pnpm dev` instead.
 
 ## Usage
 
@@ -58,7 +63,7 @@ This starts the server. Open **http://localhost:7838** in Chrome or Edge.
 
 ### Accessing from other devices
 
-The network URL is shown in the header (e.g., `http://192.168.0.105:7838`). Open it on any device on your local network.
+The network URL is shown in the header (e.g., `http://192.168.0.105:7837`). Open it on any device on your local network.
 
 ### Refreshing the library
 
@@ -108,12 +113,13 @@ packages/
 ### Can't reach the app from another device
 
 - **VPN active** — If WireGuard or any other VPN is running on the connecting device, it may route traffic away from the local network. Disconnect the VPN and try again.
-- **Wrong URL** — Use the network URL shown in the app header (e.g. `http://192.168.1.x:7838`), not `localhost`.
+- **Wrong URL** — Use the network URL shown in the app header (e.g. `http://192.168.1.x:7837`), not `localhost`.
 - **Windows Firewall** — Windows may block inbound connections on first run. Add exceptions with (run as Administrator):
   ```
   netsh advfirewall firewall add rule name="Photo Quest Server" dir=in action=allow protocol=TCP localport=7837
-  netsh advfirewall firewall add rule name="Photo Quest Web" dir=in action=allow protocol=TCP localport=7838
+  netsh advfirewall firewall add rule name="Photo Quest Web (dev)" dir=in action=allow protocol=TCP localport=7838
   ```
+  (`7837` is needed in production; `7838` is only the Vite dev server.)
 
 ## License
 
