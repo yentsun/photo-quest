@@ -79,7 +79,7 @@ function usePathValidation() {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { addFolderWithPath, removeFolder, refreshLibrary } = useMediaActions();
+  const { addFolderWithPath, refreshLibrary } = useMediaActions();
   const { signal, bump } = useRefresh();
   const slideshow = useSlideshow();
   const { isScanning, setStatusMessage } = useScan();
@@ -90,8 +90,6 @@ export default function Dashboard() {
 
   const [importProgress, setImportProgress] = useState(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
-  const [showRemove, setShowRemove] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState(null);
   const [selectedPath, setSelectedPath] = useState(null);
   const [browsing, setBrowsing] = useState(false);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
@@ -341,25 +339,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleRemoveFolder = (folder) => {
-    setRemoveTarget(folder);
-    setShowRemove(true);
-  };
-
-  const confirmRemoveFolder = async () => {
-    if (!removeTarget) return;
-    const folder = removeTarget;
-    setShowRemove(false);
-    const folderName = folder.name || folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
-    try {
-      const result = await removeFolder(folder.id);
-      setStatusMessage(`Removed "${folderName}" (${result.hidden} items hidden)`);
-    } catch (err) {
-      console.error('Failed to remove folder:', err);
-      alert('Failed to remove folder: ' + err.message);
-    }
-  };
-
   if (loading && folders.length === 0) return <div className="page-loader"><Loader message="Fetching your media folders…" /></div>;
 
   return (
@@ -484,7 +463,6 @@ export default function Dashboard() {
             <FolderCard
               key={folder.id}
               folder={folder}
-              onRemove={() => handleRemoveFolder(folder)}
             />
           ))}
         </div>
@@ -582,18 +560,6 @@ export default function Dashboard() {
         )}
       </Modal>
 
-      <Modal open={showRemove} onClose={() => setShowRemove(false)} title="Remove folder">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Icon name="warning" className="icon-md text-mut" />
-          <p className="text-mut">
-            Remove "<strong>{removeTarget ? removeTarget.name || removeTarget.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder' : 'this folder'}</strong>" from library? Files on disk are not deleted. Your likes will be preserved if you re-add this folder later.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <Button variant="ghost" size="sm" onClick={() => setShowRemove(false)}>Cancel</Button>
-          <Button variant="danger" size="sm" icon={<Icon name="close" className="icon-sm" />} onClick={confirmRemoveFolder}>Remove</Button>
-        </div>
-      </Modal>
     </div>
   );
 }

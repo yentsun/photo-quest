@@ -694,7 +694,7 @@ body {
 .media-player-state {
   position: absolute; inset: 0; z-index: 10; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-  background: #000;
+  background: rgba(0, 0, 0, 0.7);
 }
 .media-player-label { color: var(--sol-text-em); font-size: var(--fs-sm); }
 .media-player-error { color: var(--sol-red); font-size: var(--fs-sm); }

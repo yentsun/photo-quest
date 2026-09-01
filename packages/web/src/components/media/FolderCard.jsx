@@ -2,9 +2,9 @@ import { memo, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getThumbUrl, renameFolder } from '../../utils/api.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
-import { Icon, IconButton } from '../ui/index.js';
+import { Icon } from '../ui/index.js';
 
-export default memo(function FolderCard({ folder, onRemove }) {
+export default memo(function FolderCard({ folder }) {
   const navigate = useNavigate();
   const { bump } = useRefresh();
   const pathName = folder.path.split(/[/\\]/).filter(Boolean).pop() || 'Folder';
@@ -53,18 +53,6 @@ export default memo(function FolderCard({ folder, onRemove }) {
               <Icon name="folder" className="icon-2xl text-mut" />
             </div>
           )}
-
-        {onRemove && (
-          <div className="folder-card-remove">
-            <IconButton
-              icon={<Icon name="close" className="icon-sm" />}
-              onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              label="Remove folder"
-              size="sm"
-              className="icon-btn-overlay"
-            />
-          </div>
-        )}
       </div>
 
       <div className="folder-card-meta">

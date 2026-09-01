@@ -11,11 +11,15 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   const videoRef = useRef(null);
   const [buffering, setBuffering] = useState(true);
   const [error, setError] = useState(null);
+  /* Tracks whether autoplay has begun for the current source, so playback is
+   * only ever started once per source. */
+  const startedRef = useRef(false);
 
   const [renderedSrc, setRenderedSrc] = useState(src);
   if (src !== renderedSrc) {
     setRenderedSrc(src);
     setBuffering(true);
+    startedRef.current = false;
   }
 
   useImperativeHandle(ref, () => ({
@@ -29,6 +33,19 @@ const MediaPlayer = forwardRef(function MediaPlayer({
     },
   }));
 
+  /* Start playback as soon as a frame is available (HAVE_CURRENT_DATA). Gating
+   * on a large buffered look-ahead can deadlock on connections/devices that
+   * won't fetch ahead while paused, leaving the loader up forever. Once playing,
+   * the browser buffers naturally; a brief stall only re-shows the translucent
+   * loader over the current frame. */
+  const maybeStartPlayback = () => {
+    const v = videoRef.current;
+    if (!v || startedRef.current) return;
+    if (v.readyState < 2) return;
+    startedRef.current = true;
+    v.play().catch(() => {});
+  };
+
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -40,7 +57,6 @@ const MediaPlayer = forwardRef(function MediaPlayer({
         v.muted = muted ?? false;
       } catch {}
     }
-    if (autoPlay) v.play().catch(() => {});
   }, [src, autoPlay]);
 
   const handleVolumeChange = () => {
@@ -64,12 +80,15 @@ const MediaPlayer = forwardRef(function MediaPlayer({
       <video
         ref={videoRef}
         src={src}
+        preload="auto"
         className={['media-player-video', className].filter(Boolean).join(' ')}
-        controls
+        controls={!buffering}
         loop
         onEnded={onEnded}
         playsInline
-        onCanPlay={() => setBuffering(false)}
+        onLoadedData={maybeStartPlayback}
+        onProgress={maybeStartPlayback}
+        onCanPlay={maybeStartPlayback}
         onWaiting={() => setBuffering(true)}
         onPlaying={() => setBuffering(false)}
         onVolumeChange={handleVolumeChange}

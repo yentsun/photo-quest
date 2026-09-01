@@ -87,6 +87,18 @@ export default async function () {
     });
 
     try {
+      /* For browser navigations (full page loads) serve the SPA even when the
+       * path matches an API route, so React Router can handle client-side deep
+       * links like /media/:id instead of dumping raw JSON. API fetches (XHR) and
+       * media-element requests (video/img) are distinguished by their Sec-Fetch-*
+       * and Accept headers and fall through to route matching below. */
+      if (req.method === 'GET'
+          && (req.headers['sec-fetch-mode'] === 'navigate'
+            || (req.headers.accept || '').includes('text/html'))) {
+        const served = serveStatic(url.pathname, res);
+        if (served) return;
+      }
+
       /* Find matching route. */
       for (const route of routes) {
         if (route.method !== req.method) continue;
