@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useReducer, useRef } from 'react';
-import { Routes, Route, BrowserRouter, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, BrowserRouter, Navigate, useLocation } from 'react-router-dom';
 import GlobalContext, { initialState, reducer } from '../globalContext';
 import { saveNavLocation, getSavedNavPath } from '../utils/sessionNav.js';
 import { SlideshowProvider } from '../contexts/SlideshowContext.jsx';
@@ -18,36 +18,31 @@ import Dashboard from './Dashboard';
 import { LikedPage, FolderPage, MediaPage, TagsPage, TagPage, TranscodesPage } from './pages/index.js';
 import ToasterMessage from './ToasterMessage';
 
-/** Persists the current view and, when a reload lands on the landing route,
-    navigates back to the last non-landing view so a sleep/wake reload resumes
-    where the user left off. */
+/** Persists the current view so a sleep/wake reload can resume it. The very
+    first location we see is the one the app was (re)loaded with; for a landing
+    reload saving it would wipe the saved view, so we skip only that first
+    location and record every real navigation after it. */
 function ResumeView() {
   const location = useLocation();
-  const navigate = useNavigate();
   const firstRun = useRef(true);
 
-  /* Persist the view on every real navigation. The very first location we see
-     is the one the app was (re)loaded with — for a sleep/wake reload that is a
-     landing route, and saving it would wipe the saved view before the restore
-     effect below can fire. We skip it so an automatic `/` → `/dashboard`
-     redirect never destroys the resume target. */
   useEffect(() => {
     if (firstRun.current) { firstRun.current = false; return; }
     saveNavLocation(location);
   }, [location]);
 
-  /* On load, if the browser landed on the landing route (`/` or `/dashboard`)
-     but a previous view was saved, navigate back to it. This runs once on the
-     boot location, so it sees whichever landing route the reload produced. */
-  useEffect(() => {
-    const saved = getSavedNavPath();
-    const current = location.pathname + (location.search || '');
-    if (saved && (location.pathname === '/' || location.pathname === '/dashboard') && saved !== current) {
-      navigate(saved, { replace: true });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   return null;
+}
+
+/** The index `/` route. When the app reloads on the landing URL it resolves to
+    the last saved view (so a sleep/wake reset resumes where the user left off),
+    otherwise it falls back to the dashboard. Rendering this at the index route
+    makes it the single navigation that fires on `/`, so it can never race a
+    competing redirect. */
+function IndexRedirect() {
+  const saved = getSavedNavPath();
+  const target = saved && saved.startsWith('/') ? saved : r.dashboard;
+  return <Navigate replace to={target} />;
 }
 
 export default function Router() {
@@ -67,7 +62,7 @@ export default function Router() {
               <ResumeView />
               <Routes>
                 <Route path={r.root} element={<Root />}>
-                  <Route index element={<Navigate replace to={r.dashboard} />} />
+                  <Route index element={<IndexRedirect />} />
                   <Route path={r.dashboard} element={<Dashboard />} />
                   <Route path={r.liked} element={<LikedPage />} />
                   <Route path={r.folder} element={<FolderPage />} />

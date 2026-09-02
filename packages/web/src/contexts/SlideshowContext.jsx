@@ -16,7 +16,11 @@ import { fetchMedia } from '../utils/api.js';
 
 const SlideshowContext = createContext();
 
+/* Position snapshot (small, written on every transition) and the items array
+   (large, written only when the sequence actually changes). Keeping them apart
+   avoids re-serialising the whole media array on every next/prev/image change. */
 const STORAGE_KEY = 'photoquest.slideshow.session';
+const ITEMS_KEY = 'photoquest.slideshow.items';
 
 const initialState = {
   active: false,
@@ -37,16 +41,18 @@ const initialState = {
  */
 function loadSnapshot() {
   let raw;
+  let itemsRaw;
   try {
     raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return initialState;
+    itemsRaw = sessionStorage.getItem(ITEMS_KEY);
   } catch {
     return initialState;
   }
+  if (!raw) return initialState;
   try {
     const data = JSON.parse(raw);
-    const items = Array.isArray(data?.items) ? data.items : [];
-    if (!data?.active || items.length === 0) return initialState;
+    const items = itemsRaw ? JSON.parse(itemsRaw) : [];
+    if (!data?.active || !Array.isArray(items) || items.length === 0) return initialState;
     const maxIndex = items.length - 1;
     const history = Array.isArray(data.history)
       ? data.history.filter((i) => Number.isInteger(i) && i >= 0 && i <= maxIndex)
@@ -62,25 +68,6 @@ function loadSnapshot() {
     };
   } catch {
     return initialState;
-  }
-}
-
-function saveSnapshot(state) {
-  try {
-    sessionStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        active: state.active,
-        items: state.items,
-        currentIndex: state.currentIndex,
-        order: state.order,
-        history: state.history,
-        total: state.total,
-        source: state.source,
-      }),
-    );
-  } catch {
-    /* Ignore quota / private-mode errors — persistence is best-effort. */
   }
 }
 
@@ -177,15 +164,37 @@ export function SlideshowProvider({ children }) {
      Stored in a ref so it never triggers re-renders or effect re-runs. It is reset
      on a full page reload, so `loadMore` falls back to rebuilding from `state.source`. */
   const loadMoreRef = useRef(null);
+  /* Tracks the last sequence we persisted so the large items array is only
+     serialised when it changes (start/append/remove/reorder), not per transition. */
+  const seqRef = useRef(state.items);
 
   /* Keep the session snapshot in sync. When a slideshow is actively playing this
      restores it after a reload; once it stops we clear the snapshot so a stale
      session is never resurrected. */
   useEffect(() => {
     try {
-      if (state.active) saveSnapshot(state);
-      else sessionStorage.removeItem(STORAGE_KEY);
-    } catch { /* ignore */ }
+      if (!state.active) {
+        sessionStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(ITEMS_KEY);
+        seqRef.current = state.items;
+        return;
+      }
+      if (state.items !== seqRef.current) {
+        sessionStorage.setItem(ITEMS_KEY, JSON.stringify(state.items));
+        seqRef.current = state.items;
+      }
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          active: true,
+          currentIndex: state.currentIndex,
+          order: state.order,
+          history: state.history,
+          total: state.total,
+          source: state.source,
+        }),
+      );
+    } catch { /* ignore quota / private-mode errors */ }
   }, [state]);
 
   return (
