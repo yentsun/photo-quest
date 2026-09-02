@@ -169,7 +169,10 @@ export default function MediaPage() {
   }, [id, item?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const navItems = inSlideshow ? slideshow.items : folderMedia;
-  const currentIndex = navItems.findIndex(m => m.id === Number(id));
+  /* In a slideshow the index is authoritative slideshow state — after a reload
+     the URL may briefly point at a stale id, so deriving it from the URL would
+     flash a wrong counter/nav state before the URL is corrected. */
+  const currentIndex = inSlideshow ? slideshow.currentIndex : navItems.findIndex(m => m.id === Number(id));
   const hasPrev = inSlideshow ? slideshow.history.length > 0 : currentIndex > 0;
   const hasNext = inSlideshow ? navItems.length > 1 : currentIndex < navItems.length - 1;
 

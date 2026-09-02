@@ -216,6 +216,8 @@ export default function Dashboard() {
           const res = await fetchMedia({ random: true, limit: BATCH });
           return res.items;
         },
+        /* Serializable source so the library shuffle session survives a reload. */
+        source: { query: {} },
       });
     } catch (err) { console.error('Failed to fetch media for shuffle:', err); }
     finally { setShuffling(false); }

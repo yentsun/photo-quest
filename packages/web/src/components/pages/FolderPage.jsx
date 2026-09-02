@@ -350,6 +350,10 @@ export default function FolderPage() {
           const res = await fetchMedia(makeOpts());
           return res.items;
         },
+        /* Serializable source so the shuffle session survives a reload — the
+           in-memory `loadMore` closure above is gone after a page reload, but
+           loadMore can be rebuilt from this descriptor. */
+        source: { query: { folder: f.path, subtree: true, type: mediaTypeParam } },
       });
     } catch (err) { console.error('Failed to fetch subtree media for shuffle:', err); }
     finally { setShuffling(false); }
