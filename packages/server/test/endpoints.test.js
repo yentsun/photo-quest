@@ -83,12 +83,12 @@ async function setup() {
         if (!hash) return { error: 'hash is required', status: 400 };
         const items = db.prepare('SELECT * FROM media WHERE hash = ? AND hidden = 0').all(hash);
         if (items.length < 2) return { error: 'No duplicate group for this hash', status: 400 };
-        return { media: items[0], merged: items.length - 1, deletedFiles: items.length - 1 };
+        return { media: items[0], merged: items.length - 1, removedIds: items.slice(1).map(i => i.id), deletedFiles: items.length - 1 };
       },
       deleteDuplicates: function({ hash }) {
         if (!hash) return { error: 'hash is required', status: 400 };
         const items = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 0').all(hash);
-        return { deleted: items.length, deletedFiles: items.length };
+        return { deleted: items.length, removedIds: items.map(i => i.id), deletedFiles: items.length };
       },
       getMediaById: function(id) {
         return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)) || null;

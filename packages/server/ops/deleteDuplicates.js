@@ -27,5 +27,5 @@ export default function ({ hash } = {}) {
   }
 
   logger.debug(`deleted group hash=${hash} records=${items.length} deletedFiles=${deletedFiles}`);
-  return { deleted: items.length, deletedFiles };
+  return { deleted: items.length, removedIds: items.map(r => r.id), deletedFiles };
 }

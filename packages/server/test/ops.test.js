@@ -218,6 +218,8 @@ test('mergeDuplicates op', async (t) => {
     /* likes = 2 (B) + 5 (A) + 30 (C) = 37. */
     t.assert.strictEqual(result.media.likes, 37);
     t.assert.deepStrictEqual([...result.media.tags].sort(), ['a', 'b', 'c']);
+    /* The removed copies' ids are reported so the client can clear its cache. */
+    t.assert.deepStrictEqual([...result.removedIds].sort((x, y) => x - y), [a, c]);
     /* Removed records are gone; the master survives. */
     t.assert.strictEqual(callOp(getMediaById, ctx, a), null);
     t.assert.strictEqual(callOp(getMediaById, ctx, c), null);
@@ -267,6 +269,7 @@ test('deleteDuplicates op', async (t) => {
 
     t.assert.strictEqual(result.deleted, 2);
     t.assert.strictEqual(result.deletedFiles, 2);
+    t.assert.deepStrictEqual([...result.removedIds].sort((x, y) => x - y), [a, b]);
     t.assert.strictEqual(callOp(getMediaById, ctx, a), null);
     t.assert.strictEqual(callOp(getMediaById, ctx, b), null);
   });

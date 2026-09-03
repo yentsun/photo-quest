@@ -89,6 +89,30 @@ export function getLastMediaItem(id) { return _mediaCache.get(id) ?? null; }
 export function getLastFolderMedia(folderPath) { return _folderMediaCache.get(folderPath) ?? null; }
 
 /**
+ * Remove media ids from the in-memory + IDB media caches and upsert
+ * replacements. Called after destructive operations (deleting or merging
+ * media) so the UI reflects the change immediately, without a hard refresh.
+ * Also drops stale per-folder results and the tag list, which can change on
+ * merge/delete.
+ *
+ * @param {Array<number|string>} ids - Media ids to delete from the cache.
+ * @param {Object[]} [replacements] - Media items to (re)insert into the cache.
+ */
+async function syncMediaCache(ids = [], replacements = []) {
+  for (const id of ids) {
+    _mediaCache.delete(Number(id));
+    idbDeleteMedia(id).catch(err => console.warn('[idb] deleteMedia (cache sync) failed:', err));
+  }
+  for (const item of replacements) {
+    const parsed = parseTags(item);
+    _mediaCache.set(parsed.id, parsed);
+    idbPutMedia(parsed).catch(err => console.warn('[idb] putMedia (cache sync) failed:', err));
+  }
+  _folderMediaCache.clear();
+  _tagsCache = null;
+}
+
+/**
  * Clear all in-memory session caches (folders, tags, media, per-folder media).
  * Used after a full cache purge so the next render fetches fresh from the
  * server instead of serving stale in-memory data.
@@ -211,7 +235,11 @@ export async function mergeDuplicates({ hash }) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || 'Failed to merge duplicates');
   }
-  return response.json();
+  const data = await response.json();
+  /* The master's likes/tags changed and the other copies are gone — sync the
+     local caches so the change is visible without a hard refresh. */
+  await syncMediaCache(data.removedIds ?? [], data.media ? [data.media] : []);
+  return data;
 }
 
 export async function deleteDuplicates({ hash }) {
@@ -224,7 +252,9 @@ export async function deleteDuplicates({ hash }) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || 'Failed to delete duplicates');
   }
-  return response.json();
+  const data = await response.json();
+  await syncMediaCache(data.removedIds ?? [], []);
+  return data;
 }
 
 export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type, skipCache = false } = {}) {

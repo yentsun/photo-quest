@@ -80,5 +80,5 @@ export default function ({ hash } = {}) {
   media.tagCount = total;
 
   logger.debug(`merged hash=${hash} master=${master.id} removed=${removals.length} deletedFiles=${deletedFiles}`);
-  return { media, merged: removals.length, deletedFiles };
+  return { media, merged: removals.length, removedIds: removals.map(r => r.id), deletedFiles };
 }
