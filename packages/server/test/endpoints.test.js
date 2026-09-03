@@ -12,6 +12,7 @@ import config from '@photo-quest/shared/config.js';
 // Import endpoint handlers
 import endpoint_get_media from '../endpoints/10_get_media.js';
 import endpoint_get_media_id from '../endpoints/20_get_media_id.js';
+import endpoint_get_duplicates from '../endpoints/93_get_duplicates.js';
 import endpoint_patch_like from '../endpoints/25_patch_media_id_like.js';
 import endpoint_post_scan from '../endpoints/30_post_media_scan.js';
 import endpoint_post_add from '../endpoints/35_post_media_add.js';
@@ -51,6 +52,30 @@ async function setup() {
         const { total } = db.prepare('SELECT COUNT(*) AS total FROM media').get();
         const items = db.prepare('SELECT * FROM media ORDER BY created_at DESC').all();
         return { items, total };
+      },
+      listDuplicates: function({ countOnly = false } = {}) {
+        const rows = db.prepare(`
+          SELECT * FROM media
+          WHERE hidden = 0 AND hash IS NOT NULL AND hash != ''
+            AND hash IN (
+              SELECT hash FROM media WHERE hidden = 0 AND hash IS NOT NULL AND hash != ''
+              GROUP BY hash HAVING COUNT(*) > 1
+            )
+          ORDER BY hash
+        `).all();
+        const groupsByHash = new Map();
+        for (const row of rows) {
+          const g = groupsByHash.get(row.hash) || { hash: row.hash, items: [] };
+          g.items.push(row);
+          groupsByHash.set(row.hash, g);
+        }
+        const groups = [...groupsByHash.values()].map(g => ({ ...g, count: g.items.length }));
+        if (countOnly) {
+          let copyCount = 0;
+          for (const g of groups) copyCount += g.count - 1;
+          return { groupCount: groups.length, copyCount };
+        }
+        return { groups };
       },
       getMediaById: function(id) {
         return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)) || null;
@@ -95,6 +120,7 @@ async function setup() {
   // Register endpoints
   await endpoint_get_media(kojo, logger);
   await endpoint_get_media_id(kojo, logger);
+  await endpoint_get_duplicates(kojo, logger);
   await endpoint_patch_like(kojo, logger);
   await endpoint_post_add(kojo, logger);
   await endpoint_delete(kojo, logger);
@@ -521,6 +547,63 @@ test('PATCH /media/:id/thumbnail', async (t) => {
     await promise;
 
     t.assert.strictEqual(res._status, 404);
+  });
+});
+
+test('GET /duplicates', async (t) => {
+  await setup();
+
+  await t.test('returns no groups when there are no duplicates', async () => {
+    const route = findRoute('GET', '/duplicates');
+    const req = mockReq('GET', '/duplicates');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.groups.length, 0);
+  });
+
+  await t.test('groups items sharing the same hash', async () => {
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/dup-a.jpg', 'A', 'image', 'ready', 'same')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/dup-b.jpg', 'B', 'image', 'ready', 'same')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/other-c.jpg', 'C', 'image', 'ready', 'other')").run();
+
+    const route = findRoute('GET', '/duplicates');
+    const req = mockReq('GET', '/duplicates');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.groups.length, 1);
+    t.assert.strictEqual(res._body.groups[0].hash, 'same');
+    t.assert.strictEqual(res._body.groups[0].count, 2);
+    t.assert.strictEqual(res._body.groups[0].items.length, 2);
+  });
+});
+
+test('GET /duplicates?count=1', async (t) => {
+  await setup();
+
+  await t.test('returns aggregate counts only', async () => {
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/c-1.jpg', 'A', 'image', 'ready', 'same')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/c-2.jpg', 'B', 'image', 'ready', 'same')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/c-3.jpg', 'C', 'image', 'ready', 'same')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/o-1.jpg', 'D', 'image', 'ready', 'other')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/o-2.jpg', 'E', 'image', 'ready', 'other')").run();
+
+    const route = findRoute('GET', '/duplicates');
+    const req = mockReq('GET', '/duplicates?count=1');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.groupCount, 2);
+    /* Group 1 has 3 items (2 extra copies), group 2 has 2 items (1 extra). */
+    t.assert.strictEqual(res._body.copyCount, 3);
+    t.assert.strictEqual('groups' in res._body, false);
   });
 });
 

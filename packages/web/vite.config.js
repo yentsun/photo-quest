@@ -177,6 +177,18 @@ export default defineConfig({
       '/open-folder': API_TARGET,
       '/tags': API_TARGET,
       '/library': API_TARGET,
+      '/duplicates': {
+        target: API_TARGET,
+        bypass(req) {
+          // /duplicates is both a client route and an API endpoint. Browser
+          // navigations (text/html) serve the SPA for React Router; API fetches
+          // (Accept: application/json, or the default wildcard) proxy to the back-end.
+          if (req.headers.accept?.includes('text/html')
+              || req.headers['sec-fetch-mode'] === 'navigate') {
+            return req.url;
+          }
+        },
+      },
     },
   },
 });

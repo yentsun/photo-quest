@@ -103,20 +103,20 @@ export function resetMediaCaches() {
 // ---------------------------------------------------------------------------
 // Sidebar count badges (cached — never "live" over the full library)
 // ---------------------------------------------------------------------------
-// Library / Liked / Tags counts are cached in-memory + localStorage so the
-// badges render instantly on every load and are never recomputed by scanning
-// the whole media store. They are refreshed against the cheap server COUNT
-// endpoints (which return just a total) only on data-change signals.
+// Library / Liked / Tags / Duplicates counts are cached in-memory + localStorage
+// so the badges render instantly on every load and are never recomputed by
+// scanning the whole media store. They are refreshed against the cheap server
+// COUNT endpoints (which return just a total) only on data-change signals.
 
-const COUNTS_STORAGE_KEY = 'photoquest.counts-v1';
-const EMPTY_COUNTS = { library: null, liked: null, tags: null };
+const COUNTS_STORAGE_KEY = 'photoquest.counts-v2';
+const EMPTY_COUNTS = { library: null, liked: null, tags: null, duplicates: null };
 
-/** @type {{ library: number|null, liked: number|null, tags: number|null }} */
+/** @type {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }} */
 let _countsCache = null;
 
 /**
  * Return the cached badge counts (or nulls on first run / cleared storage).
- * @returns {{ library: number|null, liked: number|null, tags: number|null }}
+ * @returns {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }}
  */
 export function getCachedCounts() {
   if (_countsCache) return _countsCache;
@@ -137,15 +137,16 @@ function persistCounts(counts) {
 /**
  * Cheaply refresh the badge counts from the server (COUNT-only requests) and
  * cache the result. Server-only; never touches the IDB snapshot.
- * @returns {Promise<{ library: number|null, liked: number|null, tags: number|null }>}
+ * @returns {Promise<{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }>}
  */
 export async function refreshCounts() {
-  const [library, liked, tags] = await Promise.all([
+  const [library, liked, tags, duplicates] = await Promise.all([
     fetchMedia({ limit: 0 }).then(d => d.total).catch(() => null),
     fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => null),
     fetchTags().then(d => d.length).catch(() => null),
+    fetchDuplicates({ countOnly: true }).then(d => d.groupCount).catch(() => null),
   ]);
-  const counts = { library, liked, tags };
+  const counts = { library, liked, tags, duplicates };
   persistCounts(counts);
   return counts;
 }
@@ -190,6 +191,14 @@ export async function fetchTags() {
   const data = await response.json();
   _tagsCache = data;
   return data;
+}
+
+export async function fetchDuplicates({ countOnly = false } = {}) {
+  const url = new URL(apiRoutes.duplicates, window.location.origin);
+  if (countOnly) url.searchParams.set('count', '1');
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Failed to fetch duplicates');
+  return response.json();
 }
 
 export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type, skipCache = false } = {}) {

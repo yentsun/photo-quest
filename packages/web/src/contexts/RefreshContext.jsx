@@ -11,19 +11,20 @@ const RefreshContext = createContext();
 
 export function RefreshProvider({ children }) {
   const [signal, setSignal] = useState(0);
-  /* Per-section counts shown in the sidebar badge (Library / Liked / Tags).
-     Kept here so any component can update them and the sidebar reflects the
-     latest value without a full page refetch. */
+  /* Per-section counts shown in the sidebar badge (Library / Liked / Tags /
+     Duplicates). Kept here so any component can update them and the sidebar
+     reflects the latest value without a full page refetch. */
   const [libraryCount, setLibraryCount] = useState(null);
   const [likedCount, setLikedCount] = useState(null);
   const [tagCount, setTagCount] = useState(null);
+  const [duplicatesCount, setDuplicatesCount] = useState(null);
 
   const bump = useCallback(() => {
     setSignal(s => s + 1);
   }, []);
 
   return (
-    <RefreshContext.Provider value={{ signal, bump, libraryCount, setLibraryCount, likedCount, setLikedCount, tagCount, setTagCount }}>
+    <RefreshContext.Provider value={{ signal, bump, libraryCount, setLibraryCount, likedCount, setLikedCount, tagCount, setTagCount, duplicatesCount, setDuplicatesCount }}>
       {children}
     </RefreshContext.Provider>
   );

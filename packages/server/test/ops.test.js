@@ -12,6 +12,7 @@ import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE } from '@photo-quest/shared';
 
 /* Import the raw op functions. */
 import listMedia from '../ops/listMedia.js';
+import listDuplicates from '../ops/listDuplicates.js';
 import getMediaById from '../ops/getMediaById.js';
 import removeMedia from '../ops/removeMedia.js';
 import likeMedia from '../ops/likeMedia.js';
@@ -100,6 +101,88 @@ test('listMedia op', async (t) => {
     const result = callOp(listMedia, ctx, { limit: 2, offset: 0 });
     t.assert.strictEqual(result.items.length, 2);
     t.assert.strictEqual(result.total, 3);
+  });
+});
+
+test('listDuplicates op', async (t) => {
+  function insertWithHash(db, filePath, hash, title = 'Test') {
+    const { lastInsertRowid: id } = db.prepare(
+      "INSERT INTO media (path, title, status, hash) VALUES (?, ?, 'pending', ?)"
+    ).run(filePath, title, hash);
+    return id;
+  }
+
+  await t.test('returns empty groups when there are no duplicates', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertWithHash(db, '/a.jpg', 'hashA');
+
+    const result = callOp(listDuplicates, ctx);
+    t.assert.strictEqual(result.groups.length, 0);
+  });
+
+  await t.test('groups items sharing the same hash', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertWithHash(db, '/one.jpg', 'same');
+    insertWithHash(db, '/two.jpg', 'same');
+    insertWithHash(db, '/three.jpg', 'other');
+    insertWithHash(db, '/four.jpg', 'same', 'Fourth');
+
+    const result = callOp(listDuplicates, ctx);
+
+    t.assert.strictEqual(result.groups.length, 1);
+    const group = result.groups[0];
+    t.assert.strictEqual(group.hash, 'same');
+    t.assert.strictEqual(group.count, 3);
+    t.assert.strictEqual(group.items.length, 3);
+  });
+
+  await t.test('excludes items with a null/empty hash', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    db.prepare("INSERT INTO media (path, title, status) VALUES ('/no-hash.jpg', 'X', 'pending')").run();
+    db.prepare("INSERT INTO media (path, title, status, hash) VALUES ('/empty-hash.jpg', 'Y', 'pending', '')").run();
+    insertWithHash(db, '/one.jpg', 'same');
+    insertWithHash(db, '/two.jpg', 'same');
+
+    const result = callOp(listDuplicates, ctx);
+    t.assert.strictEqual(result.groups.length, 1);
+  });
+
+  await t.test('excludes hidden media', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertWithHash(db, '/one.jpg', 'same');
+    const hiddenId = insertWithHash(db, '/two.jpg', 'same');
+    insertWithHash(db, '/three.jpg', 'same');
+    db.prepare('UPDATE media SET hidden = 1 WHERE id = ?').run(hiddenId);
+
+    const result = callOp(listDuplicates, ctx);
+    /* Only the two visible rows remain; the hidden one is excluded. */
+    t.assert.strictEqual(result.groups.length, 1);
+    t.assert.strictEqual(result.groups[0].count, 2);
+    t.assert.strictEqual(result.groups[0].items.length, 2);
+  });
+
+  await t.test('countOnly returns groupCount and copyCount', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertWithHash(db, '/a.jpg', 'same');
+    insertWithHash(db, '/b.jpg', 'same');
+    insertWithHash(db, '/c.jpg', 'same');
+    insertWithHash(db, '/d.jpg', 'other');
+    insertWithHash(db, '/e.jpg', 'other');
+
+    const result = callOp(listDuplicates, ctx, { countOnly: true });
+    t.assert.strictEqual(result.groupCount, 2);
+    /* Group 1 has 3 items (2 extra copies), group 2 has 2 items (1 extra). */
+    t.assert.strictEqual(result.copyCount, 3);
   });
 });
 

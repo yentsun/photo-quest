@@ -466,6 +466,28 @@ body {
 @media (min-width: 1024px) { .item-grid { grid-template-columns: repeat(5, 1fr); } }
 @media (min-width: 1280px) { .item-grid { grid-template-columns: repeat(6, 1fr); } }
 
+/* ─── Duplicates page ─── */
+.duplicate-groups { display: flex; flex-direction: column; gap: 32px; }
+.duplicate-group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.duplicate-group-count {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--sol-text-em);
+}
+.duplicate-group-hash {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--sol-text-mut);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ─── Media card ─── */
 .media-card {
   border: 1px solid var(--sol-border);
