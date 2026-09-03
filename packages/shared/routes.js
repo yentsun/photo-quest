@@ -157,4 +157,7 @@ export const apiRoutes = {
 
   /** GET  -- list groups of duplicate media sharing the same content hash. */
   duplicates: '/duplicates',
+
+  /** POST -- merge a duplicate group: keep one record, absorb tags+likes, remove the rest (files + records). Body: { keepId, removeIds }. */
+  duplicatesMerge: '/duplicates/merge',
 };

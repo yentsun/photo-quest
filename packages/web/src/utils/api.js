@@ -201,6 +201,19 @@ export async function fetchDuplicates({ countOnly = false } = {}) {
   return response.json();
 }
 
+export async function mergeDuplicates({ keepId, removeIds }) {
+  const response = await fetch(apiRoutes.duplicatesMerge, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keepId, removeIds }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to merge duplicates');
+  }
+  return response.json();
+}
+
 export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type, skipCache = false } = {}) {
   const url = new URL(apiRoutes.media, window.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);

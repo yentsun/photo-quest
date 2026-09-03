@@ -13,6 +13,7 @@ import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE } from '@photo-quest/shared';
 /* Import the raw op functions. */
 import listMedia from '../ops/listMedia.js';
 import listDuplicates from '../ops/listDuplicates.js';
+import mergeDuplicates from '../ops/mergeDuplicates.js';
 import getMediaById from '../ops/getMediaById.js';
 import removeMedia from '../ops/removeMedia.js';
 import likeMedia from '../ops/likeMedia.js';
@@ -183,6 +184,65 @@ test('listDuplicates op', async (t) => {
     t.assert.strictEqual(result.groupCount, 2);
     /* Group 1 has 3 items (2 extra copies), group 2 has 2 items (1 extra). */
     t.assert.strictEqual(result.copyCount, 3);
+  });
+});
+
+test('mergeDuplicates op', async (t) => {
+  function seedGroup(db) {
+    const { lastInsertRowid: keepId } = db.prepare(
+      "INSERT INTO media (path, title, status, hash, tags, likes) VALUES ('/keep.jpg', 'Keep', 'ready', 'same', '[\"a\"]', 2)"
+    ).run();
+    const { lastInsertRowid: dup2 } = db.prepare(
+      "INSERT INTO media (path, title, status, hash, tags, likes) VALUES ('/dup2.jpg', 'Dup2', 'ready', 'same', '[\"b\",\"a\"]', 1)"
+    ).run();
+    const { lastInsertRowid: dup3 } = db.prepare(
+      "INSERT INTO media (path, title, status, hash, tags, likes) VALUES ('/dup3.jpg', 'Dup3', 'ready', 'same', '[\"c\"]', 3)"
+    ).run();
+    return { keepId, dup2, dup3 };
+  }
+
+  await t.test('absorbs tags and likes, removes the other records', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const { keepId, dup2, dup3 } = seedGroup(db);
+
+    const result = callOp(mergeDuplicates, ctx, { keepId, removeIds: [dup2, dup3] });
+
+    t.assert.strictEqual(result.merged, 2);
+    t.assert.strictEqual(result.deletedFiles, 2);
+    t.assert.strictEqual(result.media.id, keepId);
+    t.assert.strictEqual(result.media.likes, 6);
+    t.assert.deepStrictEqual([...result.media.tags].sort(), ['a', 'b', 'c']);
+    /* Removed records are gone; the master survives. */
+    t.assert.strictEqual(callOp(getMediaById, ctx, dup2), null);
+    t.assert.strictEqual(callOp(getMediaById, ctx, dup3), null);
+    t.assert.strictEqual(callOp(getMediaById, ctx, keepId).id, keepId);
+  });
+
+  await t.test('ignores removeIds that do not share the master hash', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const { keepId } = seedGroup(db);
+    const { lastInsertRowid: other } = db.prepare(
+      "INSERT INTO media (path, title, status, hash) VALUES ('/other.jpg', 'Other', 'ready', 'different')"
+    ).run();
+
+    const result = callOp(mergeDuplicates, ctx, { keepId, removeIds: [other] });
+    t.assert.strictEqual(result.error, 'No duplicates to merge');
+    t.assert.strictEqual(result.status, 400);
+  });
+
+  await t.test('returns 404 for a missing master', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const result = callOp(mergeDuplicates, ctx, { keepId: 9999, removeIds: [1] });
+    t.assert.strictEqual(result.status, 404);
+  });
+
+  await t.test('validates required fields', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    t.assert.strictEqual(callOp(mergeDuplicates, ctx, {}).status, 400);
   });
 });
 

@@ -13,6 +13,7 @@ import config from '@photo-quest/shared/config.js';
 import endpoint_get_media from '../endpoints/10_get_media.js';
 import endpoint_get_media_id from '../endpoints/20_get_media_id.js';
 import endpoint_get_duplicates from '../endpoints/93_get_duplicates.js';
+import endpoint_post_duplicates_merge from '../endpoints/94_post_duplicates_merge.js';
 import endpoint_patch_like from '../endpoints/25_patch_media_id_like.js';
 import endpoint_post_scan from '../endpoints/30_post_media_scan.js';
 import endpoint_post_add from '../endpoints/35_post_media_add.js';
@@ -77,6 +78,14 @@ async function setup() {
         }
         return { groups };
       },
+      mergeDuplicates: function({ keepId, removeIds }) {
+        if (keepId == null || !Array.isArray(removeIds)) {
+          return { error: 'Missing required fields: keepId, removeIds', status: 400 };
+        }
+        const master = db.prepare('SELECT * FROM media WHERE id = ?').get(Number(keepId));
+        if (!master) return { error: 'Master record not found', status: 404 };
+        return { media: master, merged: removeIds.length, deletedFiles: removeIds.length };
+      },
       getMediaById: function(id) {
         return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)) || null;
       },
@@ -121,6 +130,7 @@ async function setup() {
   await endpoint_get_media(kojo, logger);
   await endpoint_get_media_id(kojo, logger);
   await endpoint_get_duplicates(kojo, logger);
+  await endpoint_post_duplicates_merge(kojo, logger);
   await endpoint_patch_like(kojo, logger);
   await endpoint_post_add(kojo, logger);
   await endpoint_delete(kojo, logger);
@@ -604,6 +614,52 @@ test('GET /duplicates?count=1', async (t) => {
     /* Group 1 has 3 items (2 extra copies), group 2 has 2 items (1 extra). */
     t.assert.strictEqual(res._body.copyCount, 3);
     t.assert.strictEqual('groups' in res._body, false);
+  });
+});
+
+test('POST /duplicates/merge', async (t) => {
+  await setup();
+
+  await t.test('merges and returns the kept record', async () => {
+    const { lastInsertRowid: keepId } = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/keep.jpg', 'Keep', 'image', 'ready', 'same')").run();
+    const { lastInsertRowid: dupId } = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/dup.jpg', 'Dup', 'image', 'ready', 'same')").run();
+
+    const route = findRoute('POST', '/duplicates/merge');
+    const req = mockReq('POST', '/duplicates/merge', { keepId, removeIds: [dupId] });
+    const res = mockRes();
+
+    const promise = route.handler(req, res);
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.merged, 1);
+    t.assert.strictEqual(res._body.deletedFiles, 1);
+    t.assert.strictEqual(res._body.media.id, keepId);
+  });
+
+  await t.test('rejects when required fields are missing', async () => {
+    const route = findRoute('POST', '/duplicates/merge');
+    const req = mockReq('POST', '/duplicates/merge', { keepId: 1 });
+    const res = mockRes();
+
+    const promise = route.handler(req, res);
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 400);
+  });
+
+  await t.test('returns 404 for a missing master', async () => {
+    const route = findRoute('POST', '/duplicates/merge');
+    const req = mockReq('POST', '/duplicates/merge', { keepId: 9999, removeIds: [1] });
+    const res = mockRes();
+
+    const promise = route.handler(req, res);
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 404);
   });
 });
 
