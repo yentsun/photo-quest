@@ -201,15 +201,28 @@ export async function fetchDuplicates({ countOnly = false } = {}) {
   return response.json();
 }
 
-export async function mergeDuplicates({ keepId, removeIds }) {
+export async function mergeDuplicates({ hash }) {
   const response = await fetch(apiRoutes.duplicatesMerge, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ keepId, removeIds }),
+    body: JSON.stringify({ hash }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || 'Failed to merge duplicates');
+  }
+  return response.json();
+}
+
+export async function deleteDuplicates({ hash }) {
+  const response = await fetch(apiRoutes.duplicatesDelete, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hash }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to delete duplicates');
   }
   return response.json();
 }

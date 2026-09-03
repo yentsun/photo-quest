@@ -14,6 +14,7 @@ import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE } from '@photo-quest/shared';
 import listMedia from '../ops/listMedia.js';
 import listDuplicates from '../ops/listDuplicates.js';
 import mergeDuplicates from '../ops/mergeDuplicates.js';
+import deleteDuplicates from '../ops/deleteDuplicates.js';
 import getMediaById from '../ops/getMediaById.js';
 import removeMedia from '../ops/removeMedia.js';
 import likeMedia from '../ops/likeMedia.js';
@@ -189,60 +190,91 @@ test('listDuplicates op', async (t) => {
 
 test('mergeDuplicates op', async (t) => {
   function seedGroup(db) {
-    const { lastInsertRowid: keepId } = db.prepare(
-      "INSERT INTO media (path, title, status, hash, tags, likes) VALUES ('/keep.jpg', 'Keep', 'ready', 'same', '[\"a\"]', 2)"
-    ).run();
-    const { lastInsertRowid: dup2 } = db.prepare(
-      "INSERT INTO media (path, title, status, hash, tags, likes) VALUES ('/dup2.jpg', 'Dup2', 'ready', 'same', '[\"b\",\"a\"]', 1)"
-    ).run();
-    const { lastInsertRowid: dup3 } = db.prepare(
-      "INSERT INTO media (path, title, status, hash, tags, likes) VALUES ('/dup3.jpg', 'Dup3', 'ready', 'same', '[\"c\"]', 3)"
-    ).run();
-    return { keepId, dup2, dup3 };
+    /* A=latest, B=earliest (so B is master), C=middle-but-most-liked. */
+    const b = db.prepare(
+      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES ('/b.jpg', 'B', 'ready', 'same', '[\"b\",\"a\"]', 2, '2020-01-01')"
+    ).run().lastInsertRowid;
+    const a = db.prepare(
+      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES ('/a.jpg', 'A', 'ready', 'same', '[\"a\"]', 5, '2023-01-01')"
+    ).run().lastInsertRowid;
+    const c = db.prepare(
+      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES ('/c.jpg', 'C', 'ready', 'same', '[\"c\"]', 30, '2021-01-01')"
+    ).run().lastInsertRowid;
+    return { b, a, c };
   }
 
-  await t.test('absorbs tags and likes, removes the other records', (t) => {
+  await t.test('keeps the earliest-created master and absorbs tags + likes', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
-    const { keepId, dup2, dup3 } = seedGroup(db);
+    const { b, a, c } = seedGroup(db);
 
-    const result = callOp(mergeDuplicates, ctx, { keepId, removeIds: [dup2, dup3] });
+    const result = callOp(mergeDuplicates, ctx, { hash: 'same' });
 
     t.assert.strictEqual(result.merged, 2);
     t.assert.strictEqual(result.deletedFiles, 2);
-    t.assert.strictEqual(result.media.id, keepId);
-    t.assert.strictEqual(result.media.likes, 6);
+    /* Master is B — earliest created_at. */
+    t.assert.strictEqual(result.media.id, b);
+    t.assert.strictEqual(result.media.title, 'B');
+    /* likes = 2 (B) + 5 (A) + 30 (C) = 37. */
+    t.assert.strictEqual(result.media.likes, 37);
     t.assert.deepStrictEqual([...result.media.tags].sort(), ['a', 'b', 'c']);
     /* Removed records are gone; the master survives. */
-    t.assert.strictEqual(callOp(getMediaById, ctx, dup2), null);
-    t.assert.strictEqual(callOp(getMediaById, ctx, dup3), null);
-    t.assert.strictEqual(callOp(getMediaById, ctx, keepId).id, keepId);
+    t.assert.strictEqual(callOp(getMediaById, ctx, a), null);
+    t.assert.strictEqual(callOp(getMediaById, ctx, c), null);
+    t.assert.strictEqual(callOp(getMediaById, ctx, b).id, b);
   });
 
-  await t.test('ignores removeIds that do not share the master hash', (t) => {
+  await t.test('breaks ties by most likes when created_at is equal', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
-    const { keepId } = seedGroup(db);
-    const { lastInsertRowid: other } = db.prepare(
-      "INSERT INTO media (path, title, status, hash) VALUES ('/other.jpg', 'Other', 'ready', 'different')"
-    ).run();
+    const low = db.prepare(
+      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES ('/low.jpg', 'Low', 'ready', 'same', '[\"a\"]', 1, '2021-01-01')"
+    ).run().lastInsertRowid;
+    const high = db.prepare(
+      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES ('/high.jpg', 'High', 'ready', 'same', '[\"b\"]', 9, '2021-01-01')"
+    ).run().lastInsertRowid;
 
-    const result = callOp(mergeDuplicates, ctx, { keepId, removeIds: [other] });
-    t.assert.strictEqual(result.error, 'No duplicates to merge');
+    const result = callOp(mergeDuplicates, ctx, { hash: 'same' });
+    t.assert.strictEqual(result.media.id, high);
+    t.assert.strictEqual(result.media.likes, 10);
+    t.assert.strictEqual(callOp(getMediaById, ctx, low), null);
+  });
+
+  await t.test('returns 400 for a hash with fewer than two records', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    db.prepare("INSERT INTO media (path, title, status, hash) VALUES ('/only.jpg', 'Only', 'ready', 'same')").run();
+
+    const result = callOp(mergeDuplicates, ctx, { hash: 'same' });
     t.assert.strictEqual(result.status, 400);
-  });
-
-  await t.test('returns 404 for a missing master', (t) => {
-    const db = freshDb();
-    const ctx = makeContext(db);
-    const result = callOp(mergeDuplicates, ctx, { keepId: 9999, removeIds: [1] });
-    t.assert.strictEqual(result.status, 404);
   });
 
   await t.test('validates required fields', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     t.assert.strictEqual(callOp(mergeDuplicates, ctx, {}).status, 400);
+  });
+});
+
+test('deleteDuplicates op', async (t) => {
+  await t.test('deletes every record in the group', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const a = db.prepare("INSERT INTO media (path, title, status, hash) VALUES ('/a.jpg', 'A', 'ready', 'same')").run().lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, status, hash) VALUES ('/b.jpg', 'B', 'ready', 'same')").run().lastInsertRowid;
+
+    const result = callOp(deleteDuplicates, ctx, { hash: 'same' });
+
+    t.assert.strictEqual(result.deleted, 2);
+    t.assert.strictEqual(result.deletedFiles, 2);
+    t.assert.strictEqual(callOp(getMediaById, ctx, a), null);
+    t.assert.strictEqual(callOp(getMediaById, ctx, b), null);
+  });
+
+  await t.test('validates required fields', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    t.assert.strictEqual(callOp(deleteDuplicates, ctx, {}).status, 400);
   });
 });
 

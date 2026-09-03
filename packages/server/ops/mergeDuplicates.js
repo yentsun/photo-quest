@@ -1,15 +1,16 @@
 /**
  * @file Merge a duplicate group into a single media record.
  *
- * Kojo op: accessed as `kojo.ops.mergeDuplicates({ keepId, removeIds })`.
- * Keeps the master record (`keepId`), absorbs the union of its tags and the
- * sum of its likes, then deletes every other record (and its file on disk)
- * via the `removeMedia` op.
+ * Kojo op: accessed as `kojo.ops.mergeDuplicates({ hash })`.
+ * Looks up every visible record sharing `hash`, keeps the most "mature" one
+ * (earliest created_at, tie-broken by most likes), absorbs the union of its
+ * tags plus the sum of its likes, then deletes the other records (and their
+ * files on disk) via the `removeMedia` op.
  *
- * @param {{ keepId: number|string, removeIds: Array<number|string> }} params
+ * @param {{ hash: string }} params
  * @returns {Object}
  *   On success: { media, merged, deletedFiles }
- *   On error:   { error, status } (400 invalid input / 404 keepId not found)
+ *   On error:   { error, status } (400 invalid input / no group)
  */
 
 import removeMedia from './removeMedia.js';
@@ -22,37 +23,36 @@ function parseTags(row) {
   return [];
 }
 
-export default function ({ keepId, removeIds } = {}) {
+/**
+ * Pick the most mature record: earliest created_at, tie-broken by most likes.
+ */
+function pickMaster(items) {
+  return [...items].sort((a, b) => {
+    const aDate = a.created_at || '';
+    const bDate = b.created_at || '';
+    if (aDate !== bDate) return aDate < bDate ? -1 : 1;
+    return (b.likes || 0) - (a.likes || 0);
+  })[0];
+}
+
+export default function ({ hash } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  if (keepId == null || !Array.isArray(removeIds) || removeIds.length === 0) {
-    return { error: 'keepId and removeIds are required', status: 400 };
+  if (!hash) return { error: 'hash is required', status: 400 };
+
+  const items = db.prepare('SELECT * FROM media WHERE hash = ? AND hidden = 0').all(hash);
+  if (items.length < 2) {
+    logger.debug(`no duplicate group for hash=${hash}`);
+    return { error: 'No duplicate group for this hash', status: 400 };
   }
 
-  const keepIdNum = Number(keepId);
-  const keep = db.prepare('SELECT * FROM media WHERE id = ?').get(keepIdNum);
-  if (!keep) return { error: 'Master record not found', status: 404 };
-
-  if (!keep.hash) {
-    logger.debug(`master has no hash: id=${keepIdNum}`);
-    return { error: 'Master record has no content hash', status: 400 };
-  }
-
-  /* Load the removals (excluding the master) and validate they share the same hash. */
-  const removals = [];
-  for (const id of removeIds) {
-    const num = Number(id);
-    if (!Number.isFinite(num) || num === keepIdNum) continue;
-    const row = db.prepare('SELECT * FROM media WHERE id = ?').get(num);
-    if (row && row.hash === keep.hash) removals.push(row);
-  }
-
-  if (removals.length === 0) return { error: 'No duplicates to merge', status: 400 };
+  const master = pickMaster(items);
+  const removals = items.filter(i => i.id !== master.id);
 
   /* Absorb tags (union) and likes (sum) into the master. */
-  const tagSet = new Set(parseTags(keep));
-  let likeSum = keep.likes || 0;
+  const tagSet = new Set(parseTags(master));
+  let likeSum = master.likes || 0;
   for (const row of removals) {
     for (const tag of parseTags(row)) tagSet.add(tag);
     likeSum += row.likes || 0;
@@ -60,7 +60,7 @@ export default function ({ keepId, removeIds } = {}) {
 
   db.prepare(
     "UPDATE media SET tags = ?, likes = ?, updated_at = datetime('now') WHERE id = ?"
-  ).run(JSON.stringify([...tagSet]), likeSum, keepIdNum);
+  ).run(JSON.stringify([...tagSet]), likeSum, master.id);
 
   /* Delete the other records (and their files) via the shared removeMedia op. */
   let deletedFiles = 0;
@@ -69,7 +69,7 @@ export default function ({ keepId, removeIds } = {}) {
     if (result.deleted) deletedFiles++;
   }
 
-  const media = db.prepare('SELECT * FROM media WHERE id = ?').get(keepIdNum);
+  const media = db.prepare('SELECT * FROM media WHERE id = ?').get(master.id);
   media.tags = parseTags(media);
 
   const { total } = db.prepare(
@@ -79,6 +79,6 @@ export default function ({ keepId, removeIds } = {}) {
   ).get();
   media.tagCount = total;
 
-  logger.debug(`merged id=${keepIdNum} removed=${removals.length} deletedFiles=${deletedFiles}`);
+  logger.debug(`merged hash=${hash} master=${master.id} removed=${removals.length} deletedFiles=${deletedFiles}`);
   return { media, merged: removals.length, deletedFiles };
 }

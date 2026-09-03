@@ -473,6 +473,7 @@ body {
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 .duplicate-group-count {
   font-size: var(--fs-sm);
@@ -487,62 +488,11 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.duplicate-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.duplicate-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px;
-  border: 1px solid var(--sol-border);
-  background: var(--sol-surface);
-  cursor: pointer;
-  transition: border-color 80ms;
-}
-.duplicate-row:hover { border-color: var(--sol-text-mut); }
-.duplicate-row-thumb {
-  width: 64px;
-  height: 48px;
-  object-fit: cover;
-  flex-shrink: 0;
-  border-radius: 4px;
-  background: var(--sol-dim);
-}
-.duplicate-row-body {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.duplicate-row-title {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--sol-text-em);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.duplicate-row-path {
-  font-size: var(--fs-xs);
-  font-family: var(--font-mono);
-  color: var(--sol-text-mut);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.duplicate-row-actions {
+.duplicate-group-actions {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-shrink: 0;
-}
-.duplicate-row-type {
-  font-size: var(--fs-xs);
-  color: var(--sol-text-mut);
+  margin-left: auto;
   flex-shrink: 0;
 }
 

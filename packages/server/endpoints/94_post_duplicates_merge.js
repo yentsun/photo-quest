@@ -1,9 +1,9 @@
 /**
  * @file POST /duplicates/merge -- Merge a duplicate group into one record.
  *
- * Body: { keepId, removeIds } where keepId is the record to keep and
- * removeIds are the other copies to delete (record + file on disk).
- * The master absorbs the union of tags and the sum of likes.
+ * Body: { hash }. Keeps the most "mature" copy (earliest created_at,
+ * tie-broken by most likes), absorbs the union of tags and the sum of likes,
+ * and removes the other copies (record + file on disk).
  */
 
 import { json, parseBody } from '../src/http.js';
@@ -14,15 +14,14 @@ export default async (kojo, logger) => {
     pathname: '/duplicates/merge',
   }, async (req, res) => {
     const body = await parseBody(req);
-    const keepId = body?.keepId;
-    const removeIds = body?.removeIds;
+    const hash = body?.hash;
 
-    if (keepId == null || !Array.isArray(removeIds)) {
-      return json(res, 400, { error: 'Missing required fields: keepId, removeIds' });
+    if (!hash) {
+      return json(res, 400, { error: 'hash is required' });
     }
 
-    const result = kojo.ops.mergeDuplicates({ keepId, removeIds });
-    logger.debug(`[POST /duplicates/merge] keepId=${keepId} result=${JSON.stringify({ merged: result.merged, deletedFiles: result.deletedFiles })}`);
+    const result = kojo.ops.mergeDuplicates({ hash });
+    logger.debug(`[POST /duplicates/merge] hash=${hash} merged=${result.merged} deletedFiles=${result.deletedFiles}`);
 
     if (result.status) {
       return json(res, result.status, { error: result.error });
