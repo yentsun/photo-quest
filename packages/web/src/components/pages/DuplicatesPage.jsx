@@ -55,12 +55,16 @@ export default function DuplicatesPage() {
         title: 'Delete all duplicates',
         body: <>Delete all <strong>{n}</strong> cop{n === 1 ? 'y' : 'ies'}? Every record and file in this group will be removed from disk.</>,
         label: 'Delete all',
+        variant: 'danger',
+        icon: 'trash',
       };
     }
     return {
       title: 'Merge all duplicates',
       body: <>Merge all <strong>{n}</strong> cop{n === 1 ? 'y' : 'ies'} into one? The most mature copy (earliest added, or most liked) is kept; likes and tags are combined, and the other files are deleted from disk.</>,
       label: 'Merge all',
+      variant: 'primary',
+      icon: 'copy',
     };
   })();
 
@@ -117,7 +121,12 @@ export default function DuplicatesPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Button variant="ghost" size="sm" onClick={() => setConfirm(null)}>Cancel</Button>
-          <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={runConfirm}>
+          <Button
+            variant={confirmMeta?.variant}
+            size="sm"
+            icon={confirmMeta?.icon ? <Icon name={confirmMeta.icon} className="icon-sm" /> : undefined}
+            onClick={runConfirm}
+          >
             {confirmMeta?.label}
           </Button>
         </div>

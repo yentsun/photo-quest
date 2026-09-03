@@ -243,7 +243,8 @@ body {
 .btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
 
 .btn-primary { background: var(--sol-accent); color: var(--sol-bg); border-color: var(--sol-accent); }
-.btn-primary:hover { filter: brightness(0.9); }
+.btn-primary:hover { background: var(--sol-accent); border-color: var(--sol-accent); filter: brightness(0.9); }
+.btn-primary:active { background: var(--sol-accent); border-color: var(--sol-accent); filter: brightness(0.8); }
 .btn-primary:disabled { filter: none; }
 
 .btn-ghost { background: transparent; border-color: var(--sol-border); color: var(--sol-text); }
