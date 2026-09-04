@@ -89,6 +89,36 @@ export function getLastMediaItem(id) { return _mediaCache.get(id) ?? null; }
 export function getLastFolderMedia(folderPath) { return _folderMediaCache.get(folderPath) ?? null; }
 
 /**
+ * Remove media ids from the in-memory + IDB media caches and upsert
+ * replacements. Called after destructive operations (deleting or merging
+ * media) so the UI reflects the change immediately, without a hard refresh.
+ * Also drops stale per-folder results, folder snapshots, and the tag list,
+ * which can change on merge/delete.
+ *
+ * @param {Array<number|string>} ids - Media ids to delete from the cache.
+ * @param {Object[]} [replacements] - Media items to (re)insert into the cache.
+ */
+async function syncMediaCache(ids = [], replacements = []) {
+  const updates = [];
+  for (const id of ids) {
+    _mediaCache.delete(Number(id));
+    updates.push(idbDeleteMedia(id));
+  }
+  for (const item of replacements) {
+    const parsed = parseTags(item);
+    _mediaCache.set(parsed.id, parsed);
+    updates.push(idbPutMedia(parsed));
+  }
+  _folderMediaCache.clear();
+  _foldersCache = null;
+  _tagsCache = null;
+  updates.push(idbReplaceFolders([]));
+  await Promise.all(updates.map(update => update.catch(err => {
+    console.warn('[idb] cache sync failed:', err);
+  })));
+}
+
+/**
  * Clear all in-memory session caches (folders, tags, media, per-folder media).
  * Used after a full cache purge so the next render fetches fresh from the
  * server instead of serving stale in-memory data.
@@ -103,20 +133,20 @@ export function resetMediaCaches() {
 // ---------------------------------------------------------------------------
 // Sidebar count badges (cached — never "live" over the full library)
 // ---------------------------------------------------------------------------
-// Library / Liked / Tags counts are cached in-memory + localStorage so the
-// badges render instantly on every load and are never recomputed by scanning
-// the whole media store. They are refreshed against the cheap server COUNT
-// endpoints (which return just a total) only on data-change signals.
+// Library / Liked / Tags / Duplicates counts are cached in-memory + localStorage
+// so the badges render instantly on every load and are never recomputed by
+// scanning the whole media store. They are refreshed against the cheap server
+// COUNT endpoints (which return just a total) only on data-change signals.
 
-const COUNTS_STORAGE_KEY = 'photoquest.counts-v1';
-const EMPTY_COUNTS = { library: null, liked: null, tags: null };
+const COUNTS_STORAGE_KEY = 'photoquest.counts-v2';
+const EMPTY_COUNTS = { library: null, liked: null, tags: null, duplicates: null };
 
-/** @type {{ library: number|null, liked: number|null, tags: number|null }} */
+/** @type {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }} */
 let _countsCache = null;
 
 /**
  * Return the cached badge counts (or nulls on first run / cleared storage).
- * @returns {{ library: number|null, liked: number|null, tags: number|null }}
+ * @returns {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }}
  */
 export function getCachedCounts() {
   if (_countsCache) return _countsCache;
@@ -137,15 +167,16 @@ function persistCounts(counts) {
 /**
  * Cheaply refresh the badge counts from the server (COUNT-only requests) and
  * cache the result. Server-only; never touches the IDB snapshot.
- * @returns {Promise<{ library: number|null, liked: number|null, tags: number|null }>}
+ * @returns {Promise<{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }>}
  */
 export async function refreshCounts() {
-  const [library, liked, tags] = await Promise.all([
+  const [library, liked, tags, duplicates] = await Promise.all([
     fetchMedia({ limit: 0 }).then(d => d.total).catch(() => null),
     fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => null),
     fetchTags().then(d => d.length).catch(() => null),
+    fetchDuplicates({ countOnly: true }).then(d => d.groupCount).catch(() => null),
   ]);
-  const counts = { library, liked, tags };
+  const counts = { library, liked, tags, duplicates };
   persistCounts(counts);
   return counts;
 }
@@ -189,6 +220,46 @@ export async function fetchTags() {
   if (!response.ok) throw new Error('Failed to fetch tags');
   const data = await response.json();
   _tagsCache = data;
+  return data;
+}
+
+export async function fetchDuplicates({ countOnly = false } = {}) {
+  const url = new URL(apiRoutes.duplicates, window.location.origin);
+  if (countOnly) url.searchParams.set('count', '1');
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Failed to fetch duplicates');
+  return response.json();
+}
+
+export async function mergeDuplicates({ ids }) {
+  const response = await fetch(apiRoutes.duplicatesMerge, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to merge duplicates');
+  }
+  const data = await response.json();
+  /* The master's likes/tags changed and the other copies are gone — sync the
+     local caches so the change is visible without a hard refresh. */
+  await syncMediaCache(data.removedIds ?? [], data.media ? [data.media] : []);
+  return data;
+}
+
+export async function deleteDuplicates({ ids }) {
+  const response = await fetch(apiRoutes.duplicatesDelete, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to delete duplicates');
+  }
+  const data = await response.json();
+  await syncMediaCache(data.removedIds ?? [], []);
   return data;
 }
 

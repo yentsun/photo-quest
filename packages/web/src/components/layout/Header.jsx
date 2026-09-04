@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { to: clientRoutes.dashboard, icon: 'folder', label: 'Library', countKey: 'library' },
   { to: clientRoutes.liked, icon: 'heart', label: 'Liked', countKey: 'liked' },
   { to: clientRoutes.tags, icon: 'list', label: 'Tags', countKey: 'tags' },
+  { to: clientRoutes.duplicates, icon: 'copy', label: 'Duplicates', countKey: 'duplicates' },
 ];
 
 export default function Header({ collapsed, onToggle }) {
@@ -20,7 +21,7 @@ export default function Header({ collapsed, onToggle }) {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
-  const { signal, libraryCount, setLibraryCount, likedCount, setLikedCount, tagCount, setTagCount } = useRefresh();
+  const { signal, libraryCount, setLibraryCount, likedCount, setLikedCount, tagCount, setTagCount, duplicatesCount, setDuplicatesCount } = useRefresh();
 
   /* Load the per-section counts shown next to the nav items. These are cached
      (localStorage) so the badges render instantly on load, and are only
@@ -31,7 +32,8 @@ export default function Header({ collapsed, onToggle }) {
     if (cached.library != null) setLibraryCount(cached.library);
     if (cached.liked != null) setLikedCount(cached.liked);
     if (cached.tags != null) setTagCount(cached.tags);
-  }, [setLibraryCount, setLikedCount, setTagCount]);
+    if (cached.duplicates != null) setDuplicatesCount(cached.duplicates);
+  }, [setLibraryCount, setLikedCount, setTagCount, setDuplicatesCount]);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,9 +42,10 @@ export default function Header({ collapsed, onToggle }) {
       if (counts.library != null) setLibraryCount(counts.library);
       if (counts.liked != null) setLikedCount(counts.liked);
       if (counts.tags != null) setTagCount(counts.tags);
+      if (counts.duplicates != null) setDuplicatesCount(counts.duplicates);
     });
     return () => { cancelled = true; };
-  }, [signal, setLibraryCount, setLikedCount, setTagCount]);
+  }, [signal, setLibraryCount, setLikedCount, setTagCount, setDuplicatesCount]);
 
   useEffect(() => {
     /* Always record the current origin — it is the server when the app is
@@ -150,7 +153,9 @@ export default function Header({ collapsed, onToggle }) {
             const count =
               item.countKey === 'library' ? libraryCount
               : item.countKey === 'liked' ? likedCount
-              : tagCount;
+              : item.countKey === 'tags' ? tagCount
+              : item.countKey === 'duplicates' ? duplicatesCount
+              : null;
             return (
               <NavLink
                 key={item.to}

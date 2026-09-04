@@ -255,6 +255,23 @@ test('scanMedia — processing phase', async (t) => {
     t.assert.strictEqual(byTitle.deep_clip.status, MEDIA_STATUS.PENDING);
   });
 
+  await t.test('hashes the complete file contents', async () => {
+    const db = makeDb();
+    const { ctx } = makeContext(db);
+    const prefix = Buffer.alloc(65536, 'a');
+    const first = path.join(root, 'same-prefix-a.jpg');
+    const second = path.join(root, 'same-prefix-b.jpg');
+    fs.writeFileSync(first, Buffer.concat([prefix, Buffer.from('A')]));
+    fs.writeFileSync(second, Buffer.concat([prefix, Buffer.from('B')]));
+
+    await processOneItem(db, 1, first, ctx[1]);
+    await processOneItem(db, 2, second, ctx[1]);
+
+    const firstHash = db.prepare('SELECT hash FROM media WHERE path = ?').get(first).hash;
+    const secondHash = db.prepare('SELECT hash FROM media WHERE path = ?').get(second).hash;
+    t.assert.notStrictEqual(firstHash, secondHash);
+  });
+
   await t.test('marks queue items as completed after processing', async () => {
     const db = makeDb();
     const { ctx } = makeContext(db);

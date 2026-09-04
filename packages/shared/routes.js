@@ -47,6 +47,9 @@ export const clientRoutes = {
 
   /** Transcode queue management page. */
   transcodes: '/transcodes',
+
+  /** Duplicate media section -- groups items sharing the same content hash. */
+  duplicates: '/duplicates',
 };
 
 // ---------------------------------------------------------------------------
@@ -151,4 +154,13 @@ export const apiRoutes = {
 
   /** POST -- Upload a media file from a mobile client. Body: { fileName, data: base64 }. */
   mediaUpload: '/media/upload',
+
+  /** GET  -- list groups of duplicate media sharing the same content hash. */
+  duplicates: '/duplicates',
+
+  /** POST -- merge a duplicate group into one record. Body: { hash }. */
+  duplicatesMerge: '/duplicates/merge',
+
+  /** POST -- delete every record in a duplicate group. Body: { hash }. */
+  duplicatesDelete: '/duplicates/delete',
 };
