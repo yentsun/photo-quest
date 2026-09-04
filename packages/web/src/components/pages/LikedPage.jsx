@@ -122,7 +122,7 @@ export default function LikedPage() {
 
       <MediaGrid
         items={displayItems}
-        onItemClick={m => navigate(`/media/${m.id}`)}
+        onItemClick={m => navigate(`/media/${m.id}`, { state: { context: 'liked' } })}
         emptyState={
           <EmptyState
             icon={<Icon name="heart" className="icon-2xl" />}

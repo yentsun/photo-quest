@@ -13,6 +13,8 @@ import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
 
+const FETCH_LIMIT = 10000;
+
 function byName(a, b) {
   return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
 }
@@ -49,6 +51,7 @@ export default function MediaPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const sort = location.state?.sort || 'filename';
+  const navContext = location.state?.context;
   const { deleteMedia } = useMediaActions();
   const { signal, bump, setTagCount, setLikedCount } = useRefresh();
   const { dispatch } = useContext(GlobalContext);
@@ -91,6 +94,9 @@ export default function MediaPage() {
         ?? getPageCache(`folder:${f.id}:filename`)?.data?.directMedia
         ?? [];
   });
+  const [likedNavList, setLikedNavList] = useState(() =>
+    navContext === 'liked' ? (getPageCache('liked')?.data?.likedMedia ?? []) : []
+  );
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [folder, setFolder] = useState(() => {
     const cachedItem = inSlideshow ? slideshow.current : getLastMediaItem(Number(id));
@@ -159,6 +165,15 @@ export default function MediaPage() {
     return () => { cancelled = true; };
   }, [id, inSlideshow]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (inSlideshow || navContext !== 'liked') return;
+    let cancelled = false;
+    fetchMedia({ liked: true, limit: FETCH_LIMIT })
+      .then(({ items }) => { if (!cancelled) setLikedNavList(items); })
+      .catch(err => console.error('Failed to load liked nav list:', err));
+    return () => { cancelled = true; };
+  }, [inSlideshow, navContext]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const TERMINAL = [MEDIA_STATUS.READY, MEDIA_STATUS.ERROR];
   useEffect(() => {
     if (!item || item.type !== MEDIA_TYPE.VIDEO || TERMINAL.includes(item.status)) return;
@@ -168,7 +183,8 @@ export default function MediaPage() {
     return () => clearInterval(interval);
   }, [id, item?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const navItems = inSlideshow ? slideshow.items : folderMedia;
+  const isLikedNav = navContext === 'liked' && !inSlideshow;
+  const navItems = inSlideshow ? slideshow.items : isLikedNav ? likedNavList : folderMedia;
   /* In a slideshow the index is authoritative slideshow state — after a reload
      the URL may briefly point at a stale id, so deriving it from the URL would
      flash a wrong counter/nav state before the URL is corrected. */
@@ -339,17 +355,21 @@ export default function MediaPage() {
       ? (folderMedia[folderIdx + 1] ?? folderMedia[folderIdx - 1])
       : null;
     const slideshowNext = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
-    /* When the deleted item is the sole folder sibling, keep the slideshow
-       playing by falling back to the slideshow sequence. */
-    const nextItem = folderIdx >= 0 ? (folderNext ?? slideshowNext) : slideshowNext;
+    /* In a liked nav session the sequence is the liked list itself; otherwise
+       follow the folder sequence, falling back to the slideshow when the
+       deleted item was the sole folder sibling. */
+    const nextItem = isLikedNav
+      ? slideshowNext
+      : folderIdx >= 0 ? (folderNext ?? slideshowNext) : slideshowNext;
 
     if (nextItem) navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
-    else navigate(folder ? `/folder/${folder.id}` : '/dashboard', { replace: true });
+    else navigate(isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard'), { replace: true });
 
     /* Drop the deleted item from both the slideshow and the folder sibling
        list so subsequent up/down navigation doesn't target a dead id. */
     if (inSlideshow) removeSlideshowItem(deletedId);
     setFolderMedia(list => list.filter(m => m.id !== deletedId));
+    if (isLikedNav) setLikedNavList(list => list.filter(m => m.id !== deletedId));
 
     try {
       await deleteMedia(deletedId);
@@ -359,7 +379,7 @@ export default function MediaPage() {
       console.error('Failed to delete media:', err);
       dispatch({ type: actions.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
     }
-  }, [item, navItems, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump]);
+  }, [item, navItems, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump, isLikedNav]);
 
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -480,7 +500,7 @@ export default function MediaPage() {
     return item?.folder_chain ?? [];
   }, [item?.folder_chain]);
 
-  const backTarget = folder ? `/folder/${folder.id}` : '/dashboard';
+  const backTarget = isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard');
   const goBack = useCallback(() => {
     navigate(backTarget);
   }, [navigate, backTarget]);
