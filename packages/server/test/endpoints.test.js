@@ -71,7 +71,7 @@ async function setup() {
           g.items.push(row);
           groupsByHash.set(row.hash, g);
         }
-        const groups = [...groupsByHash.values()].map(g => ({ ...g, count: g.items.length }));
+        const groups = [...groupsByHash.values()].map(g => ({ ...g, count: g.items.length, ids: g.items.map(item => item.id) }));
         if (countOnly) {
           let copyCount = 0;
           for (const g of groups) copyCount += g.count - 1;
@@ -79,15 +79,15 @@ async function setup() {
         }
         return { groups };
       },
-      mergeDuplicates: function({ hash }) {
-        if (!hash) return { error: 'hash is required', status: 400 };
-        const items = db.prepare('SELECT * FROM media WHERE hash = ? AND hidden = 0').all(hash);
-        if (items.length < 2) return { error: 'No duplicate group for this hash', status: 400 };
+      mergeDuplicates: function({ ids }) {
+        if (!Array.isArray(ids) || ids.length < 2) return { error: 'ids are required', status: 400 };
+        const items = db.prepare(`SELECT * FROM media WHERE id IN (${ids.map(() => '?').join(', ')}) AND hidden = 0`).all(...ids);
+        if (items.length !== ids.length) return { error: 'No duplicate group for these ids', status: 400 };
         return { media: items[0], merged: items.length - 1, removedIds: items.slice(1).map(i => i.id), deletedFiles: items.length - 1 };
       },
-      deleteDuplicates: function({ hash }) {
-        if (!hash) return { error: 'hash is required', status: 400 };
-        const items = db.prepare('SELECT id FROM media WHERE hash = ? AND hidden = 0').all(hash);
+      deleteDuplicates: function({ ids }) {
+        if (!Array.isArray(ids) || ids.length < 2) return { error: 'ids are required', status: 400 };
+        const items = db.prepare(`SELECT id FROM media WHERE id IN (${ids.map(() => '?').join(', ')}) AND hidden = 0`).all(...ids);
         return { deleted: items.length, removedIds: items.map(i => i.id), deletedFiles: items.length };
       },
       getMediaById: function(id) {
@@ -625,12 +625,12 @@ test('GET /duplicates?count=1', async (t) => {
 test('POST /duplicates/merge', async (t) => {
   await setup();
 
-  await t.test('merges a duplicate group by hash', async () => {
-    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/keep.jpg', 'Keep', 'image', 'ready', 'same')").run();
-    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/dup.jpg', 'Dup', 'image', 'ready', 'same')").run();
+  await t.test('merges a duplicate group by ids', async () => {
+    const keep = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/keep.jpg', 'Keep', 'image', 'ready', 'same')").run().lastInsertRowid;
+    const duplicate = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/dup.jpg', 'Dup', 'image', 'ready', 'same')").run().lastInsertRowid;
 
     const route = findRoute('POST', '/duplicates/merge');
-    const req = mockReq('POST', '/duplicates/merge', { hash: 'same' });
+    const req = mockReq('POST', '/duplicates/merge', { ids: [keep, duplicate] });
     const res = mockRes();
 
     const promise = route.handler(req, res);
@@ -642,7 +642,7 @@ test('POST /duplicates/merge', async (t) => {
     t.assert.strictEqual(res._body.deletedFiles, 1);
   });
 
-  await t.test('rejects when hash is missing', async () => {
+  await t.test('rejects when ids are missing', async () => {
     const route = findRoute('POST', '/duplicates/merge');
     const req = mockReq('POST', '/duplicates/merge', {});
     const res = mockRes();
@@ -654,11 +654,11 @@ test('POST /duplicates/merge', async (t) => {
     t.assert.strictEqual(res._status, 400);
   });
 
-  await t.test('rejects a hash with no duplicate group', async () => {
-    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/only.jpg', 'Only', 'image', 'ready', 'alone')").run();
+  await t.test('rejects a singleton selection', async () => {
+    const id = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/only.jpg', 'Only', 'image', 'ready', 'alone')").run().lastInsertRowid;
 
     const route = findRoute('POST', '/duplicates/merge');
-    const req = mockReq('POST', '/duplicates/merge', { hash: 'alone' });
+    const req = mockReq('POST', '/duplicates/merge', { ids: [id] });
     const res = mockRes();
 
     const promise = route.handler(req, res);
@@ -672,12 +672,12 @@ test('POST /duplicates/merge', async (t) => {
 test('POST /duplicates/delete', async (t) => {
   await setup();
 
-  await t.test('deletes a duplicate group by hash', async () => {
-    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/a.jpg', 'A', 'image', 'ready', 'same')").run();
-    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/b.jpg', 'B', 'image', 'ready', 'same')").run();
+  await t.test('deletes a duplicate group by ids', async () => {
+    const a = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/a.jpg', 'A', 'image', 'ready', 'same')").run().lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/b.jpg', 'B', 'image', 'ready', 'same')").run().lastInsertRowid;
 
     const route = findRoute('POST', '/duplicates/delete');
-    const req = mockReq('POST', '/duplicates/delete', { hash: 'same' });
+    const req = mockReq('POST', '/duplicates/delete', { ids: [a, b] });
     const res = mockRes();
 
     const promise = route.handler(req, res);
@@ -689,7 +689,7 @@ test('POST /duplicates/delete', async (t) => {
     t.assert.strictEqual(res._body.deletedFiles, 2);
   });
 
-  await t.test('rejects when hash is missing', async () => {
+  await t.test('rejects when ids are missing', async () => {
     const route = findRoute('POST', '/duplicates/delete');
     const req = mockReq('POST', '/duplicates/delete', {});
     const res = mockRes();

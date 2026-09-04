@@ -33,10 +33,10 @@ export default function DuplicatesPage() {
     setConfirm(null);
     try {
       if (type === 'merge') {
-        await mergeDuplicates({ hash: group.hash });
+        await mergeDuplicates({ ids: group.ids });
         dispatch({ type: actions.TOAST_SHOWN, message: 'Duplicates merged', toastType: 'success' });
       } else {
-        await deleteDuplicates({ hash: group.hash });
+        await deleteDuplicates({ ids: group.ids });
         dispatch({ type: actions.TOAST_SHOWN, message: 'Duplicates deleted', toastType: 'success' });
       }
       bump();

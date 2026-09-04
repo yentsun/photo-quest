@@ -1,7 +1,7 @@
 /**
  * @file POST /duplicates/delete -- Delete every record in a duplicate group.
  *
- * Body: { hash }. Removes all records sharing the hash (and their files on
+ * Body: { ids }. Removes all selected verified duplicates (and their files on
  * disk).
  */
 
@@ -13,14 +13,14 @@ export default async (kojo, logger) => {
     pathname: '/duplicates/delete',
   }, async (req, res) => {
     const body = await parseBody(req);
-    const hash = body?.hash;
+    const ids = body?.ids;
 
-    if (!hash) {
-      return json(res, 400, { error: 'hash is required' });
+    if (!Array.isArray(ids)) {
+      return json(res, 400, { error: 'ids are required' });
     }
 
-    const result = kojo.ops.deleteDuplicates({ hash });
-    logger.debug(`[POST /duplicates/delete] hash=${hash} deleted=${result.deleted} deletedFiles=${result.deletedFiles}`);
+    const result = kojo.ops.deleteDuplicates({ ids });
+    logger.debug(`[POST /duplicates/delete] ids=${ids.join(',')} deleted=${result.deleted} deletedFiles=${result.deletedFiles}`);
 
     if (result.status) {
       return json(res, result.status, { error: result.error });

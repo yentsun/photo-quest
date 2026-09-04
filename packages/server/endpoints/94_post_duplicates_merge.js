@@ -1,7 +1,7 @@
 /**
  * @file POST /duplicates/merge -- Merge a duplicate group into one record.
  *
- * Body: { hash }. Keeps the most "mature" copy (earliest created_at,
+ * Body: { ids }. Keeps the most "mature" copy (earliest created_at,
  * tie-broken by most likes), absorbs the union of tags and the sum of likes,
  * and removes the other copies (record + file on disk).
  */
@@ -14,14 +14,14 @@ export default async (kojo, logger) => {
     pathname: '/duplicates/merge',
   }, async (req, res) => {
     const body = await parseBody(req);
-    const hash = body?.hash;
+    const ids = body?.ids;
 
-    if (!hash) {
-      return json(res, 400, { error: 'hash is required' });
+    if (!Array.isArray(ids)) {
+      return json(res, 400, { error: 'ids are required' });
     }
 
-    const result = kojo.ops.mergeDuplicates({ hash });
-    logger.debug(`[POST /duplicates/merge] hash=${hash} merged=${result.merged} deletedFiles=${result.deletedFiles}`);
+    const result = kojo.ops.mergeDuplicates({ ids });
+    logger.debug(`[POST /duplicates/merge] ids=${ids.join(',')} merged=${result.merged} deletedFiles=${result.deletedFiles}`);
 
     if (result.status) {
       return json(res, result.status, { error: result.error });

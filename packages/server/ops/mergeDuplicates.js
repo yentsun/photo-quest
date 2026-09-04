@@ -1,19 +1,20 @@
 /**
  * @file Merge a duplicate group into a single media record.
  *
- * Kojo op: accessed as `kojo.ops.mergeDuplicates({ hash })`.
- * Looks up every visible record sharing `hash`, keeps the most "mature" one
+ * Kojo op: accessed as `kojo.ops.mergeDuplicates({ ids })`.
+ * Verifies the selected visible records have identical contents, keeps the most "mature" one
  * (earliest created_at, tie-broken by most likes), absorbs the union of its
  * tags plus the sum of its likes, then deletes the other records (and their
  * files on disk) via the `removeMedia` op.
  *
- * @param {{ hash: string }} params
+ * @param {{ ids: number[] }} params
  * @returns {Object}
  *   On success: { media, merged, deletedFiles }
  *   On error:   { error, status } (400 invalid input / no group)
  */
 
 import removeMedia from './removeMedia.js';
+import { getVerifiedDuplicateGroup } from './verifiedDuplicates.js';
 
 function parseTags(row) {
   if (Array.isArray(row.tags)) return row.tags;
@@ -35,17 +36,16 @@ function pickMaster(items) {
   })[0];
 }
 
-export default function ({ hash } = {}) {
+export default function ({ ids } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  if (!hash) return { error: 'hash is required', status: 400 };
-
-  const items = db.prepare('SELECT * FROM media WHERE hash = ? AND hidden = 0').all(hash);
-  if (items.length < 2) {
-    logger.debug(`no duplicate group for hash=${hash}`);
-    return { error: 'No duplicate group for this hash', status: 400 };
+  const group = getVerifiedDuplicateGroup(db, ids);
+  if (!group) {
+    logger.debug('no verified duplicate group for selected ids');
+    return { error: 'No verified duplicate group for these media items', status: 400 };
   }
+  const { hash, items } = group;
 
   const master = pickMaster(items);
   const removals = items.filter(i => i.id !== master.id);
@@ -61,6 +61,14 @@ export default function ({ hash } = {}) {
   db.prepare(
     "UPDATE media SET tags = ?, likes = ?, updated_at = datetime('now') WHERE id = ?"
   ).run(JSON.stringify([...tagSet]), likeSum, master.id);
+
+  /* Keep folder-specific thumbnail choices when their identical media record
+     is removed. The thumbnail time remains valid for the same content. */
+  const removalIds = removals.map(row => row.id);
+  const placeholders = removalIds.map(() => '?').join(', ');
+  db.prepare(
+    `UPDATE folders SET thumbnail_media_id = ? WHERE thumbnail_media_id IN (${placeholders})`
+  ).run(master.id, ...removalIds);
 
   /* Delete the other records (and their files) via the shared removeMedia op. */
   let deletedFiles = 0;

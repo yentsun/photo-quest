@@ -33,34 +33,30 @@ const WORKER_PATH = process.env.SCAN_WORKER_PATH
 
 /**
  * Compute a content hash for a file.
- * Uses first 64KB + file size for reliable identification (LAW 1.24).
+ * Uses the full file contents so a matching hash is exact identity.
  * Async with timeout to avoid hanging on cloud-synced files.
  */
 async function computeFileHash(filePath, timeoutMs = 5000) {
-  const stat = fs.statSync(filePath);
-  const chunkSize = Math.min(65536, stat.size);
+  const hash = crypto.createHash('sha256');
+  await new Promise((resolve, reject) => {
+    let timer;
+    const resetTimeout = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => stream.destroy(new Error('File read timed out')), timeoutMs);
+    };
 
-  const buffer = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error('File read timed out'));
-    }, timeoutMs);
-
-    const chunks = [];
-    let read = 0;
-    const stream = fs.createReadStream(filePath, { start: 0, end: chunkSize - 1 });
+    const stream = fs.createReadStream(filePath);
+    resetTimeout();
     stream.on('data', (chunk) => {
-      chunks.push(chunk);
-      read += chunk.length;
-      if (read >= chunkSize) stream.destroy();
+      hash.update(chunk);
+      /* A large file may legitimately take longer than timeoutMs overall;
+         fail only when its read stream stops making progress. */
+      resetTimeout();
     });
-    stream.on('end', () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
-    stream.on('close', () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
+    stream.on('end', () => { clearTimeout(timer); resolve(); });
     stream.on('error', (err) => { clearTimeout(timer); reject(err); });
   });
 
-  const hash = crypto.createHash('sha256');
-  hash.update(buffer);
-  hash.update(String(stat.size));
   return hash.digest('hex').substring(0, 32);
 }
 

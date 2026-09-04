@@ -11,6 +11,8 @@
  *   Otherwise:                { groups: [{ hash, count, items }] }
  */
 
+import { findVerifiedDuplicateGroups } from './verifiedDuplicates.js';
+
 export default function ({ countOnly = false } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
@@ -26,14 +28,16 @@ export default function ({ countOnly = false } = {}) {
     ORDER BY hash, COALESCE(date_taken, created_at) DESC, path DESC
   `).all();
 
-  const groupsByHash = new Map();
+  const candidatesByHash = new Map();
   for (const row of rows) {
-    const group = groupsByHash.get(row.hash) || { hash: row.hash, items: [] };
-    group.items.push(row);
-    groupsByHash.set(row.hash, group);
+    const group = candidatesByHash.get(row.hash) || [];
+    group.push(row);
+    candidatesByHash.set(row.hash, group);
   }
 
-  const groups = [...groupsByHash.values()].map(g => ({ ...g, count: g.items.length }));
+  const groups = [...candidatesByHash.values()]
+    .flatMap(findVerifiedDuplicateGroups)
+    .map(group => ({ ...group, count: group.items.length, ids: group.items.map(item => item.id) }));
   logger.debug(`[listDuplicates] groups=${groups.length}`);
 
   if (countOnly) {

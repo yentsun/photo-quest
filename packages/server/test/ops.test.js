@@ -7,8 +7,11 @@
  */
 
 import test from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { DatabaseSync as Database } from 'node:sqlite';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE } from '@photo-quest/shared';
 
 /* Import the raw op functions. */
 import listMedia from '../ops/listMedia.js';
@@ -30,6 +33,7 @@ function freshDb() {
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(CREATE_MEDIA_TABLE);
   db.exec(CREATE_JOBS_TABLE);
+  db.exec(CREATE_FOLDERS_TABLE);
   db.exec("ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
   return db;
 }
@@ -62,6 +66,12 @@ function callOp(op, ctx, ...args) {
 function insertMedia(db, filePath, title = 'Test') {
   const { lastInsertRowid: id } = db.prepare("INSERT INTO media (path, title, status) VALUES (?, ?, 'pending')").run(filePath, title);
   return id;
+}
+
+function writeFixtureFile(root, name, contents) {
+  const filePath = path.join(root, name);
+  fs.writeFileSync(filePath, contents);
+  return filePath;
 }
 
 /* ------------------------------------------------------------------ */
@@ -107,7 +117,12 @@ test('listMedia op', async (t) => {
 });
 
 test('listDuplicates op', async (t) => {
-  function insertWithHash(db, filePath, hash, title = 'Test') {
+  let root;
+  t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'duplicates-test-')); });
+  t.afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
+  function insertWithHash(db, name, hash, title = 'Test', contents = hash) {
+    const filePath = writeFixtureFile(root, path.basename(name), contents);
     const { lastInsertRowid: id } = db.prepare(
       "INSERT INTO media (path, title, status, hash) VALUES (?, ?, 'pending', ?)"
     ).run(filePath, title, hash);
@@ -137,9 +152,9 @@ test('listDuplicates op', async (t) => {
 
     t.assert.strictEqual(result.groups.length, 1);
     const group = result.groups[0];
-    t.assert.strictEqual(group.hash, 'same');
     t.assert.strictEqual(group.count, 3);
     t.assert.strictEqual(group.items.length, 3);
+    t.assert.strictEqual(group.ids.length, 3);
   });
 
   await t.test('excludes items with a null/empty hash', (t) => {
@@ -186,20 +201,38 @@ test('listDuplicates op', async (t) => {
     /* Group 1 has 3 items (2 extra copies), group 2 has 2 items (1 extra). */
     t.assert.strictEqual(result.copyCount, 3);
   });
+
+  await t.test('excludes different files sharing a stored fingerprint', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertWithHash(db, '/one.jpg', 'legacy-fingerprint', 'One', 'same prefix and size A');
+    insertWithHash(db, '/two.jpg', 'legacy-fingerprint', 'Two', 'same prefix and size B');
+
+    const result = callOp(listDuplicates, ctx);
+    t.assert.strictEqual(result.groups.length, 0);
+  });
 });
 
 test('mergeDuplicates op', async (t) => {
+  let root;
+  t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'duplicates-test-')); });
+  t.afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
   function seedGroup(db) {
     /* A=latest, B=earliest (so B is master), C=middle-but-most-liked. */
+    const bPath = writeFixtureFile(root, 'b.jpg', 'same');
+    const aPath = writeFixtureFile(root, 'a.jpg', 'same');
+    const cPath = writeFixtureFile(root, 'c.jpg', 'same');
     const b = db.prepare(
-      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES ('/b.jpg', 'B', 'ready', 'same', '[\"b\",\"a\"]', 2, '2020-01-01')"
-    ).run().lastInsertRowid;
+      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES (?, 'B', 'ready', 'same', '[\"b\",\"a\"]', 2, '2020-01-01')"
+    ).run(bPath).lastInsertRowid;
     const a = db.prepare(
-      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES ('/a.jpg', 'A', 'ready', 'same', '[\"a\"]', 5, '2023-01-01')"
-    ).run().lastInsertRowid;
+      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES (?, 'A', 'ready', 'same', '[\"a\"]', 5, '2023-01-01')"
+    ).run(aPath).lastInsertRowid;
     const c = db.prepare(
-      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES ('/c.jpg', 'C', 'ready', 'same', '[\"c\"]', 30, '2021-01-01')"
-    ).run().lastInsertRowid;
+      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES (?, 'C', 'ready', 'same', '[\"c\"]', 30, '2021-01-01')"
+    ).run(cPath).lastInsertRowid;
     return { b, a, c };
   }
 
@@ -208,7 +241,7 @@ test('mergeDuplicates op', async (t) => {
     const ctx = makeContext(db);
     const { b, a, c } = seedGroup(db);
 
-    const result = callOp(mergeDuplicates, ctx, { hash: 'same' });
+    const result = callOp(mergeDuplicates, ctx, { ids: [b, a, c] });
 
     t.assert.strictEqual(result.merged, 2);
     t.assert.strictEqual(result.deletedFiles, 2);
@@ -229,25 +262,27 @@ test('mergeDuplicates op', async (t) => {
   await t.test('breaks ties by most likes when created_at is equal', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
+    const lowPath = writeFixtureFile(root, 'low.jpg', 'same');
+    const highPath = writeFixtureFile(root, 'high.jpg', 'same');
     const low = db.prepare(
-      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES ('/low.jpg', 'Low', 'ready', 'same', '[\"a\"]', 1, '2021-01-01')"
-    ).run().lastInsertRowid;
+      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES (?, 'Low', 'ready', 'same', '[\"a\"]', 1, '2021-01-01')"
+    ).run(lowPath).lastInsertRowid;
     const high = db.prepare(
-      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES ('/high.jpg', 'High', 'ready', 'same', '[\"b\"]', 9, '2021-01-01')"
-    ).run().lastInsertRowid;
+      "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES (?, 'High', 'ready', 'same', '[\"b\"]', 9, '2021-01-01')"
+    ).run(highPath).lastInsertRowid;
 
-    const result = callOp(mergeDuplicates, ctx, { hash: 'same' });
+    const result = callOp(mergeDuplicates, ctx, { ids: [low, high] });
     t.assert.strictEqual(result.media.id, high);
     t.assert.strictEqual(result.media.likes, 10);
     t.assert.strictEqual(callOp(getMediaById, ctx, low), null);
   });
 
-  await t.test('returns 400 for a hash with fewer than two records', (t) => {
+  await t.test('returns 400 for fewer than two selected records', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     db.prepare("INSERT INTO media (path, title, status, hash) VALUES ('/only.jpg', 'Only', 'ready', 'same')").run();
 
-    const result = callOp(mergeDuplicates, ctx, { hash: 'same' });
+    const result = callOp(mergeDuplicates, ctx, { ids: [1] });
     t.assert.strictEqual(result.status, 400);
   });
 
@@ -256,16 +291,36 @@ test('mergeDuplicates op', async (t) => {
     const ctx = makeContext(db);
     t.assert.strictEqual(callOp(mergeDuplicates, ctx, {}).status, 400);
   });
+
+  await t.test('preserves a removed duplicate as a folder thumbnail', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const { b, a, c } = seedGroup(db);
+    db.prepare('INSERT INTO folders (path, thumbnail_media_id, thumbnail_time) VALUES (?, ?, ?)')
+      .run(root, a, 12.5);
+
+    callOp(mergeDuplicates, ctx, { ids: [b, a, c] });
+
+    const folder = db.prepare('SELECT thumbnail_media_id, thumbnail_time FROM folders WHERE path = ?').get(root);
+    t.assert.strictEqual(folder.thumbnail_media_id, b);
+    t.assert.strictEqual(folder.thumbnail_time, 12.5);
+  });
 });
 
 test('deleteDuplicates op', async (t) => {
+  let root;
+  t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'duplicates-test-')); });
+  t.afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
   await t.test('deletes every record in the group', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
-    const a = db.prepare("INSERT INTO media (path, title, status, hash) VALUES ('/a.jpg', 'A', 'ready', 'same')").run().lastInsertRowid;
-    const b = db.prepare("INSERT INTO media (path, title, status, hash) VALUES ('/b.jpg', 'B', 'ready', 'same')").run().lastInsertRowid;
+    const aPath = writeFixtureFile(root, 'a.jpg', 'same');
+    const bPath = writeFixtureFile(root, 'b.jpg', 'same');
+    const a = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'A', 'ready', 'same')").run(aPath).lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'B', 'ready', 'same')").run(bPath).lastInsertRowid;
 
-    const result = callOp(deleteDuplicates, ctx, { hash: 'same' });
+    const result = callOp(deleteDuplicates, ctx, { ids: [a, b] });
 
     t.assert.strictEqual(result.deleted, 2);
     t.assert.strictEqual(result.deletedFiles, 2);
@@ -278,6 +333,17 @@ test('deleteDuplicates op', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     t.assert.strictEqual(callOp(deleteDuplicates, ctx, {}).status, 400);
+  });
+
+  await t.test('rejects a stale singleton selection', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const filePath = writeFixtureFile(root, 'only.jpg', 'same');
+    const id = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'Only', 'ready', 'same')").run(filePath).lastInsertRowid;
+
+    const result = callOp(deleteDuplicates, ctx, { ids: [id] });
+    t.assert.strictEqual(result.status, 400);
+    t.assert.ok(callOp(getMediaById, ctx, id));
   });
 });
 

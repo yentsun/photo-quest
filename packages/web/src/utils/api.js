@@ -92,24 +92,30 @@ export function getLastFolderMedia(folderPath) { return _folderMediaCache.get(fo
  * Remove media ids from the in-memory + IDB media caches and upsert
  * replacements. Called after destructive operations (deleting or merging
  * media) so the UI reflects the change immediately, without a hard refresh.
- * Also drops stale per-folder results and the tag list, which can change on
- * merge/delete.
+ * Also drops stale per-folder results, folder snapshots, and the tag list,
+ * which can change on merge/delete.
  *
  * @param {Array<number|string>} ids - Media ids to delete from the cache.
  * @param {Object[]} [replacements] - Media items to (re)insert into the cache.
  */
 async function syncMediaCache(ids = [], replacements = []) {
+  const updates = [];
   for (const id of ids) {
     _mediaCache.delete(Number(id));
-    idbDeleteMedia(id).catch(err => console.warn('[idb] deleteMedia (cache sync) failed:', err));
+    updates.push(idbDeleteMedia(id));
   }
   for (const item of replacements) {
     const parsed = parseTags(item);
     _mediaCache.set(parsed.id, parsed);
-    idbPutMedia(parsed).catch(err => console.warn('[idb] putMedia (cache sync) failed:', err));
+    updates.push(idbPutMedia(parsed));
   }
   _folderMediaCache.clear();
+  _foldersCache = null;
   _tagsCache = null;
+  updates.push(idbReplaceFolders([]));
+  await Promise.all(updates.map(update => update.catch(err => {
+    console.warn('[idb] cache sync failed:', err);
+  })));
 }
 
 /**
@@ -225,11 +231,11 @@ export async function fetchDuplicates({ countOnly = false } = {}) {
   return response.json();
 }
 
-export async function mergeDuplicates({ hash }) {
+export async function mergeDuplicates({ ids }) {
   const response = await fetch(apiRoutes.duplicatesMerge, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ hash }),
+    body: JSON.stringify({ ids }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -242,11 +248,11 @@ export async function mergeDuplicates({ hash }) {
   return data;
 }
 
-export async function deleteDuplicates({ hash }) {
+export async function deleteDuplicates({ ids }) {
   const response = await fetch(apiRoutes.duplicatesDelete, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ hash }),
+    body: JSON.stringify({ ids }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
