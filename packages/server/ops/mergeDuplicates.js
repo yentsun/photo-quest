@@ -14,7 +14,7 @@
  */
 
 import removeMedia from './removeMedia.js';
-import { getVerifiedDuplicateGroup } from './verifiedDuplicates.js';
+import { getVerifiedDuplicateGroup } from '../src/verifiedDuplicates.js';
 
 function parseTags(row) {
   if (Array.isArray(row.tags)) return row.tags;

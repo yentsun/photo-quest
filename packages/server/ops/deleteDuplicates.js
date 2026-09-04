@@ -13,7 +13,7 @@
  */
 
 import removeMedia from './removeMedia.js';
-import { getVerifiedDuplicateGroup } from './verifiedDuplicates.js';
+import { getVerifiedDuplicateGroup } from '../src/verifiedDuplicates.js';
 
 export default function ({ ids } = {}) {
   const [kojo, logger] = this;

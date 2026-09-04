@@ -11,7 +11,7 @@
  *   Otherwise:                { groups: [{ hash, count, items }] }
  */
 
-import { findVerifiedDuplicateGroups } from './verifiedDuplicates.js';
+import { findVerifiedDuplicateGroups } from '../src/verifiedDuplicates.js';
 
 export default function ({ countOnly = false } = {}) {
   const [kojo, logger] = this;
