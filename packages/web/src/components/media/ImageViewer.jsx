@@ -1,14 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Loader from '../ui/Loader.jsx';
 
 export default function ImageViewer({ src, alt = '', className = '' }) {
   const [status, setStatus] = useState('loading');
 
-  const [renderedSrc, setRenderedSrc] = useState(src);
-  if (src !== renderedSrc) {
-    setRenderedSrc(src);
+  useEffect(() => {
+    let cancelled = false;
     setStatus('loading');
-  }
+    const probe = new Image();
+    probe.onload = () => { if (!cancelled) setStatus('loaded'); };
+    probe.onerror = () => { if (!cancelled) setStatus('error'); };
+    probe.src = src;
+    /* If the image is already in the browser cache, `complete` is true
+       synchronously — skip the loader so navigation feels instant rather than
+       flashing on an already-loaded image. */
+    if (probe.complete && probe.naturalWidth > 0) setStatus('loaded');
+    return () => { cancelled = true; };
+  }, [src]);
 
   return (
     <div className="image-viewer">

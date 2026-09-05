@@ -8,7 +8,7 @@ import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getThumbUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
+import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -206,15 +206,22 @@ export default function MediaPage() {
 
   const preloadRefs = useRef([]);
   useEffect(() => {
-    if (!inSlideshow) return;
+    /* Preload the next media the viewer will actually render so next/prev
+       navigation feels instant. Images are warmed via /image/:id (the URL the
+       viewer shows, not the thumbnail). Videos are skipped — preloading video
+       streams is too expensive. This runs for both slideshow and folder/liked
+       navigation. */
+    const sequence = inSlideshow ? slideshow.items : navItems;
+    const startIdx = inSlideshow ? slideshow.currentIndex : currentIndex;
+    if (startIdx < 0) return;
     preloadRefs.current = [1, 2].flatMap(offset => {
-      const next = slideshow.items[slideshow.currentIndex + offset];
+      const next = sequence[startIdx + offset];
       if (!next || next.type !== MEDIA_TYPE.IMAGE) return [];
       const img = new Image();
-      img.src = getThumbUrl(next.id, next.thumbnail_time);
+      img.src = getImageUrl(next.id);
       return [img];
     });
-  }, [inSlideshow, slideshow.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [inSlideshow, slideshow.currentIndex, currentIndex, navItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goPrev = useCallback(() => {
     if (!hasPrev) return;
