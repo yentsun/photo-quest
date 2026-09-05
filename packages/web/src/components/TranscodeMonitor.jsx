@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { fetchJobs } from '../utils/api.js';
+import { resolveApiUrl } from '../config/apiBase.js';
 import { useJobProgressUpdater } from '../contexts/JobProgressContext.jsx';
 
 /**
@@ -31,7 +32,7 @@ export default function TranscodeMonitor() {
 
     const connect = () => {
       if (destroyed) return;
-      es = new EventSource('/jobs/events');
+      es = new EventSource(resolveApiUrl('/jobs/events'));
 
       es.onmessage = (event) => {
         try {

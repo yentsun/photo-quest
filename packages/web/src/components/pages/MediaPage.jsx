@@ -12,6 +12,7 @@ import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fe
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
+import { resolveApiUrl } from '../../config/apiBase.js';
 
 const FETCH_LIMIT = 10000;
 
@@ -497,7 +498,7 @@ export default function MediaPage() {
   useEffect(() => {
     if (!showInfo || !item) return;
     setFileStatus(null);
-    fetch(`/media/${item.id}/status`)
+    fetch(resolveApiUrl(`/media/${item.id}/status`))
       .then(r => r.json())
       .then(setFileStatus)
       .catch(() => setFileStatus({ ok: false, error: 'Could not check status' }));

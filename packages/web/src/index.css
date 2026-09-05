@@ -1057,3 +1057,40 @@ body {
 .error-boundary-link { color: var(--sol-accent); text-decoration: underline; }
 .error-boundary-details { font-size: var(--fs-sm); color: var(--sol-text-mut); }
 .error-boundary-details pre { margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
+
+/* ─── Connect screen ─── */
+.connect-screen {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 24px;
+  background: var(--sol-bg); color: var(--sol-text);
+}
+.connect-card {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 18px; width: 100%; max-width: 460px;
+  padding: 36px 28px;
+  background: var(--sol-surface);
+  border: 1px solid var(--sol-border);
+  border-radius: 12px;
+}
+.connect-logo img { width: 56px; height: 56px; border-radius: 12px; }
+.connect-title { font-size: var(--fs-xl); font-weight: 600; text-align: center; }
+.connect-sub { font-size: var(--fs-sm); text-align: center; max-width: 360px; }
+.connect-list {
+  display: flex; flex-direction: column; gap: 8px;
+  width: 100%; max-height: 260px; overflow-y: auto;
+}
+.connect-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 10px 12px;
+  background: transparent;
+  border: 1px solid var(--sol-border);
+  border-radius: 8px;
+  color: var(--sol-text); cursor: pointer;
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+.connect-item:hover { background: var(--sol-bg); border-color: var(--sol-text-mut); }
+.connect-item--active { border-color: var(--sol-accent); background: var(--sol-bg); }
+.connect-item-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connect-error { color: var(--sol-red); font-size: var(--fs-sm); text-align: center; }
+.connect-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; }

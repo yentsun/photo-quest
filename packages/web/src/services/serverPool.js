@@ -8,6 +8,8 @@
  * probes each known server and redirects to the first one that responds.
  */
 
+import { resolveApiUrl } from '../config/apiBase.js';
+
 const STORAGE_KEY = 'photoquest.knownServers';
 const ACTIVE_KEY = 'photoquest.activeServer';
 
@@ -91,7 +93,7 @@ export function setActiveServer(url) {
 function isCurrentOriginReachable() {
   // A light probe: the server serves the web app, so a same-origin fetch of
   // a known endpoint that returns JSON (not the SPA fallback) confirms it.
-  return fetch('/network', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
+  return fetch(resolveApiUrl('/network'), { cache: 'no-store', signal: AbortSignal.timeout(3000) })
     .then(r => (r.ok ? true : Promise.reject(new Error('not ok'))))
     .catch(() => false);
 }
@@ -104,11 +106,21 @@ function isCurrentOriginReachable() {
  */
 async function probeServer(base) {
   try {
-    const res = await fetch(`${base}network`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
+    const res = await fetch(resolveApiUrl(`${base}network`), { cache: 'no-store', signal: AbortSignal.timeout(3000) });
     return res.ok;
   } catch {
     return false;
   }
+}
+
+/**
+ * Public probe of a single server base URL. Resolves true if `/network`
+ * responds. Used by the connect screen to validate a candidate address.
+ * @param {string} base
+ * @returns {Promise<boolean>}
+ */
+export function probeServerUrl(base) {
+  return probeServer(base);
 }
 
 /**
@@ -154,4 +166,23 @@ export function redirectToServer(base) {
   if (base === currentServerUrl()) return;
   const target = new URL(base, window.location.href).toString();
   window.location.replace(target);
+}
+
+/**
+ * Seed the known-server pool from a `/network` payload. Registers the
+ * `local`, `canonical`/`network`, and every `alternatives` URL so the pool
+ * covers the same machine, the stable LAN interface, and tunnel addresses
+ * (e.g. WireGuard). Returns the newly added URLs.
+ *
+ * @param {{ local?: string, canonical?: string, network?: string, alternatives?: string[] }} network
+ * @returns {string[]}
+ */
+export function seedFromNetwork(network) {
+  const added = [];
+  const push = (url) => { if (url && addKnownServer(url)) added.push(normalizeServerUrl(url)); };
+  push(network?.local);
+  push(network?.canonical);
+  push(network?.network); // legacy alias for canonical
+  for (const alt of network?.alternatives ?? []) push(alt);
+  return added;
 }

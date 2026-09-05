@@ -7,6 +7,7 @@ import { useScan } from '../contexts/ScanContext.jsx';
 import { fetchFolders, fetchMedia, getLastFolders, pickLibraryFile, connectLibrary, fetchLibraryStatus, resetMediaCaches } from '../utils/api.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache.js';
 import usePersistedState from '../hooks/usePersistedState.js';
+import { resolveApiUrl } from '../config/apiBase.js';
 import { idbGetFolders, idbClearCache } from '../services/idb.js';
 import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
@@ -50,7 +51,7 @@ function usePathValidation() {
     setPathError(null);
     setPathInfo(null);
     try {
-      const res = await fetch('/media/check-path', {
+      const res = await fetch(resolveApiUrl('/media/check-path'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path }),
@@ -251,7 +252,7 @@ export default function Dashboard() {
   const handleBrowse = async () => {
     setBrowsing(true);
     try {
-      const res = await fetch('/open-folder', { method: 'POST' });
+      const res = await fetch(resolveApiUrl('/open-folder'), { method: 'POST' });
       const data = await res.json();
       if (data.cancelled || !data.path) return;
       setSelectedPath(data.path);
@@ -318,7 +319,7 @@ export default function Dashboard() {
       const { scanId, total } = await addFolderWithPath(selectedPath);
       setImportProgress({ total, processed: 0 });
       const { cancelled } = await new Promise((resolve, reject) => {
-        const es = new EventSource('/jobs/events');
+        const es = new EventSource(resolveApiUrl('/jobs/events'));
         es.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
