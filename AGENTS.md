@@ -59,7 +59,7 @@ Independent Node.js process that polls the SQLite job queue. Uses Node.js built-
 
 ## Releasing
 
-- Bump the `version` field in all 5 `package.json` files (root, web, server, shared, electron) to the new version.
+- Bump the `version` field in all package.json files (root, web, server, shared, electron, capacitor) to the new version.
 - Update the changelog in `docs/` with change notes.
 - Commit with the version number as the message (e.g. `0.6.0`), push to master.
 - Create an annotated tag `v<version>` (e.g. `git tag -a v0.6.0 -m "0.6.0"`), push the tag.

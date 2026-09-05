@@ -15,6 +15,7 @@ import ErrorBoundary from './ErrorBoundary';
 import Root from './Root';
 import TranscodeMonitor from './TranscodeMonitor';
 import Dashboard from './Dashboard';
+import ServerGate from './ServerGate.jsx';
 import { LikedPage, FolderPage, MediaPage, TagsPage, TagPage, TranscodesPage, DuplicatesPage } from './pages/index.js';
 import ToasterMessage from './ToasterMessage';
 
@@ -49,37 +50,39 @@ export default function Router() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   return (
-    <GlobalContext.Provider value={{ state, dispatch }}>
-      <RefreshProvider>
-        <ScanProvider>
-        <JobProgressProvider>
-        <SlideshowProvider>
-          <TranscodeMonitor />
-          <ToasterMessage />
+    <ServerGate>
+      <GlobalContext.Provider value={{ state, dispatch }}>
+        <RefreshProvider>
+          <ScanProvider>
+          <JobProgressProvider>
+          <SlideshowProvider>
+            <TranscodeMonitor />
+            <ToasterMessage />
 
-          <ErrorBoundary>
-            <BrowserRouter>
-              <ResumeView />
-              <Routes>
-                <Route path={r.root} element={<Root />}>
-                  <Route index element={<IndexRedirect />} />
-                  <Route path={r.dashboard} element={<Dashboard />} />
-                  <Route path={r.liked} element={<LikedPage />} />
-                  <Route path={r.folder} element={<FolderPage />} />
-                  <Route path={r.media} element={<MediaPage />} />
-                  <Route path={r.tags} element={<TagsPage />} />
-                  <Route path={r.tag} element={<TagPage />} />
-                  <Route path={r.transcodes} element={<TranscodesPage />} />
-                  <Route path={r.duplicates} element={<DuplicatesPage />} />
-                </Route>
-                <Route path="*" element={<Navigate to={r.root} />} />
-              </Routes>
-            </BrowserRouter>
-          </ErrorBoundary>
-        </SlideshowProvider>
-        </JobProgressProvider>
-        </ScanProvider>
-      </RefreshProvider>
-    </GlobalContext.Provider>
+            <ErrorBoundary>
+              <BrowserRouter>
+                <ResumeView />
+                <Routes>
+                  <Route path={r.root} element={<Root />}>
+                    <Route index element={<IndexRedirect />} />
+                    <Route path={r.dashboard} element={<Dashboard />} />
+                    <Route path={r.liked} element={<LikedPage />} />
+                    <Route path={r.folder} element={<FolderPage />} />
+                    <Route path={r.media} element={<MediaPage />} />
+                    <Route path={r.tags} element={<TagsPage />} />
+                    <Route path={r.tag} element={<TagPage />} />
+                    <Route path={r.transcodes} element={<TranscodesPage />} />
+                    <Route path={r.duplicates} element={<DuplicatesPage />} />
+                  </Route>
+                  <Route path="*" element={<Navigate to={r.root} />} />
+                </Routes>
+              </BrowserRouter>
+            </ErrorBoundary>
+          </SlideshowProvider>
+          </JobProgressProvider>
+          </ScanProvider>
+        </RefreshProvider>
+      </GlobalContext.Provider>
+    </ServerGate>
   );
 }

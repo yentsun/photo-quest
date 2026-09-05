@@ -7,6 +7,7 @@ import { useScan } from '../contexts/ScanContext.jsx';
 import { useJobs, useJobProgressUpdater } from '../contexts/JobProgressContext.jsx';
 import { fetchJobs, cancelScan } from '../utils/api.js';
 import { discoverServer, redirectToServer } from '../services/serverPool.js';
+import { resolveApiUrl } from '../config/apiBase.js';
 import { JOB_STATUS } from '@photo-quest/shared';
 
 /**
@@ -28,7 +29,7 @@ function RefreshToaster() {
   const { isScanning, setIsScanning, statusMessage, abortRefresh } = useScan();
 
   const syncFromServer = useCallback(() => {
-    fetch('/scans')
+    fetch(resolveApiUrl('/scans'))
       .then(r => r.json())
       .then(scans => {
         const active = scans.find(s => s.status === 'importing' || s.status === 'discovering');
@@ -53,7 +54,7 @@ function RefreshToaster() {
     const connect = () => {
       if (destroyed) return;
       syncFromServer();
-      es = new EventSource('/jobs/events');
+      es = new EventSource(resolveApiUrl('/jobs/events'));
 
       es.onmessage = (event) => {
         try {
