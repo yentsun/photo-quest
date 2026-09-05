@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { setApiBase, getApiBase } from '../config/apiBase.js';
-import { getKnownServers, probeServerUrl, addKnownServer, removeKnownServer, currentServerUrl } from '../services/serverPool.js';
-import { fetchNetworkInfo } from '../utils/api.js';
+import { setApiBase } from '../config/apiBase.js';
+import { getKnownServers, addKnownServer, currentServerUrl } from '../services/serverPool.js';
 import { Button, Icon, Input, Modal } from './ui/index.js';
 
 /**
@@ -18,7 +17,7 @@ function normalize(url) {
   if (!url) return null;
   try {
     const u = new URL(url);
-    return `${u.protocol}//${u.host}${u.port ? `:${u.port}` : ''}${u.pathname === '/' ? '' : '/'}`;
+    return `${u.origin}/`;
   } catch {
     return null;
   }
