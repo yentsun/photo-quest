@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo, getCachedCounts, refreshCounts } from '../../utils/api.js';
+import { fetchNetworkInfo, getCachedCounts, refreshCounts, refreshDuplicatesCount } from '../../utils/api.js';
 import { addKnownServer, currentServerUrl } from '../../services/serverPool.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { Button, Icon, Modal } from '../ui/index.js';
@@ -42,7 +42,12 @@ export default function Header({ collapsed, onToggle }) {
       if (counts.library != null) setLibraryCount(counts.library);
       if (counts.liked != null) setLikedCount(counts.liked);
       if (counts.tags != null) setTagCount(counts.tags);
-      if (counts.duplicates != null) setDuplicatesCount(counts.duplicates);
+    });
+    /* Duplicate badge is refreshed separately so a slow duplicate request can
+       never delay the cheap Library / Liked / Tags counts. */
+    refreshDuplicatesCount().then(duplicates => {
+      if (cancelled) return;
+      if (duplicates != null) setDuplicatesCount(duplicates);
     });
     return () => { cancelled = true; };
   }, [signal, setLibraryCount, setLikedCount, setTagCount, setDuplicatesCount]);

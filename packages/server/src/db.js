@@ -69,6 +69,7 @@ export function initDb() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_date_sort ON media(COALESCE(date_taken, created_at))');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_title ON media(title)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_updated_at ON media(updated_at)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_media_hash ON media(hash)');
 
   const existed = fs.existsSync(DB_PATH);
   console.debug(`[db] Initialised (${existed ? 'loaded from disk' : 'new database'})`);

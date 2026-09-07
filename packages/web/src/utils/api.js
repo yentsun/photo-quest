@@ -170,15 +170,30 @@ function persistCounts(counts) {
  * @returns {Promise<{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }>}
  */
 export async function refreshCounts() {
-  const [library, liked, tags, duplicates] = await Promise.all([
+  const [library, liked, tags] = await Promise.all([
     fetchMedia({ limit: 0 }).then(d => d.total).catch(() => null),
     fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => null),
     fetchTags().then(d => d.length).catch(() => null),
-    fetchDuplicates({ countOnly: true }).then(d => d.groupCount).catch(() => null),
   ]);
-  const counts = { library, liked, tags, duplicates };
+  const counts = { library, liked, tags, duplicates: getCachedCounts().duplicates };
   persistCounts(counts);
   return counts;
+}
+
+/**
+ * Refresh just the Duplicate badge count in the background. Kept separate so a
+ * slow duplicate request can never delay the Library / Liked / Tags counts.
+ * Timed out so a pathological server can't hang it either. The result is
+ * persisted to the count cache and returned so callers can update the badge.
+ *
+ * @returns {Promise<number|null>}
+ */
+export async function refreshDuplicatesCount() {
+  const duplicates = await fetchDuplicates({ countOnly: true, timeout: 8000 })
+    .then(d => d.groupCount)
+    .catch(() => null);
+  if (duplicates != null) persistCounts({ ...getCachedCounts(), duplicates });
+  return duplicates;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,10 +238,16 @@ export async function fetchTags() {
   return data;
 }
 
-export async function fetchDuplicates({ countOnly = false } = {}) {
+export async function fetchDuplicates({ countOnly = false, limit, offset, timeout } = {}) {
   const url = new URL(apiRoutes.duplicates, window.location.origin);
   if (countOnly) url.searchParams.set('count', '1');
-  const response = await fetch(url);
+  if (limit != null) url.searchParams.set('limit', limit);
+  if (offset != null) url.searchParams.set('offset', offset);
+  const opts = {};
+  /* The duplicate badge must never hang the UI — if the server is slow or the
+     library path is wedged, bail out rather than block rendering. */
+  if (timeout != null) opts.signal = AbortSignal.timeout(timeout);
+  const response = await fetch(url, opts);
   if (!response.ok) throw new Error('Failed to fetch duplicates');
   return response.json();
 }

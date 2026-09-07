@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useContext } from 'react';
+import { useState, useEffect, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { actions } from '@photo-quest/shared';
 import GlobalContext from '../../globalContext.js';
@@ -8,24 +8,48 @@ import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, Loader, Modal } from '../ui/index.js';
 
+const PAGE_GROUPS = 100;
+
 export default function DuplicatesPage() {
   const navigate = useNavigate();
   const { signal, bump } = useRefresh();
   const { dispatch } = useContext(GlobalContext);
-  const [data, setData] = useState(null);
+  const [groups, setGroups] = useState([]);
+  const [groupCount, setGroupCount] = useState(0);
+  const [copyCount, setCopyCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [confirm, setConfirm] = useState(null); // { type: 'merge' | 'delete', group }
 
   useEffect(() => {
     let cancelled = false;
-    fetchDuplicates()
-      .then(result => { if (!cancelled) { setData(result); setLoading(false); } })
-      .catch(err => { console.error('Failed to fetch duplicates:', err); if (!cancelled) setLoading(false); });
+    setLoading(true);
+    fetchDuplicates({ limit: PAGE_GROUPS, offset: 0 })
+      .then(result => {
+        if (cancelled) return;
+        setGroups(result.groups ?? []);
+        setGroupCount(result.groupCount ?? (result.groups?.length ?? 0));
+        setCopyCount(result.copyCount ?? 0);
+      })
+      .catch(err => console.error('Failed to fetch duplicates:', err))
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [signal]);
 
-  const groups = data?.groups ?? [];
-  const totalCopies = useMemo(() => groups.reduce((acc, g) => acc + (g.count - 1), 0), [groups]);
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const result = await fetchDuplicates({ limit: PAGE_GROUPS, offset: groups.length });
+      setGroups(prev => [...prev, ...(result.groups ?? [])]);
+    } catch (err) {
+      console.error('Failed to load more duplicates:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [groups.length]);
+
+  const hasMore = groups.length < groupCount;
+  const totalCopies = copyCount;
 
   const runConfirm = async () => {
     if (!confirm) return;
@@ -68,7 +92,7 @@ export default function DuplicatesPage() {
     };
   })();
 
-  if (loading && !data) return <div className="page-loader"><Loader message="Finding duplicates…" /></div>;
+  if (loading && groups.length === 0) return <div className="page-loader"><Loader message="Finding duplicates…" /></div>;
 
   return (
     <div className="page">
@@ -76,9 +100,11 @@ export default function DuplicatesPage() {
         <div>
           <h1 className="page-title">Duplicates</h1>
           <p className="page-subtitle">
-            {groups.length === 0
+            {groupCount === 0
               ? 'No duplicates found'
-              : `${groups.length.toLocaleString()} group${groups.length !== 1 ? 's' : ''} · ${totalCopies.toLocaleString()} duplicate cop${totalCopies === 1 ? 'y' : 'ies'}`}
+              : loading
+                ? 'Finding duplicates…'
+                : `${groupCount.toLocaleString()} group${groupCount !== 1 ? 's' : ''} · ${totalCopies.toLocaleString()} duplicate cop${totalCopies === 1 ? 'y' : 'ies'}`}
           </p>
         </div>
       </div>
@@ -111,6 +137,13 @@ export default function DuplicatesPage() {
               />
             </section>
           ))}
+          {hasMore && (
+            <div className="pagination-row">
+              <Button variant="ghost" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
