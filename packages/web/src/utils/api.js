@@ -175,19 +175,25 @@ export async function refreshCounts() {
     fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => null),
     fetchTags().then(d => d.length).catch(() => null),
   ]);
-  /* Apply the cheap counts immediately; the duplicate badge is never awaited so
-     it can't delay the Library / Liked / Tags counts. It refreshes in the
-     background and re-persists, so the next data-change signal picks it up.
-     Timed out so a pathological server can't hang it either. */
   const counts = { library, liked, tags, duplicates: getCachedCounts().duplicates };
   persistCounts(counts);
-  fetchDuplicates({ countOnly: true, timeout: 8000 })
-    .then(d => d.groupCount)
-    .catch(() => null)
-    .then(duplicates => {
-      if (duplicates != null) persistCounts({ ...getCachedCounts(), duplicates });
-    });
   return counts;
+}
+
+/**
+ * Refresh just the Duplicate badge count in the background. Kept separate so a
+ * slow duplicate request can never delay the Library / Liked / Tags counts.
+ * Timed out so a pathological server can't hang it either. The result is
+ * persisted to the count cache and returned so callers can update the badge.
+ *
+ * @returns {Promise<number|null>}
+ */
+export async function refreshDuplicatesCount() {
+  const duplicates = await fetchDuplicates({ countOnly: true, timeout: 8000 })
+    .then(d => d.groupCount)
+    .catch(() => null);
+  if (duplicates != null) persistCounts({ ...getCachedCounts(), duplicates });
+  return duplicates;
 }
 
 // ---------------------------------------------------------------------------
