@@ -202,15 +202,41 @@ test('listDuplicates op', async (t) => {
     t.assert.strictEqual(result.copyCount, 3);
   });
 
-  await t.test('excludes different files sharing a stored fingerprint', (t) => {
+  await t.test('groups items by stored hash without reading file contents', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
-    insertWithHash(db, '/one.jpg', 'legacy-fingerprint', 'One', 'same prefix and size A');
-    insertWithHash(db, '/two.jpg', 'legacy-fingerprint', 'Two', 'same prefix and size B');
+    /* The referenced files are never created on disk — the listing op must not
+       read file bytes (full-content verification is deferred to merge/delete).
+       This proves the op is non-blocking on large libraries. */
+    db.prepare("INSERT INTO media (path, title, status, hash) VALUES ('/ghost-a.jpg', 'A', 'ready', 'fp')").run();
+    db.prepare("INSERT INTO media (path, title, status, hash) VALUES ('/ghost-b.jpg', 'B', 'ready', 'fp')").run();
 
     const result = callOp(listDuplicates, ctx);
-    t.assert.strictEqual(result.groups.length, 0);
+    t.assert.strictEqual(result.groups.length, 1);
+    t.assert.strictEqual(result.groups[0].count, 2);
+    t.assert.strictEqual(result.groupCount, 1);
+    t.assert.strictEqual(result.copyCount, 1);
+  });
+
+  await t.test('paginates groups by hash with limit/offset', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertWithHash(db, '/a.jpg', 'h1');
+    insertWithHash(db, '/b.jpg', 'h1');
+    insertWithHash(db, '/c.jpg', 'h2');
+    insertWithHash(db, '/d.jpg', 'h2');
+
+    const page1 = callOp(listDuplicates, ctx, { limit: 1, offset: 0 });
+    t.assert.strictEqual(page1.groups.length, 1);
+    t.assert.strictEqual(page1.groups[0].hash, 'h1');
+    t.assert.strictEqual(page1.groupCount, 2);
+    t.assert.strictEqual(page1.copyCount, 2);
+
+    const page2 = callOp(listDuplicates, ctx, { limit: 1, offset: 1 });
+    t.assert.strictEqual(page2.groups.length, 1);
+    t.assert.strictEqual(page2.groups[0].hash, 'h2');
   });
 });
 
