@@ -70,6 +70,7 @@ export function initDb() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_title ON media(title)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_updated_at ON media(updated_at)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_hash ON media(hash)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_media_hidden_path ON media(hidden, path)');
 
   const existed = fs.existsSync(DB_PATH);
   console.debug(`[db] Initialised (${existed ? 'loaded from disk' : 'new database'})`);
