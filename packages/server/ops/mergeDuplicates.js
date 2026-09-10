@@ -2,10 +2,11 @@
  * @file Merge a duplicate group into a single media record.
  *
  * Kojo op: accessed as `kojo.ops.mergeDuplicates({ ids })`.
- * Verifies the selected visible records have identical contents, keeps the most "mature" one
- * (earliest created_at, tie-broken by most likes), absorbs the union of its
- * tags plus the sum of its likes, then deletes the other records (and their
- * files on disk) via the `removeMedia` op.
+ * Verifies the selected visible records that still have files on disk are
+ * identical (records whose file is missing are tolerated and simply dropped),
+ * keeps the most "mature" surviving one (earliest created_at, tie-broken by
+ * most likes), absorbs the union of its tags plus the sum of its likes, then
+ * deletes the other records (and their files on disk) via the `removeMedia` op.
  *
  * @param {{ ids: number[] }} params
  * @returns {Object}
@@ -45,9 +46,11 @@ export default function ({ ids } = {}) {
     logger.debug('no verified duplicate group for selected ids');
     return { error: 'No verified duplicate group for these media items', status: 400 };
   }
-  const { hash, items } = group;
+  const { hash, items, existing } = group;
 
-  const master = pickMaster(items);
+  /* Prefer a record whose file still exists as the master so we never delete
+     the last surviving copy when the group also contains missing files. */
+  const master = pickMaster(existing.length ? existing : items);
   const removals = items.filter(i => i.id !== master.id);
 
   /* Absorb tags (union) and likes (sum) into the master. */
