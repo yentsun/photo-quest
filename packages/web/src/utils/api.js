@@ -252,11 +252,24 @@ export async function fetchDuplicates({ countOnly = false, limit, offset, timeou
   return response.json();
 }
 
-export async function mergeDuplicates({ ids }) {
+/**
+ * Return the visible copies sharing a single media item's content hash.
+ * Used by the media view to decide whether to offer a merge action.
+ *
+ * @param {number|string} id
+ * @returns {Promise<{ hash: string|null, ids: number[], count: number, items: Object[] }>}
+ */
+export async function fetchMediaDuplicates(id) {
+  const response = await fetch(`${apiRoutes.media}/${id}/duplicates`);
+  if (!response.ok) throw new Error('Failed to fetch media duplicates');
+  return response.json();
+}
+
+export async function mergeDuplicates({ ids, keepId }) {
   const response = await fetch(apiRoutes.duplicatesMerge, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify(keepId != null ? { ids, keepId } : { ids }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));

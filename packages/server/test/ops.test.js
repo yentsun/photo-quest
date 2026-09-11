@@ -16,6 +16,7 @@ import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE } from '@ph
 /* Import the raw op functions. */
 import listMedia from '../ops/listMedia.js';
 import listDuplicates from '../ops/listDuplicates.js';
+import getMediaDuplicates from '../ops/getMediaDuplicates.js';
 import mergeDuplicates from '../ops/mergeDuplicates.js';
 import deleteDuplicates from '../ops/deleteDuplicates.js';
 import getMediaById from '../ops/getMediaById.js';
@@ -240,6 +241,62 @@ test('listDuplicates op', async (t) => {
   });
 });
 
+test('getMediaDuplicates op', async (t) => {
+  let root;
+  t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'duplicates-test-')); });
+  t.afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
+  function insertWithHash(db, name, hash, title = 'Test') {
+    const filePath = writeFixtureFile(root, path.basename(name), hash);
+    const { lastInsertRowid: id } = db.prepare(
+      "INSERT INTO media (path, title, status, hash) VALUES (?, ?, 'pending', ?)"
+    ).run(filePath, title, hash);
+    return id;
+  }
+
+  await t.test('returns an empty result for an item without duplicates', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const only = insertWithHash(db, '/only.jpg', 'solo');
+
+    const result = callOp(getMediaDuplicates, ctx, only);
+    t.assert.strictEqual(result.count, 0);
+    t.assert.deepStrictEqual(result.ids, []);
+  });
+
+  await t.test('returns every copy for a duplicated item', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const a = insertWithHash(db, '/a.jpg', 'same');
+    const b = insertWithHash(db, '/b.jpg', 'same');
+    insertWithHash(db, '/other.jpg', 'other');
+
+    const result = callOp(getMediaDuplicates, ctx, a);
+    t.assert.strictEqual(result.count, 2);
+    t.assert.deepStrictEqual([...result.ids].sort((x, y) => x - y), [a, b]);
+    t.assert.strictEqual(result.items.length, 2);
+  });
+
+  await t.test('excludes hidden copies', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const a = insertWithHash(db, '/a.jpg', 'same');
+    const b = insertWithHash(db, '/b.jpg', 'same');
+    db.prepare('UPDATE media SET hidden = 1 WHERE id = ?').run(b);
+
+    const result = callOp(getMediaDuplicates, ctx, a);
+    t.assert.strictEqual(result.count, 0);
+  });
+
+  await t.test('returns an empty result for a missing item', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const result = callOp(getMediaDuplicates, ctx, 999);
+    t.assert.strictEqual(result.count, 0);
+  });
+});
+
 test('mergeDuplicates op', async (t) => {
   let root;
   t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'duplicates-test-')); });
@@ -369,6 +426,52 @@ test('mergeDuplicates op', async (t) => {
     t.assert.strictEqual(result.media.id, present);
     t.assert.strictEqual(callOp(getMediaById, ctx, missing), null);
     t.assert.ok(fs.existsSync(existingPath));
+  });
+
+  await t.test('keeps an explicitly requested record as master', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const { b, a, c } = seedGroup(db);
+
+    /* Without keepId the earliest-created B wins; ask for A instead. */
+    const result = callOp(mergeDuplicates, ctx, { ids: [b, a, c], keepId: a });
+
+    t.assert.strictEqual(result.media.id, a);
+    t.assert.strictEqual(result.media.title, 'A');
+    /* likes = 2 (B) + 5 (A) + 30 (C) = 37. */
+    t.assert.strictEqual(result.media.likes, 37);
+    t.assert.deepStrictEqual([...result.media.tags].sort(), ['a', 'b', 'c']);
+    t.assert.deepStrictEqual([...result.removedIds].sort((x, y) => x - y), [b, c]);
+  });
+
+  await t.test('does not keep a requested record whose file is missing when a copy survives', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const existingPath = writeFixtureFile(root, 'present.jpg', 'same');
+    const missing = db.prepare(
+      "INSERT INTO media (path, title, status, hash, created_at) VALUES (?, 'Gone', 'ready', 'same', '2019-01-01')"
+    ).run(path.join(root, 'gone.jpg')).lastInsertRowid;
+    const present = db.prepare(
+      "INSERT INTO media (path, title, status, hash, created_at) VALUES (?, 'Here', 'ready', 'same', '2024-01-01')"
+    ).run(existingPath).lastInsertRowid;
+
+    /* keepId asks for the missing record, but the surviving file must win so it
+       is not deleted from disk. */
+    const result = callOp(mergeDuplicates, ctx, { ids: [missing, present], keepId: missing });
+
+    t.assert.strictEqual(result.media.id, present);
+    t.assert.ok(fs.existsSync(existingPath));
+    t.assert.strictEqual(callOp(getMediaById, ctx, missing), null);
+  });
+
+  await t.test('falls back to the maturity winner when keepId is not in the group', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const { b, a, c } = seedGroup(db);
+
+    const result = callOp(mergeDuplicates, ctx, { ids: [b, a, c], keepId: 9999 });
+
+    t.assert.strictEqual(result.media.id, b);
   });
 
   await t.test('rejects when surviving files differ', (t) => {

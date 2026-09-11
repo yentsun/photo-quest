@@ -89,6 +89,9 @@ export const apiRoutes = {
   /** PATCH -- set a custom thumbnail frame for a video. */
   mediaThumbnail: '/media/:id/thumbnail',
 
+  /** GET  -- list the visible copies sharing this media item's content hash. */
+  mediaDuplicates: '/media/:id/duplicates',
+
   /** POST -- open the media file in the OS default player (server machine). */
   mediaOpen: '/media/:id/open',
 

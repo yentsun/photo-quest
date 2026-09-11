@@ -1,14 +1,20 @@
 /**
  * @file Merge a duplicate group into a single media record.
  *
- * Kojo op: accessed as `kojo.ops.mergeDuplicates({ ids })`.
+ * Kojo op: accessed as `kojo.ops.mergeDuplicates({ ids, keepId })`.
  * Verifies the selected visible records that still have files on disk are
  * identical (records whose file is missing are tolerated and simply dropped),
  * keeps the most "mature" surviving one (earliest created_at, tie-broken by
  * most likes), absorbs the union of its tags plus the sum of its likes, then
  * deletes the other records (and their files on disk) via the `removeMedia` op.
  *
- * @param {{ ids: number[] }} params
+ * When `keepId` is supplied it wins over the maturity winner, so the media view
+ * can keep the copy the user is looking at while still combining likes and
+ * tags. A record whose file is missing can only win when no copy has a
+ * surviving file — otherwise a surviving copy is kept to avoid deleting the
+ * last file on disk.
+ *
+ * @param {{ ids: number[], keepId?: number }} params
  * @returns {Object}
  *   On success: { media, merged, deletedFiles }
  *   On error:   { error, status } (400 invalid input / no group)
@@ -37,7 +43,7 @@ function pickMaster(items) {
   })[0];
 }
 
-export default function ({ ids } = {}) {
+export default function ({ ids, keepId } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
@@ -48,9 +54,13 @@ export default function ({ ids } = {}) {
   }
   const { hash, items, existing } = group;
 
-  /* Prefer a record whose file still exists as the master so we never delete
-     the last surviving copy when the group also contains missing files. */
-  const master = pickMaster(existing.length ? existing : items);
+  /* A record whose file still exists is always preferred as master so the last
+     surviving copy is never deleted. Within that pool an explicitly requested
+     record (the one the user is viewing) wins over the maturity heuristic;
+     only when nothing is verifiable do we fall back to every record. */
+  const pool = existing.length ? existing : items;
+  const requested = keepId != null ? pool.find(item => item.id === Number(keepId)) : null;
+  const master = requested ?? pickMaster(pool);
   const removals = items.filter(i => i.id !== master.id);
 
   /* Absorb tags (union) and likes (sum) into the master. */

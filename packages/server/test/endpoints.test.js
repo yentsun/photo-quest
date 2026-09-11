@@ -12,6 +12,7 @@ import config from '@photo-quest/shared/config.js';
 // Import endpoint handlers
 import endpoint_get_media from '../endpoints/10_get_media.js';
 import endpoint_get_media_id from '../endpoints/20_get_media_id.js';
+import endpoint_get_media_id_duplicates from '../endpoints/21_get_media_id_duplicates.js';
 import endpoint_get_duplicates from '../endpoints/93_get_duplicates.js';
 import endpoint_post_duplicates_merge from '../endpoints/94_post_duplicates_merge.js';
 import endpoint_post_duplicates_delete from '../endpoints/95_post_duplicates_delete.js';
@@ -93,6 +94,13 @@ async function setup() {
       getMediaById: function(id) {
         return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)) || null;
       },
+      getMediaDuplicates: function(id) {
+        const media = db.prepare('SELECT id, hash FROM media WHERE id = ? AND hidden = 0').get(Number(id));
+        if (!media || !media.hash) return { hash: null, ids: [], count: 0, items: [] };
+        const items = db.prepare('SELECT * FROM media WHERE hidden = 0 AND hash = ?').all(media.hash);
+        if (items.length < 2) return { hash: media.hash, ids: [], count: 0, items: [] };
+        return { hash: media.hash, ids: items.map(i => i.id), count: items.length, items };
+      },
       likeMedia: function(id) {
         const existing = db.prepare('SELECT likes FROM media WHERE id = ?').get(Number(id));
         if (!existing) return null;
@@ -133,6 +141,7 @@ async function setup() {
   // Register endpoints
   await endpoint_get_media(kojo, logger);
   await endpoint_get_media_id(kojo, logger);
+  await endpoint_get_media_id_duplicates(kojo, logger);
   await endpoint_get_duplicates(kojo, logger);
   await endpoint_post_duplicates_merge(kojo, logger);
   await endpoint_post_duplicates_delete(kojo, logger);
@@ -242,6 +251,39 @@ test('GET /media/:id', async (t) => {
 
     t.assert.strictEqual(res._status, 200);
     t.assert.strictEqual(res._body.title, 'X');
+  });
+});
+
+test('GET /media/:id/duplicates', async (t) => {
+  await setup();
+
+  await t.test('returns no copies for an item without duplicates', async () => {
+    const { lastInsertRowid: id } = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/solo.jpg', 'Solo', 'image', 'ready', 'solo')").run();
+
+    const route = findRoute('GET', '/media/:id/duplicates');
+    const req = mockReq('GET', `/media/${id}/duplicates`);
+    const res = mockRes();
+
+    await route.handler(req, res, { id: String(id) });
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.count, 0);
+    t.assert.deepStrictEqual(res._body.ids, []);
+  });
+
+  await t.test('returns every copy for a duplicated item', async () => {
+    const a = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/dup-a.jpg', 'A', 'image', 'ready', 'same')").run().lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/dup-b.jpg', 'B', 'image', 'ready', 'same')").run().lastInsertRowid;
+
+    const route = findRoute('GET', '/media/:id/duplicates');
+    const req = mockReq('GET', `/media/${a}/duplicates`);
+    const res = mockRes();
+
+    await route.handler(req, res, { id: String(a) });
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.count, 2);
+    t.assert.deepStrictEqual([...res._body.ids].sort((x, y) => x - y), [a, b]);
   });
 });
 

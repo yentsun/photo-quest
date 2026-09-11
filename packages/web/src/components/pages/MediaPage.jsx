@@ -8,7 +8,7 @@ import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
+import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -70,6 +70,8 @@ export default function MediaPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [duplicates, setDuplicates] = useState({ ids: [], count: 0 });
+  const [showMerge, setShowMerge] = useState(false);
   const viewerRef = useRef(null);
   const mediaViewportRef = useRef(null);
   const touchStartX = useRef(null);
@@ -173,6 +175,24 @@ export default function MediaPage() {
       .catch(err => console.error('Failed to load liked nav list:', err));
     return () => { cancelled = true; };
   }, [inSlideshow, navContext]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Surface a merge action only when the item on screen shares its content hash
+     with other visible copies. Skipped during a slideshow — merging mid-playback
+     would leave stale entries in the slideshow queue. */
+  useEffect(() => {
+    if (inSlideshow) return;
+    const mediaId = Number(id);
+    if (!Number.isInteger(mediaId)) return;
+    let cancelled = false;
+    fetchMediaDuplicates(mediaId)
+      .then(result => { if (!cancelled) setDuplicates({ ids: result.ids ?? [], count: result.count ?? 0 }); })
+      .catch(err => {
+        if (cancelled) return;
+        console.error('Failed to check duplicates:', err);
+        setDuplicates({ ids: [], count: 0 });
+      });
+    return () => { cancelled = true; };
+  }, [id, inSlideshow, signal]);
 
   const TERMINAL = [MEDIA_STATUS.READY, MEDIA_STATUS.ERROR];
   useEffect(() => {
@@ -388,6 +408,35 @@ export default function MediaPage() {
     }
   }, [item, navItems, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump, isLikedNav]);
 
+  /* Merge this item's duplicate copies into it. The item on screen is passed as
+     `keepId` so the current variant wins the purge; likes and tags are combined
+     server-side and the other files are removed from disk. */
+  const handleMerge = useCallback(async () => {
+    if (!item || duplicates.count < 2 || !duplicates.ids.includes(item.id)) return;
+    setShowMerge(false);
+    try {
+      const result = await mergeDuplicatesApi({ ids: duplicates.ids, keepId: item.id });
+      const master = result.media;
+      if (master) {
+        if (master.id !== item.id) {
+          /* The current item's file was missing, so a surviving copy won.
+             Follow the master so the URL and view stay in sync. */
+          setItem(master);
+          setFolderMedia(list => list.filter(m => m.id !== item.id));
+          navigate(`/media/${master.id}`, { replace: true, state: location.state });
+        } else {
+          setItem(prev => (prev ? { ...prev, ...master } : prev));
+        }
+      }
+      setDuplicates({ ids: [master?.id ?? item.id], count: 1 });
+      bump();
+      dispatch({ type: actions.TOAST_SHOWN, message: `Merged ${result.merged} duplicate${result.merged === 1 ? '' : 's'}`, toastType: 'success' });
+    } catch (err) {
+      console.error('Failed to merge duplicates:', err);
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not merge duplicates', toastType: 'error' });
+    }
+  }, [item, duplicates, bump, dispatch, navigate, location.state]);
+
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFsChange);
@@ -467,7 +516,7 @@ export default function MediaPage() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT') return;
-      if (showDelete) return; /* Delete modal captures its own keys */
+      if (showDelete || showMerge) return; /* modals capture their own keys */
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
@@ -481,7 +530,7 @@ export default function MediaPage() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete, showDelete]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete, showDelete, showMerge]);
 
   /* Delete confirmation modal: Enter confirms, Escape closes. Escape already
      works via the shared Modal component; wire Enter here. */
@@ -527,6 +576,9 @@ export default function MediaPage() {
 
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(item);
+  /* Only offer merging when the loaded duplicate group actually contains the
+     item on screen, so a stale group from a previous item never leaks in. */
+  const canMerge = !inSlideshow && duplicates.count > 1 && duplicates.ids.includes(item.id);
 
   /* Overflow actions (Download + "Use as...") shared by the desktop action bar
      and the mobile kebab menu so the two never drift apart. `onAction`
@@ -774,6 +826,11 @@ export default function MediaPage() {
           <div className="viewer-actions">
             <LikeButton count={item.likes || 0} onLike={handleLike} />
             <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
+            {canMerge && (
+              <Button variant="ghost" size="sm" icon={<Icon name="copy" className="icon-sm" />} onClick={() => setShowMerge(true)}>
+                Merge {duplicates.count} copies
+              </Button>
+            )}
             {renderOverflowActions('viewer-overflow-hidden')}
             <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={() => setShowDelete(true)} className="viewer-action-push">Delete</Button>
             <IconButton
@@ -850,6 +907,19 @@ export default function MediaPage() {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Button variant="ghost" size="sm" onClick={() => setShowDelete(false)}>Cancel</Button>
           <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>
+        </div>
+      </Modal>
+
+      <Modal open={showMerge} onClose={() => setShowMerge(false)} title="Merge duplicates">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="warning" className="icon-md text-mut" />
+          <p className="text-mut">
+            Merge <strong>{duplicates.count - 1}</strong> duplicate cop{duplicates.count - 1 === 1 ? 'y' : 'ies'} into this one? "<strong>{item?.title}</strong>" is kept, its likes and tags are combined with the other copies, and their files are deleted from disk.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => setShowMerge(false)}>Cancel</Button>
+          <Button variant="primary" size="sm" icon={<Icon name="copy" className="icon-sm" />} onClick={handleMerge}>Merge</Button>
         </div>
       </Modal>
     </div>
