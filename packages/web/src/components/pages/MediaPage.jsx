@@ -70,7 +70,7 @@ export default function MediaPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
-  const [duplicates, setDuplicates] = useState({ ids: [], count: 0 });
+  const [duplicates, setDuplicates] = useState({ ids: [], count: 0, items: [] });
   const [showMerge, setShowMerge] = useState(false);
   const viewerRef = useRef(null);
   const mediaViewportRef = useRef(null);
@@ -177,19 +177,19 @@ export default function MediaPage() {
   }, [inSlideshow, navContext]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Surface a merge action only when the item on screen shares its content hash
-     with other visible copies. Skipped during a slideshow — merging mid-playback
-     would leave stale entries in the slideshow queue. */
+     with other visible copies. Runs during a slideshow too (Shuffle is a
+     slideshow session); `handleMerge` drops the merged copies from the
+     slideshow queue so navigation never lands on a deleted file. */
   useEffect(() => {
-    if (inSlideshow) return;
     const mediaId = Number(id);
     if (!Number.isInteger(mediaId)) return;
     let cancelled = false;
     fetchMediaDuplicates(mediaId)
-      .then(result => { if (!cancelled) setDuplicates({ ids: result.ids ?? [], count: result.count ?? 0 }); })
+      .then(result => { if (!cancelled) setDuplicates({ ids: result.ids ?? [], count: result.count ?? 0, items: result.items ?? [] }); })
       .catch(err => {
         if (cancelled) return;
         console.error('Failed to check duplicates:', err);
-        setDuplicates({ ids: [], count: 0 });
+        setDuplicates({ ids: [], count: 0, items: [] });
       });
     return () => { cancelled = true; };
   }, [id, inSlideshow, signal]);
@@ -417,25 +417,28 @@ export default function MediaPage() {
     try {
       const result = await mergeDuplicatesApi({ ids: duplicates.ids, keepId: item.id });
       const master = result.media;
+      /* Drop the merged copies from the slideshow queue so next/prev never lands
+         on a file that was just deleted from disk. */
+      if (inSlideshow) (result.removedIds ?? []).forEach(removeSlideshowItem);
       if (master) {
         if (master.id !== item.id) {
           /* The current item's file was missing, so a surviving copy won.
              Follow the master so the URL and view stay in sync. */
           setItem(master);
           setFolderMedia(list => list.filter(m => m.id !== item.id));
-          navigate(`/media/${master.id}`, { replace: true, state: location.state });
+          if (!inSlideshow) navigate(`/media/${master.id}`, { replace: true, state: location.state });
         } else {
           setItem(prev => (prev ? { ...prev, ...master } : prev));
         }
       }
-      setDuplicates({ ids: [master?.id ?? item.id], count: 1 });
+      setDuplicates({ ids: [master?.id ?? item.id], count: 1, items: master ? [master] : [] });
       bump();
       dispatch({ type: actions.TOAST_SHOWN, message: `Merged ${result.merged} duplicate${result.merged === 1 ? '' : 's'}`, toastType: 'success' });
     } catch (err) {
       console.error('Failed to merge duplicates:', err);
       dispatch({ type: actions.TOAST_SHOWN, message: 'Could not merge duplicates', toastType: 'error' });
     }
-  }, [item, duplicates, bump, dispatch, navigate, location.state]);
+  }, [item, duplicates, bump, dispatch, navigate, location.state, inSlideshow, removeSlideshowItem]);
 
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -578,7 +581,7 @@ export default function MediaPage() {
   const mediaUrl = getMediaUrl(item);
   /* Only offer merging when the loaded duplicate group actually contains the
      item on screen, so a stale group from a previous item never leaks in. */
-  const canMerge = !inSlideshow && duplicates.count > 1 && duplicates.ids.includes(item.id);
+  const canMerge = duplicates.count > 1 && duplicates.ids.includes(item.id);
 
   /* Overflow actions (Download + "Use as...") shared by the desktop action bar
      and the mobile kebab menu so the two never drift apart. `onAction`
@@ -917,6 +920,19 @@ export default function MediaPage() {
             Merge <strong>{duplicates.count - 1}</strong> duplicate cop{duplicates.count - 1 === 1 ? 'y' : 'ies'} into this one? "<strong>{item?.title}</strong>" is kept, its likes and tags are combined with the other copies, and their files are deleted from disk.
           </p>
         </div>
+        {duplicates.items.length > 0 && (
+          <ul className="duplicate-path-list">
+            {duplicates.items.map(dup => {
+              const kept = dup.id === item.id;
+              return (
+                <li key={dup.id} className={`duplicate-path-item${kept ? ' duplicate-path-kept' : ''}`}>
+                  <Icon name={kept ? 'copy' : 'trash'} className="icon-sm" />
+                  <span className="duplicate-path-text" title={dup.path}>{dup.path}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Button variant="ghost" size="sm" onClick={() => setShowMerge(false)}>Cancel</Button>
           <Button variant="primary" size="sm" icon={<Icon name="copy" className="icon-sm" />} onClick={handleMerge}>Merge</Button>

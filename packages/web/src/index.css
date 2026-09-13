@@ -509,6 +509,28 @@ body {
 }
 .duplicate-bulk-count { font-size: var(--fs-sm); font-weight: 600; color: var(--sol-text-em); margin-right: auto; }
 
+/* Duplicate paths listed inside the merge confirmation modal */
+.duplicate-path-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.duplicate-path-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  color: var(--sol-text-mut);
+}
+.duplicate-path-item svg { flex-shrink: 0; margin-top: 1px; }
+.duplicate-path-kept { color: var(--sol-text-em); }
+.duplicate-path-text { word-break: break-all; }
+
 /* ─── Checkbox ─── */
 .checkbox { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
 .checkbox input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--sol-accent); cursor: pointer; }
