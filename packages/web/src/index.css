@@ -509,27 +509,38 @@ body {
 }
 .duplicate-bulk-count { font-size: var(--fs-sm); font-weight: 600; color: var(--sol-text-em); margin-right: auto; }
 
-/* Duplicate paths listed inside the merge confirmation modal */
+/* Duplicate copies listed inside the merge confirmation modal */
 .duplicate-path-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 240px;
+  gap: 8px;
+  max-height: 300px;
   overflow-y: auto;
 }
 .duplicate-path-item {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   font-size: var(--fs-xs);
   color: var(--sol-text-mut);
 }
-.duplicate-path-item svg { flex-shrink: 0; margin-top: 1px; }
+.duplicate-path-item svg { flex-shrink: 0; }
 .duplicate-path-kept { color: var(--sol-text-em); }
+.duplicate-path-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .duplicate-path-text { word-break: break-all; }
+.duplicate-path-status { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); }
+.duplicate-thumb {
+  flex-shrink: 0;
+  display: block;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--sol-bg);
+  border: 1px solid var(--sol-border);
+}
+.duplicate-thumb-fallback { display: flex; align-items: center; justify-content: center; }
 
 /* ─── Checkbox ─── */
 .checkbox { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }

@@ -5,7 +5,7 @@ import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import GlobalContext from '../../globalContext.js';
 import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
-import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
+import { ImageViewer, MediaPlayer, LikeButton, DuplicateThumb } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
 import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi } from '../../utils/api.js';
@@ -926,8 +926,14 @@ export default function MediaPage() {
               const kept = dup.id === item.id;
               return (
                 <li key={dup.id} className={`duplicate-path-item${kept ? ' duplicate-path-kept' : ''}`}>
-                  <Icon name={kept ? 'copy' : 'trash'} className="icon-sm" />
-                  <span className="duplicate-path-text" title={dup.path}>{dup.path}</span>
+                  <DuplicateThumb media={dup} />
+                  <div className="duplicate-path-info">
+                    <span className="duplicate-path-text" title={dup.path}>{dup.path}</span>
+                    <span className="duplicate-path-status">
+                      <Icon name={kept ? 'copy' : 'trash'} className="icon-sm" />
+                      {kept ? 'Kept' : 'Will be deleted'}
+                    </span>
+                  </div>
                 </li>
               );
             })}
