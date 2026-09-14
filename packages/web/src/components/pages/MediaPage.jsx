@@ -77,6 +77,10 @@ export default function MediaPage() {
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
   const touchStartOnControl = useRef(false);
+  /* Folder chains for slideshow items, which come from a list endpoint that
+     does not embed `folder_chain`. Keyed by folder path so each folder is
+     fetched at most once per session. */
+  const folderChainCacheRef = useRef(new Map());
 
   const inSlideshow = slideshow.active;
 
@@ -119,9 +123,30 @@ export default function MediaPage() {
       const chain = currentItem.folder_chain;
       setFolders(chain);
       setFolder(chain[chain.length - 1] || null);
-    } else {
-      setFolder(null);
+      return;
     }
+    setFolder(null);
+
+    /* Slideshow sequences (shuffle included) are built from a list endpoint
+       that does not embed `folder_chain`, so fetch it for the item on screen
+       to render breadcrumbs. Cached per folder so stepping through items in
+       the same folder only fetches once. */
+    if (!currentItem?.folder) return;
+    const cached = folderChainCacheRef.current.get(currentItem.folder);
+    if (cached) {
+      setItem(prev => (prev?.id === currentItem.id ? { ...prev, folder_chain: cached } : prev));
+      return;
+    }
+
+    let cancelled = false;
+    fetchMediaById(currentItem.id, { skipCache: true })
+      .then(fresh => {
+        if (cancelled || !fresh?.folder_chain) return;
+        folderChainCacheRef.current.set(currentItem.folder, fresh.folder_chain);
+        setItem(prev => (prev?.id === currentItem.id ? { ...prev, folder_chain: fresh.folder_chain } : prev));
+      })
+      .catch(err => console.error('Failed to load media breadcrumbs:', err));
+    return () => { cancelled = true; };
   }, [inSlideshow, slideshow.current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
