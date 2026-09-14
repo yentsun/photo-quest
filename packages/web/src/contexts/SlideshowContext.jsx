@@ -127,6 +127,10 @@ function reducer(state, action) {
 
     case 'REMOVE_ITEM': {
       const removedIdx = state.items.findIndex(m => m.id === action.id);
+      /* The id may not be part of the sequence at all — e.g. a folder sibling
+         reached via up/down navigation during a shuffle. Without this guard
+         every history index would be decremented and the stack corrupted. */
+      if (removedIdx === -1) return state;
       const newItems = state.items.filter(m => m.id !== action.id);
       if (newItems.length === 0) return { ...initialState };
       const newHistory = state.history

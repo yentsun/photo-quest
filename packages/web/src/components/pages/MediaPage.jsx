@@ -8,7 +8,7 @@ import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton, DuplicateThumb } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi } from '../../utils/api.js';
+import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -121,33 +121,50 @@ export default function MediaPage() {
     setLoading(false);
     if (currentItem?.folder_chain) {
       const chain = currentItem.folder_chain;
-      setFolders(chain);
       setFolder(chain[chain.length - 1] || null);
-      return;
+    } else {
+      setFolder(null);
     }
-    setFolder(null);
+  }, [inSlideshow, slideshow.current]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    /* Slideshow sequences (shuffle included) are built from a list endpoint
-       that does not embed `folder_chain`, so fetch it for the item on screen
-       to render breadcrumbs. Cached per folder so stepping through items in
-       the same folder only fetches once. */
-    if (!currentItem?.folder) return;
-    const cached = folderChainCacheRef.current.get(currentItem.folder);
+  /* In a slideshow, sequence items come from the list endpoint without
+     `folder_chain`, and up/down navigation can show a folder sibling that is
+     not the slideshow current. Fetch the chain for whatever item is actually
+     on screen (not `slideshow.current`) so breadcrumbs always render. Cached
+     per folder so each folder is fetched at most once per session. */
+  useEffect(() => {
+    if (!inSlideshow || !item?.folder || item.folder_chain) return;
+    const folderPath = item.folder;
+    const itemId = item.id;
+
+    const cached = folderChainCacheRef.current.get(folderPath);
     if (cached) {
-      setItem(prev => (prev?.id === currentItem.id ? { ...prev, folder_chain: cached } : prev));
+      setItem(prev => (prev?.id === itemId ? { ...prev, folder_chain: cached } : prev));
       return;
     }
 
     let cancelled = false;
-    fetchMediaById(currentItem.id, { skipCache: true })
+    fetchMediaById(itemId, { skipCache: true })
       .then(fresh => {
         if (cancelled || !fresh?.folder_chain) return;
-        folderChainCacheRef.current.set(currentItem.folder, fresh.folder_chain);
-        setItem(prev => (prev?.id === currentItem.id ? { ...prev, folder_chain: fresh.folder_chain } : prev));
+        folderChainCacheRef.current.set(folderPath, fresh.folder_chain);
+        setItem(prev => (prev?.id === itemId ? { ...prev, folder_chain: fresh.folder_chain } : prev));
       })
       .catch(err => console.error('Failed to load media breadcrumbs:', err));
     return () => { cancelled = true; };
-  }, [inSlideshow, slideshow.current]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [inSlideshow, item?.id, item?.folder, item?.folder_chain]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Full folder list, used to derive breadcrumbs synchronously. Loaded by the
+     dashboard normally; fetch it here too so a direct media URL still gets
+     breadcrumbs without waiting for anything else. */
+  useEffect(() => {
+    if (folders.length > 0) return;
+    let cancelled = false;
+    fetchFolders()
+      .then(list => { if (!cancelled && Array.isArray(list)) setFolders(list); })
+      .catch(err => console.error('Failed to load folders:', err));
+    return () => { cancelled = true; };
+  }, [folders.length]);
 
   useEffect(() => {
     if (inSlideshow) return;
@@ -180,7 +197,6 @@ export default function MediaPage() {
 
         if (freshItem.folder_chain) {
           const chain = freshItem.folder_chain;
-          setFolders(chain);
           setFolder(chain[chain.length - 1] || null);
           const { items: cachedSiblings } = await idbGetMedia({ folder: freshItem.folder, sort });
           if (!cancelled && cachedSiblings.length > 0) setFolderMedia(applySort(cachedSiblings, sort));
@@ -414,8 +430,16 @@ export default function MediaPage() {
       ? slideshowNext
       : folderIdx >= 0 ? (folderNext ?? slideshowNext) : slideshowNext;
 
-    if (nextItem) navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
-    else navigate(isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard'), { replace: true });
+    if (nextItem) {
+      /* In a slideshow the route change alone does not update the displayed
+         item: the slideshow effect only re-runs when the sequence advances,
+         and up/down folder navigation does not advance it. Follow the next
+         item explicitly so the deleted media is never left on screen. */
+      if (inSlideshow) setItem(nextItem);
+      navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
+    } else {
+      navigate(isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard'), { replace: true });
+    }
 
     /* Drop the deleted item from both the slideshow and the folder sibling
        list so subsequent up/down navigation doesn't target a dead id. */
@@ -580,9 +604,29 @@ export default function MediaPage() {
       .catch(() => setFileStatus({ ok: false, error: 'Could not check status' }));
   }, [showInfo, item]);
 
+  /* Breadcrumbs are derived synchronously from the item's folder path using the
+     already-loaded folder list, so they render on the first paint — no async
+     chain fetch and no empty bar in between. `item.folder_chain` (returned by
+     /media/:id) is preferred when present. */
   const breadcrumbs = useMemo(() => {
-    return item?.folder_chain ?? [];
-  }, [item?.folder_chain]);
+    if (item?.folder_chain?.length) return item.folder_chain;
+    if (!item?.folder || folders.length === 0) return [];
+
+    const byPath = new Map(folders.map(f => [f.path, f]));
+    const byId = new Map(folders.map(f => [f.id, f]));
+    const target = byPath.get(item.folder);
+    if (!target) return [];
+
+    const chain = [];
+    const seen = new Set();
+    let node = target;
+    while (node && !seen.has(node.id)) {
+      seen.add(node.id);
+      chain.unshift({ id: node.id, path: node.path, name: node.name });
+      node = node.parentId != null ? byId.get(node.parentId) : null;
+    }
+    return chain;
+  }, [item?.folder_chain, item?.folder, folders]);
 
   const backTarget = isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard');
   const goBack = useCallback(() => {
