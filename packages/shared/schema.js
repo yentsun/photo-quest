@@ -33,8 +33,13 @@
  *  - `likes`           Cumulative like count (unlimited, each click adds 1).
  *  - `hidden`          1 if folder was removed (preserves likes/metadata for
  *                      re-adding later), 0 otherwise.
- *  - `hash`            Content hash (first 64KB + size) for identifying same
- *                      media across different paths/filenames.
+ *  - `hash`            Full-content SHA-256 (truncated to 32 hex chars) for
+ *                      identifying the same media across different paths and
+ *                      filenames. See `hash_version`.
+ *  - `hash_version`    Algorithm version that produced `hash`. NULL means the
+ *                      legacy first-64KB + size fingerprint; HASH_VERSION is
+ *                      the current full-content hash. Stale rows are re-hashed
+ *                      in the background (issue #63).
  *  - `orientation`     EXIF orientation tag (1-8). 1 = normal, 6 = 90° CW,
  *                      etc. NULL for videos or images without EXIF.
  *  - `camera`          Camera make/model from EXIF (e.g. "FUJIFILM X100").
@@ -62,6 +67,7 @@ export const CREATE_MEDIA_TABLE = `
     likes INTEGER NOT NULL DEFAULT 0,
     hidden INTEGER NOT NULL DEFAULT 0,
     hash TEXT,
+    hash_version INTEGER,
     orientation INTEGER,
     camera TEXT,
     date_taken TEXT,

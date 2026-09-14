@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync as Database } from 'node:sqlite';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, SCAN_STATUS, IMPORT_STATUS, MEDIA_STATUS } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, SCAN_STATUS, IMPORT_STATUS, MEDIA_STATUS, HASH_VERSION } from '@photo-quest/shared';
 import scanMedia, { processOneItem, resumeIncompleteScans, abortDiscoveryWalk } from '../ops/scanMedia.js';
 
 /** Create a temp directory tree with nested folders and media files. */
@@ -267,9 +267,28 @@ test('scanMedia — processing phase', async (t) => {
     await processOneItem(db, 1, first, ctx[1]);
     await processOneItem(db, 2, second, ctx[1]);
 
-    const firstHash = db.prepare('SELECT hash FROM media WHERE path = ?').get(first).hash;
-    const secondHash = db.prepare('SELECT hash FROM media WHERE path = ?').get(second).hash;
-    t.assert.notStrictEqual(firstHash, secondHash);
+    const firstRow = db.prepare('SELECT hash, hash_version FROM media WHERE path = ?').get(first);
+    const secondRow = db.prepare('SELECT hash, hash_version FROM media WHERE path = ?').get(second);
+    t.assert.notStrictEqual(firstRow.hash, secondRow.hash);
+    /* Files sharing only a 64 KB prefix + size must not collide (issue #63). */
+    t.assert.strictEqual(firstRow.hash_version, HASH_VERSION);
+    t.assert.strictEqual(secondRow.hash_version, HASH_VERSION);
+  });
+
+  await t.test('gives byte-identical files the same hash and stamps the current version', async () => {
+    const db = makeDb();
+    const { ctx } = makeContext(db);
+    const first = path.join(root, 'identical-a.jpg');
+    const second = path.join(root, 'identical-b.jpg');
+    fs.writeFileSync(first, 'same-bytes');
+    fs.writeFileSync(second, 'same-bytes');
+
+    await processOneItem(db, 1, first, ctx[1]);
+    await processOneItem(db, 2, second, ctx[1]);
+
+    const rows = db.prepare('SELECT hash, hash_version FROM media ORDER BY path').all();
+    t.assert.strictEqual(rows[0].hash, rows[1].hash);
+    t.assert.strictEqual(rows[0].hash_version, HASH_VERSION);
   });
 
   await t.test('marks queue items as completed after processing', async () => {

@@ -104,6 +104,7 @@ function migrateDb() {
     'ALTER TABLE media ADD COLUMN folder TEXT',
     'ALTER TABLE media ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE media ADD COLUMN hash TEXT',
+    'ALTER TABLE media ADD COLUMN hash_version INTEGER',
     'ALTER TABLE media ADD COLUMN orientation INTEGER',
     'ALTER TABLE media ADD COLUMN camera TEXT',
     'ALTER TABLE media ADD COLUMN date_taken TEXT',

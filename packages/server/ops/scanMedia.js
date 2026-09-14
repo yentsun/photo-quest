@@ -20,45 +20,16 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
-import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS } from '@photo-quest/shared';
+import { SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS, MEDIA_TYPE, MEDIA_STATUS, SCAN_STATUS, IMPORT_STATUS, HASH_VERSION } from '@photo-quest/shared';
 import { broadcastSse } from '../src/sse.js';
 import { DB_PATH } from '../src/db.js';
 import { isMediaFile } from '../src/mediaFile.js';
+import { computeFileHash } from '../src/fileHash.js';
 
 const WORKER_PATH = process.env.SCAN_WORKER_PATH
   || path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/scanWorker.js');
-
-/**
- * Compute a content hash for a file.
- * Uses the full file contents so a matching hash is exact identity.
- * Async with timeout to avoid hanging on cloud-synced files.
- */
-async function computeFileHash(filePath, timeoutMs = 5000) {
-  const hash = crypto.createHash('sha256');
-  await new Promise((resolve, reject) => {
-    let timer;
-    const resetTimeout = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => stream.destroy(new Error('File read timed out')), timeoutMs);
-    };
-
-    const stream = fs.createReadStream(filePath);
-    resetTimeout();
-    stream.on('data', (chunk) => {
-      hash.update(chunk);
-      /* A large file may legitimately take longer than timeoutMs overall;
-         fail only when its read stream stops making progress. */
-      resetTimeout();
-    });
-    stream.on('end', () => { clearTimeout(timer); resolve(); });
-    stream.on('error', (err) => { clearTimeout(timer); reject(err); });
-  });
-
-  return hash.digest('hex').substring(0, 32);
-}
 
 /**
  * Process a single import queue item: hash, dedup, insert media record.
@@ -114,21 +85,21 @@ export async function processOneItem(db, itemId, filePath, logger) {
     logger.debug(`restoring hidden media id=${hidden.id} with same hash`);
     db.prepare(
       `UPDATE media SET path = ?, folder = ?, hidden = 0, date_taken = ?,
-       updated_at = datetime('now') WHERE id = ?`
-    ).run(filePath, folder, dateTaken, hidden.id);
+       hash_version = ?, updated_at = datetime('now') WHERE id = ?`
+    ).run(filePath, folder, dateTaken, HASH_VERSION, hidden.id);
     logger.debug(`Restored media id=${hidden.id} at ${filePath}`);
   } else {
     const exists = db.prepare('SELECT id FROM media WHERE path = ?').get(filePath);
 
     if (exists) {
       logger.debug(`path exists with id=${exists.id}, patching hash`);
-      db.prepare('UPDATE media SET hash = ?, date_taken = ? WHERE path = ? AND (hash IS NULL OR date_taken IS NULL)').run(hash, dateTaken, filePath);
+      db.prepare('UPDATE media SET hash = ?, hash_version = ?, date_taken = ? WHERE path = ? AND (hash IS NULL OR date_taken IS NULL)').run(hash, HASH_VERSION, dateTaken, filePath);
     } else {
       logger.debug(`inserting new media record`);
       const result = db.prepare(
-        `INSERT INTO media (path, title, type, folder, status, hash, date_taken)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(filePath, title, mediaType, folder, status, hash, dateTaken);
+        `INSERT INTO media (path, title, type, folder, status, hash, hash_version, date_taken)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(filePath, title, mediaType, folder, status, hash, HASH_VERSION, dateTaken);
       logger.debug(`inserted media id=${result.lastInsertRowid}`);
     }
   }
