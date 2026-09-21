@@ -16,6 +16,7 @@ import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE } from '@ph
 /* Import the raw op functions. */
 import listMedia from '../ops/listMedia.js';
 import listDuplicates from '../ops/listDuplicates.js';
+import listFailed from '../ops/listFailed.js';
 import getMediaDuplicates from '../ops/getMediaDuplicates.js';
 import mergeDuplicates from '../ops/mergeDuplicates.js';
 import deleteDuplicates from '../ops/deleteDuplicates.js';
@@ -238,6 +239,146 @@ test('listDuplicates op', async (t) => {
     const page2 = callOp(listDuplicates, ctx, { limit: 1, offset: 1 });
     t.assert.strictEqual(page2.groups.length, 1);
     t.assert.strictEqual(page2.groups[0].hash, 'h2');
+  });
+});
+
+test('listFailed op', async (t) => {
+  let root;
+  t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'failed-test-')); });
+  t.afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
+  /** Insert a media row. `exists` controls whether the original file is written. */
+  function insertRow(db, { name, status = 'ready', hash = null, exists = true, transcoded = null, contents = name }) {
+    const filePath = path.join(root, name);
+    if (exists) writeFixtureFile(root, name, contents);
+    const { lastInsertRowid: id } = db.prepare(
+      'INSERT INTO media (path, title, status, hash, transcoded_path) VALUES (?, ?, ?, ?, ?)'
+    ).run(filePath, name, status, hash, transcoded);
+    return id;
+  }
+
+  await t.test('returns no groups when every file exists', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertRow(db, { name: 'a.jpg', hash: 'h1' });
+    insertRow(db, { name: 'b.jpg', hash: 'h1' });
+
+    const result = callOp(listFailed, ctx);
+    t.assert.strictEqual(result.groups.length, 0);
+    t.assert.strictEqual(result.groupCount, 0);
+    t.assert.strictEqual(result.failedCount, 0);
+  });
+
+  await t.test('flags a record whose file is missing', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertRow(db, { name: 'gone.jpg', exists: false });
+
+    const result = callOp(listFailed, ctx);
+    t.assert.strictEqual(result.groupCount, 1);
+    t.assert.strictEqual(result.failedCount, 1);
+    const group = result.groups[0];
+    t.assert.deepStrictEqual(group.failedIds, [id]);
+    t.assert.strictEqual(group.failedCount, 1);
+    t.assert.strictEqual(group.siblingCount, 0);
+    t.assert.strictEqual(group.items[0].health, 'missing');
+  });
+
+  await t.test('groups a broken record with its intact copy sharing the hash', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const broken = insertRow(db, { name: 'gone.jpg', hash: 'same', exists: false });
+    const intact = insertRow(db, { name: 'here.jpg', hash: 'same' });
+
+    const result = callOp(listFailed, ctx);
+    t.assert.strictEqual(result.groupCount, 1);
+    t.assert.strictEqual(result.failedCount, 1);
+    const group = result.groups[0];
+    t.assert.strictEqual(group.hash, 'same');
+    t.assert.deepStrictEqual(group.failedIds, [broken]);
+    t.assert.strictEqual(group.siblingCount, 1);
+    t.assert.strictEqual(group.items.length, 2);
+    /* The broken copy is listed first and carries its health reason. */
+    t.assert.strictEqual(group.items[0].id, broken);
+    t.assert.strictEqual(group.items[0].health, 'missing');
+    t.assert.strictEqual(group.items[1].id, intact);
+    t.assert.strictEqual(group.items[1].health, null);
+  });
+
+  await t.test('does not flag a video whose transcoded file is gone but original survives', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertRow(db, { name: 'video.mp4', transcoded: path.join(root, 'missing-transcode.mp4') });
+
+    const result = callOp(listFailed, ctx);
+    t.assert.strictEqual(result.groupCount, 0);
+  });
+
+  await t.test('flags a processing error when the file exists', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertRow(db, { name: 'broken.jpg', status: 'error' });
+
+    const result = callOp(listFailed, ctx);
+    t.assert.strictEqual(result.groupCount, 1);
+    t.assert.strictEqual(result.groups[0].items[0].health, 'error');
+  });
+
+  await t.test('prefers missing over error when both apply', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertRow(db, { name: 'gone.jpg', status: 'error', exists: false });
+
+    const result = callOp(listFailed, ctx);
+    t.assert.strictEqual(result.groups[0].items[0].health, 'missing');
+  });
+
+  await t.test('excludes hidden media', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertRow(db, { name: 'gone.jpg', exists: false });
+    db.prepare('UPDATE media SET hidden = 1 WHERE id = ?').run(id);
+
+    const result = callOp(listFailed, ctx);
+    t.assert.strictEqual(result.groupCount, 0);
+  });
+
+  await t.test('countOnly returns totals without groups', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertRow(db, { name: 'gone-a.jpg', hash: 'same', exists: false });
+    insertRow(db, { name: 'here-b.jpg', hash: 'same' });
+    insertRow(db, { name: 'gone-c.jpg', exists: false });
+
+    const result = callOp(listFailed, ctx, { countOnly: true });
+    t.assert.strictEqual(result.groupCount, 2);
+    t.assert.strictEqual(result.failedCount, 2);
+    t.assert.strictEqual('groups' in result, false);
+  });
+
+  await t.test('paginates groups with limit/offset', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    insertRow(db, { name: 'gone-1.jpg', exists: false });
+    insertRow(db, { name: 'gone-2.jpg', exists: false });
+    insertRow(db, { name: 'gone-3.jpg', exists: false });
+
+    const page1 = callOp(listFailed, ctx, { limit: 2, offset: 0 });
+    t.assert.strictEqual(page1.groups.length, 2);
+    t.assert.strictEqual(page1.groupCount, 3);
+
+    const page2 = callOp(listFailed, ctx, { limit: 2, offset: 2 });
+    t.assert.strictEqual(page2.groups.length, 1);
+    t.assert.strictEqual(page2.groupCount, 3);
   });
 });
 

@@ -56,6 +56,7 @@ Independent Node.js process that polls the SQLite job queue. Uses Node.js built-
 - `GET /stream/:id` — Stream video (HTTP Range supported)
 - `GET /jobs` — List all jobs
 - `GET /jobs/events` — SSE for real-time job updates
+- `GET /failed` — List broken media (missing/unreadable file or failed processing), grouped by hash
 
 ## Releasing
 

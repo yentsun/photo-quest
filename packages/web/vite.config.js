@@ -189,6 +189,17 @@ export default defineConfig({
           }
         },
       },
+      '/failed': {
+        target: API_TARGET,
+        bypass(req) {
+          // /failed is both a client route and an API endpoint -- same rule as
+          // /duplicates above.
+          if (req.headers.accept?.includes('text/html')
+              || req.headers['sec-fetch-mode'] === 'navigate') {
+            return req.url;
+          }
+        },
+      },
     },
   },
 });

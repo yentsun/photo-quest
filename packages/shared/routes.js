@@ -50,6 +50,10 @@ export const clientRoutes = {
 
   /** Duplicate media section -- groups items sharing the same content hash. */
   duplicates: '/duplicates',
+
+  /** Failed media section -- items whose file is missing/unreadable or whose
+   *  processing failed, grouped by content hash. */
+  failed: '/failed',
 };
 
 // ---------------------------------------------------------------------------
@@ -166,4 +170,8 @@ export const apiRoutes = {
 
   /** POST -- delete every record in a duplicate group. Body: { hash }. */
   duplicatesDelete: '/duplicates/delete',
+
+  /** GET  -- list media whose file is missing/unreadable or whose processing
+   *  failed, grouped by content hash. */
+  failed: '/failed',
 };

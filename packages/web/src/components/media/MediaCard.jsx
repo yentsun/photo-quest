@@ -51,7 +51,12 @@ export default memo(function MediaCard({ media, onClick, showLikes = true }) {
           )
         )}
 
-        {media.status === 'error' ? (
+        {media.health === 'missing' ? (
+          <div className="media-card-overlay media-card-error">
+            <Icon name="warning" className="icon-lg text-red" />
+            <span className="media-card-overlay-text">File missing</span>
+          </div>
+        ) : media.status === 'error' ? (
           <div className="media-card-overlay media-card-error">
             <Icon name="warning" className="icon-lg text-red" />
             <span className="media-card-overlay-text">Processing failed</span>
