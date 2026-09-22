@@ -1,4 +1,4 @@
-export default function Badge({ count, variant = 'default', className = '' }) {
+export default function Badge({ count, variant = 'default', className = '', children }) {
   const variantClass = variant === 'primary' ? 'badge-primary'
     : variant === 'success' ? 'badge-success'
     : variant === 'warning' ? 'badge-warning'
@@ -7,7 +7,7 @@ export default function Badge({ count, variant = 'default', className = '' }) {
 
   return (
     <span className={['badge', variantClass, className].filter(Boolean).join(' ')}>
-      {count}
+      {children ?? count}
     </span>
   );
 }
