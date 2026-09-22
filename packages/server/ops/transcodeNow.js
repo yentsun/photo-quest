@@ -17,6 +17,10 @@ let running = false;
 /** Media IDs currently queued or running — prevents duplicate jobs per media. */
 const queuedMedia = new Set();
 
+/** Set once the process is shutting down, so an interrupted job is left
+ *  resumable instead of being marked failed (or started anew). */
+let shuttingDown = false;
+
 export function hasQueuedTranscode(id) {
   return queuedMedia.has(Number(id));
 }
@@ -30,16 +34,23 @@ function killCurrentChild() {
 }
 
 /* Kill any running ffmpeg when the server exits, so transcoding actually
-   stops on shutdown instead of leaving an orphaned process burning CPU. */
-for (const signal of ['SIGINT', 'SIGTERM', 'exit']) {
-  process.on(signal, () => killCurrentChild());
+   stops on shutdown instead of leaving an orphaned process burning CPU.
+   The interrupted job is left in its `running` state: the next boot re-queues
+   it (see resumePendingTranscodes) instead of the shutdown marking it failed
+   and deleting the original file. */
+function handleShutdown() {
+  shuttingDown = true;
+  killCurrentChild();
 }
-process.on('beforeExit', killCurrentChild);
+for (const signal of ['SIGINT', 'SIGTERM', 'exit']) {
+  process.on(signal, handleShutdown);
+}
+process.on('beforeExit', handleShutdown);
 
 
 /** Pick the oldest pending job and start transcoding it. */
 function kick(kojo, logger) {
-  if (running) return;
+  if (running || shuttingDown) return;
   const db = kojo.get('db');
 
   const job = db.prepare(
@@ -107,6 +118,10 @@ async function runJob(kojo, db, logger, job) {
     return;
   }
 
+  /* Set once ffmpeg starts writing, so an interrupted/failed run can remove the
+     partial file and a later resume reuses the same output path. */
+  let outputPath = null;
+
   try {
     logger.info(`Probing: ${media.path}`);
     db.prepare("UPDATE media SET status = 'probing', updated_at = datetime('now') WHERE id = ?").run(media.id);
@@ -137,7 +152,7 @@ async function runJob(kojo, db, logger, job) {
     const dir = path.dirname(media.path);
     const base = path.basename(media.path, path.extname(media.path));
     const suffix = isMp4 ? '_converted' : '';
-    let outputPath = path.join(dir, `${base}${suffix}.mp4`);
+    outputPath = path.join(dir, `${base}${suffix}.mp4`);
 
     /* Avoid overwriting an existing file that may belong to another media record. */
     let counter = 1;
@@ -181,10 +196,19 @@ async function runJob(kojo, db, logger, job) {
     broadcastSse({ type: 'transcode_complete', mediaId: media.id, jobId: job.id });
     logger.info(`Done: ${outputPath}`);
   } catch (err) {
-    /* A killed (paused/cancelled) ffmpeg should not mark the job failed. */
+    /* Remove the partial output so a resumed/failed run leaves no orphan and
+       the next attempt reuses the same filename. */
+    if (outputPath) {
+      try { fs.unlinkSync(outputPath); } catch { /* already gone */ }
+    }
+
+    /* A killed (paused/cancelled/shutdown) ffmpeg must not mark the job failed:
+       the job is left as-is so it can be resumed. */
     const jobState = db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id);
-    if (jobState && (jobState.status === JOB_STATUS.PAUSED || jobState.status === JOB_STATUS.COMPLETED)) {
-      logger.info(`Job ${job.id} stopped (${jobState.status}); skipping failure`);
+    const stopped = shuttingDown
+      || (jobState && (jobState.status === JOB_STATUS.PAUSED || jobState.status === JOB_STATUS.COMPLETED));
+    if (stopped) {
+      logger.info(`Job ${job.id} stopped (${shuttingDown ? 'shutdown' : jobState.status}); leaving it to resume`);
       return;
     }
 
@@ -334,10 +358,12 @@ function transcode(media, outputPath, videoArgs, audioArgs, onProgress) {
       }
     });
 
-    proc.on('close', code => {
+    proc.on('close', (code, signal) => {
       if (currentChild === proc) currentChild = null;
-      if (code !== 0 && code !== null) reject(new Error(`ffmpeg exited with code ${code}`));
-      else resolve(outputPath);
+      /* A signalled child reports `code = null` — treat it as a failure, never a
+         success, so a killed transcode can't be mistaken for a finished one. */
+      if (code === 0) resolve(outputPath);
+      else reject(new Error(`ffmpeg exited with code ${code}${signal ? ` (signal ${signal})` : ''}`));
     });
     proc.on('error', err => {
       if (currentChild === proc) currentChild = null;
