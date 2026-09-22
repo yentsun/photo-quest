@@ -1,5 +1,5 @@
 /**
- * @file Tests for the scanMedia op — db-backed import queue (LAW 2.3).
+ * @file Tests for the scanMedia op — db-backed import queue.
  *
  * Tests cover:
  *  - Discovery phase: scan record + import_queue population

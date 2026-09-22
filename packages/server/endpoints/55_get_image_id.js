@@ -3,8 +3,8 @@
  *
  * Kojo endpoint: registers route via the addHttpRoute op.
  *
- * LAW 2.3: Photos must be displayed according to their EXIF orientation data.
- * Uses the orientation value stored in the DB during import (LAW 2.4).
+ * Photos must be displayed according to their EXIF orientation data.
+ * Uses the orientation value stored in the DB during import.
  * Only processes through sharp when rotation is actually needed.
  */
 

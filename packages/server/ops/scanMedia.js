@@ -3,7 +3,7 @@
  *
  * Kojo op: accessed as `kojo.ops.scanMedia(dirPath)`.
  *
- * LAW 2.3: Media import uses a db-based queue. Files are discovered and queued
+ * Media import uses a db-based queue. Files are discovered and queued
  * individually, progress is reported via SSE, and interrupted imports resume
  * automatically on restart.
  *
@@ -168,7 +168,7 @@ function ensureScanWorker(logger) {
 
 /**
  * Resume any incomplete scans found in the database.
- * Called at boot time to satisfy LAW 2.3 resume requirement.
+ * Called at boot time to satisfy the resume requirement.
  */
 export function resumeIncompleteScans(kojo, logger) {
   const db = kojo.get('db');

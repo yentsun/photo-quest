@@ -73,7 +73,7 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/media\/(?!\d+$)/, /^\/stream/, /^\/image/, /^\/thumb/, /^\/jobs/, /^\/folders/, /^\/tags$/, /^\/library$/],
 
-        /* Runtime caching — serve previously viewed media offline (LAW 1.29). */
+        /* Runtime caching — serve previously viewed media offline. */
         runtimeCaching: [
           {
             urlPattern: /^\/image\//,
