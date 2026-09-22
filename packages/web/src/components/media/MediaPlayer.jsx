@@ -6,6 +6,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   title = '',
   autoPlay = true,
   onEnded,
+  onError,
   className = '',
 }, ref) {
   const videoRef = useRef(null);
@@ -92,7 +93,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
         onWaiting={() => setBuffering(true)}
         onPlaying={() => setBuffering(false)}
         onVolumeChange={handleVolumeChange}
-        onError={() => { setBuffering(false); setError('This video could not be played.'); }}
+        onError={() => { setBuffering(false); setError('This video could not be played.'); onError?.(); }}
       />
     </div>
   );

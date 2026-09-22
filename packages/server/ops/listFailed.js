@@ -27,6 +27,7 @@
  */
 
 import { scanFailedMediaAsync } from '../src/mediaHealth.js';
+import { broadcastSse } from '../src/sse.js';
 
 /** @type {{ groups: Object[], groupCount: number, failedCount: number, at: number }|null} */
 let _snapshot = null;
@@ -125,9 +126,39 @@ export function buildGroups(db, failed) {
  * @param {object} [logger]
  * @returns {Promise<{ groups: Object[], groupCount: number, failedCount: number, at: number }>}
  */
-export async function buildFailedSnapshot(db, logger = console) {
+export async function buildFailedSnapshot(db, logger = console, { cleanOrphans = false } = {}) {
   const { failed, scanned } = await scanFailedMediaAsync(db, { logger });
-  const built = buildGroups(db, failed);
+
+  let remaining = failed;
+  if (cleanOrphans) {
+    /* Refresh prunes records whose file is gone — but only those with no user
+       data. A record with likes or tags is never deleted automatically; it is
+       left in the Failed list so the user can decide (deleting it would throw
+       away likes/tags that cannot be recovered if the file is re-added). */
+    const remove = db.prepare('DELETE FROM media WHERE id = ?');
+    remaining = [];
+    const removedIds = [];
+    let kept = 0;
+    for (const entry of failed) {
+      const row = entry.row;
+      const hasUserData = (row.likes || 0) > 0 || (row.tags && row.tags !== '[]' && row.tags !== '');
+      if (entry.reason === 'missing' && !hasUserData) {
+        remove.run(row.id);
+        removedIds.push(row.id);
+      } else {
+        if (entry.reason === 'missing') kept++;
+        remaining.push(entry);
+      }
+    }
+    if (removedIds.length > 0) {
+      logger.info?.(`[healthScan] removed ${removedIds.length} orphan record(s) with no file on disk`);
+      /* Drop them from connected clients' caches so they don't linger in grids. */
+      broadcastSse({ type: 'media_removed', ids: removedIds });
+    }
+    if (kept > 0) logger.info?.(`[healthScan] kept ${kept} missing record(s) with likes/tags for manual review`);
+  }
+
+  const built = buildGroups(db, remaining);
   logger.debug?.(`[healthScan] ${scanned} scanned, ${built.failedCount} broken in ${built.groupCount} group(s)`);
   return { ...built, at: Date.now() };
 }
@@ -175,13 +206,15 @@ function persistSnapshot(db, snapshot) {
  *
  * @param {object} kojo
  * @param {object} [logger]
+ * @param {{ cleanOrphans?: boolean }} [opts] `cleanOrphans` also deletes records
+ *   whose file no longer exists (used by the library Refresh).
  */
-export function startHealthScan(kojo, logger = console) {
+export function startHealthScan(kojo, logger = console, { cleanOrphans = false } = {}) {
   if (_scanning) return Promise.resolve();
   _scanning = true;
   const db = kojo.get('db');
   logger.info?.('[healthScan] starting background file-health sweep...');
-  return buildFailedSnapshot(db, logger)
+  return buildFailedSnapshot(db, logger, { cleanOrphans })
     .then(snapshot => {
       _snapshot = snapshot;
       _snapshotDb = db;

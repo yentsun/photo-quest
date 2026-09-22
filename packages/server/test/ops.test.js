@@ -18,6 +18,7 @@ import listMedia from '../ops/listMedia.js';
 import listDuplicates from '../ops/listDuplicates.js';
 import listFailed, { startHealthScan, removeFromFailedSnapshot } from '../ops/listFailed.js';
 import repairFailed from '../ops/repairFailed.js';
+import { cancelJob, retryJob } from '../ops/transcodeNow.js';
 import getMediaDuplicates from '../ops/getMediaDuplicates.js';
 import mergeDuplicates from '../ops/mergeDuplicates.js';
 import deleteDuplicates from '../ops/deleteDuplicates.js';
@@ -351,6 +352,36 @@ test('listFailed op', async (t) => {
     t.assert.strictEqual(result.groups[0].items[0].health, 'missing');
   });
 
+  await t.test('cleanOrphans deletes records whose file is gone', async (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const gone = insertRow(db, { name: 'gone.jpg', exists: false });
+    const broken = insertRow(db, { name: 'broken.jpg', status: 'error' });
+
+    await startHealthScan(ctx[0], ctx[1], { cleanOrphans: true });
+
+    t.assert.strictEqual(db.prepare('SELECT COUNT(*) AS c FROM media WHERE id = ?').get(gone).c, 0);
+    t.assert.strictEqual(db.prepare('SELECT COUNT(*) AS c FROM media WHERE id = ?').get(broken).c, 1);
+    t.assert.strictEqual(callOp(listFailed, ctx, { countOnly: true }).failedCount, 1);
+  });
+
+  await t.test('cleanOrphans keeps missing records that have likes or tags', async (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const liked = insertRow(db, { name: 'liked.jpg', exists: false });
+    db.prepare('UPDATE media SET likes = 3 WHERE id = ?').run(liked);
+    const tagged = insertRow(db, { name: 'tagged.jpg', exists: false });
+    db.prepare("UPDATE media SET tags = '[\"keep\"]' WHERE id = ?").run(tagged);
+    const plain = insertRow(db, { name: 'plain.jpg', exists: false });
+
+    await startHealthScan(ctx[0], ctx[1], { cleanOrphans: true });
+
+    t.assert.strictEqual(db.prepare('SELECT COUNT(*) AS c FROM media WHERE id = ?').get(liked).c, 1);
+    t.assert.strictEqual(db.prepare('SELECT COUNT(*) AS c FROM media WHERE id = ?').get(tagged).c, 1);
+    t.assert.strictEqual(db.prepare('SELECT COUNT(*) AS c FROM media WHERE id = ?').get(plain).c, 0);
+    t.assert.strictEqual(callOp(listFailed, ctx, { countOnly: true }).failedCount, 2);
+  });
+
   await t.test('excludes hidden media', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
@@ -525,6 +556,33 @@ test('repairFailed op', async (t) => {
     t.assert.strictEqual(db.prepare('SELECT status FROM media WHERE id = ?').get(id).status, 'error');
   });
 
+  await t.test('force re-transcodes a video and discards its transcoded output', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const queued = [];
+    ctx[0].ops.transcodeNow = (id) => { queued.push(id); return 1; };
+    const id = insertRow(db, { name: 'broken.mp4', exists: true, transcodedExists: true });
+
+    const result = callOp(repairFailed, ctx, { ids: [id], force: true });
+
+    t.assert.strictEqual(result.requeued, 1);
+    t.assert.deepStrictEqual(queued, [id]);
+    const row = db.prepare('SELECT status, transcoded_path FROM media WHERE id = ?').get(id);
+    t.assert.strictEqual(row.status, 'pending');
+    t.assert.strictEqual(row.transcoded_path, null);
+  });
+
+  await t.test('force is unrepairable without the original', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const id = insertRow(db, { name: 'lost.mp4', exists: false, transcodedExists: true });
+
+    const result = callOp(repairFailed, ctx, { ids: [id], force: true });
+
+    t.assert.strictEqual(result.unrepairable, 1);
+    t.assert.strictEqual(result.results[0].reason, 'no-original');
+  });
+
   await t.test('repairs every failed record with all: true', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
@@ -550,6 +608,89 @@ test('repairFailed op', async (t) => {
 
     t.assert.strictEqual(result.repaired, 0);
     t.assert.strictEqual(db.prepare('SELECT status FROM media WHERE id = ?').get(id).status, 'error');
+  });
+});
+
+test('cancelJob op', async (t) => {
+  await t.test('marks a running job cancelled and resets media to probed', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const mediaId = db.prepare("INSERT INTO media (path, title, type, status) VALUES ('/v.mp4', 'V', 'video', 'transcoding')").run().lastInsertRowid;
+    const jobId = db.prepare("INSERT INTO jobs (media_id, type, status) VALUES (?, 'transcode', 'running')").run(mediaId).lastInsertRowid;
+
+    const result = cancelJob(ctx[0], ctx[1], jobId);
+
+    t.assert.strictEqual(result.cancelled, true);
+    t.assert.strictEqual(db.prepare('SELECT status FROM jobs WHERE id = ?').get(jobId).status, 'cancelled');
+    t.assert.strictEqual(db.prepare('SELECT status FROM media WHERE id = ?').get(mediaId).status, 'probed');
+  });
+
+  await t.test('marks a queued job cancelled', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const mediaId = db.prepare("INSERT INTO media (path, title, type, status) VALUES ('/q.mp4', 'Q', 'video', 'pending')").run().lastInsertRowid;
+    const jobId = db.prepare("INSERT INTO jobs (media_id, type, status) VALUES (?, 'transcode', 'pending')").run(mediaId).lastInsertRowid;
+
+    cancelJob(ctx[0], ctx[1], jobId);
+
+    t.assert.strictEqual(db.prepare('SELECT status FROM jobs WHERE id = ?').get(jobId).status, 'cancelled');
+  });
+
+  await t.test('returns cancelled:false for a missing job', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    t.assert.strictEqual(cancelJob(ctx[0], ctx[1], 999).cancelled, false);
+  });
+});
+
+test('retryJob op', async (t) => {
+  function insertJob(db, status) {
+    const mediaId = db.prepare(
+      "INSERT INTO media (path, title, type, status) VALUES (?, 'V', 'video', 'probed')"
+    ).run(`/${status}.mp4`).lastInsertRowid;
+    const jobId = db.prepare(
+      "INSERT INTO jobs (media_id, type, status, error) VALUES (?, 'transcode', ?, 'boom')"
+    ).run(mediaId, status).lastInsertRowid;
+    return { mediaId, jobId };
+  }
+
+  await t.test('re-queues a cancelled job and clears its error', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const { jobId } = insertJob(db, 'cancelled');
+
+    const result = retryJob(ctx[0], ctx[1], jobId);
+
+    t.assert.strictEqual(result.retried, true);
+    const job = db.prepare('SELECT status, error FROM jobs WHERE id = ?').get(jobId);
+    t.assert.notStrictEqual(job.status, 'cancelled');
+    t.assert.strictEqual(job.error, null);
+  });
+
+  await t.test('re-queues a failed job', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const { jobId } = insertJob(db, 'failed');
+
+    t.assert.strictEqual(retryJob(ctx[0], ctx[1], jobId).retried, true);
+  });
+
+  await t.test('refuses to retry a completed job', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const { jobId } = insertJob(db, 'completed');
+
+    const result = retryJob(ctx[0], ctx[1], jobId);
+    t.assert.strictEqual(result.retried, false);
+    t.assert.strictEqual(result.status, 400);
+  });
+
+  await t.test('returns 404 for a missing job', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const result = retryJob(ctx[0], ctx[1], 999);
+    t.assert.strictEqual(result.retried, false);
+    t.assert.strictEqual(result.status, 404);
   });
 });
 

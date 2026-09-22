@@ -113,6 +113,8 @@ export const JOB_TYPE = {
  *      +---> PAUSED --> PENDING (resume restarts from scratch)
  *      |          |
  *      +------> FAILED
+ *      |
+ *      +------> CANCELLED (user cancelled; stays in the list, never resumed)
  *
  * @readonly
  * @enum {string}
@@ -123,4 +125,5 @@ export const JOB_STATUS = {
   PAUSED: 'paused',
   COMPLETED: 'completed',
   FAILED: 'failed',
+  CANCELLED: 'cancelled',
 };

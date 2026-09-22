@@ -1055,6 +1055,7 @@ body {
 .transcode-status--paused { color: var(--sol-orange, #d19a4a); }
 .transcode-status--completed { color: var(--sol-text-mut); }
 .transcode-status--failed { color: var(--sol-red); }
+.transcode-status--cancelled { color: var(--sol-text-mut); }
 .transcode-row .ascii-meter { width: 160px; flex-shrink: 0; }
 .transcode-error { color: var(--sol-red); font-size: var(--fs-xs); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

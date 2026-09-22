@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { removeFromFailedSnapshot } from './listFailed.js';
+import { broadcastSse } from '../src/sse.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const THUMBS_DIR = path.join(__dirname, '..', 'thumbs');
@@ -90,6 +91,12 @@ export default function (id) {
     }
   } else {
     logger.debug(`nothing deleted (id not found): id=${id}`);
+  }
+
+  /* Tell connected clients to drop this record from their caches so a removed
+     media never lingers in a grid. */
+  if (result.changes > 0) {
+    broadcastSse({ type: 'media_removed', ids: [Number(id)] });
   }
 
   return { deleted: result.changes > 0, path: filePath };

@@ -8,7 +8,7 @@ import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton, DuplicateThumb } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi } from '../../utils/api.js';
+import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi, repairFailed } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -62,6 +62,10 @@ export default function MediaPage() {
   const titleInputRef = useRef(null);
   const playerRef = useRef(null);
   const [fileStatus, setFileStatus] = useState(null);
+  const [fixing, setFixing] = useState(false);
+  /* Set when the <video> element fails to play a "ready" file (e.g. a corrupt
+     transcoded output) so the Fix action can offer a forced re-transcode. */
+  const [playbackError, setPlaybackError] = useState(false);
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
   const [allTags, setAllTags] = useState([]);
@@ -181,19 +185,16 @@ export default function MediaPage() {
           if (!cancelled && cachedItem) { setItem(cachedItem); setLoading(false); }
         }
         setLoadingMessage('Fetching media item…');
-        const mediaItem = await fetchMediaById(mediaId);
+        /* Authoritative fetch: returns null when the record no longer exists, so
+           a stale IndexedDB copy is dropped instead of being shown. On a network
+           error it still falls back to the cached item. */
+        const mediaItem = await fetchMediaById(mediaId, { skipCache: true });
         if (cancelled) return;
+        if (!mediaItem) { setItem(null); setLoading(false); return; }
         setItem(mediaItem);
         setLoading(false);
 
-        // Cached item may lack folder_chain (stored before the server change).
-        // Force a fresh fetch when needed so breadcrumbs show up immediately.
-        let freshItem = mediaItem;
-        if (mediaItem.folder && !mediaItem.folder_chain) {
-          freshItem = await fetchMediaById(mediaId, { skipCache: true });
-          if (cancelled) return;
-          setItem(freshItem);
-        }
+        const freshItem = mediaItem;
 
         if (freshItem.folder_chain) {
           const chain = freshItem.folder_chain;
@@ -489,6 +490,44 @@ export default function MediaPage() {
     }
   }, [item, duplicates, bump, dispatch, navigate, location.state, inSlideshow, removeSlideshowItem]);
 
+  /* Ask the server to repair the current item. `force` discards the existing
+     transcoded output and re-encodes from the original (for a "ready" file that
+     won't play); otherwise it reconciles the record with what's on disk. */
+  const runRepair = useCallback(async (force) => {
+    if (!item) return;
+    setFixing(true);
+    try {
+      const result = await repairFailed({ ids: [item.id], force });
+      if (result.repaired > 0) {
+        const detail = result.requeued > 0 ? 're-queued for transcoding' : 'restored';
+        dispatch({ type: actions.TOAST_SHOWN, message: `${force ? 'Re-transcoding' : 'Fixed'} — ${detail}`, toastType: 'success' });
+        try {
+          const fresh = await fetchMediaById(item.id, { skipCache: true });
+          setItem(fresh);
+        } catch { /* keep the current item; polling will catch up */ }
+        setPlaybackError(false);
+        bump();
+      } else {
+        dispatch({
+          type: actions.TOAST_SHOWN,
+          message: force ? 'Could not re-transcode — original file is missing' : 'Could not fix this media',
+          toastType: 'error',
+        });
+      }
+    } catch (err) {
+      console.error('Failed to repair media:', err);
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not repair media', toastType: 'error' });
+    } finally {
+      setFixing(false);
+    }
+  }, [item, dispatch, bump]);
+
+  const handleFix = useCallback(() => runRepair(false), [runRepair]);
+  const handleRetranscode = useCallback(() => runRepair(true), [runRepair]);
+
+  /* A new item gets a fresh playback state. */
+  useEffect(() => { setPlaybackError(false); }, [id]);
+
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFsChange);
@@ -707,6 +746,15 @@ export default function MediaPage() {
             <p className="media-error-msg">Processing failed</p>
             {item.job_error && <p className="media-error-detail">{item.job_error}</p>}
             <p className="media-error-path">{item.path}</p>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Icon name="wrench" className="icon-sm" />}
+              onClick={handleFix}
+              disabled={fixing}
+            >
+              {fixing ? 'Fixing…' : 'Fix'}
+            </Button>
           </div>
         ) : item.status !== MEDIA_STATUS.READY ? (
           <div className="media-processing">
@@ -742,7 +790,7 @@ export default function MediaPage() {
             })()}
           </div>
         ) : (
-          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} />
+          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} onError={() => setPlaybackError(true)} />
         )}
 
         <IconButton
@@ -901,6 +949,16 @@ export default function MediaPage() {
             {canMerge && (
               <Button variant="ghost" size="sm" icon={<Icon name="copy" className="icon-sm" />} onClick={() => setShowMerge(true)}>
                 Merge {duplicates.count} copies
+              </Button>
+            )}
+            {item.status === MEDIA_STATUS.ERROR && (
+              <Button variant="ghost" size="sm" icon={<Icon name="wrench" className="icon-sm" />} onClick={handleFix} disabled={fixing}>
+                {fixing ? 'Fixing…' : 'Fix'}
+              </Button>
+            )}
+            {!isImage && playbackError && (
+              <Button variant="ghost" size="sm" icon={<Icon name="refresh" className="icon-sm" />} onClick={handleRetranscode} disabled={fixing}>
+                {fixing ? 'Working…' : (item.transcoded_path ? 'Re-transcode' : 'Transcode')}
               </Button>
             )}
             {renderOverflowActions('viewer-overflow-hidden')}

@@ -58,6 +58,9 @@ async function setup() {
         const items = db.prepare('SELECT * FROM media ORDER BY created_at DESC').all();
         return { items, total };
       },
+      listMediaIds: function() {
+        return db.prepare('SELECT id FROM media WHERE hidden = 0 ORDER BY id').all().map(r => r.id);
+      },
       listDuplicates: function({ countOnly = false } = {}) {
         const rows = db.prepare(`
           SELECT * FROM media
@@ -252,6 +255,19 @@ test('GET /media', async (t) => {
     t.assert.strictEqual(res._body.items.length, 1);
     t.assert.strictEqual(res._body.items[0].title, 'Test');
     t.assert.strictEqual(res._body.total, 1);
+  });
+
+  await t.test('?ids=1 returns just the visible media ids', async () => {
+    const route = findRoute('GET', '/media');
+    const req = mockReq('GET', '/media?ids=1');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.ok(Array.isArray(res._body.ids));
+    t.assert.strictEqual(res._body.ids.length, 1);
+    t.assert.strictEqual('items' in res._body, false);
   });
 });
 

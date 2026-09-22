@@ -13,6 +13,14 @@ export default async (kojo, logger) => {
     pathname: '/media',
   }, (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
+
+    /* `?ids=1` returns just the visible media ids — used by the client to prune
+       its IndexedDB snapshot of records the server no longer has. */
+    if (url.searchParams.get('ids') === '1') {
+      const ids = kojo.ops.listMediaIds();
+      return json(res, 200, { ids });
+    }
+
     const limit = url.searchParams.get('limit');
     const offset = url.searchParams.get('offset');
     const folder = url.searchParams.get('folder');

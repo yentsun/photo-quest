@@ -142,6 +142,9 @@ export const apiRoutes = {
   /** POST -- cancel a single job by its numeric ID. */
   jobCancel: '/jobs/:id/cancel',
 
+  /** POST -- re-queue a cancelled or failed job by its numeric ID. */
+  jobRetry: '/jobs/:id/retry',
+
   /** GET  -- Server-Sent Events (SSE) endpoint.  The server pushes real-time
    *  job progress updates to connected clients over this long-lived
    *  connection. */

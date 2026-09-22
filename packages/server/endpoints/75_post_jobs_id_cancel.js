@@ -1,8 +1,9 @@
 /**
  * @file POST /jobs/:id/cancel -- Cancel a single job.
  *
- * Removes the job (queued or running). If it is the running job, the current
- * ffmpeg process is killed; the media record falls back to 'probed'.
+ * Marks the job `cancelled` (it stays visible in the Transcodes list). If it is
+ * the running job, the current ffmpeg/ffprobe process is killed; the media
+ * record falls back to 'probed'.
  */
 
 import { json } from '../src/http.js';

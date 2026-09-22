@@ -18,7 +18,6 @@ import config from '@photo-quest/shared/config.js';
 import { initDb } from './src/db.js';
 import { resumeIncompleteScans } from './ops/scanMedia.js';
 import { resumePendingTranscodes } from './ops/transcodeNow.js';
-import { scanFailedMediaAsync } from './src/mediaHealth.js';
 
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -102,13 +101,12 @@ export default async function boot() {
   /* Re-queue any transcodes left pending/running from a previous session. */
   resumePendingTranscodes(kojo, console);
 
-  /* Run cleanups after the server is listening so we don't block startup.
-     They yield to the event loop. The file-health sweep is not run here — it
-     is user-triggered with Refresh (see ops/scanMedia.js). */
+  /* Remove orphaned thumbnail files after the server is listening so we don't
+     block startup. The library is not scanned here — broken/missing media is
+     surfaced by the Failed section and the file-health sweep is user-triggered
+     with Refresh (see ops/scanMedia.js). */
   setImmediate(() => {
     cleanupThumbs(db);
-    cleanupOrphanRecords(db)
-      .catch(err => console.warn(`[boot] Orphan record cleanup failed: ${err.message}`));
   });
 
   return kojo;
@@ -142,24 +140,6 @@ function cleanupThumbs(db) {
     console.log(`[boot] Thumbnail cleanup: checked ${checked} file(s), removed ${removed} orphan(s)`);
   } catch (err) {
     console.warn(`[boot] Thumbnail cleanup failed: ${err.message}`);
-  }
-}
-
-async function cleanupOrphanRecords(db) {
-  /* Async, batched and yielding so a large library never freezes the server at
-     boot. Uses the shared health scanner: a record with no usable file on disk
-     is an orphan. */
-  const { failed } = await scanFailedMediaAsync(db, { logger: console });
-  const remove = db.prepare('DELETE FROM media WHERE id = ?');
-  let removed = 0;
-  for (const entry of failed) {
-    if (entry.reason !== 'missing') continue;
-    console.log(`[boot] Removing orphan media record id=${entry.row.id}: ${entry.row.path}`);
-    remove.run(entry.row.id);
-    removed++;
-  }
-  if (removed > 0) {
-    console.log(`[boot] Removed ${removed} orphan media record(s)`);
   }
 }
 

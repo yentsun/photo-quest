@@ -14,7 +14,11 @@
  *       image -> `ready` (images need no transcode)
  *   - neither file exists -> left untouched and reported as `unrepairable`
  *
- * @param {{ ids?: number[], all?: boolean }} [opts]
+ * With `force: true` a video is always re-transcoded from its original: any
+ * existing transcoded output is discarded first (used when the player reports a
+ * "ready" file that won't actually play). It needs the original to still exist.
+ *
+ * @param {{ ids?: number[], all?: boolean, force?: boolean }} [opts]
  *   `ids` repairs the given records; `all` repairs every currently-failed one.
  * @returns {{ repaired: number, restored: number, requeued: number,
  *   unrepairable: number, results: Array<{ id: number, outcome: string, reason?: string }> }}
@@ -31,7 +35,7 @@ function isFile(filePath) {
   return !!stat && stat.isFile();
 }
 
-export default function repairFailed({ ids, all = false } = {}) {
+export default function repairFailed({ ids, all = false, force = false } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
@@ -51,6 +55,28 @@ export default function repairFailed({ ids, all = false } = {}) {
   const setStatus = db.prepare("UPDATE media SET status = ?, updated_at = datetime('now') WHERE id = ?");
 
   for (const row of targets) {
+    /* Force mode: re-transcode a video from its original, discarding whatever
+       transcoded output it has (which is assumed unplayable). */
+    if (force && row.type === MEDIA_TYPE.VIDEO) {
+      if (!isFile(row.path)) {
+        unrepairable++;
+        results.push({ id: row.id, outcome: 'unrepairable', reason: 'no-original' });
+        continue;
+      }
+      if (row.transcoded_path && isFile(row.transcoded_path)) {
+        /* Never delete a file another record still points at. */
+        const shared = db.prepare('SELECT id FROM media WHERE id != ? AND transcoded_path = ?')
+          .get(row.id, row.transcoded_path);
+        if (!shared) { try { fs.unlinkSync(row.transcoded_path); } catch { /* ignore */ } }
+      }
+      db.prepare("UPDATE media SET status = ?, transcoded_path = NULL, updated_at = datetime('now') WHERE id = ?")
+        .run(MEDIA_STATUS.PENDING, row.id);
+      kojo.ops?.transcodeNow?.(row.id);
+      requeued++;
+      results.push({ id: row.id, outcome: 'requeued', reason: 'forced' });
+      continue;
+    }
+
     if (isFile(row.transcoded_path)) {
       setStatus.run(MEDIA_STATUS.READY, row.id);
       restored++;

@@ -54,7 +54,9 @@ export async function processOneItem(db, itemId, filePath, logger) {
   const folder = path.dirname(filePath);
   const isImage = IMAGE_EXTENSIONS.includes(ext);
   const mediaType = isImage ? MEDIA_TYPE.IMAGE : MEDIA_TYPE.VIDEO;
-  const status = isImage ? MEDIA_STATUS.READY : MEDIA_STATUS.PENDING;
+  /* Videos are playable as-is (the browser streams the original); transcoding
+     is an explicit, on-demand action, so nothing is queued at scan time. */
+  const status = MEDIA_STATUS.READY;
   logger.debug(`type=${mediaType} status=${status} title="${title}"`);
 
   if (!fs.existsSync(filePath)) {
@@ -339,9 +341,10 @@ export default async function (dirPath) {
 
   /* Legacy hash reindexing and the file-health sweep are intentionally
      user-triggered with Refresh, not automatic boot tasks. Both yield between
-     batches and ignore concurrent Refresh calls. */
+     batches and ignore concurrent Refresh calls. Refresh also prunes records
+     whose file has vanished (cleanOrphans). */
   startHashBackfill(kojo, logger);
-  startHealthScan(kojo, logger);
+  startHealthScan(kojo, logger, { cleanOrphans: true });
 
   logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
 

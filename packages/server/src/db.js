@@ -134,4 +134,20 @@ function migrateDb() {
   } catch (err) {
     /* Table may not exist yet on first run -- ignore. */
   }
+
+  /* Videos are playable without transcoding now, so previously auto-queued
+     ones are marked ready. A transcode with an active job is left alone. */
+  try {
+    const { changes } = db.prepare(`
+      UPDATE media SET status = 'ready', updated_at = datetime('now')
+      WHERE type = 'video' AND status IN ('pending', 'probed')
+        AND id NOT IN (
+          SELECT media_id FROM jobs
+          WHERE type = 'transcode' AND status IN ('pending', 'running', 'paused')
+        )
+    `).run();
+    if (changes > 0) console.debug(`[db] Marked ${changes} video(s) ready (transcoding is on demand)`);
+  } catch (err) {
+    /* jobs table may not exist yet on first run -- ignore. */
+  }
 }

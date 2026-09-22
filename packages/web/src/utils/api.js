@@ -21,6 +21,7 @@ import {
   idbDeleteMedia,
   idbDeleteFolder,
   idbReplaceFolders,
+  idbPruneMedia,
 } from '../services/idb.js';
 
 // ---------------------------------------------------------------------------
@@ -116,6 +117,55 @@ async function syncMediaCache(ids = [], replacements = []) {
   await Promise.all(updates.map(update => update.catch(err => {
     console.warn('[idb] cache sync failed:', err);
   })));
+}
+
+/**
+ * Drop media ids from the in-memory + IndexedDB caches. Called when the server
+ * reports records were removed (SSE `media_removed`) so they stop appearing in
+ * grids immediately instead of lingering as dead entries.
+ *
+ * @param {Array<number|string>} ids
+ */
+export async function purgeMedia(ids = []) {
+  if (!ids.length) return;
+  const updates = [];
+  for (const id of ids) {
+    _mediaCache.delete(Number(id));
+    updates.push(idbDeleteMedia(id));
+  }
+  _folderMediaCache.clear();
+  await Promise.all(updates.map(update => update.catch(err => {
+    console.warn('[idb] purge failed:', err);
+  })));
+}
+
+/**
+ * Fetch every visible media id from the server.
+ * @returns {Promise<number[]>}
+ */
+export async function fetchMediaIds() {
+  const url = new URL(apiRoutes.media, window.location.origin);
+  url.searchParams.set('ids', '1');
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Failed to fetch media ids');
+  const { ids } = await response.json();
+  return ids ?? [];
+}
+
+/**
+ * Reconcile the in-memory + IndexedDB media caches with the server: drop any
+ * record the server no longer has. Run once per session so media deleted while
+ * this client was away doesn't linger in grids.
+ *
+ * @returns {Promise<number>} Number of records removed.
+ */
+export async function pruneMediaCache() {
+  const ids = await fetchMediaIds();
+  const keep = new Set(ids.map(Number));
+  for (const key of [..._mediaCache.keys()]) {
+    if (!keep.has(key)) _mediaCache.delete(key);
+  }
+  return idbPruneMedia(keep);
 }
 
 /**
@@ -294,16 +344,19 @@ export async function fetchFailed({ countOnly = false, limit, offset, refresh = 
 /**
  * Ask the server to repair failed media records by re-checking their files on
  * disk and reconciling their status. Pass `ids` for specific records or
- * `all: true` to repair every currently-failed record.
+ * `all: true` to repair every currently-failed record. `force: true` discards a
+ * video's existing transcoded output and re-transcodes it from the original.
  *
- * @param {{ ids?: number[], all?: boolean }} [opts]
+ * @param {{ ids?: number[], all?: boolean, force?: boolean }} [opts]
  * @returns {Promise<{ repaired: number, restored: number, requeued: number, unrepairable: number }>}
  */
-export async function repairFailed({ ids, all = false } = {}) {
+export async function repairFailed({ ids, all = false, force = false } = {}) {
+  const payload = all ? { all: true } : { ids };
+  if (force) payload.force = true;
   const response = await fetch(apiRoutes.failedRepair, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(all ? { all: true } : { ids }),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -418,6 +471,17 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   }
 }
 
+/**
+ * Drop a media item from the in-memory + IndexedDB caches. Used when the server
+ * reports the record no longer exists (404) so a stale cached copy is not
+ * rendered again.
+ */
+async function forgetMedia(id) {
+  const numericId = Number(id);
+  _mediaCache.delete(numericId);
+  try { await idbDeleteMedia(numericId); } catch { /* ignore */ }
+}
+
 export async function fetchMediaById(id, { skipCache = false } = {}) {
   // IDB-first (unless caller needs fresh server data)
   if (!skipCache) {
@@ -429,9 +493,11 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
     if (idbItem) {
       parseTags(idbItem);
       _mediaCache.set(idbItem.id, idbItem);
-      // Refresh from server in background
+      // Refresh from server in background. A 404 means the record is gone, so
+      // purge the stale cache instead of keeping it around.
       fetch(`${apiRoutes.media}/${id}`, { headers: { 'Accept': 'application/json' } })
         .then(async r => {
+          if (r.status === 404) { await forgetMedia(id); return; }
           if (!r.ok) return;
           const item = parseTags(await r.json());
           _mediaCache.set(item.id, item);
@@ -447,6 +513,7 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
     const response = await fetch(`${apiRoutes.media}/${id}`, {
       headers: { 'Accept': 'application/json' },
     });
+    if (response.status === 404) { await forgetMedia(id); return null; }
     if (!response.ok) throw new Error('Failed to fetch media item');
     const item = parseTags(await response.json());
     _mediaCache.set(item.id, item);
@@ -485,6 +552,12 @@ export async function resumeJobs() {
 export async function cancelJob(id) {
   const response = await fetch(`/jobs/${id}/cancel`, { method: 'POST' });
   if (!response.ok) throw new Error('Failed to cancel job');
+  return response.json();
+}
+
+export async function retryJob(id) {
+  const response = await fetch(apiRoutes.jobRetry.replace(':id', id), { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to retry job');
   return response.json();
 }
 

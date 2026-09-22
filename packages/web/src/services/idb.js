@@ -155,6 +155,36 @@ export async function idbDeleteMedia(id) {
 }
 
 /**
+ * Delete every media record whose id is not in `keepIds`. Reconciles the
+ * IndexedDB snapshot with the server's authoritative id list so records removed
+ * server-side (deleted, merged, cleaned up) stop appearing in grids.
+ *
+ * @param {Set<number>} keepIds
+ * @returns {Promise<number>} Number of records removed.
+ */
+export async function idbPruneMedia(keepIds) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    let removed = 0;
+    const tx = db.transaction('media', 'readwrite');
+    const store = tx.objectStore('media');
+    const req = store.openKeyCursor();
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor) return;
+      if (!keepIds.has(Number(cursor.key))) {
+        store.delete(cursor.key);
+        removed++;
+      }
+      cursor.continue();
+    };
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve(removed);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
  * Delete a single folder from the IDB folders store.
  * @param {number} id
  */

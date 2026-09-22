@@ -238,7 +238,7 @@ test('scanMedia — processing phase', async (t) => {
     t.assert.strictEqual(byTitle.family.folder, path.join(root, 'other'));
   });
 
-  await t.test('sets status to ready for images and pending for videos', async () => {
+  await t.test('sets status to ready for images and videos (no default transcoding)', async () => {
     const db = makeDb();
     const { ctx } = makeContext(db);
     const scan = scanMedia.bind(ctx);
@@ -252,8 +252,8 @@ test('scanMedia — processing phase', async (t) => {
     t.assert.strictEqual(byTitle.photo.status, MEDIA_STATUS.READY);
     t.assert.strictEqual(byTitle.nested.status, MEDIA_STATUS.READY);
     t.assert.strictEqual(byTitle.family.status, MEDIA_STATUS.READY);
-    t.assert.strictEqual(byTitle.video.status, MEDIA_STATUS.PENDING);
-    t.assert.strictEqual(byTitle.deep_clip.status, MEDIA_STATUS.PENDING);
+    t.assert.strictEqual(byTitle.video.status, MEDIA_STATUS.READY);
+    t.assert.strictEqual(byTitle.deep_clip.status, MEDIA_STATUS.READY);
   });
 
   await t.test('hashes the complete file contents', async () => {
