@@ -8,15 +8,16 @@
  * (false negatives) and can group files that merely share a prefix and size
  * (false positives) — see issue #63.
  *
- * This module re-hashes those rows in one background pass at boot and stamps
- * them with the current `HASH_VERSION`, reporting progress to the server log.
+ * This module re-hashes those rows in one background pass triggered by Refresh
+ * and stamps them with the current `HASH_VERSION`, reporting progress to the
+ * server log.
  * It is:
  *  - **Bounded:** small batches, yielding to the event loop between them, so it
  *    never runs on a request path and never blocks the server.
  *  - **Complete:** it keeps going until no legacy row remains, rather than
- *    spreading the work across boots.
+ *    spreading the work across Refresh operations.
  *  - **Resumable:** every row is stamped the moment it is re-hashed, so if the
- *    process is killed mid-run the next boot continues where it left off.
+ *    process is killed mid-run the next Refresh continues where it left off.
  *  - **Safe:** rows whose file is missing/unreadable are skipped (left legacy)
  *    rather than stamped with an unverified hash.
  */
@@ -139,7 +140,7 @@ export async function backfillHashes(db, { batchSize = DEFAULT_BATCH_SIZE, logge
 let running = false;
 
 /**
- * Kick off the legacy-hash backfill in the background. Safe to call at boot:
+ * Kick off the legacy-hash backfill in the background. Safe to call on Refresh:
  * a second call while one is running is ignored.
  *
  * @param {object} kojo

@@ -18,7 +18,6 @@ import config from '@photo-quest/shared/config.js';
 import { initDb } from './src/db.js';
 import { resumeIncompleteScans } from './ops/scanMedia.js';
 import { resumePendingTranscodes } from './ops/transcodeNow.js';
-import { startHashBackfill } from './src/hashBackfill.js';
 
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -102,13 +101,10 @@ export default async function boot() {
   /* Re-queue any transcodes left pending/running from a previous session. */
   resumePendingTranscodes(kojo, console);
 
-  /* Run cleanups after the server is listening so we don't block startup.
-     Orphan cleanup runs first so the hash backfill doesn't waste time on rows
-     whose files are already gone. */
+  /* Run cleanups after the server is listening so we don't block startup. */
   setImmediate(() => {
     cleanupOrphanRecords(db);
     cleanupThumbs(db);
-    startHashBackfill(kojo, console);
   });
 
   return kojo;

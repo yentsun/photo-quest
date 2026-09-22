@@ -387,7 +387,7 @@ test('scanMedia — deduplication', async (t) => {
     t.assert.strictEqual(allMedia(db).length, 5);
   });
 
-  await t.test('backfills date_taken for pre-existing records without re-queueing', async () => {
+  await t.test('refreshes date_taken for pre-existing records without re-queueing', async () => {
     const db = makeDb();
     const { ctx } = makeContext(db);
     const scan = scanMedia.bind(ctx);
@@ -396,18 +396,19 @@ test('scanMedia — deduplication', async (t) => {
     const { scanId: scan1 } = await scan(root);
     await drainQueue(db, scan1, ctx[1]);
 
-    // Simulate a pre-migration record: null out date_taken on one existing row.
+    // Change the file timestamp after import; Refresh must recompute its date.
     const target = db.prepare('SELECT id, path FROM media WHERE path = ?').get(path.join(root, 'photo.jpg'));
-    db.prepare('UPDATE media SET date_taken = NULL WHERE id = ?').run(target.id);
+    const refreshedDate = new Date('2026-09-13T16:34:51.000Z');
+    fs.utimesSync(target.path, refreshedDate, refreshedDate);
 
-    // Second scan finds no new files but must backfill date_taken.
+    // Second scan finds no new files but must refresh date_taken.
     const result2 = await scan(root);
     t.assert.strictEqual(result2.total, 0);
     const items = allQueueItems(db, result2.scanId);
     t.assert.strictEqual(items.length, 0); // no re-queue (issue #32)
 
     const refreshed = db.prepare('SELECT date_taken FROM media WHERE id = ?').get(target.id);
-    t.assert.ok(refreshed.date_taken, 'date_taken should be backfilled on refresh');
+    t.assert.strictEqual(refreshed.date_taken, refreshedDate.toISOString());
   });
 });
 

@@ -43,7 +43,8 @@
  *  - `orientation`     EXIF orientation tag (1-8). 1 = normal, 6 = 90° CW,
  *                      etc. NULL for videos or images without EXIF.
  *  - `camera`          Camera make/model from EXIF (e.g. "FUJIFILM X100").
- *  - `date_taken`      ISO-8601 datetime from EXIF DateTimeOriginal.
+ *  - `date_taken`      ISO-8601 capture datetime from media metadata, a
+ *                      timestamped filename, or the filesystem timestamp.
  *  - `created_at` /
  *    `updated_at`      ISO-8601 timestamps managed by SQLite defaults and
  *                      explicit UPDATEs in the worker.
