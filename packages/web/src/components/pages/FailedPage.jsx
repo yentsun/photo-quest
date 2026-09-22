@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { actions } from '@photo-quest/shared';
 import GlobalContext from '../../globalContext.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
-import { fetchFailed, deleteMedia } from '../../utils/api.js';
+import { fetchFailed, repairFailed, deleteMedia, getLastFailed } from '../../utils/api.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Badge, Button, Checkbox, Icon, Loader, Modal } from '../ui/index.js';
@@ -33,17 +33,22 @@ export default function FailedPage() {
   const navigate = useNavigate();
   const { signal, bump } = useRefresh();
   const { dispatch } = useContext(GlobalContext);
-  const [groups, setGroups] = useState([]);
-  const [groupCount, setGroupCount] = useState(0);
-  const [failedCount, setFailedCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [checking, setChecking] = useState(false);
-  const [confirm, setConfirm] = useState(null); // { targets: group[] }
-  const [selected, setSelected] = useState(() => new Set());
 
   const [searchParams, setSearchParams] = useSearchParams();
   const paramPage = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
   const page = paramPage - 1;
+
+  /* Seed from the session cache so a revisit renders instantly instead of
+     re-running (and waiting on) the server file-health sweep. */
+  const cachedPage = getLastFailed(PAGE_SIZE, page * PAGE_SIZE);
+  const [groups, setGroups] = useState(() => cachedPage?.groups ?? []);
+  const [groupCount, setGroupCount] = useState(() => cachedPage?.groupCount ?? 0);
+  const [failedCount, setFailedCount] = useState(() => cachedPage?.failedCount ?? 0);
+  const [loading, setLoading] = useState(() => !cachedPage);
+  const [checking, setChecking] = useState(false);
+  const [fixing, setFixing] = useState(false);
+  const [confirm, setConfirm] = useState(null); // { targets: group[] }
+  const [selected, setSelected] = useState(() => new Set());
 
   const goToPage = useCallback((p) => {
     if (p === 0) { setSearchParams({}, { replace: true }); return; }
@@ -83,7 +88,10 @@ export default function FailedPage() {
 
   const load = useCallback((refresh) => {
     let cancelled = false;
-    if (refresh) setChecking(true); else setLoading(true);
+    /* Only show the full-page loader when this page isn't already cached —
+       otherwise keep the cached groups on screen while revalidating. */
+    const cached = !refresh ? getLastFailed(PAGE_SIZE, page * PAGE_SIZE) : null;
+    if (refresh) setChecking(true); else setLoading(!cached);
     fetchFailed({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, refresh })
       .then(result => {
         if (cancelled) return;
@@ -110,6 +118,36 @@ export default function FailedPage() {
       : `${startGroup.toLocaleString()}–${endGroup.toLocaleString()} of ${groupCount.toLocaleString()} group${groupCount !== 1 ? 's' : ''}`;
     return `${range} · ${failedCount.toLocaleString()} broken item${failedCount !== 1 ? 's' : ''}`;
   })();
+
+  const runFix = async ({ all = false, targets = null } = {}) => {
+    const ids = targets ? [...new Set(targets.flatMap(group => group.failedIds))] : undefined;
+    if (!all && (!ids || ids.length === 0)) return;
+    setFixing(true);
+    try {
+      const result = await repairFailed(all ? { all: true } : { ids });
+      if (result.repaired > 0) {
+        const detail = [
+          result.restored > 0 && `${result.restored} restored`,
+          result.requeued > 0 && `${result.requeued} re-queued`,
+        ].filter(Boolean).join(', ');
+        dispatch({
+          type: actions.TOAST_SHOWN,
+          message: `Fixed ${result.repaired} record${result.repaired !== 1 ? 's' : ''}${detail ? ` (${detail})` : ''}`,
+          toastType: 'success',
+        });
+      } else {
+        dispatch({ type: actions.TOAST_SHOWN, message: 'Nothing could be fixed', toastType: 'error' });
+      }
+      setSelected(new Set());
+      load(true);
+      bump();
+    } catch (err) {
+      console.error('Failed to repair media:', err);
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not repair media', toastType: 'error' });
+    } finally {
+      setFixing(false);
+    }
+  };
 
   const runConfirm = async () => {
     if (!confirm) return;
@@ -169,9 +207,18 @@ export default function FailedPage() {
           <Button
             variant="ghost"
             size="sm"
+            icon={<Icon name="wrench" className="icon-sm" />}
+            onClick={() => runFix({ all: true })}
+            disabled={fixing || checking || groupCount === 0}
+          >
+            {fixing ? 'Fixing…' : 'Fix all'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             icon={<Icon name="refresh" className="icon-sm" />}
             onClick={() => load(true)}
-            disabled={checking}
+            disabled={checking || fixing}
           >
             {checking ? 'Checking…' : 'Re-check'}
           </Button>
@@ -187,6 +234,9 @@ export default function FailedPage() {
             label={`Select all (${groups.length})`}
           />
           <span className="duplicate-bulk-count">{selectedBrokenCount} broken record{selectedBrokenCount !== 1 ? 's' : ''}</span>
+          <Button variant="ghost" size="sm" icon={<Icon name="wrench" className="icon-sm" />} onClick={() => runFix({ targets: selectedGroups })} disabled={fixing}>
+            Fix each
+          </Button>
           <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={() => setConfirm({ targets: selectedGroups })}>
             Remove each
           </Button>
@@ -221,6 +271,9 @@ export default function FailedPage() {
                   </span>
                   {group.hash && <span className="duplicate-group-hash">{group.hash}</span>}
                   <div className="duplicate-group-actions">
+                    <Button variant="ghost" size="sm" icon={<Icon name="wrench" className="icon-sm" />} onClick={() => runFix({ targets: [group] })} disabled={fixing}>
+                      Fix
+                    </Button>
                     <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={() => setConfirm({ targets: [group] })}>
                       Remove broken
                     </Button>

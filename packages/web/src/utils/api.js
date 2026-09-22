@@ -57,6 +57,36 @@ const _mediaCache = new Map();
 const _folderMediaCache = new Map();
 
 /**
+ * Last failed-media listing per page, keyed by `${limit}:${offset}`. The server
+ * file-health sweep is expensive, so a session cache lets the Failed page render
+ * instantly on revisit; it is invalidated by repair/delete (and `refresh: true`).
+ * @type {Map<string, { groups: Object[], groupCount: number, failedCount: number }>}
+ */
+const _failedCache = new Map();
+
+/** Cache key for a failed-listing page. */
+function failedCacheKey(limit, offset) {
+  return `${limit ?? ''}:${offset ?? ''}`;
+}
+
+/**
+ * Returns the last cached failed-media listing for a page, or null if this
+ * session hasn't fetched it yet. Safe to call inside a useState initialiser.
+ *
+ * @param {number} [limit]
+ * @param {number} [offset]
+ * @returns {{ groups: Object[], groupCount: number, failedCount: number }|null}
+ */
+export function getLastFailed(limit, offset) {
+  return _failedCache.get(failedCacheKey(limit, offset)) ?? null;
+}
+
+/** Drop the cached failed-media listings (after a repair/delete or cache purge). */
+export function invalidateFailedCache() {
+  _failedCache.clear();
+}
+
+/**
  * Returns the last successfully loaded folders array, or null if not yet
  * fetched in this session.  Safe to call inside React useState initialisers
  * (synchronous — no async needed).
@@ -119,15 +149,16 @@ async function syncMediaCache(ids = [], replacements = []) {
 }
 
 /**
- * Clear all in-memory session caches (folders, tags, media, per-folder media).
- * Used after a full cache purge so the next render fetches fresh from the
- * server instead of serving stale in-memory data.
+ * Clear all in-memory session caches (folders, tags, media, per-folder media,
+ * failed listings). Used after a full cache purge so the next render fetches
+ * fresh from the server instead of serving stale in-memory data.
  */
 export function resetMediaCaches() {
   _foldersCache = null;
   _tagsCache = null;
   _mediaCache.clear();
   _folderMediaCache.clear();
+  _failedCache.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -270,8 +301,9 @@ export async function fetchDuplicates({ countOnly = false, limit, offset, timeou
 
 /**
  * Fetch media whose file is missing/unreadable or whose processing failed,
- * grouped by content hash. Pass `refresh: true` to bypass the server-side
- * file-check cache (used by the manual "Re-check" action).
+ * grouped by content hash. Full listings are served from a session cache
+ * (instant revisit) and refreshed in the background. Pass `refresh: true` to
+ * bypass both the client and server file-check caches (manual "Re-check").
  *
  * @param {{ countOnly?: boolean, limit?: number, offset?: number, refresh?: boolean, timeout?: number }} [opts]
  * @returns {Promise<{ groups?: Object[], groupCount: number, failedCount: number }>}
@@ -284,9 +316,47 @@ export async function fetchFailed({ countOnly = false, limit, offset, refresh = 
   if (offset != null) url.searchParams.set('offset', offset);
   const opts = {};
   if (timeout != null) opts.signal = AbortSignal.timeout(timeout);
+
+  /* Session cache hit: return instantly and revalidate in the background so the
+     next visit is fresh (and an offline/erroring server still shows data). */
+  const key = failedCacheKey(limit, offset);
+  const cached = !countOnly && !refresh ? _failedCache.get(key) : null;
+  if (cached) {
+    fetch(url, opts)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { if (data) _failedCache.set(key, data); })
+      .catch(() => {});
+    return cached;
+  }
+
   const response = await fetch(url, opts);
   if (!response.ok) throw new Error('Failed to fetch failed media');
-  return response.json();
+  const data = await response.json();
+  if (!countOnly) _failedCache.set(key, data);
+  return data;
+}
+
+/**
+ * Ask the server to repair failed media records by re-checking their files on
+ * disk and reconciling their status. Pass `ids` for specific records or
+ * `all: true` to repair every currently-failed record.
+ *
+ * @param {{ ids?: number[], all?: boolean }} [opts]
+ * @returns {Promise<{ repaired: number, restored: number, requeued: number, unrepairable: number }>}
+ */
+export async function repairFailed({ ids, all = false } = {}) {
+  const response = await fetch(apiRoutes.failedRepair, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(all ? { all: true } : { ids }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to repair media');
+  }
+  const data = await response.json();
+  invalidateFailedCache();
+  return data;
 }
 
 /**
@@ -524,6 +594,7 @@ export async function deleteMedia(id) {
   const result = await response.json();
   _mediaCache.delete(id);
   if (folderPath) _folderMediaCache.delete(folderPath);
+  invalidateFailedCache();
   idbDeleteMedia(id).catch(() => {});
   return result;
 }

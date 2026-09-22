@@ -174,4 +174,7 @@ export const apiRoutes = {
   /** GET  -- list media whose file is missing/unreadable or whose processing
    *  failed, grouped by content hash. */
   failed: '/failed',
+
+  /** POST -- try to repair failed media. Body: { ids } or { all: true }. */
+  failedRepair: '/failed/repair',
 };

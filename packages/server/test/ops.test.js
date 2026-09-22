@@ -17,6 +17,7 @@ import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE } from '@ph
 import listMedia from '../ops/listMedia.js';
 import listDuplicates from '../ops/listDuplicates.js';
 import listFailed from '../ops/listFailed.js';
+import repairFailed from '../ops/repairFailed.js';
 import getMediaDuplicates from '../ops/getMediaDuplicates.js';
 import mergeDuplicates from '../ops/mergeDuplicates.js';
 import deleteDuplicates from '../ops/deleteDuplicates.js';
@@ -48,6 +49,7 @@ function makeContext(db) {
   const kojo = {
     get: (k) => state.get(k),
     set: (k, v) => state.set(k, v),
+    ops: {},
   };
   const logger = {
     info() {},
@@ -379,6 +381,102 @@ test('listFailed op', async (t) => {
     const page2 = callOp(listFailed, ctx, { limit: 2, offset: 2 });
     t.assert.strictEqual(page2.groups.length, 1);
     t.assert.strictEqual(page2.groupCount, 3);
+  });
+});
+
+test('repairFailed op', async (t) => {
+  let root;
+  t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'repair-test-')); });
+  t.afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
+  /** Insert a media row. `exists`/`transcodedExists` control what is on disk. */
+  function insertRow(db, { name, type = 'video', status = 'error', hash = null, exists = true, transcodedExists = false }) {
+    const filePath = path.join(root, name);
+    if (exists) writeFixtureFile(root, name, name);
+    const transcoded = transcodedExists ? path.join(root, `tc-${name}.mp4`) : null;
+    if (transcoded) writeFixtureFile(root, `tc-${name}.mp4`, 'transcoded');
+    const { lastInsertRowid: id } = db.prepare(
+      'INSERT INTO media (path, title, type, status, hash, transcoded_path) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(filePath, name, type, status, hash, transcoded);
+    return id;
+  }
+
+  await t.test('restores a record whose transcoded output exists', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const id = insertRow(db, { name: 'video.webm', exists: false, transcodedExists: true });
+
+    const result = callOp(repairFailed, ctx, { ids: [id] });
+
+    t.assert.strictEqual(result.repaired, 1);
+    t.assert.strictEqual(result.restored, 1);
+    t.assert.strictEqual(result.requeued, 0);
+    t.assert.strictEqual(result.results[0].reason, 'transcoded');
+    t.assert.strictEqual(db.prepare('SELECT status FROM media WHERE id = ?').get(id).status, 'ready');
+  });
+
+  await t.test('restores an image whose original exists', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const id = insertRow(db, { name: 'photo.jpg', type: 'image' });
+
+    const result = callOp(repairFailed, ctx, { ids: [id] });
+
+    t.assert.strictEqual(result.restored, 1);
+    t.assert.strictEqual(db.prepare('SELECT status FROM media WHERE id = ?').get(id).status, 'ready');
+  });
+
+  await t.test('re-queues a video whose original exists', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const queued = [];
+    ctx[0].ops.transcodeNow = (id) => { queued.push(id); return 1; };
+    const id = insertRow(db, { name: 'video.avi' });
+
+    const result = callOp(repairFailed, ctx, { ids: [id] });
+
+    t.assert.strictEqual(result.repaired, 1);
+    t.assert.strictEqual(result.requeued, 1);
+    t.assert.deepStrictEqual(queued, [id]);
+    t.assert.strictEqual(db.prepare('SELECT status FROM media WHERE id = ?').get(id).status, 'pending');
+  });
+
+  await t.test('reports a record with no file on disk as unrepairable', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const id = insertRow(db, { name: 'gone.webm', exists: false });
+
+    const result = callOp(repairFailed, ctx, { ids: [id] });
+
+    t.assert.strictEqual(result.repaired, 0);
+    t.assert.strictEqual(result.unrepairable, 1);
+    t.assert.strictEqual(result.results[0].outcome, 'unrepairable');
+    t.assert.strictEqual(db.prepare('SELECT status FROM media WHERE id = ?').get(id).status, 'error');
+  });
+
+  await t.test('repairs every failed record with all: true', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    insertRow(db, { name: 'good.webm', exists: false, transcodedExists: true });
+    insertRow(db, { name: 'bad.webm', exists: false });
+    insertRow(db, { name: 'ok.webm', status: 'ready', exists: true });
+
+    const result = callOp(repairFailed, ctx, { all: true });
+
+    t.assert.strictEqual(result.repaired, 1);
+    t.assert.strictEqual(result.unrepairable, 1);
+  });
+
+  await t.test('ignores hidden media when repairing all', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const id = insertRow(db, { name: 'hidden.webm', exists: false, transcodedExists: true });
+    db.prepare('UPDATE media SET hidden = 1 WHERE id = ?').run(id);
+
+    const result = callOp(repairFailed, ctx, { all: true });
+
+    t.assert.strictEqual(result.repaired, 0);
+    t.assert.strictEqual(db.prepare('SELECT status FROM media WHERE id = ?').get(id).status, 'error');
   });
 });
 

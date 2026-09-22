@@ -99,6 +99,15 @@ function getResult(db, refresh) {
   return value;
 }
 
+/**
+ * Drop the cached file-health sweep. Called by ops that change media state
+ * (repair, delete, scan) so the next `listFailed` / `/failed?count=1` reflects
+ * the change immediately instead of serving a stale result until the TTL.
+ */
+export function invalidateFailedCache() {
+  _cache = null;
+}
+
 export default function ({ countOnly = false, limit, offset, refresh = false } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');

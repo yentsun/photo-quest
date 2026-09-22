@@ -15,6 +15,7 @@ import endpoint_get_media_id from '../endpoints/20_get_media_id.js';
 import endpoint_get_media_id_duplicates from '../endpoints/21_get_media_id_duplicates.js';
 import endpoint_get_duplicates from '../endpoints/93_get_duplicates.js';
 import endpoint_get_failed from '../endpoints/96_get_failed.js';
+import endpoint_post_failed_repair from '../endpoints/97_post_failed_repair.js';
 import endpoint_post_duplicates_merge from '../endpoints/94_post_duplicates_merge.js';
 import endpoint_post_duplicates_delete from '../endpoints/95_post_duplicates_delete.js';
 import endpoint_patch_like from '../endpoints/25_patch_media_id_like.js';
@@ -120,6 +121,12 @@ async function setup() {
         const safeOffset = offset >= 0 ? offset : 0;
         return { groups: groups.slice(safeOffset, safeOffset + safeLimit), groupCount: groups.length, failedCount: rows.length };
       },
+      repairFailed: function({ ids, all = false } = {}) {
+        const targets = all
+          ? db.prepare("SELECT id FROM media WHERE hidden = 0 AND status = 'error'").all()
+          : (ids || []).map(id => ({ id }));
+        return { repaired: targets.length, restored: targets.length, requeued: 0, unrepairable: 0, results: [] };
+      },
       likeMedia: function(id) {
         const existing = db.prepare('SELECT likes FROM media WHERE id = ?').get(Number(id));
         if (!existing) return null;
@@ -163,6 +170,7 @@ async function setup() {
   await endpoint_get_media_id_duplicates(kojo, logger);
   await endpoint_get_duplicates(kojo, logger);
   await endpoint_get_failed(kojo, logger);
+  await endpoint_post_failed_repair(kojo, logger);
   await endpoint_post_duplicates_merge(kojo, logger);
   await endpoint_post_duplicates_delete(kojo, logger);
   await endpoint_patch_like(kojo, logger);
@@ -742,6 +750,51 @@ test('GET /failed?count=1', async (t) => {
     t.assert.strictEqual(res._body.groupCount, 2);
     t.assert.strictEqual(res._body.failedCount, 3);
     t.assert.strictEqual('groups' in res._body, false);
+  });
+});
+
+test('POST /failed/repair', async (t) => {
+  await setup();
+
+  await t.test('repairs the given ids', async () => {
+    const a = db.prepare("INSERT INTO media (path, title, type, status) VALUES ('/a.jpg', 'A', 'image', 'error')").run().lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, type, status) VALUES ('/b.jpg', 'B', 'image', 'error')").run().lastInsertRowid;
+
+    const route = findRoute('POST', '/failed/repair');
+    const req = mockReq('POST', '/failed/repair', { ids: [a, b] });
+    const res = mockRes();
+
+    const promise = route.handler(req, res);
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.repaired, 2);
+  });
+
+  await t.test('repairs every failed record when all is true', async () => {
+    const route = findRoute('POST', '/failed/repair');
+    const req = mockReq('POST', '/failed/repair', { all: true });
+    const res = mockRes();
+
+    const promise = route.handler(req, res);
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.repaired, 2);
+  });
+
+  await t.test('rejects when neither ids nor all are given', async () => {
+    const route = findRoute('POST', '/failed/repair');
+    const req = mockReq('POST', '/failed/repair', {});
+    const res = mockRes();
+
+    const promise = route.handler(req, res);
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 400);
   });
 });
 
