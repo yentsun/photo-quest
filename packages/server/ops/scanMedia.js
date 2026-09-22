@@ -29,6 +29,7 @@ import { isMediaFile } from '../src/mediaFile.js';
 import { computeFileHash } from '../src/fileHash.js';
 import { getCaptureDate } from '../src/mediaDate.js';
 import { startHashBackfill } from '../src/hashBackfill.js';
+import { startHealthScan } from './listFailed.js';
 
 const WORKER_PATH = process.env.SCAN_WORKER_PATH
   || path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/scanWorker.js');
@@ -336,10 +337,11 @@ export default async function (dirPath) {
     console.log(`[DBG][scan] REFRESH-DATES ${(performance.now() - tRefreshDates).toFixed(0)}ms rows=${existingRows.length} refreshed=${refreshed}`);
   }
 
-  /* Legacy hash reindexing is intentionally user-triggered with Refresh, not
-     an automatic boot task. It yields between batches and ignores concurrent
-     Refresh calls. */
+  /* Legacy hash reindexing and the file-health sweep are intentionally
+     user-triggered with Refresh, not automatic boot tasks. Both yield between
+     batches and ignore concurrent Refresh calls. */
   startHashBackfill(kojo, logger);
+  startHealthScan(kojo, logger);
 
   logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
 

@@ -11,8 +11,10 @@
  * the single-row `failed_snapshot` table. This op only reads that snapshot,
  * which makes `GET /failed` (and the sidebar count) effectively instant.
  *
- * `refresh: true` asks the background sweep to run again; the current snapshot
- * is still returned immediately, with `refreshing: true` so the client can poll.
+ * The sweep is user-triggered: a library Refresh (ops/scanMedia.js) or an
+ * explicit `refresh: true` (the Failed page's "Re-check"). Neither blocks the
+ * request — the current snapshot is returned immediately with `refreshing:
+ * true` while a sweep runs in the background.
  *
  * `countOnly` returns just the totals for the sidebar badge. The full listing is
  * paginated by group with `limit` / `offset` and always returns the effective
@@ -25,9 +27,6 @@
  */
 
 import { scanFailedMediaAsync } from '../src/mediaHealth.js';
-
-/** How long a snapshot is considered fresh before a request triggers a re-sweep. */
-const SNAPSHOT_TTL_MS = 5 * 60_000;
 
 /** @type {{ groups: Object[], groupCount: number, failedCount: number, at: number }|null} */
 let _snapshot = null;
@@ -267,10 +266,9 @@ export default function ({ countOnly = false, limit, offset, refresh = false } =
 
   const snapshot = loadSnapshot(db);
 
-  /* Serve the snapshot instantly; refresh it in the background when asked or
-     when it has gone stale. */
-  const stale = Date.now() - snapshot.at > SNAPSHOT_TTL_MS;
-  if ((refresh || stale) && !_scanning) {
+  /* Serve the snapshot instantly; run a fresh sweep in the background only
+     when explicitly asked (library Refresh or the page's "Re-check"). */
+  if (refresh && !_scanning) {
     startHealthScan(kojo, logger);
   }
 

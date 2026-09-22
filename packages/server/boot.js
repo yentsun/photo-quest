@@ -18,7 +18,6 @@ import config from '@photo-quest/shared/config.js';
 import { initDb } from './src/db.js';
 import { resumeIncompleteScans } from './ops/scanMedia.js';
 import { resumePendingTranscodes } from './ops/transcodeNow.js';
-import { startHealthScan } from './ops/listFailed.js';
 import { scanFailedMediaAsync } from './src/mediaHealth.js';
 
 import { fileURLToPath } from 'node:url';
@@ -104,13 +103,12 @@ export default async function boot() {
   resumePendingTranscodes(kojo, console);
 
   /* Run cleanups after the server is listening so we don't block startup.
-     They yield to the event loop, and the first health sweep runs once the
-     orphan cleanup has finished so the snapshot excludes deleted records. */
+     They yield to the event loop. The file-health sweep is not run here — it
+     is user-triggered with Refresh (see ops/scanMedia.js). */
   setImmediate(() => {
     cleanupThumbs(db);
     cleanupOrphanRecords(db)
-      .catch(err => console.warn(`[boot] Orphan record cleanup failed: ${err.message}`))
-      .finally(() => startHealthScan(kojo, console));
+      .catch(err => console.warn(`[boot] Orphan record cleanup failed: ${err.message}`));
   });
 
   return kojo;
