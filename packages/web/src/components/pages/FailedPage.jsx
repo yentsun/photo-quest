@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { actions } from '@photo-quest/shared';
 import GlobalContext from '../../globalContext.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
-import { fetchFailed, repairFailed, deleteMedia, getLastFailed } from '../../utils/api.js';
+import { fetchFailed, repairFailed, deleteMedia, mergeDuplicates } from '../../utils/api.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Badge, Button, Checkbox, Icon, Loader, Modal } from '../ui/index.js';
@@ -38,16 +38,16 @@ export default function FailedPage() {
   const paramPage = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
   const page = paramPage - 1;
 
-  /* Seed from the session cache so a revisit renders instantly instead of
-     re-running (and waiting on) the server file-health sweep. */
-  const cachedPage = getLastFailed(PAGE_SIZE, page * PAGE_SIZE);
-  const [groups, setGroups] = useState(() => cachedPage?.groups ?? []);
-  const [groupCount, setGroupCount] = useState(() => cachedPage?.groupCount ?? 0);
-  const [failedCount, setFailedCount] = useState(() => cachedPage?.failedCount ?? 0);
-  const [loading, setLoading] = useState(() => !cachedPage);
+  const [groups, setGroups] = useState([]);
+  const [groupCount, setGroupCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
+  /* True while the server is running a background file-health sweep. The page
+     keeps polling until it finishes so results appear without a manual reload. */
+  const [refreshing, setRefreshing] = useState(false);
   const [fixing, setFixing] = useState(false);
-  const [confirm, setConfirm] = useState(null); // { targets: group[] }
+  const [confirm, setConfirm] = useState(null); // { type: 'remove'|'merge', targets: group[] }
   const [selected, setSelected] = useState(() => new Set());
 
   const goToPage = useCallback((p) => {
@@ -85,26 +85,54 @@ export default function FailedPage() {
 
   const selectedGroups = groups.filter(g => selected.has(g.key));
   const selectedBrokenCount = selectedGroups.reduce((sum, g) => sum + g.failedCount, 0);
+  /* Groups with a duplicate sibling can be resolved by merging. */
+  const mergeableSelected = selectedGroups.filter(g => g.items.length > 1);
+
+  const applyResult = useCallback((result) => {
+    setGroups(result.groups ?? []);
+    setGroupCount(result.groupCount ?? (result.groups?.length ?? 0));
+    setFailedCount(result.failedCount ?? 0);
+    setRefreshing(!!result.refreshing);
+  }, []);
 
   const load = useCallback((refresh) => {
     let cancelled = false;
-    /* Only show the full-page loader when this page isn't already cached —
-       otherwise keep the cached groups on screen while revalidating. */
-    const cached = !refresh ? getLastFailed(PAGE_SIZE, page * PAGE_SIZE) : null;
-    if (refresh) setChecking(true); else setLoading(!cached);
+    if (refresh) setChecking(true); else setLoading(true);
     fetchFailed({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, refresh })
       .then(result => {
         if (cancelled) return;
-        setGroups(result.groups ?? []);
-        setGroupCount(result.groupCount ?? (result.groups?.length ?? 0));
-        setFailedCount(result.failedCount ?? 0);
+        applyResult(result);
+        if (refresh && !result.refreshing) setChecking(false);
       })
-      .catch(err => console.error('Failed to fetch failed media:', err))
-      .finally(() => { if (!cancelled) { setLoading(false); setChecking(false); } });
+      .catch(err => {
+        console.error('Failed to fetch failed media:', err);
+        if (!cancelled) setChecking(false);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [page]);
+  }, [page, applyResult]);
 
   useEffect(() => load(false), [load, signal]);
+
+  /* While the server sweeps, poll the snapshot until it finishes. */
+  useEffect(() => {
+    if (!refreshing) return;
+    const deadline = Date.now() + 120_000;
+    const id = setInterval(async () => {
+      if (Date.now() > deadline) {
+        setRefreshing(false);
+        setChecking(false);
+        clearInterval(id);
+        return;
+      }
+      try {
+        const result = await fetchFailed({ limit: PAGE_SIZE, offset: page * PAGE_SIZE });
+        applyResult(result);
+        if (!result.refreshing) { setChecking(false); clearInterval(id); }
+      } catch { /* keep polling */ }
+    }, 2000);
+    return () => clearInterval(id);
+  }, [refreshing, page, applyResult]);
 
   const totalPages = Math.max(1, Math.ceil(groupCount / PAGE_SIZE));
   const startGroup = page * PAGE_SIZE + 1;
@@ -139,7 +167,7 @@ export default function FailedPage() {
         dispatch({ type: actions.TOAST_SHOWN, message: 'Nothing could be fixed', toastType: 'error' });
       }
       setSelected(new Set());
-      load(true);
+      load(false);
       bump();
     } catch (err) {
       console.error('Failed to repair media:', err);
@@ -151,8 +179,37 @@ export default function FailedPage() {
 
   const runConfirm = async () => {
     if (!confirm) return;
-    const targets = confirm.targets;
+    const { type, targets } = confirm;
     setConfirm(null);
+
+    if (type === 'merge') {
+      let ok = 0;
+      let fail = 0;
+      for (const group of targets) {
+        const ids = group.items.map(item => item.id);
+        /* Keep an intact copy as the master so the broken record is the one
+           dropped — that is what actually resolves the failure. */
+        const intact = group.items.find(item => !item.health);
+        try {
+          await mergeDuplicates({ ids, keepId: intact?.id });
+          ok++;
+        } catch (err) {
+          console.error(`Failed to merge group ${group.key}:`, err);
+          fail++;
+        }
+      }
+      if (ok > 0) {
+        dispatch({ type: actions.TOAST_SHOWN, message: `Merged ${ok} group${ok !== 1 ? 's' : ''}`, toastType: 'success' });
+      }
+      if (fail > 0) {
+        dispatch({ type: actions.TOAST_SHOWN, message: `Could not merge ${fail} group${fail !== 1 ? 's' : ''}`, toastType: 'error' });
+      }
+      setSelected(new Set());
+      load(false);
+      bump();
+      return;
+    }
+
     const ids = [...new Set(targets.flatMap(group => group.failedIds))];
     let ok = 0;
     let fail = 0;
@@ -172,14 +229,25 @@ export default function FailedPage() {
       dispatch({ type: actions.TOAST_SHOWN, message: `Could not remove ${fail} record${fail !== 1 ? 's' : ''}`, toastType: 'error' });
     }
     setSelected(new Set());
-    load(true);
+    load(false);
     bump();
   };
 
   const confirmMeta = (() => {
     if (!confirm) return null;
-    const targets = confirm.targets;
+    const { type, targets } = confirm;
     const isBulk = targets.length > 1;
+    if (type === 'merge') {
+      return {
+        title: isBulk ? `Merge ${targets.length} groups` : 'Merge duplicates',
+        body: isBulk
+          ? <>Merge the copies in <strong>{targets.length}</strong> selected groups into one each? The broken records are dropped and the most mature intact copy is kept.</>
+          : <>Merge the <strong>{targets[0].items.length}</strong> copies in this group into one? The broken record(s) are dropped and the intact copy is kept.</>,
+        label: isBulk ? 'Merge each' : 'Merge',
+        variant: 'primary',
+        icon: 'copy',
+      };
+    }
     const n = isBulk
       ? targets.reduce((sum, group) => sum + group.failedCount, 0)
       : targets[0].failedCount;
@@ -234,10 +302,15 @@ export default function FailedPage() {
             label={`Select all (${groups.length})`}
           />
           <span className="duplicate-bulk-count">{selectedBrokenCount} broken record{selectedBrokenCount !== 1 ? 's' : ''}</span>
+          {mergeableSelected.length > 0 && (
+            <Button variant="primary" size="sm" icon={<Icon name="copy" className="icon-sm" />} onClick={() => setConfirm({ type: 'merge', targets: mergeableSelected })}>
+              Merge each
+            </Button>
+          )}
           <Button variant="ghost" size="sm" icon={<Icon name="wrench" className="icon-sm" />} onClick={() => runFix({ targets: selectedGroups })} disabled={fixing}>
             Fix each
           </Button>
-          <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={() => setConfirm({ targets: selectedGroups })}>
+          <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={() => setConfirm({ type: 'remove', targets: selectedGroups })}>
             Remove each
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Clear</Button>
@@ -271,10 +344,15 @@ export default function FailedPage() {
                   </span>
                   {group.hash && <span className="duplicate-group-hash">{group.hash}</span>}
                   <div className="duplicate-group-actions">
+                    {group.items.length > 1 && (
+                      <Button variant="primary" size="sm" icon={<Icon name="copy" className="icon-sm" />} onClick={() => setConfirm({ type: 'merge', targets: [group] })}>
+                        Merge
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" icon={<Icon name="wrench" className="icon-sm" />} onClick={() => runFix({ targets: [group] })} disabled={fixing}>
                       Fix
                     </Button>
-                    <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={() => setConfirm({ targets: [group] })}>
+                    <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={() => setConfirm({ type: 'remove', targets: [group] })}>
                       Remove broken
                     </Button>
                   </div>

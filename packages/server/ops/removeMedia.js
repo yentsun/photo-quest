@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { invalidateFailedCache } from './listFailed.js';
+import { removeFromFailedSnapshot } from './listFailed.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const THUMBS_DIR = path.join(__dirname, '..', 'thumbs');
@@ -49,6 +49,7 @@ export default function (id) {
   logger.debug(`db delete changes=${result.changes}`);
 
   if (result.changes > 0) {
+    removeFromFailedSnapshot(kojo, [Number(id)]);
     for (const p of [filePath]) {
       if (!p) continue;
       try {

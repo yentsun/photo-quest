@@ -18,6 +18,8 @@ import config from '@photo-quest/shared/config.js';
 import { initDb } from './src/db.js';
 import { resumeIncompleteScans } from './ops/scanMedia.js';
 import { resumePendingTranscodes } from './ops/transcodeNow.js';
+import { startHealthScan } from './ops/listFailed.js';
+import { scanFailedMediaAsync } from './src/mediaHealth.js';
 
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -101,10 +103,14 @@ export default async function boot() {
   /* Re-queue any transcodes left pending/running from a previous session. */
   resumePendingTranscodes(kojo, console);
 
-  /* Run cleanups after the server is listening so we don't block startup. */
+  /* Run cleanups after the server is listening so we don't block startup.
+     They yield to the event loop, and the first health sweep runs once the
+     orphan cleanup has finished so the snapshot excludes deleted records. */
   setImmediate(() => {
-    cleanupOrphanRecords(db);
     cleanupThumbs(db);
+    cleanupOrphanRecords(db)
+      .catch(err => console.warn(`[boot] Orphan record cleanup failed: ${err.message}`))
+      .finally(() => startHealthScan(kojo, console));
   });
 
   return kojo;
@@ -141,23 +147,21 @@ function cleanupThumbs(db) {
   }
 }
 
-function cleanupOrphanRecords(db) {
-  try {
-    const rows = db.prepare('SELECT id, path, transcoded_path FROM media').all();
-    let removed = 0;
-    for (const row of rows) {
-      const fileExists = (row.path && fs.existsSync(row.path));
-      const transcodeExists = (row.transcoded_path && fs.existsSync(row.transcoded_path));
-      if (fileExists || transcodeExists) continue;
-      console.log(`[boot] Removing orphan media record id=${row.id}: ${row.path}`);
-      db.prepare('DELETE FROM media WHERE id = ?').run(row.id);
-      removed++;
-    }
-    if (removed > 0) {
-      console.log(`[boot] Removed ${removed} orphan media record(s)`);
-    }
-  } catch (err) {
-    console.warn(`[boot] Orphan record cleanup failed: ${err.message}`);
+async function cleanupOrphanRecords(db) {
+  /* Async, batched and yielding so a large library never freezes the server at
+     boot. Uses the shared health scanner: a record with no usable file on disk
+     is an orphan. */
+  const { failed } = await scanFailedMediaAsync(db, { logger: console });
+  const remove = db.prepare('DELETE FROM media WHERE id = ?');
+  let removed = 0;
+  for (const entry of failed) {
+    if (entry.reason !== 'missing') continue;
+    console.log(`[boot] Removing orphan media record id=${entry.row.id}: ${entry.row.path}`);
+    remove.run(entry.row.id);
+    removed++;
+  }
+  if (removed > 0) {
+    console.log(`[boot] Removed ${removed} orphan media record(s)`);
   }
 }
 

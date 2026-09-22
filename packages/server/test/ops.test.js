@@ -11,12 +11,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync as Database } from 'node:sqlite';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE } from '@photo-quest/shared';
 
 /* Import the raw op functions. */
 import listMedia from '../ops/listMedia.js';
 import listDuplicates from '../ops/listDuplicates.js';
-import listFailed from '../ops/listFailed.js';
+import listFailed, { startHealthScan, removeFromFailedSnapshot } from '../ops/listFailed.js';
 import repairFailed from '../ops/repairFailed.js';
 import getMediaDuplicates from '../ops/getMediaDuplicates.js';
 import mergeDuplicates from '../ops/mergeDuplicates.js';
@@ -37,6 +37,7 @@ function freshDb() {
   db.exec(CREATE_MEDIA_TABLE);
   db.exec(CREATE_JOBS_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
+  db.exec(CREATE_FAILED_SNAPSHOT_TABLE);
   db.exec("ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
   return db;
 }
@@ -259,25 +260,30 @@ test('listFailed op', async (t) => {
     return id;
   }
 
-  await t.test('returns no groups when every file exists', (t) => {
+  /* The op serves a cached snapshot, so run the (async) sweep first. */
+  const refresh = (ctx) => startHealthScan(ctx[0], ctx[1]);
+
+  await t.test('returns no groups when every file exists', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
     insertRow(db, { name: 'a.jpg', hash: 'h1' });
     insertRow(db, { name: 'b.jpg', hash: 'h1' });
 
+    await refresh(ctx);
     const result = callOp(listFailed, ctx);
     t.assert.strictEqual(result.groups.length, 0);
     t.assert.strictEqual(result.groupCount, 0);
     t.assert.strictEqual(result.failedCount, 0);
   });
 
-  await t.test('flags a record whose file is missing', (t) => {
+  await t.test('flags a record whose file is missing', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
     const id = insertRow(db, { name: 'gone.jpg', exists: false });
 
+    await refresh(ctx);
     const result = callOp(listFailed, ctx);
     t.assert.strictEqual(result.groupCount, 1);
     t.assert.strictEqual(result.failedCount, 1);
@@ -288,13 +294,14 @@ test('listFailed op', async (t) => {
     t.assert.strictEqual(group.items[0].health, 'missing');
   });
 
-  await t.test('groups a broken record with its intact copy sharing the hash', (t) => {
+  await t.test('groups a broken record with its intact copy sharing the hash', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
     const broken = insertRow(db, { name: 'gone.jpg', hash: 'same', exists: false });
     const intact = insertRow(db, { name: 'here.jpg', hash: 'same' });
 
+    await refresh(ctx);
     const result = callOp(listFailed, ctx);
     t.assert.strictEqual(result.groupCount, 1);
     t.assert.strictEqual(result.failedCount, 1);
@@ -310,49 +317,53 @@ test('listFailed op', async (t) => {
     t.assert.strictEqual(group.items[1].health, null);
   });
 
-  await t.test('does not flag a video whose transcoded file is gone but original survives', (t) => {
+  await t.test('does not flag a video whose transcoded file is gone but original survives', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
     insertRow(db, { name: 'video.mp4', transcoded: path.join(root, 'missing-transcode.mp4') });
 
+    await refresh(ctx);
     const result = callOp(listFailed, ctx);
     t.assert.strictEqual(result.groupCount, 0);
   });
 
-  await t.test('flags a processing error when the file exists', (t) => {
+  await t.test('flags a processing error when the file exists', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
     insertRow(db, { name: 'broken.jpg', status: 'error' });
 
+    await refresh(ctx);
     const result = callOp(listFailed, ctx);
     t.assert.strictEqual(result.groupCount, 1);
     t.assert.strictEqual(result.groups[0].items[0].health, 'error');
   });
 
-  await t.test('prefers missing over error when both apply', (t) => {
+  await t.test('prefers missing over error when both apply', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
     insertRow(db, { name: 'gone.jpg', status: 'error', exists: false });
 
+    await refresh(ctx);
     const result = callOp(listFailed, ctx);
     t.assert.strictEqual(result.groups[0].items[0].health, 'missing');
   });
 
-  await t.test('excludes hidden media', (t) => {
+  await t.test('excludes hidden media', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
     const id = insertRow(db, { name: 'gone.jpg', exists: false });
     db.prepare('UPDATE media SET hidden = 1 WHERE id = ?').run(id);
 
+    await refresh(ctx);
     const result = callOp(listFailed, ctx);
     t.assert.strictEqual(result.groupCount, 0);
   });
 
-  await t.test('countOnly returns totals without groups', (t) => {
+  await t.test('countOnly returns totals without groups', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
@@ -360,13 +371,14 @@ test('listFailed op', async (t) => {
     insertRow(db, { name: 'here-b.jpg', hash: 'same' });
     insertRow(db, { name: 'gone-c.jpg', exists: false });
 
+    await refresh(ctx);
     const result = callOp(listFailed, ctx, { countOnly: true });
     t.assert.strictEqual(result.groupCount, 2);
     t.assert.strictEqual(result.failedCount, 2);
     t.assert.strictEqual('groups' in result, false);
   });
 
-  await t.test('paginates groups with limit/offset', (t) => {
+  await t.test('paginates groups with limit/offset', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
 
@@ -374,6 +386,7 @@ test('listFailed op', async (t) => {
     insertRow(db, { name: 'gone-2.jpg', exists: false });
     insertRow(db, { name: 'gone-3.jpg', exists: false });
 
+    await refresh(ctx);
     const page1 = callOp(listFailed, ctx, { limit: 2, offset: 0 });
     t.assert.strictEqual(page1.groups.length, 2);
     t.assert.strictEqual(page1.groupCount, 3);
@@ -381,6 +394,64 @@ test('listFailed op', async (t) => {
     const page2 = callOp(listFailed, ctx, { limit: 2, offset: 2 });
     t.assert.strictEqual(page2.groups.length, 1);
     t.assert.strictEqual(page2.groupCount, 3);
+  });
+});
+
+test('removeFromFailedSnapshot', async (t) => {
+  let root;
+  t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'snapshot-test-')); });
+  t.afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+
+  function insertRow(db, { name, status = 'ready', hash = null, exists = true }) {
+    const filePath = path.join(root, name);
+    if (exists) writeFixtureFile(root, name, name);
+    const { lastInsertRowid: id } = db.prepare(
+      'INSERT INTO media (path, title, status, hash) VALUES (?, ?, ?, ?)'
+    ).run(filePath, name, status, hash);
+    return id;
+  }
+
+  await t.test('drops a repaired record from its group', async (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const broken = insertRow(db, { name: 'gone.jpg', status: 'error', hash: 'same', exists: false });
+    insertRow(db, { name: 'here.jpg', hash: 'same' });
+
+    await startHealthScan(ctx[0], ctx[1]);
+    t.assert.strictEqual(callOp(listFailed, ctx, { countOnly: true }).failedCount, 1);
+
+    const changed = removeFromFailedSnapshot(ctx[0], [broken]);
+    t.assert.strictEqual(changed, true);
+    const after = callOp(listFailed, ctx, { countOnly: true });
+    t.assert.strictEqual(after.failedCount, 0);
+    t.assert.strictEqual(after.groupCount, 0);
+  });
+
+  await t.test('keeps the group when other broken records remain', async (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const a = insertRow(db, { name: 'gone-a.jpg', status: 'error', hash: 'same', exists: false });
+    const b = insertRow(db, { name: 'gone-b.jpg', status: 'error', hash: 'same', exists: false });
+    insertRow(db, { name: 'here.jpg', hash: 'same' });
+
+    await startHealthScan(ctx[0], ctx[1]);
+    removeFromFailedSnapshot(ctx[0], [a]);
+    const after = callOp(listFailed, ctx, { countOnly: true });
+    t.assert.strictEqual(after.failedCount, 1);
+    t.assert.strictEqual(after.groupCount, 1);
+    const group = callOp(listFailed, ctx).groups[0];
+    t.assert.deepStrictEqual(group.failedIds, [b]);
+    t.assert.strictEqual(group.siblingCount, 1);
+  });
+
+  await t.test('is a no-op for ids that are not in the snapshot', async (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    insertRow(db, { name: 'gone.jpg', status: 'error', hash: 'x', exists: false });
+    await startHealthScan(ctx[0], ctx[1]);
+
+    t.assert.strictEqual(removeFromFailedSnapshot(ctx[0], [999999]), false);
+    t.assert.strictEqual(callOp(listFailed, ctx, { countOnly: true }).failedCount, 1);
   });
 });
 
@@ -454,25 +525,27 @@ test('repairFailed op', async (t) => {
     t.assert.strictEqual(db.prepare('SELECT status FROM media WHERE id = ?').get(id).status, 'error');
   });
 
-  await t.test('repairs every failed record with all: true', (t) => {
+  await t.test('repairs every failed record with all: true', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     insertRow(db, { name: 'good.webm', exists: false, transcodedExists: true });
     insertRow(db, { name: 'bad.webm', exists: false });
     insertRow(db, { name: 'ok.webm', status: 'ready', exists: true });
 
+    await startHealthScan(ctx[0], ctx[1]);
     const result = callOp(repairFailed, ctx, { all: true });
 
     t.assert.strictEqual(result.repaired, 1);
     t.assert.strictEqual(result.unrepairable, 1);
   });
 
-  await t.test('ignores hidden media when repairing all', (t) => {
+  await t.test('ignores hidden media when repairing all', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const id = insertRow(db, { name: 'hidden.webm', exists: false, transcodedExists: true });
     db.prepare('UPDATE media SET hidden = 1 WHERE id = ?').run(id);
 
+    await startHealthScan(ctx[0], ctx[1]);
     const result = callOp(repairFailed, ctx, { all: true });
 
     t.assert.strictEqual(result.repaired, 0);

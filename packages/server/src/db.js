@@ -14,7 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE } from '@photo-quest/shared';
 
 /* Compute __dirname for ES modules. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -59,6 +59,7 @@ export function initDb() {
   db.exec(CREATE_SCANS_TABLE);
   db.exec(CREATE_IMPORT_QUEUE_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
+  db.exec(CREATE_FAILED_SNAPSHOT_TABLE);
 
   /* Run migrations before creating indexes that reference migrated columns. */
   migrateDb();

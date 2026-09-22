@@ -22,8 +22,7 @@
 
 import fs from 'node:fs';
 import { MEDIA_STATUS, MEDIA_TYPE } from '@photo-quest/shared';
-import { scanFailedMedia } from '../src/mediaHealth.js';
-import { invalidateFailedCache } from './listFailed.js';
+import { getFailedMediaRows, removeFromFailedSnapshot } from './listFailed.js';
 
 /** Stat a path without throwing, returning true only for a regular file. */
 function isFile(filePath) {
@@ -36,8 +35,10 @@ export default function repairFailed({ ids, all = false } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
+  /* `all` works off the cached health snapshot so it never has to run a
+     synchronous full-library sweep on the request thread. */
   const targets = all
-    ? scanFailedMedia(db).failed.map(entry => entry.row)
+    ? getFailedMediaRows(db)
     : (Array.isArray(ids) ? ids : [])
         .map(id => db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)))
         .filter(Boolean);
@@ -76,7 +77,11 @@ export default function repairFailed({ ids, all = false } = {}) {
   }
 
   const repaired = restored + requeued;
-  if (repaired > 0) invalidateFailedCache();
+  if (repaired > 0) {
+    /* Drop the repaired records from the cached snapshot so the Failed section
+       updates immediately, without waiting for the next background sweep. */
+    removeFromFailedSnapshot(kojo, results.filter(r => r.outcome !== 'unrepairable').map(r => r.id));
+  }
   logger.debug(`[repairFailed] all=${all} targets=${targets.length} restored=${restored} requeued=${requeued} unrepairable=${unrepairable}`);
   return { repaired, restored, requeued, unrepairable, results };
 }
