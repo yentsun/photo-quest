@@ -591,20 +591,67 @@ export async function renameMedia(id, title) {
   return item;
 }
 
-export async function likeMedia(id) {
-  const response = await fetch(`/media/${id}/like`, {
-    method: 'PATCH',
-  });
-  if (!response.ok) {
-    throw new Error('Failed to like media');
+/**
+ * How long after the last like press a "series" is considered finished. Rapid
+ * presses coalesce into one request; the series ends after this quiet window.
+ */
+const LIKE_SERIES_MS = 400;
+
+/** Most likes sent in one request. Hitting it flushes immediately and opens a
+ *  new series, so no presses are dropped. */
+const LIKE_MAX = 30;
+
+/** @type {Map<number, { count: number, timer: any, waiters: Array<{resolve: Function, reject: Function}> }>} */
+const _likeSeries = new Map();
+
+/** Send the coalesced likes for one media item. */
+async function flushLikeSeries(id) {
+  const entry = _likeSeries.get(id);
+  if (!entry) return;
+  _likeSeries.delete(id);
+
+  try {
+    const response = await fetch(`/media/${id}/like?count=${entry.count}`, { method: 'PATCH' });
+    if (!response.ok) throw new Error('Failed to like media');
+    const data = await response.json();
+    const { likedCount, ...item } = data;
+    _mediaCache.set(item.id, item);
+    idbPutMedia(item).catch(() => {});
+    /* The server returns the updated liked count (only when an item transitions
+       to liked); surface it so the sidebar updates without an extra request. */
+    entry.waiters.forEach(w => w.resolve({ item, likedCount }));
+  } catch (err) {
+    entry.waiters.forEach(w => w.reject(err));
   }
-  const data = await response.json();
-  const { likedCount, ...item } = data;
-  _mediaCache.set(item.id, item);
-  idbPutMedia(item).catch(() => {});
-  /* The server returns the updated liked count (only when an item transitions
-     to liked); surface it so the sidebar updates without an extra request. */
-  return { item, likedCount };
+}
+
+/**
+ * Like a media item. Consecutive calls for the same item within
+ * {@link LIKE_SERIES_MS} are coalesced into a single request that adds them all,
+ * so a burst of presses produces one network round-trip.
+ *
+ * @param {number|string} id
+ * @returns {Promise<{ item: Object, likedCount?: number }>} Resolves when the
+ *   series is flushed (or rejects if that request fails).
+ */
+export function likeMedia(id) {
+  const key = Number(id);
+  let entry = _likeSeries.get(key);
+  if (!entry) {
+    entry = { count: 0, timer: null, waiters: [] };
+    _likeSeries.set(key, entry);
+  }
+  entry.count += 1;
+  const promise = new Promise((resolve, reject) => entry.waiters.push({ resolve, reject }));
+  if (entry.timer) clearTimeout(entry.timer);
+  if (entry.count >= LIKE_MAX) {
+    /* Cap reached — flush now instead of waiting out the quiet window. */
+    entry.timer = null;
+    flushLikeSeries(key);
+  } else {
+    entry.timer = setTimeout(() => flushLikeSeries(key), LIKE_SERIES_MS);
+  }
+  return promise;
 }
 
 export async function deleteMedia(id) {

@@ -1044,6 +1044,25 @@ test('likeMedia op', async (t) => {
     t.assert.strictEqual('likedCount' in result, false);
   });
 
+  await t.test('adds `count` likes in one call', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertMedia(db, '/like.jpg', 'Like');
+    const result = callOp(likeMedia, ctx, id, 5);
+
+    t.assert.strictEqual(result.likes, 5);
+    t.assert.strictEqual(result.likedCount, 1);
+  });
+
+  await t.test('clamps count to 30', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertMedia(db, '/like.jpg', 'Like');
+    t.assert.strictEqual(callOp(likeMedia, ctx, id, 100).likes, 30);
+  });
+
   await t.test('returns null for a non-existent id', (t) => {
     const db = freshDb();
     const ctx = makeContext(db);

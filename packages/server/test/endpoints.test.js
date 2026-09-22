@@ -130,11 +130,11 @@ async function setup() {
           : (ids || []).map(id => ({ id }));
         return { repaired: targets.length, restored: targets.length, requeued: 0, unrepairable: 0, results: [] };
       },
-      likeMedia: function(id) {
+      likeMedia: function(id, count = 1) {
         const existing = db.prepare('SELECT likes FROM media WHERE id = ?').get(Number(id));
         if (!existing) return null;
         const newlyLiked = existing.likes === 0;
-        db.prepare('UPDATE media SET likes = likes + 1 WHERE id = ?').run(Number(id));
+        db.prepare('UPDATE media SET likes = likes + ? WHERE id = ?').run(Number(count) || 1, Number(id));
         const media = this.getMediaById(id);
         if (newlyLiked) {
           const { total } = db.prepare('SELECT COUNT(*) AS total FROM media WHERE hidden = 0 AND likes > 0').get();
@@ -352,6 +352,20 @@ test('PATCH /media/:id/like', async (t) => {
     await route.handler(req, res2, { id: String(id) });
     t.assert.strictEqual(res2._body.likes, 2);
     t.assert.strictEqual('likedCount' in res2._body, false);
+  });
+
+  await t.test('?count=N adds N likes in one request', async () => {
+    const { lastInsertRowid: id } = db.prepare("INSERT INTO media (path, title, type, status, likes) VALUES ('batch.jpg', 'Batch', 'image', 'ready', 0)").run();
+
+    const route = findRoute('PATCH', '/media/:id/like');
+    const req = mockReq('PATCH', `/media/${id}/like?count=5`);
+    const res = mockRes();
+
+    await route.handler(req, res, { id: String(id) });
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.likes, 5);
+    t.assert.strictEqual(typeof res._body.likedCount, 'number');
   });
 
   await t.test('returns 404 for non-existent', async () => {

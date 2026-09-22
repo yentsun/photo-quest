@@ -2,8 +2,9 @@
  * @file PATCH /media/:id/like -- Increment the like count for a media item.
  *
  * Kojo endpoint: registers route via the addHttpRoute op.
- * Delegates to `kojo.ops.likeMedia(id)` which increments the like count
- * and persists the change to disk.
+ * Delegates to `kojo.ops.likeMedia(id, count)` which increments the like count
+ * and persists the change to disk. `?count=N` adds N likes in one request so a
+ * burst of rapid clicks is coalesced by the client.
  *
  * Returns the updated media record with the new like count.
  */
@@ -15,8 +16,10 @@ export default async (kojo, logger) => {
     method: 'PATCH',
     pathname: '/media/:id/like',
   }, (req, res, params) => {
-    logger.debug(`[PATCH /media/:id/like] id=${params.id}`);
-    const result = kojo.ops.likeMedia(Number(params.id));
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const count = Number(url.searchParams.get('count')) || 1;
+    logger.debug(`[PATCH /media/:id/like] id=${params.id} count=${count}`);
+    const result = kojo.ops.likeMedia(Number(params.id), count);
 
     if (!result) {
       logger.debug(`[PATCH /media/:id/like] not found: id=${params.id}`);

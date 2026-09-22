@@ -346,15 +346,24 @@ export default function MediaPage() {
 
   const handleLike = useCallback(async () => {
     if (!item) return;
-    const originalLikes = item.likes || 0;
-    setItem(prev => ({ ...prev, likes: originalLikes + 1 }));
+    const mediaId = item.id;
+    /* Optimistic: bump immediately (functional so rapid presses each add one).
+       The requests themselves are coalesced into one by the like debounce. */
+    setItem(prev => (prev ? { ...prev, likes: (prev.likes || 0) + 1 } : prev));
     try {
-      const { likedCount } = await likeMediaApi(item.id);
+      const { item: updated, likedCount } = await likeMediaApi(mediaId);
+      if (updated) setItem(prev => (prev && prev.id === mediaId ? { ...prev, ...updated } : prev));
       /* Update the sidebar liked count directly from the response. */
       if (likedCount != null) setLikedCount(likedCount);
+    } catch (err) {
+      console.error('Failed to like media:', err);
+      /* Re-sync with the server (the likes were not applied). */
+      try {
+        const fresh = await fetchMediaById(mediaId, { skipCache: true });
+        if (fresh) setItem(prev => (prev && prev.id === mediaId ? fresh : prev));
+      } catch { /* ignore */ }
     }
-    catch (err) { console.error('Failed to like media:', err); setItem(prev => ({ ...prev, likes: originalLikes })); }
-  }, [item, setLikedCount]);
+  }, [item?.id, setLikedCount]);
 
   const handleTouchStart = useCallback((e) => {
     if (e.touches.length !== 1) return;
