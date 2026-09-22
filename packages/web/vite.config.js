@@ -73,7 +73,7 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/media\/(?!\d+$)/, /^\/stream/, /^\/image/, /^\/thumb/, /^\/jobs/, /^\/folders/, /^\/tags$/, /^\/library$/],
 
-        /* Runtime caching — serve previously viewed media offline (LAW 1.29). */
+        /* Runtime caching — serve previously viewed media offline. */
         runtimeCaching: [
           {
             urlPattern: /^\/image\//,
@@ -183,6 +183,17 @@ export default defineConfig({
           // /duplicates is both a client route and an API endpoint. Browser
           // navigations (text/html) serve the SPA for React Router; API fetches
           // (Accept: application/json, or the default wildcard) proxy to the back-end.
+          if (req.headers.accept?.includes('text/html')
+              || req.headers['sec-fetch-mode'] === 'navigate') {
+            return req.url;
+          }
+        },
+      },
+      '/failed': {
+        target: API_TARGET,
+        bypass(req) {
+          // /failed is both a client route and an API endpoint -- same rule as
+          // /duplicates above.
           if (req.headers.accept?.includes('text/html')
               || req.headers['sec-fetch-mode'] === 'navigate') {
             return req.url;

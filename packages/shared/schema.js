@@ -43,7 +43,8 @@
  *  - `orientation`     EXIF orientation tag (1-8). 1 = normal, 6 = 90° CW,
  *                      etc. NULL for videos or images without EXIF.
  *  - `camera`          Camera make/model from EXIF (e.g. "FUJIFILM X100").
- *  - `date_taken`      ISO-8601 datetime from EXIF DateTimeOriginal.
+ *  - `date_taken`      ISO-8601 capture datetime from media metadata, a
+ *                      timestamped filename, or the filesystem timestamp.
  *  - `created_at` /
  *    `updated_at`      ISO-8601 timestamps managed by SQLite defaults and
  *                      explicit UPDATEs in the worker.
@@ -162,5 +163,30 @@ export const CREATE_IMPORT_QUEUE_TABLE = `
     error TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
+  )
+`;
+
+/**
+ * SQL statement that creates the `failed_snapshot` table.
+ *
+ * A single-row cache of the latest file-health sweep. Statting every media
+ * file is far too slow to run on a request thread, so the sweep runs in the
+ * background (see src/mediaHealth.js) and stores its serialised result here.
+ * `GET /failed` then answers instantly from this row.
+ *
+ *  - `json`         Serialised failed-media groups (the `/failed` listing).
+ *  - `group_count`  Number of groups in `json`.
+ *  - `failed_count` Number of broken records in `json`.
+ *  - `computed_at`  Unix epoch (ms) the snapshot was produced, for staleness.
+ *
+ * @type {string}
+ */
+export const CREATE_FAILED_SNAPSHOT_TABLE = `
+  CREATE TABLE IF NOT EXISTS failed_snapshot (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    json TEXT NOT NULL,
+    group_count INTEGER NOT NULL DEFAULT 0,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    computed_at INTEGER NOT NULL DEFAULT 0
   )
 `;

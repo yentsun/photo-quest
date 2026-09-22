@@ -1,6 +1,6 @@
 /**
  * @file Slideshow state management context.
- * LAW 1.27: slideshow is manual (no auto-advance), uses the unified MediaPage viewer.
+ * Slideshow is manual (no auto-advance) and uses the unified MediaPage viewer.
  *
  * Persistence: the active slideshow session (order, sequence, current index,
  * history, total, and the fetch source) is written to sessionStorage so it

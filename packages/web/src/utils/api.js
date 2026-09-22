@@ -119,9 +119,9 @@ async function syncMediaCache(ids = [], replacements = []) {
 }
 
 /**
- * Clear all in-memory session caches (folders, tags, media, per-folder media).
- * Used after a full cache purge so the next render fetches fresh from the
- * server instead of serving stale in-memory data.
+ * Clear all in-memory session caches (folders, tags, media, per-folder media,
+ * failed listings). Used after a full cache purge so the next render fetches
+ * fresh from the server instead of serving stale in-memory data.
  */
 export function resetMediaCaches() {
   _foldersCache = null;
@@ -139,14 +139,14 @@ export function resetMediaCaches() {
 // COUNT endpoints (which return just a total) only on data-change signals.
 
 const COUNTS_STORAGE_KEY = 'photoquest.counts-v2';
-const EMPTY_COUNTS = { library: null, liked: null, tags: null, duplicates: null };
+const EMPTY_COUNTS = { library: null, liked: null, tags: null, duplicates: null, failed: null };
 
-/** @type {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }} */
+/** @type {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null, failed: number|null }} */
 let _countsCache = null;
 
 /**
  * Return the cached badge counts (or nulls on first run / cleared storage).
- * @returns {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }}
+ * @returns {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null, failed: number|null }}
  */
 export function getCachedCounts() {
   if (_countsCache) return _countsCache;
@@ -175,7 +175,8 @@ export async function refreshCounts() {
     fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => null),
     fetchTags().then(d => d.length).catch(() => null),
   ]);
-  const counts = { library, liked, tags, duplicates: getCachedCounts().duplicates };
+  const cached = getCachedCounts();
+  const counts = { library, liked, tags, duplicates: cached.duplicates, failed: cached.failed };
   persistCounts(counts);
   return counts;
 }
@@ -194,6 +195,21 @@ export async function refreshDuplicatesCount() {
     .catch(() => null);
   if (duplicates != null) persistCounts({ ...getCachedCounts(), duplicates });
   return duplicates;
+}
+
+/**
+ * Refresh just the Failed badge count in the background. Kept separate so a slow
+ * file-health sweep can never delay the other counts. Timed out so a pathological
+ * server can't hang it either.
+ *
+ * @returns {Promise<number|null>}
+ */
+export async function refreshFailedCount() {
+  const failed = await fetchFailed({ countOnly: true, timeout: 8000 })
+    .then(d => d.groupCount)
+    .catch(() => null);
+  if (failed != null) persistCounts({ ...getCachedCounts(), failed });
+  return failed;
 }
 
 // ---------------------------------------------------------------------------
@@ -249,6 +265,50 @@ export async function fetchDuplicates({ countOnly = false, limit, offset, timeou
   if (timeout != null) opts.signal = AbortSignal.timeout(timeout);
   const response = await fetch(url, opts);
   if (!response.ok) throw new Error('Failed to fetch duplicates');
+  return response.json();
+}
+
+/**
+ * Fetch media whose file is missing/unreadable or whose processing failed,
+ * grouped by content hash. The server answers from its persisted health
+ * snapshot, so this is cheap; `refreshing` in the response is true while a new
+ * sweep runs in the background. Pass `refresh: true` to ask for a new sweep
+ * (manual "Re-check").
+ *
+ * @param {{ countOnly?: boolean, limit?: number, offset?: number, refresh?: boolean, timeout?: number }} [opts]
+ * @returns {Promise<{ groups?: Object[], groupCount: number, failedCount: number, refreshing?: boolean }>}
+ */
+export async function fetchFailed({ countOnly = false, limit, offset, refresh = false, timeout } = {}) {
+  const url = new URL(apiRoutes.failed, window.location.origin);
+  if (countOnly) url.searchParams.set('count', '1');
+  if (refresh) url.searchParams.set('refresh', '1');
+  if (limit != null) url.searchParams.set('limit', limit);
+  if (offset != null) url.searchParams.set('offset', offset);
+  const opts = {};
+  if (timeout != null) opts.signal = AbortSignal.timeout(timeout);
+  const response = await fetch(url, opts);
+  if (!response.ok) throw new Error('Failed to fetch failed media');
+  return response.json();
+}
+
+/**
+ * Ask the server to repair failed media records by re-checking their files on
+ * disk and reconciling their status. Pass `ids` for specific records or
+ * `all: true` to repair every currently-failed record.
+ *
+ * @param {{ ids?: number[], all?: boolean }} [opts]
+ * @returns {Promise<{ repaired: number, restored: number, requeued: number, unrepairable: number }>}
+ */
+export async function repairFailed({ ids, all = false } = {}) {
+  const response = await fetch(apiRoutes.failedRepair, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(all ? { all: true } : { ids }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to repair media');
+  }
   return response.json();
 }
 

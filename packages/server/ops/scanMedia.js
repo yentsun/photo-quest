@@ -3,7 +3,7 @@
  *
  * Kojo op: accessed as `kojo.ops.scanMedia(dirPath)`.
  *
- * LAW 2.3: Media import uses a db-based queue. Files are discovered and queued
+ * Media import uses a db-based queue. Files are discovered and queued
  * individually, progress is reported via SSE, and interrupted imports resume
  * automatically on restart.
  *
@@ -27,6 +27,9 @@ import { broadcastSse } from '../src/sse.js';
 import { DB_PATH } from '../src/db.js';
 import { isMediaFile } from '../src/mediaFile.js';
 import { computeFileHash } from '../src/fileHash.js';
+import { getCaptureDate } from '../src/mediaDate.js';
+import { startHashBackfill } from '../src/hashBackfill.js';
+import { startHealthScan } from './listFailed.js';
 
 const WORKER_PATH = process.env.SCAN_WORKER_PATH
   || path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/scanWorker.js');
@@ -63,12 +66,12 @@ export async function processOneItem(db, itemId, filePath, logger) {
   }
 
   const fileStat = fs.statSync(filePath);
-  const dateTaken = fileStat.mtime.toISOString();
+  const dateTaken = await getCaptureDate(filePath, mediaType, fileStat.mtime);
 
   const existing = db.prepare('SELECT id FROM media WHERE path = ? AND hidden = 0').get(filePath);
   if (existing) {
-    logger.debug(`fast-path: already in library as id=${existing.id}, updating date_taken`);
-    db.prepare('UPDATE media SET date_taken = ? WHERE id = ? AND date_taken IS NULL').run(dateTaken, existing.id);
+    logger.debug(`fast-path: already in library as id=${existing.id}, refreshing date_taken`);
+    db.prepare('UPDATE media SET date_taken = ? WHERE id = ?').run(dateTaken, existing.id);
     db.prepare('UPDATE import_queue SET status = ? WHERE id = ?').run(IMPORT_STATUS.COMPLETED, itemId);
     return;
   }
@@ -166,7 +169,7 @@ function ensureScanWorker(logger) {
 
 /**
  * Resume any incomplete scans found in the database.
- * Called at boot time to satisfy LAW 2.3 resume requirement.
+ * Called at boot time to satisfy the resume requirement.
  */
 export function resumeIncompleteScans(kojo, logger) {
   const db = kojo.get('db');
@@ -284,7 +287,7 @@ export default async function (dirPath) {
 
   const tRows = performance.now();
   const existingRows = db.prepare(
-    'SELECT id, path FROM media WHERE hidden = 0 AND path >= ? AND path < ?'
+    'SELECT id, path, type FROM media WHERE hidden = 0 AND path >= ? AND path < ?'
   ).all(dirPrefix, dirPrefixUpper);
   const existingPaths = new Set(existingRows.map(r => r.path));
   console.log(`[DBG][scan] LOAD-SUBTREE-ROWS ${(performance.now() - tRows).toFixed(0)}ms rows=${existingRows.length}`);
@@ -315,29 +318,30 @@ export default async function (dirPath) {
   }
   if (removed > 0) logger.info(`Scan: removed ${removed} stale non-media record(s)`);
 
-  /* Backfill date_taken for existing records under this directory that were
-     created before the date_taken column migration (row exists but is NULL).
-     Uses mtime as a cheap proxy (no hash computed). Now scoped to a single
-     query + a stat per NULL candidate instead of a per-file DB lookup for
-     every file in the subtree (issue #40). Rows whose files no longer exist
-     on disk stay NULL. */
-  const nullRows = db.prepare(
-    'SELECT path FROM media WHERE hidden = 0 AND date_taken IS NULL AND path >= ? AND path < ?'
-  ).all(dirPrefix, dirPrefixUpper);
-  if (nullRows.length > 0) {
-    const tBackfill = performance.now();
-    const backfillStmt = db.prepare(
-      'UPDATE media SET date_taken = ? WHERE path = ? AND date_taken IS NULL AND hidden = 0'
+  /* Every Refresh recomputes dates for existing files. Metadata is preferred,
+     then timestamped filenames, then the filesystem modification time. */
+  if (existingRows.length > 0) {
+    const tRefreshDates = performance.now();
+    const updateDateStmt = db.prepare(
+      'UPDATE media SET date_taken = ? WHERE id = ? AND hidden = 0'
     );
-    let filled = 0;
-    for (const { path: filePath } of nullRows) {
+    let refreshed = 0;
+    for (const row of existingRows) {
       try {
-        backfillStmt.run((await fsp.stat(filePath)).mtime.toISOString(), filePath);
-        filled++;
-      } catch { /* stat may fail if the file vanished (orphan); leave NULL */ }
+        const fileStat = await fsp.stat(row.path);
+        const dateTaken = await getCaptureDate(row.path, row.type, fileStat.mtime);
+        updateDateStmt.run(dateTaken, row.id);
+        refreshed++;
+      } catch { /* The file may have vanished; preserve its prior date. */ }
     }
-    console.log(`[DBG][scan] BACKFILL ${(performance.now() - tBackfill).toFixed(0)}ms null=${nullRows.length} filled=${filled}`);
+    console.log(`[DBG][scan] REFRESH-DATES ${(performance.now() - tRefreshDates).toFixed(0)}ms rows=${existingRows.length} refreshed=${refreshed}`);
   }
+
+  /* Legacy hash reindexing and the file-health sweep are intentionally
+     user-triggered with Refresh, not automatic boot tasks. Both yield between
+     batches and ignore concurrent Refresh calls. */
+  startHashBackfill(kojo, logger);
+  startHealthScan(kojo, logger);
 
   logger.info(`Scan: ${dirPath} — ${files.length} on disk, ${newFiles.length} new`);
 
