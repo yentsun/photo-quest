@@ -56,6 +56,7 @@ export default function MediaPage() {
   const { signal, bump, setTagCount, setLikedCount } = useRefresh();
   const { dispatch } = useContext(GlobalContext);
   const slideshow = useSlideshow();
+  const { removeItem: removeSlideshowItem } = slideshow;
   const [showInfo, setShowInfo] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -254,6 +255,21 @@ export default function MediaPage() {
   const hasPrev = inSlideshow ? slideshow.history.length > 0 : currentIndex > 0;
   const hasNext = inSlideshow ? navItems.length > 1 : currentIndex < navItems.length - 1;
 
+  /* The item we're on was deleted (e.g. on another device): skip to its next
+     neighbour instead of showing "Media not found". Only when the id is part of
+     the sequence being navigated, so a bad URL still shows the not-found page. */
+  useEffect(() => {
+    if (loading || item) return;
+    const missingId = Number(id);
+    const idx = navItems.findIndex(m => m.id === missingId);
+    if (idx === -1) return;
+    const fallback = navItems[idx + 1] || navItems[idx - 1];
+    setFolderMedia(list => list.filter(m => m.id !== missingId));
+    setLikedNavList(list => list.filter(m => m.id !== missingId));
+    if (inSlideshow) removeSlideshowItem(missingId);
+    if (fallback) navigate(`/media/${fallback.id}`, { replace: true, state: location.state });
+  }, [item, loading, id, navItems, inSlideshow, navigate, location.state, removeSlideshowItem]);
+
   useEffect(() => {
     if (!inSlideshow || !slideshow.current) return;
     navigate(`/media/${slideshow.current.id}`, { replace: true });
@@ -391,8 +407,6 @@ export default function MediaPage() {
     if (dx < 0) goNext(); else goPrev();
   }, [goNext, goPrev, showMobileNavPanel]);
 
-  const { removeItem: removeSlideshowItem } = slideshow;
-
   const handleSetFolderThumbnail = useCallback(async (time = null) => {
     if (!item || !folder) return;
     try {
@@ -476,15 +490,20 @@ export default function MediaPage() {
     try {
       const result = await mergeDuplicatesApi({ ids: duplicates.ids, keepId: item.id });
       const master = result.media;
-      /* Drop the merged copies from the slideshow queue so next/prev never lands
-         on a file that was just deleted from disk. */
-      if (inSlideshow) (result.removedIds ?? []).forEach(removeSlideshowItem);
+      /* Drop every merged-away copy from all navigation lists (slideshow, folder
+         siblings, liked) so next/prev can never land on a deleted file. This
+         includes the current item when a surviving copy became the master. */
+      const removed = new Set((result.removedIds ?? []).map(Number));
+      if (inSlideshow) removed.forEach(id => removeSlideshowItem(id));
+      if (removed.size > 0) {
+        setFolderMedia(list => list.filter(m => !removed.has(m.id)));
+        setLikedNavList(list => list.filter(m => !removed.has(m.id)));
+      }
       if (master) {
         if (master.id !== item.id) {
           /* The current item's file was missing, so a surviving copy won.
              Follow the master so the URL and view stay in sync. */
           setItem(master);
-          setFolderMedia(list => list.filter(m => m.id !== item.id));
           if (!inSlideshow) navigate(`/media/${master.id}`, { replace: true, state: location.state });
         } else {
           setItem(prev => (prev ? { ...prev, ...master } : prev));
