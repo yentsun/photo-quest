@@ -19,11 +19,70 @@ import os from 'node:os';
  * interface. */
 const NON_LAN_RE = /^(wg|wireguard|tailscale|zt|tun|tap|utun|ppp|ipsec|vpn|docker|veth|vbox|vmnet|virtualbox)[a-z0-9]*$/i;
 
+/** An all-zero MAC is what virtual/tunnel adapters report (VPN clients, Hyper-V,
+ *  WSL, …). A physical NIC always has a real hardware address. */
+const ZERO_MAC_RE = /^(0{2}[:-]){5}0{2}$/;
+
 /** Coerce the os.networkInterfaces() family value to a canonical check. */
 function isIPv4(iface) {
   // Node returns the string 'IPv4' on modern versions, the numeric 4 on older.
   const family = String(iface.family);
   return family.toLowerCase() === 'ipv4' || family === '4';
+}
+
+/**
+ * The interface's IPv4 prefix length, from `cidr` when present (Node >= 18) and
+ * falling back to the netmask. Returns null when neither is usable.
+ *
+ * @param {import('node:os').NetworkInterfaceInfo} iface
+ * @returns {number|null}
+ */
+function prefixLength(iface) {
+  if (typeof iface.cidr === 'string' && iface.cidr.includes('/')) {
+    const bits = Number(iface.cidr.slice(iface.cidr.lastIndexOf('/') + 1));
+    if (Number.isFinite(bits)) return bits;
+  }
+  if (typeof iface.netmask === 'string') {
+    const octets = iface.netmask.split('.');
+    if (octets.length === 4) {
+      let bits = 0;
+      for (const octet of octets) {
+        const n = Number(octet);
+        if (!Number.isFinite(n) || n < 0 || n > 255) return null;
+        bits += n.toString(2).split('').filter((c) => c === '1').length;
+      }
+      return bits;
+    }
+  }
+  return null;
+}
+
+/**
+ * A /31 or /32 host prefix can only address a single peer — that is a
+ * point-to-point tunnel link (WireGuard assigns /32 to its address), never a LAN
+ * other devices can reach.
+ *
+ * @param {import('node:os').NetworkInterfaceInfo} iface
+ */
+function isPointToPoint(iface) {
+  const bits = prefixLength(iface);
+  return bits !== null && bits >= 31;
+}
+
+/**
+ * Classify an interface as a LAN interface or a tunnel/virtual one. Name
+ * matching alone misses VPN adapters with vendor names (e.g. "BitLionFull"), so
+ * the address shape (point-to-point prefix, all-zero MAC) is used too.
+ *
+ * @param {string} name
+ * @param {import('node:os').NetworkInterfaceInfo} iface
+ * @returns {'normal'|'tunnel'}
+ */
+function classifyInterface(name, iface) {
+  if (NON_LAN_RE.test(name)) return 'tunnel';
+  if (isPointToPoint(iface)) return 'tunnel';
+  if (typeof iface.mac === 'string' && ZERO_MAC_RE.test(iface.mac)) return 'tunnel';
+  return 'normal';
 }
 
 /**
@@ -38,8 +97,7 @@ export function listReachableIPv4(interfaces = os.networkInterfaces()) {
     for (const iface of interfaces[name]) {
       if (!isIPv4(iface)) continue;
       if (iface.internal) continue;
-      const kind = NON_LAN_RE.test(name) ? 'tunnel' : 'normal';
-      rows.push({ name, address: iface.address, kind });
+      rows.push({ name, address: iface.address, kind: classifyInterface(name, iface) });
     }
   }
   // Stable ordering: normal interfaces first, then tunnels; insertion order
