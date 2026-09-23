@@ -1,5 +1,21 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef, useState } from 'react';
+import Button from '../ui/Button.jsx';
 import Loader from '../ui/Loader.jsx';
+
+const SPEED_STORAGE_KEY = 'player_speed';
+const SPEED_NORMAL = 1;
+const SPEED_SLOW = 0.5;
+
+/* Reads the saved playback speed, falling back to normal speed when nothing
+ * valid is stored (or storage is unavailable, e.g. private browsing). */
+function readSavedSpeed() {
+  try {
+    const saved = Number(localStorage.getItem(SPEED_STORAGE_KEY));
+    return saved === SPEED_SLOW ? SPEED_SLOW : SPEED_NORMAL;
+  } catch {
+    return SPEED_NORMAL;
+  }
+}
 
 const MediaPlayer = forwardRef(function MediaPlayer({
   src,
@@ -12,6 +28,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   const videoRef = useRef(null);
   const [buffering, setBuffering] = useState(true);
   const [error, setError] = useState(null);
+  const [speed, setSpeed] = useState(readSavedSpeed);
   /* Tracks whether autoplay has begun for the current source, so playback is
    * only ever started once per source. */
   const startedRef = useRef(false);
@@ -50,20 +67,34 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const saved = localStorage.getItem('player_volume');
-    if (saved !== null) {
-      try {
+    try {
+      const saved = localStorage.getItem('player_volume');
+      if (saved !== null) {
         const { volume, muted } = JSON.parse(saved);
         v.volume = volume ?? 1;
         v.muted = muted ?? false;
-      } catch {}
-    }
-  }, [src, autoPlay]);
+      }
+    } catch {}
+    /* Re-apply on every source change (loading a new source resets the rate)
+     * and whenever the user toggles the speed. */
+    v.playbackRate = speed;
+    v.defaultPlaybackRate = speed;
+  }, [src, autoPlay, speed]);
 
   const handleVolumeChange = () => {
     const v = videoRef.current;
     if (!v) return;
-    localStorage.setItem('player_volume', JSON.stringify({ volume: v.volume, muted: v.muted }));
+    try {
+      localStorage.setItem('player_volume', JSON.stringify({ volume: v.volume, muted: v.muted }));
+    } catch {}
+  };
+
+  const toggleSpeed = () => {
+    const next = speed === SPEED_SLOW ? SPEED_NORMAL : SPEED_SLOW;
+    setSpeed(next);
+    try {
+      localStorage.setItem(SPEED_STORAGE_KEY, String(next));
+    } catch {}
   };
 
   return (
@@ -95,6 +126,18 @@ const MediaPlayer = forwardRef(function MediaPlayer({
         onVolumeChange={handleVolumeChange}
         onError={() => { setBuffering(false); setError('This video could not be played.'); onError?.(); }}
       />
+      {!error && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="media-player-speed"
+          aria-label={`Playback speed: ${speed}x`}
+          title={speed === SPEED_SLOW ? 'Switch to normal speed' : 'Switch to 0.5x speed'}
+          onClick={toggleSpeed}
+        >
+          {speed}x
+        </Button>
+      )}
     </div>
   );
 });

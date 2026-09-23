@@ -779,6 +779,13 @@ body {
 }
 .media-player-label { color: var(--sol-text-em); font-size: var(--fs-sm); }
 .media-player-error { color: var(--sol-red); font-size: var(--fs-sm); }
+.media-player-speed {
+  position: absolute; top: 10px; right: 10px; z-index: 20;
+  min-width: 44px; height: 30px; padding: 0 10px;
+  background: rgba(0, 0, 0, 0.5); border-color: transparent;
+  color: rgba(255, 255, 255, 0.85); font-variant-numeric: tabular-nums;
+}
+.media-player-speed:hover { background: rgba(0, 0, 0, 0.75); color: #fff; border-color: transparent; }
 
 /* ─── Media viewer ─── */
 .viewer { position: fixed; inset: 0; z-index: 21; display: flex; flex-direction: column; }
