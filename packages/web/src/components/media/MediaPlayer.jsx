@@ -25,10 +25,15 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   onError,
   className = '',
 }, ref) {
+  const containerRef = useRef(null);
   const videoRef = useRef(null);
   const [buffering, setBuffering] = useState(true);
   const [error, setError] = useState(null);
   const [speed, setSpeed] = useState(readSavedSpeed);
+  /* Offset of the overlay controls from the container's top-right corner, so
+   * they sit on the picture rather than the letterbox bars. The video element
+   * is aspect-fitted by its max-width/max-height, so its box *is* the picture. */
+  const [overlayInset, setOverlayInset] = useState({ top: 10, right: 10 });
   /* Tracks whether autoplay has begun for the current source, so playback is
    * only ever started once per source. */
   const startedRef = useRef(false);
@@ -81,6 +86,34 @@ const MediaPlayer = forwardRef(function MediaPlayer({
     v.defaultPlaybackRate = speed;
   }, [src, autoPlay, speed]);
 
+  /* Keep the overlay controls aligned with the video's rendered box as the
+   * viewport, the video's aspect ratio, or fullscreen state change. */
+  useEffect(() => {
+    const container = containerRef.current;
+    const v = videoRef.current;
+    if (!container || !v) return;
+
+    const measure = () => {
+      const c = container.getBoundingClientRect();
+      const r = v.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      const next = { top: Math.round(r.top - c.top + 10), right: Math.round(c.right - r.right + 10) };
+      setOverlayInset((prev) => (prev.top === next.top && prev.right === next.right ? prev : next));
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    observer.observe(v);
+    window.addEventListener('resize', measure);
+    document.addEventListener('fullscreenchange', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+      document.removeEventListener('fullscreenchange', measure);
+    };
+  }, [src]);
+
   const handleVolumeChange = () => {
     const v = videoRef.current;
     if (!v) return;
@@ -98,7 +131,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   };
 
   return (
-    <div className="media-player">
+    <div className="media-player" ref={containerRef}>
       {buffering && !error && (
         <div className="media-player-state">
           <Loader message={title ? `Buffering "${title}"…` : 'Buffering…'} />
@@ -131,6 +164,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
           variant="ghost"
           size="sm"
           className="media-player-speed"
+          style={overlayInset}
           aria-label={`Playback speed: ${speed}x`}
           title={speed === SPEED_SLOW ? 'Switch to normal speed' : 'Switch to 0.5x speed'}
           onClick={toggleSpeed}
