@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
+import config from '@photo-quest/shared/config.defaults';
 import { setApiBase } from '../config/apiBase.js';
-import { getKnownServers, addKnownServer, currentServerUrl } from '../services/serverPool.js';
+import { getKnownServers, addKnownServer, currentServerUrl, fetchServerNetwork } from '../services/serverPool.js';
 import { Button, Icon, Input, Modal } from './ui/index.js';
+
+/* The server's port is a constant, documented identity. In a bundled/static
+ * shell the UI runs on a different port (or origin) and `/network` is
+ * unreachable, so this is the only hint we have for where the library lives. */
+const SERVER_PORT = config.serverPort;
 
 /**
  * True when running inside a native Capacitor WebView (bundled app) rather than a
@@ -23,19 +29,15 @@ function normalize(url) {
   }
 }
 
-/** Resolve the /network payload for a candidate base, or null if unreachable. */
+/** Resolve the /network payload for a candidate base, or null if unreachable
+ *  or not actually a Photo Quest server. */
 async function fetchNetworkFor(base) {
-  try {
-    const res = await fetch(`${base}network`, { cache: 'no-store', signal: AbortSignal.timeout(4000) });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
+  return fetchServerNetwork(base, { timeout: 4000 });
 }
 
 export default function ConnectScreen({ onConnected }) {
   const [candidates, setCandidates] = useState([]);
+  const [reachable, setReachable] = useState([]);
   const [manual, setManual] = useState('');
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -44,10 +46,10 @@ export default function ConnectScreen({ onConnected }) {
   const [testing, setTesting] = useState(null);
 
   /* Gather candidate servers: the current origin (that served this page), any
-     known servers, and — if a server is already reachable — every address it
-     advertises (localhost, LAN, WireGuard) via /network. */
+     known servers, the page host on the server port, and — from any server that
+     does answer — every address it advertises (localhost, LAN, WireGuard).
+     Reachable candidates are surfaced first so the default selection works. */
   const refreshCandidates = useCallback(async () => {
-    const origin = currentServerUrl();
     const list = [];
     const seen = new Set();
     const push = (url) => {
@@ -55,21 +57,42 @@ export default function ConnectScreen({ onConnected }) {
       if (n && !seen.has(n)) { seen.add(n); list.push(n); }
     };
 
-    push(origin);
-    for (const s of getKnownServers()) push(s);
+    /* Addresses remembered from earlier sessions. An entry here is only a hint:
+       it may no longer be running (or may be a UI origin the old client wrongly
+       recorded), so it is listed only when it actually answers. */
+    const remembered = new Set(getKnownServers().map(normalize).filter(Boolean));
 
-    /* If the current origin (or any known server) is up, read its advertised
-       addresses so local/LAN/WG are all offered. */
-    for (const candidate of list.slice()) {
-      const net = await fetchNetworkFor(candidate);
-      if (net?.local) push(net.local);
-      if (net?.canonical) push(net.canonical);
-      if (net?.network) push(net.network);
-      for (const alt of net?.alternatives ?? []) push(alt);
+    push(currentServerUrl());
+    for (const s of remembered) push(s);
+
+    /* The UI origin is not the server in a static/bundled shell, so also try the
+       same host (and localhost) on the server's fixed port. */
+    const host = window.location.hostname;
+    push(`http://localhost:${SERVER_PORT}/`);
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      push(`http://${host}:${SERVER_PORT}/`);
     }
 
-    setCandidates(list);
-    setSelected(list[0] ?? null);
+    const probed = await Promise.all(list.map(async (url) => ({ url, net: await fetchNetworkFor(url) })));
+    const up = [];
+    for (const { url, net } of probed) {
+      if (!net) continue;
+      up.push(url);
+      if (net.local) push(net.local);
+      if (net.canonical) push(net.canonical);
+      if (net.network) push(net.network);
+      for (const alt of net.alternatives ?? []) push(alt);
+    }
+
+    const isUp = (url) => up.includes(url);
+    const ordered = [...list]
+      /* Drop remembered addresses that do not answer — but never hide the fixed
+         port hints or a live server's own advertised addresses. */
+      .filter((url) => isUp(url) || !remembered.has(url))
+      .sort((a, b) => (isUp(b) ? 1 : 0) - (isUp(a) ? 1 : 0));
+    setCandidates(ordered);
+    setReachable(up);
+    setSelected(ordered[0] ?? null);
   }, []);
 
   useEffect(() => { refreshCandidates(); }, [refreshCandidates]);
@@ -130,6 +153,7 @@ export default function ConnectScreen({ onConnected }) {
             >
               <Icon name="network" className="icon-sm" />
               <span className="connect-item-url">{c}</span>
+              {!reachable.includes(c) && <span className="connect-item-offline">offline</span>}
             </button>
           ))}
         </div>

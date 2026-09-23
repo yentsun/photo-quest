@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "serve": "node scripts/serve-dist.js"
   },
   "dependencies": {
     "@photo-quest/shared": "workspace:*",

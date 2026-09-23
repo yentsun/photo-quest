@@ -838,31 +838,6 @@ export async function setVideoThumbnail(mediaId, time) {
   return item;
 }
 
-export async function pickLibraryFile() {
-  const response = await apiFetch(apiRoutes.libraryPick, { method: 'POST' });
-  if (!response.ok) throw new Error('Could not open file picker');
-  return response.json();
-}
-
-export async function connectLibrary(libraryPath) {
-  const response = await apiFetch(apiRoutes.libraryConnect, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: libraryPath }),
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || 'Failed to connect library');
-  }
-  return response.json();
-}
-
-export async function fetchLibraryStatus() {
-  const response = await apiFetch(apiRoutes.libraryStatus);
-  if (!response.ok) throw new Error('Failed to fetch library status');
-  return response.json();
-}
-
 export async function downloadMedia(media) {
   try {
     const url = getMediaUrl(media);

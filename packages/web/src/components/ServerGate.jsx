@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import ConnectScreen from './ConnectScreen.jsx';
-import { resolveApiUrl, setApiBase } from '../config/apiBase.js';
+import { setApiBase } from '../config/apiBase.js';
+import { fetchServerNetwork } from '../services/serverPool.js';
 
 /**
  * Gate that decides whether the app can reach a server.
@@ -19,10 +20,10 @@ export default function ServerGate({ children }) {
   const [state, setState] = useState('checking'); // checking | ready | connect
 
   const probe = useCallback(async () => {
-    try {
-      const res = await fetch(resolveApiUrl('/network'), { cache: 'no-store', signal: AbortSignal.timeout(3000) });
-      if (res.ok) { setState('ready'); return; }
-    } catch { /* fall through */ }
+    /* A valid /network payload proves this is the Photo Quest server. A static
+       host answers /network with the SPA index.html and HTTP 200, so the body
+       must be validated — otherwise the UI host is mistaken for the API. */
+    if (await fetchServerNetwork(null)) { setState('ready'); return; }
 
     /* Same-origin (or configured base) is unreachable. In the normal web/PWA case
        the server serves the app, so a dead origin means the app loaded from an
