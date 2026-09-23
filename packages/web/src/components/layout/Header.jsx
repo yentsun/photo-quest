@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo, getCachedCounts, refreshCounts } from '../../utils/api.js';
+import { fetchNetworkInfo, getCachedCounts, refreshCounts, refreshDuplicatesCount, refreshFailedCount } from '../../utils/api.js';
 import { addKnownServer, currentServerUrl } from '../../services/serverPool.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { Button, Icon, Modal } from '../ui/index.js';
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: clientRoutes.liked, icon: 'heart', label: 'Liked', countKey: 'liked' },
   { to: clientRoutes.tags, icon: 'list', label: 'Tags', countKey: 'tags' },
   { to: clientRoutes.duplicates, icon: 'copy', label: 'Duplicates', countKey: 'duplicates' },
+  { to: clientRoutes.failed, icon: 'warning', label: 'Failed', countKey: 'failed' },
 ];
 
 export default function Header({ collapsed, onToggle }) {
@@ -21,7 +22,7 @@ export default function Header({ collapsed, onToggle }) {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
-  const { signal, libraryCount, setLibraryCount, likedCount, setLikedCount, tagCount, setTagCount, duplicatesCount, setDuplicatesCount } = useRefresh();
+  const { signal, libraryCount, setLibraryCount, likedCount, setLikedCount, tagCount, setTagCount, duplicatesCount, setDuplicatesCount, failedCount, setFailedCount } = useRefresh();
 
   /* Load the per-section counts shown next to the nav items. These are cached
      (localStorage) so the badges render instantly on load, and are only
@@ -33,7 +34,8 @@ export default function Header({ collapsed, onToggle }) {
     if (cached.liked != null) setLikedCount(cached.liked);
     if (cached.tags != null) setTagCount(cached.tags);
     if (cached.duplicates != null) setDuplicatesCount(cached.duplicates);
-  }, [setLibraryCount, setLikedCount, setTagCount, setDuplicatesCount]);
+    if (cached.failed != null) setFailedCount(cached.failed);
+  }, [setLibraryCount, setLikedCount, setTagCount, setDuplicatesCount, setFailedCount]);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,10 +44,21 @@ export default function Header({ collapsed, onToggle }) {
       if (counts.library != null) setLibraryCount(counts.library);
       if (counts.liked != null) setLikedCount(counts.liked);
       if (counts.tags != null) setTagCount(counts.tags);
-      if (counts.duplicates != null) setDuplicatesCount(counts.duplicates);
+    });
+    /* Duplicate badge is refreshed separately so a slow duplicate request can
+       never delay the cheap Library / Liked / Tags counts. */
+    refreshDuplicatesCount().then(duplicates => {
+      if (cancelled) return;
+      if (duplicates != null) setDuplicatesCount(duplicates);
+    });
+    /* Failed badge is refreshed last — its file-health sweep is the most
+       expensive count, so it must never delay the others. */
+    refreshFailedCount().then(failed => {
+      if (cancelled) return;
+      if (failed != null) setFailedCount(failed);
     });
     return () => { cancelled = true; };
-  }, [signal, setLibraryCount, setLikedCount, setTagCount, setDuplicatesCount]);
+  }, [signal, setLibraryCount, setLikedCount, setTagCount, setDuplicatesCount, setFailedCount]);
 
   useEffect(() => {
     /* Always record the current origin — it is the server when the app is
@@ -155,6 +168,7 @@ export default function Header({ collapsed, onToggle }) {
               : item.countKey === 'liked' ? likedCount
               : item.countKey === 'tags' ? tagCount
               : item.countKey === 'duplicates' ? duplicatesCount
+              : item.countKey === 'failed' ? failedCount
               : null;
             return (
               <NavLink

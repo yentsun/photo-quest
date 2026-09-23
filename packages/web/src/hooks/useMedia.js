@@ -12,6 +12,7 @@ import {
   deleteMedia as deleteMediaApi,
   scanMedia as scanMediaApi,
   removeFolder as removeFolderApi,
+  pruneMediaCache,
 } from '../utils/api.js';
 
 /**
@@ -76,6 +77,13 @@ export function useMediaActions() {
 
     abortRef.current = false;
     bump();
+
+    /* Refresh also reconciles the local snapshot: drop any record the server no
+       longer has (removed here or elsewhere) so it doesn't linger in a grid. */
+    pruneMediaCache()
+      .then(removed => { if (removed > 0) bump(); })
+      .catch(() => {});
+
     return { serverFolders: scannedFolders, clientFolders: 0, newFiles, failedFolders };
   }, [bump, abortRef]);
 

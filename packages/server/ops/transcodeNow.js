@@ -17,6 +17,10 @@ let running = false;
 /** Media IDs currently queued or running — prevents duplicate jobs per media. */
 const queuedMedia = new Set();
 
+/** Set once the process is shutting down, so an interrupted job is left
+ *  resumable instead of being marked failed (or started anew). */
+let shuttingDown = false;
+
 export function hasQueuedTranscode(id) {
   return queuedMedia.has(Number(id));
 }
@@ -30,16 +34,23 @@ function killCurrentChild() {
 }
 
 /* Kill any running ffmpeg when the server exits, so transcoding actually
-   stops on shutdown instead of leaving an orphaned process burning CPU. */
-for (const signal of ['SIGINT', 'SIGTERM', 'exit']) {
-  process.on(signal, () => killCurrentChild());
+   stops on shutdown instead of leaving an orphaned process burning CPU.
+   The interrupted job is left in its `running` state: the next boot re-queues
+   it (see resumePendingTranscodes) instead of the shutdown marking it failed
+   and deleting the original file. */
+function handleShutdown() {
+  shuttingDown = true;
+  killCurrentChild();
 }
-process.on('beforeExit', killCurrentChild);
+for (const signal of ['SIGINT', 'SIGTERM', 'exit']) {
+  process.on(signal, handleShutdown);
+}
+process.on('beforeExit', handleShutdown);
 
 
 /** Pick the oldest pending job and start transcoding it. */
 function kick(kojo, logger) {
-  if (running) return;
+  if (running || shuttingDown) return;
   const db = kojo.get('db');
 
   const job = db.prepare(
@@ -107,6 +118,10 @@ async function runJob(kojo, db, logger, job) {
     return;
   }
 
+  /* Set once ffmpeg starts writing, so an interrupted/failed run can remove the
+     partial file and a later resume reuses the same output path. */
+  let outputPath = null;
+
   try {
     logger.info(`Probing: ${media.path}`);
     db.prepare("UPDATE media SET status = 'probing', updated_at = datetime('now') WHERE id = ?").run(media.id);
@@ -119,6 +134,15 @@ async function runJob(kojo, db, logger, job) {
     db.prepare(
       "UPDATE media SET status = 'probed', codec = ?, duration = ?, width = ?, height = ?, updated_at = datetime('now') WHERE id = ?"
     ).run(info.codec, info.duration, info.width, info.height, media.id);
+
+    /* The job may have been cancelled/paused while probing (the probe child is
+       killed, but a probe that finished first still lands here). Never start a
+       transcode for a job that is no longer running. */
+    const live = db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id);
+    if (!live || live.status !== JOB_STATUS.RUNNING) {
+      logger.info(`Job ${job.id} is ${live?.status ?? 'gone'}; not starting transcode`);
+      return;
+    }
 
     const isMp4 = media.path.toLowerCase().endsWith('.mp4');
     const isH264 = info.codec === 'h264';
@@ -137,7 +161,7 @@ async function runJob(kojo, db, logger, job) {
     const dir = path.dirname(media.path);
     const base = path.basename(media.path, path.extname(media.path));
     const suffix = isMp4 ? '_converted' : '';
-    let outputPath = path.join(dir, `${base}${suffix}.mp4`);
+    outputPath = path.join(dir, `${base}${suffix}.mp4`);
 
     /* Avoid overwriting an existing file that may belong to another media record. */
     let counter = 1;
@@ -164,12 +188,20 @@ async function runJob(kojo, db, logger, job) {
       broadcastSse({ type: 'transcode_progress', mediaId: media.id, jobId: job.id, progress, progressSecs: secs });
     });
 
+    /* Never trust ffmpeg's exit code alone: a truncated/killed MP4 (no moov
+       atom, short duration) must not replace the original. Verify it first;
+       throwing here keeps the original and marks the job failed. */
+    const check = await verifyOutput(outputPath, info.duration);
+    if (!check.ok) throw new Error(`output verification failed: ${check.reason}`);
+    logger.info(`Verified output: ${check.duration.toFixed(1)}s ${check.codec}`);
+
     db.prepare(
       "UPDATE media SET status = 'ready', transcoded_path = ?, updated_at = datetime('now') WHERE id = ?"
     ).run(outputPath, media.id);
     db.prepare("UPDATE jobs SET status = ?, progress = 100, updated_at = datetime('now') WHERE id = ?")
       .run(JOB_STATUS.COMPLETED, job.id);
 
+    /* Only now — with a verified, playable replacement — is the original removed. */
     try {
       fs.unlinkSync(media.path);
       logger.info(`Deleted original: ${media.path}`);
@@ -181,10 +213,21 @@ async function runJob(kojo, db, logger, job) {
     broadcastSse({ type: 'transcode_complete', mediaId: media.id, jobId: job.id });
     logger.info(`Done: ${outputPath}`);
   } catch (err) {
-    /* A killed (paused/cancelled) ffmpeg should not mark the job failed. */
+    /* Remove the partial output so a resumed/failed run leaves no orphan and
+       the next attempt reuses the same filename. */
+    if (outputPath) {
+      try { fs.unlinkSync(outputPath); } catch { /* already gone */ }
+    }
+
+    /* A killed (paused/cancelled/shutdown) ffmpeg must not mark the job failed:
+       the job is left as-is so it can be resumed. */
     const jobState = db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id);
-    if (jobState && (jobState.status === JOB_STATUS.PAUSED || jobState.status === JOB_STATUS.COMPLETED)) {
-      logger.info(`Job ${job.id} stopped (${jobState.status}); skipping failure`);
+    const stopped = shuttingDown
+      || (jobState && (jobState.status === JOB_STATUS.PAUSED
+        || jobState.status === JOB_STATUS.COMPLETED
+        || jobState.status === JOB_STATUS.CANCELLED));
+    if (stopped) {
+      logger.info(`Job ${job.id} stopped (${shuttingDown ? 'shutdown' : jobState.status}); leaving it to resume`);
       return;
     }
 
@@ -233,7 +276,8 @@ export function resumeAllTranscodes(kojo, logger) {
   return { resumed: affected.changes };
 }
 
-/** Cancel a single job. If it is the running job, kill the child. */
+/** Cancel a single job: mark it `cancelled` (it stays in the list) and, if it
+ *  is the running job, kill the current ffmpeg/ffprobe child. */
 export function cancelJob(kojo, logger, id) {
   const db = kojo.get('db');
   const jobId = Number(id);
@@ -241,18 +285,44 @@ export function cancelJob(kojo, logger, id) {
   const job = db.prepare('SELECT id, media_id, status FROM jobs WHERE id = ?').get(jobId);
   if (!job) return { cancelled: false };
 
+  /* Kill whichever child is running — the ffmpeg transcode OR the ffprobe that
+     precedes it — so a cancel during the probe phase stops it too. */
   if (job.status === JOB_STATUS.RUNNING && currentChild) {
     killCurrentChild();
   }
 
   db.prepare("UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE id = ?")
-    .run(JOB_STATUS.COMPLETED, jobId);
+    .run(JOB_STATUS.CANCELLED, jobId);
   db.prepare("UPDATE media SET status = 'probed', updated_at = datetime('now') WHERE id = ? AND status IN ('pending', 'probing', 'transcoding')").run(job.media_id);
 
   queuedMedia.delete(job.media_id);
   broadcastSse({ type: 'transcode_cancelled', mediaId: job.media_id, jobId });
   logger.info(`Cancelled job ${jobId}`);
   return { cancelled: true };
+}
+
+/** Re-queue a cancelled or failed job: clear its error, set it pending and kick
+ *  the runner. Returns { retried, status?, error? }. */
+export function retryJob(kojo, logger, id) {
+  const db = kojo.get('db');
+  const jobId = Number(id);
+
+  const job = db.prepare('SELECT id, media_id, status FROM jobs WHERE id = ?').get(jobId);
+  if (!job) return { retried: false, status: 404, error: 'Job not found' };
+  if (job.status !== JOB_STATUS.CANCELLED && job.status !== JOB_STATUS.FAILED) {
+    return { retried: false, status: 400, error: 'Only cancelled or failed jobs can be retried' };
+  }
+
+  db.prepare("UPDATE jobs SET status = ?, error = NULL, progress = 0, updated_at = datetime('now') WHERE id = ?")
+    .run(JOB_STATUS.PENDING, jobId);
+  db.prepare("UPDATE media SET status = 'pending', updated_at = datetime('now') WHERE id = ?")
+    .run(job.media_id);
+
+  queuedMedia.add(job.media_id);
+  broadcastSse({ type: 'transcode_queued', mediaId: job.media_id, jobId });
+  logger.info(`Retried job ${jobId}`);
+  kick(kojo, logger);
+  return { retried: true };
 }
 
 /** List all transcode jobs joined with media info, newest first. */
@@ -285,10 +355,13 @@ function probe(filePath) {
   return new Promise((resolve, reject) => {
     const args = ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', filePath];
     const proc = spawn(FFPROBE_PATH, args);
+    /* Track the probe child too, so cancel/pause/shutdown can stop it. */
+    currentChild = proc;
     const chunks = [];
     proc.stdout.on('data', chunk => chunks.push(chunk));
-    proc.on('close', code => {
-      if (code !== 0) return reject(new Error(`ffprobe exited with code ${code}`));
+    proc.on('close', (code, signal) => {
+      if (currentChild === proc) currentChild = null;
+      if (code !== 0) return reject(new Error(`ffprobe exited with code ${code}${signal ? ` (signal ${signal})` : ''}`));
       try {
         const out = JSON.parse(Buffer.concat(chunks).toString());
         const video = out.streams?.find(s => s.codec_type === 'video');
@@ -304,8 +377,33 @@ function probe(filePath) {
         reject(new Error(`Failed to parse ffprobe output: ${e.message}`));
       }
     });
-    proc.on('error', err => reject(new Error(`Failed to spawn ffprobe: ${err.message}`)));
+    proc.on('error', err => {
+      if (currentChild === proc) currentChild = null;
+      reject(new Error(`Failed to spawn ffprobe: ${err.message}`));
+    });
   });
+}
+
+/**
+ * Verify a freshly transcoded file is actually playable before it replaces the
+ * original: ffprobe must read it, find a video stream, report a duration, and
+ * not be materially shorter than the source.
+ *
+ * @returns {Promise<{ ok: boolean, reason?: string, duration?: number, codec?: string }>}
+ */
+async function verifyOutput(filePath, expectedDuration) {
+  let info;
+  try {
+    info = await probe(filePath);
+  } catch (err) {
+    return { ok: false, reason: err.message };
+  }
+  if (!info.codec || info.codec === 'unknown') return { ok: false, reason: 'no video stream' };
+  if (!(info.duration > 0)) return { ok: false, reason: 'no duration' };
+  if (expectedDuration > 0 && info.duration < expectedDuration * 0.9) {
+    return { ok: false, reason: `truncated (${info.duration.toFixed(1)}s of ${expectedDuration.toFixed(1)}s)` };
+  }
+  return { ok: true, duration: info.duration, codec: info.codec };
 }
 
 function transcode(media, outputPath, videoArgs, audioArgs, onProgress) {
@@ -334,10 +432,12 @@ function transcode(media, outputPath, videoArgs, audioArgs, onProgress) {
       }
     });
 
-    proc.on('close', code => {
+    proc.on('close', (code, signal) => {
       if (currentChild === proc) currentChild = null;
-      if (code !== 0 && code !== null) reject(new Error(`ffmpeg exited with code ${code}`));
-      else resolve(outputPath);
+      /* A signalled child reports `code = null` — treat it as a failure, never a
+         success, so a killed transcode can't be mistaken for a finished one. */
+      if (code === 0) resolve(outputPath);
+      else reject(new Error(`ffmpeg exited with code ${code}${signal ? ` (signal ${signal})` : ''}`));
     });
     proc.on('error', err => {
       if (currentChild === proc) currentChild = null;

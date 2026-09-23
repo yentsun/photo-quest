@@ -1,6 +1,6 @@
 /**
  * @file POST /open-folder -- Open a native OS folder picker dialog on the server
- * and return the selected path. Satisfies LAW 1.2 (native file picker, no text input).
+ * and return the selected path (native file picker, no text input).
  *
  * Uses PowerShell's FolderBrowserDialog (Windows). The dialog opens on the server
  * machine, which is the same machine the user is working on in the local-app use case.

@@ -14,7 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE } from '@photo-quest/shared';
 
 /* Compute __dirname for ES modules. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -59,6 +59,7 @@ export function initDb() {
   db.exec(CREATE_SCANS_TABLE);
   db.exec(CREATE_IMPORT_QUEUE_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
+  db.exec(CREATE_FAILED_SNAPSHOT_TABLE);
 
   /* Run migrations before creating indexes that reference migrated columns. */
   migrateDb();
@@ -69,6 +70,8 @@ export function initDb() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_date_sort ON media(COALESCE(date_taken, created_at))');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_title ON media(title)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_media_updated_at ON media(updated_at)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_media_hash ON media(hash)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_media_hidden_path ON media(hidden, path)');
 
   const existed = fs.existsSync(DB_PATH);
   console.debug(`[db] Initialised (${existed ? 'loaded from disk' : 'new database'})`);
@@ -102,6 +105,7 @@ function migrateDb() {
     'ALTER TABLE media ADD COLUMN folder TEXT',
     'ALTER TABLE media ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE media ADD COLUMN hash TEXT',
+    'ALTER TABLE media ADD COLUMN hash_version INTEGER',
     'ALTER TABLE media ADD COLUMN orientation INTEGER',
     'ALTER TABLE media ADD COLUMN camera TEXT',
     'ALTER TABLE media ADD COLUMN date_taken TEXT',
@@ -129,5 +133,21 @@ function migrateDb() {
     );
   } catch (err) {
     /* Table may not exist yet on first run -- ignore. */
+  }
+
+  /* Videos are playable without transcoding now, so previously auto-queued
+     ones are marked ready. A transcode with an active job is left alone. */
+  try {
+    const { changes } = db.prepare(`
+      UPDATE media SET status = 'ready', updated_at = datetime('now')
+      WHERE type = 'video' AND status IN ('pending', 'probed')
+        AND id NOT IN (
+          SELECT media_id FROM jobs
+          WHERE type = 'transcode' AND status IN ('pending', 'running', 'paused')
+        )
+    `).run();
+    if (changes > 0) console.debug(`[db] Marked ${changes} video(s) ready (transcoding is on demand)`);
+  } catch (err) {
+    /* jobs table may not exist yet on first run -- ignore. */
   }
 }

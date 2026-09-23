@@ -12,7 +12,10 @@ import config from '@photo-quest/shared/config.js';
 // Import endpoint handlers
 import endpoint_get_media from '../endpoints/10_get_media.js';
 import endpoint_get_media_id from '../endpoints/20_get_media_id.js';
+import endpoint_get_media_id_duplicates from '../endpoints/21_get_media_id_duplicates.js';
 import endpoint_get_duplicates from '../endpoints/93_get_duplicates.js';
+import endpoint_get_failed from '../endpoints/96_get_failed.js';
+import endpoint_post_failed_repair from '../endpoints/97_post_failed_repair.js';
 import endpoint_post_duplicates_merge from '../endpoints/94_post_duplicates_merge.js';
 import endpoint_post_duplicates_delete from '../endpoints/95_post_duplicates_delete.js';
 import endpoint_patch_like from '../endpoints/25_patch_media_id_like.js';
@@ -55,6 +58,9 @@ async function setup() {
         const items = db.prepare('SELECT * FROM media ORDER BY created_at DESC').all();
         return { items, total };
       },
+      listMediaIds: function() {
+        return db.prepare('SELECT id FROM media WHERE hidden = 0 ORDER BY id').all().map(r => r.id);
+      },
       listDuplicates: function({ countOnly = false } = {}) {
         const rows = db.prepare(`
           SELECT * FROM media
@@ -93,11 +99,42 @@ async function setup() {
       getMediaById: function(id) {
         return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)) || null;
       },
-      likeMedia: function(id) {
+      getMediaDuplicates: function(id) {
+        const media = db.prepare('SELECT id, hash FROM media WHERE id = ? AND hidden = 0').get(Number(id));
+        if (!media || !media.hash) return { hash: null, ids: [], count: 0, items: [] };
+        const items = db.prepare('SELECT * FROM media WHERE hidden = 0 AND hash = ?').all(media.hash);
+        if (items.length < 2) return { hash: media.hash, ids: [], count: 0, items: [] };
+        return { hash: media.hash, ids: items.map(i => i.id), count: items.length, items };
+      },
+      listFailed: function({ countOnly = false, limit, offset } = {}) {
+        /* The endpoint tests have no real files on disk, so a row counts as
+           failed when its status is 'error' (keeps the mock deterministic). */
+        const rows = db.prepare("SELECT * FROM media WHERE hidden = 0 AND status = 'error'").all();
+        const byKey = new Map();
+        for (const row of rows) {
+          const key = row.hash || `id:${row.id}`;
+          const g = byKey.get(key) || { key, hash: row.hash, failedIds: [], items: [] };
+          g.failedIds.push(row.id);
+          g.items.push({ ...row, health: 'error' });
+          byKey.set(key, g);
+        }
+        const groups = [...byKey.values()].map(g => ({ ...g, failedCount: g.failedIds.length, siblingCount: 0 }));
+        if (countOnly) return { groupCount: groups.length, failedCount: rows.length };
+        const safeLimit = limit > 0 ? limit : 25;
+        const safeOffset = offset >= 0 ? offset : 0;
+        return { groups: groups.slice(safeOffset, safeOffset + safeLimit), groupCount: groups.length, failedCount: rows.length };
+      },
+      repairFailed: function({ ids, all = false } = {}) {
+        const targets = all
+          ? db.prepare("SELECT id FROM media WHERE hidden = 0 AND status = 'error'").all()
+          : (ids || []).map(id => ({ id }));
+        return { repaired: targets.length, restored: targets.length, requeued: 0, unrepairable: 0, results: [] };
+      },
+      likeMedia: function(id, count = 1) {
         const existing = db.prepare('SELECT likes FROM media WHERE id = ?').get(Number(id));
         if (!existing) return null;
         const newlyLiked = existing.likes === 0;
-        db.prepare('UPDATE media SET likes = likes + 1 WHERE id = ?').run(Number(id));
+        db.prepare('UPDATE media SET likes = likes + ? WHERE id = ?').run(Number(count) || 1, Number(id));
         const media = this.getMediaById(id);
         if (newlyLiked) {
           const { total } = db.prepare('SELECT COUNT(*) AS total FROM media WHERE hidden = 0 AND likes > 0').get();
@@ -133,7 +170,10 @@ async function setup() {
   // Register endpoints
   await endpoint_get_media(kojo, logger);
   await endpoint_get_media_id(kojo, logger);
+  await endpoint_get_media_id_duplicates(kojo, logger);
   await endpoint_get_duplicates(kojo, logger);
+  await endpoint_get_failed(kojo, logger);
+  await endpoint_post_failed_repair(kojo, logger);
   await endpoint_post_duplicates_merge(kojo, logger);
   await endpoint_post_duplicates_delete(kojo, logger);
   await endpoint_patch_like(kojo, logger);
@@ -216,6 +256,19 @@ test('GET /media', async (t) => {
     t.assert.strictEqual(res._body.items[0].title, 'Test');
     t.assert.strictEqual(res._body.total, 1);
   });
+
+  await t.test('?ids=1 returns just the visible media ids', async () => {
+    const route = findRoute('GET', '/media');
+    const req = mockReq('GET', '/media?ids=1');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.ok(Array.isArray(res._body.ids));
+    t.assert.strictEqual(res._body.ids.length, 1);
+    t.assert.strictEqual('items' in res._body, false);
+  });
 });
 
 test('GET /media/:id', async (t) => {
@@ -245,6 +298,39 @@ test('GET /media/:id', async (t) => {
   });
 });
 
+test('GET /media/:id/duplicates', async (t) => {
+  await setup();
+
+  await t.test('returns no copies for an item without duplicates', async () => {
+    const { lastInsertRowid: id } = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/solo.jpg', 'Solo', 'image', 'ready', 'solo')").run();
+
+    const route = findRoute('GET', '/media/:id/duplicates');
+    const req = mockReq('GET', `/media/${id}/duplicates`);
+    const res = mockRes();
+
+    await route.handler(req, res, { id: String(id) });
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.count, 0);
+    t.assert.deepStrictEqual(res._body.ids, []);
+  });
+
+  await t.test('returns every copy for a duplicated item', async () => {
+    const a = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/dup-a.jpg', 'A', 'image', 'ready', 'same')").run().lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/dup-b.jpg', 'B', 'image', 'ready', 'same')").run().lastInsertRowid;
+
+    const route = findRoute('GET', '/media/:id/duplicates');
+    const req = mockReq('GET', `/media/${a}/duplicates`);
+    const res = mockRes();
+
+    await route.handler(req, res, { id: String(a) });
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.count, 2);
+    t.assert.deepStrictEqual([...res._body.ids].sort((x, y) => x - y), [a, b]);
+  });
+});
+
 test('PATCH /media/:id/like', async (t) => {
   await setup();
 
@@ -266,6 +352,20 @@ test('PATCH /media/:id/like', async (t) => {
     await route.handler(req, res2, { id: String(id) });
     t.assert.strictEqual(res2._body.likes, 2);
     t.assert.strictEqual('likedCount' in res2._body, false);
+  });
+
+  await t.test('?count=N adds N likes in one request', async () => {
+    const { lastInsertRowid: id } = db.prepare("INSERT INTO media (path, title, type, status, likes) VALUES ('batch.jpg', 'Batch', 'image', 'ready', 0)").run();
+
+    const route = findRoute('PATCH', '/media/:id/like');
+    const req = mockReq('PATCH', `/media/${id}/like?count=5`);
+    const res = mockRes();
+
+    await route.handler(req, res, { id: String(id) });
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.likes, 5);
+    t.assert.strictEqual(typeof res._body.likedCount, 'number');
   });
 
   await t.test('returns 404 for non-existent', async () => {
@@ -619,6 +719,112 @@ test('GET /duplicates?count=1', async (t) => {
     /* Group 1 has 3 items (2 extra copies), group 2 has 2 items (1 extra). */
     t.assert.strictEqual(res._body.copyCount, 3);
     t.assert.strictEqual('groups' in res._body, false);
+  });
+});
+
+test('GET /failed', async (t) => {
+  await setup();
+
+  await t.test('returns no groups when nothing failed', async () => {
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/ok-a.jpg', 'A', 'image', 'ready', 'same')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/ok-b.jpg', 'B', 'image', 'ready', 'same')").run();
+
+    const route = findRoute('GET', '/failed');
+    const req = mockReq('GET', '/failed');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.groups.length, 0);
+    t.assert.strictEqual(res._body.groupCount, 0);
+    t.assert.strictEqual(res._body.failedCount, 0);
+  });
+
+  await t.test('groups failed media sharing the same hash', async () => {
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/bad-a.jpg', 'A', 'image', 'error', 'same')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/bad-b.jpg', 'B', 'image', 'error', 'same')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/bad-c.jpg', 'C', 'image', 'error', 'other')").run();
+
+    const route = findRoute('GET', '/failed');
+    const req = mockReq('GET', '/failed');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.groups.length, 2);
+    t.assert.strictEqual(res._body.groupCount, 2);
+    t.assert.strictEqual(res._body.failedCount, 3);
+    const same = res._body.groups.find(g => g.hash === 'same');
+    t.assert.strictEqual(same.failedCount, 2);
+    t.assert.strictEqual(same.items.length, 2);
+  });
+});
+
+test('GET /failed?count=1', async (t) => {
+  await setup();
+
+  await t.test('returns aggregate counts only', async () => {
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/bad-1.jpg', 'A', 'image', 'error', 'same')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/bad-2.jpg', 'B', 'image', 'error', 'same')").run();
+    db.prepare("INSERT INTO media (path, title, type, status, hash) VALUES ('/bad-3.jpg', 'C', 'image', 'error', 'solo')").run();
+
+    const route = findRoute('GET', '/failed');
+    const req = mockReq('GET', '/failed?count=1');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.groupCount, 2);
+    t.assert.strictEqual(res._body.failedCount, 3);
+    t.assert.strictEqual('groups' in res._body, false);
+  });
+});
+
+test('POST /failed/repair', async (t) => {
+  await setup();
+
+  await t.test('repairs the given ids', async () => {
+    const a = db.prepare("INSERT INTO media (path, title, type, status) VALUES ('/a.jpg', 'A', 'image', 'error')").run().lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, type, status) VALUES ('/b.jpg', 'B', 'image', 'error')").run().lastInsertRowid;
+
+    const route = findRoute('POST', '/failed/repair');
+    const req = mockReq('POST', '/failed/repair', { ids: [a, b] });
+    const res = mockRes();
+
+    const promise = route.handler(req, res);
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.repaired, 2);
+  });
+
+  await t.test('repairs every failed record when all is true', async () => {
+    const route = findRoute('POST', '/failed/repair');
+    const req = mockReq('POST', '/failed/repair', { all: true });
+    const res = mockRes();
+
+    const promise = route.handler(req, res);
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.repaired, 2);
+  });
+
+  await t.test('rejects when neither ids nor all are given', async () => {
+    const route = findRoute('POST', '/failed/repair');
+    const req = mockReq('POST', '/failed/repair', {});
+    const res = mockRes();
+
+    const promise = route.handler(req, res);
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 400);
   });
 });
 

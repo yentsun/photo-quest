@@ -22,6 +22,7 @@ import {
   idbDeleteMedia,
   idbDeleteFolder,
   idbReplaceFolders,
+  idbPruneMedia,
 } from '../services/idb.js';
 
 /** Fetch a server URL (relative or absolute) through the configured API base. */
@@ -125,9 +126,58 @@ async function syncMediaCache(ids = [], replacements = []) {
 }
 
 /**
- * Clear all in-memory session caches (folders, tags, media, per-folder media).
- * Used after a full cache purge so the next render fetches fresh from the
- * server instead of serving stale in-memory data.
+ * Drop media ids from the in-memory + IndexedDB caches. Called when the server
+ * reports records were removed (SSE `media_removed`) so they stop appearing in
+ * grids immediately instead of lingering as dead entries.
+ *
+ * @param {Array<number|string>} ids
+ */
+export async function purgeMedia(ids = []) {
+  if (!ids.length) return;
+  const updates = [];
+  for (const id of ids) {
+    _mediaCache.delete(Number(id));
+    updates.push(idbDeleteMedia(id));
+  }
+  _folderMediaCache.clear();
+  await Promise.all(updates.map(update => update.catch(err => {
+    console.warn('[idb] purge failed:', err);
+  })));
+}
+
+/**
+ * Fetch every visible media id from the server.
+ * @returns {Promise<number[]>}
+ */
+export async function fetchMediaIds() {
+  const url = new URL(apiRoutes.media, apiOrigin());
+  url.searchParams.set('ids', '1');
+  const response = await apiFetch(url);
+  if (!response.ok) throw new Error('Failed to fetch media ids');
+  const { ids } = await response.json();
+  return ids ?? [];
+}
+
+/**
+ * Reconcile the in-memory + IndexedDB media caches with the server: drop any
+ * record the server no longer has. Run once per session so media deleted while
+ * this client was away doesn't linger in grids.
+ *
+ * @returns {Promise<number>} Number of records removed.
+ */
+export async function pruneMediaCache() {
+  const ids = await fetchMediaIds();
+  const keep = new Set(ids.map(Number));
+  for (const key of [..._mediaCache.keys()]) {
+    if (!keep.has(key)) _mediaCache.delete(key);
+  }
+  return idbPruneMedia(keep);
+}
+
+/**
+ * Clear all in-memory session caches (folders, tags, media, per-folder media,
+ * failed listings). Used after a full cache purge so the next render fetches
+ * fresh from the server instead of serving stale in-memory data.
  */
 export function resetMediaCaches() {
   _foldersCache = null;
@@ -145,14 +195,14 @@ export function resetMediaCaches() {
 // COUNT endpoints (which return just a total) only on data-change signals.
 
 const COUNTS_STORAGE_KEY = 'photoquest.counts-v2';
-const EMPTY_COUNTS = { library: null, liked: null, tags: null, duplicates: null };
+const EMPTY_COUNTS = { library: null, liked: null, tags: null, duplicates: null, failed: null };
 
-/** @type {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }} */
+/** @type {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null, failed: number|null }} */
 let _countsCache = null;
 
 /**
  * Return the cached badge counts (or nulls on first run / cleared storage).
- * @returns {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }}
+ * @returns {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null, failed: number|null }}
  */
 export function getCachedCounts() {
   if (_countsCache) return _countsCache;
@@ -176,15 +226,46 @@ function persistCounts(counts) {
  * @returns {Promise<{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }>}
  */
 export async function refreshCounts() {
-  const [library, liked, tags, duplicates] = await Promise.all([
+  const [library, liked, tags] = await Promise.all([
     fetchMedia({ limit: 0 }).then(d => d.total).catch(() => null),
     fetchMedia({ liked: true, limit: 0 }).then(d => d.total).catch(() => null),
     fetchTags().then(d => d.length).catch(() => null),
-    fetchDuplicates({ countOnly: true }).then(d => d.groupCount).catch(() => null),
   ]);
-  const counts = { library, liked, tags, duplicates };
+  const cached = getCachedCounts();
+  const counts = { library, liked, tags, duplicates: cached.duplicates, failed: cached.failed };
   persistCounts(counts);
   return counts;
+}
+
+/**
+ * Refresh just the Duplicate badge count in the background. Kept separate so a
+ * slow duplicate request can never delay the Library / Liked / Tags counts.
+ * Timed out so a pathological server can't hang it either. The result is
+ * persisted to the count cache and returned so callers can update the badge.
+ *
+ * @returns {Promise<number|null>}
+ */
+export async function refreshDuplicatesCount() {
+  const duplicates = await fetchDuplicates({ countOnly: true, timeout: 8000 })
+    .then(d => d.groupCount)
+    .catch(() => null);
+  if (duplicates != null) persistCounts({ ...getCachedCounts(), duplicates });
+  return duplicates;
+}
+
+/**
+ * Refresh just the Failed badge count in the background. Kept separate so a slow
+ * file-health sweep can never delay the other counts. Timed out so a pathological
+ * server can't hang it either.
+ *
+ * @returns {Promise<number|null>}
+ */
+export async function refreshFailedCount() {
+  const failed = await fetchFailed({ countOnly: true, timeout: 8000 })
+    .then(d => d.groupCount)
+    .catch(() => null);
+  if (failed != null) persistCounts({ ...getCachedCounts(), failed });
+  return failed;
 }
 
 // ---------------------------------------------------------------------------
@@ -229,19 +310,85 @@ export async function fetchTags() {
   return data;
 }
 
-export async function fetchDuplicates({ countOnly = false } = {}) {
+export async function fetchDuplicates({ countOnly = false, limit, offset, timeout } = {}) {
   const url = new URL(apiRoutes.duplicates, apiOrigin());
   if (countOnly) url.searchParams.set('count', '1');
-  const response = await apiFetch(url);
+  if (limit != null) url.searchParams.set('limit', limit);
+  if (offset != null) url.searchParams.set('offset', offset);
+  const opts = {};
+  /* The duplicate badge must never hang the UI — if the server is slow or the
+     library path is wedged, bail out rather than block rendering. */
+  if (timeout != null) opts.signal = AbortSignal.timeout(timeout);
+  const response = await apiFetch(url, opts);
   if (!response.ok) throw new Error('Failed to fetch duplicates');
   return response.json();
 }
 
-export async function mergeDuplicates({ ids }) {
+/**
+ * Fetch media whose file is missing/unreadable or whose processing failed,
+ * grouped by content hash. The server answers from its persisted health
+ * snapshot, so this is cheap; `refreshing` in the response is true while a new
+ * sweep runs in the background. Pass `refresh: true` to ask for a new sweep
+ * (manual "Re-check").
+ *
+ * @param {{ countOnly?: boolean, limit?: number, offset?: number, refresh?: boolean, timeout?: number }} [opts]
+ * @returns {Promise<{ groups?: Object[], groupCount: number, failedCount: number, refreshing?: boolean }>}
+ */
+export async function fetchFailed({ countOnly = false, limit, offset, refresh = false, timeout } = {}) {
+  const url = new URL(apiRoutes.failed, apiOrigin());
+  if (countOnly) url.searchParams.set('count', '1');
+  if (refresh) url.searchParams.set('refresh', '1');
+  if (limit != null) url.searchParams.set('limit', limit);
+  if (offset != null) url.searchParams.set('offset', offset);
+  const opts = {};
+  if (timeout != null) opts.signal = AbortSignal.timeout(timeout);
+  const response = await apiFetch(url, opts);
+  if (!response.ok) throw new Error('Failed to fetch failed media');
+  return response.json();
+}
+
+/**
+ * Ask the server to repair failed media records by re-checking their files on
+ * disk and reconciling their status. Pass `ids` for specific records or
+ * `all: true` to repair every currently-failed record. `force: true` discards a
+ * video's existing transcoded output and re-transcodes it from the original.
+ *
+ * @param {{ ids?: number[], all?: boolean, force?: boolean }} [opts]
+ * @returns {Promise<{ repaired: number, restored: number, requeued: number, unrepairable: number }>}
+ */
+export async function repairFailed({ ids, all = false, force = false } = {}) {
+  const payload = all ? { all: true } : { ids };
+  if (force) payload.force = true;
+  const response = await apiFetch(apiRoutes.failedRepair, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to repair media');
+  }
+  return response.json();
+}
+
+/**
+ * Return the visible copies sharing a single media item's content hash.
+ * Used by the media view to decide whether to offer a merge action.
+ *
+ * @param {number|string} id
+ * @returns {Promise<{ hash: string|null, ids: number[], count: number, items: Object[] }>}
+ */
+export async function fetchMediaDuplicates(id) {
+  const response = await apiFetch(`${apiRoutes.media}/${id}/duplicates`);
+  if (!response.ok) throw new Error('Failed to fetch media duplicates');
+  return response.json();
+}
+
+export async function mergeDuplicates({ ids, keepId }) {
   const response = await apiFetch(apiRoutes.duplicatesMerge, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify(keepId != null ? { ids, keepId } : { ids }),
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -330,6 +477,17 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   }
 }
 
+/**
+ * Drop a media item from the in-memory + IndexedDB caches. Used when the server
+ * reports the record no longer exists (404) so a stale cached copy is not
+ * rendered again.
+ */
+async function forgetMedia(id) {
+  const numericId = Number(id);
+  _mediaCache.delete(numericId);
+  try { await idbDeleteMedia(numericId); } catch { /* ignore */ }
+}
+
 export async function fetchMediaById(id, { skipCache = false } = {}) {
   // IDB-first (unless caller needs fresh server data)
   if (!skipCache) {
@@ -341,9 +499,11 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
     if (idbItem) {
       parseTags(idbItem);
       _mediaCache.set(idbItem.id, idbItem);
-      // Refresh from server in background
+      // Refresh from server in background. A 404 means the record is gone, so
+      // purge the stale cache instead of keeping it around.
       apiFetch(`${apiRoutes.media}/${id}`, { headers: { 'Accept': 'application/json' } })
         .then(async r => {
+          if (r.status === 404) { await forgetMedia(id); return; }
           if (!r.ok) return;
           const item = parseTags(await r.json());
           _mediaCache.set(item.id, item);
@@ -359,6 +519,7 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
     const response = await apiFetch(`${apiRoutes.media}/${id}`, {
       headers: { 'Accept': 'application/json' },
     });
+    if (response.status === 404) { await forgetMedia(id); return null; }
     if (!response.ok) throw new Error('Failed to fetch media item');
     const item = parseTags(await response.json());
     _mediaCache.set(item.id, item);
@@ -400,6 +561,12 @@ export async function cancelJob(id) {
   return response.json();
 }
 
+export async function retryJob(id) {
+  const response = await apiFetch(apiRoutes.jobRetry.replace(':id', id), { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to retry job');
+  return response.json();
+}
+
 export async function updateMediaTags(id, tags) {
   const response = await apiFetch(`/media/${id}/tags`, {
     method: 'PATCH',
@@ -430,20 +597,67 @@ export async function renameMedia(id, title) {
   return item;
 }
 
-export async function likeMedia(id) {
-  const response = await apiFetch(`/media/${id}/like`, {
-    method: 'PATCH',
-  });
-  if (!response.ok) {
-    throw new Error('Failed to like media');
+/**
+ * How long after the last like press a "series" is considered finished. Rapid
+ * presses coalesce into one request; the series ends after this quiet window.
+ */
+const LIKE_SERIES_MS = 400;
+
+/** Most likes sent in one request. Hitting it flushes immediately and opens a
+ *  new series, so no presses are dropped. */
+const LIKE_MAX = 30;
+
+/** @type {Map<number, { count: number, timer: any, waiters: Array<{resolve: Function, reject: Function}> }>} */
+const _likeSeries = new Map();
+
+/** Send the coalesced likes for one media item. */
+async function flushLikeSeries(id) {
+  const entry = _likeSeries.get(id);
+  if (!entry) return;
+  _likeSeries.delete(id);
+
+  try {
+    const response = await apiFetch(`/media/${id}/like?count=${entry.count}`, { method: 'PATCH' });
+    if (!response.ok) throw new Error('Failed to like media');
+    const data = await response.json();
+    const { likedCount, ...item } = data;
+    _mediaCache.set(item.id, item);
+    idbPutMedia(item).catch(() => {});
+    /* The server returns the updated liked count (only when an item transitions
+       to liked); surface it so the sidebar updates without an extra request. */
+    entry.waiters.forEach(w => w.resolve({ item, likedCount }));
+  } catch (err) {
+    entry.waiters.forEach(w => w.reject(err));
   }
-  const data = await response.json();
-  const { likedCount, ...item } = data;
-  _mediaCache.set(item.id, item);
-  idbPutMedia(item).catch(() => {});
-  /* The server returns the updated liked count (only when an item transitions
-     to liked); surface it so the sidebar updates without an extra request. */
-  return { item, likedCount };
+}
+
+/**
+ * Like a media item. Consecutive calls for the same item within
+ * {@link LIKE_SERIES_MS} are coalesced into a single request that adds them all,
+ * so a burst of presses produces one network round-trip.
+ *
+ * @param {number|string} id
+ * @returns {Promise<{ item: Object, likedCount?: number }>} Resolves when the
+ *   series is flushed (or rejects if that request fails).
+ */
+export function likeMedia(id) {
+  const key = Number(id);
+  let entry = _likeSeries.get(key);
+  if (!entry) {
+    entry = { count: 0, timer: null, waiters: [] };
+    _likeSeries.set(key, entry);
+  }
+  entry.count += 1;
+  const promise = new Promise((resolve, reject) => entry.waiters.push({ resolve, reject }));
+  if (entry.timer) clearTimeout(entry.timer);
+  if (entry.count >= LIKE_MAX) {
+    /* Cap reached — flush now instead of waiting out the quiet window. */
+    entry.timer = null;
+    flushLikeSeries(key);
+  } else {
+    entry.timer = setTimeout(() => flushLikeSeries(key), LIKE_SERIES_MS);
+  }
+  return promise;
 }
 
 export async function deleteMedia(id) {

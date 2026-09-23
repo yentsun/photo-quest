@@ -14,11 +14,11 @@
 
 /* Action types, label dictionaries, toaster timing, and every enum-like
  * constant used across the app. */
-export { actions, words, toasterTimeout, slideshowInterval, MEDIA_STATUS, MEDIA_TYPE, SCAN_STATUS, IMPORT_STATUS, JOB_STATUS, JOB_TYPE, SUPPORTED_EXTENSIONS, VIDEO_EXTENSIONS, IMAGE_EXTENSIONS } from './constants.js';
+export { actions, words, toasterTimeout, slideshowInterval, HASH_VERSION, MEDIA_STATUS, MEDIA_TYPE, SCAN_STATUS, IMPORT_STATUS, JOB_STATUS, JOB_TYPE, SUPPORTED_EXTENSIONS, VIDEO_EXTENSIONS, IMAGE_EXTENSIONS } from './constants.js';
 
 /* SQL CREATE TABLE statements consumed by both the server and the worker so
  * that either process can safely initialise the database on its own. */
-export { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE } from './schema.js';
+export { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE } from './schema.js';
 
 /* Route maps for the React client (clientRoutes) and the Express-like HTTP
  * API (apiRoutes). Keeping them here lets the front-end and back-end reference

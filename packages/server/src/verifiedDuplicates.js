@@ -64,6 +64,26 @@ export function getVerifiedDuplicateGroup(db, ids) {
   ).all(...normalizedIds);
   if (items.length !== normalizedIds.length) return null;
 
-  const groups = findVerifiedDuplicateGroups(items);
-  return groups.length === 1 && groups[0].items.length === items.length ? groups[0] : null;
+  /* Split records into those whose file still exists (and can be byte-verified)
+     and those whose file is gone. A missing file cannot be verified, but it is
+     also safe to drop — there is nothing left on disk to delete — so it must not
+     block the whole group. Every surviving file, however, must be byte-identical. */
+  const existing = [];
+  const missing = [];
+  let contentHash = null;
+  for (const item of items) {
+    const itemHash = hashFile(item.path);
+    if (itemHash == null) {
+      missing.push(item);
+    } else if (contentHash == null) {
+      contentHash = itemHash;
+      existing.push(item);
+    } else if (itemHash === contentHash) {
+      existing.push(item);
+    } else {
+      return null;
+    }
+  }
+
+  return { hash: contentHash || items[0].hash, items, existing, missing };
 }

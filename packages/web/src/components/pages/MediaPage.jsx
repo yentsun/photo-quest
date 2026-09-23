@@ -5,10 +5,10 @@ import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import GlobalContext from '../../globalContext.js';
 import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
-import { ImageViewer, MediaPlayer, LikeButton } from '../media/index.js';
+import { ImageViewer, MediaPlayer, LikeButton, DuplicateThumb } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders } from '../../utils/api.js';
+import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi, repairFailed } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -57,12 +57,17 @@ export default function MediaPage() {
   const { signal, bump, setTagCount, setLikedCount } = useRefresh();
   const { dispatch } = useContext(GlobalContext);
   const slideshow = useSlideshow();
+  const { removeItem: removeSlideshowItem } = slideshow;
   const [showInfo, setShowInfo] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const titleInputRef = useRef(null);
   const playerRef = useRef(null);
   const [fileStatus, setFileStatus] = useState(null);
+  const [fixing, setFixing] = useState(false);
+  /* Set when the <video> element fails to play a "ready" file (e.g. a corrupt
+     transcoded output) so the Fix action can offer a forced re-transcode. */
+  const [playbackError, setPlaybackError] = useState(false);
   const [addingTag, setAddingTag] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
   const [allTags, setAllTags] = useState([]);
@@ -71,11 +76,17 @@ export default function MediaPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [duplicates, setDuplicates] = useState({ ids: [], count: 0, items: [] });
+  const [showMerge, setShowMerge] = useState(false);
   const viewerRef = useRef(null);
   const mediaViewportRef = useRef(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
   const touchStartOnControl = useRef(false);
+  /* Folder chains for slideshow items, which come from a list endpoint that
+     does not embed `folder_chain`. Keyed by folder path so each folder is
+     fetched at most once per session. */
+  const folderChainCacheRef = useRef(new Map());
 
   const inSlideshow = slideshow.active;
 
@@ -116,12 +127,50 @@ export default function MediaPage() {
     setLoading(false);
     if (currentItem?.folder_chain) {
       const chain = currentItem.folder_chain;
-      setFolders(chain);
       setFolder(chain[chain.length - 1] || null);
     } else {
       setFolder(null);
     }
   }, [inSlideshow, slideshow.current]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* In a slideshow, sequence items come from the list endpoint without
+     `folder_chain`, and up/down navigation can show a folder sibling that is
+     not the slideshow current. Fetch the chain for whatever item is actually
+     on screen (not `slideshow.current`) so breadcrumbs always render. Cached
+     per folder so each folder is fetched at most once per session. */
+  useEffect(() => {
+    if (!inSlideshow || !item?.folder || item.folder_chain) return;
+    const folderPath = item.folder;
+    const itemId = item.id;
+
+    const cached = folderChainCacheRef.current.get(folderPath);
+    if (cached) {
+      setItem(prev => (prev?.id === itemId ? { ...prev, folder_chain: cached } : prev));
+      return;
+    }
+
+    let cancelled = false;
+    fetchMediaById(itemId, { skipCache: true })
+      .then(fresh => {
+        if (cancelled || !fresh?.folder_chain) return;
+        folderChainCacheRef.current.set(folderPath, fresh.folder_chain);
+        setItem(prev => (prev?.id === itemId ? { ...prev, folder_chain: fresh.folder_chain } : prev));
+      })
+      .catch(err => console.error('Failed to load media breadcrumbs:', err));
+    return () => { cancelled = true; };
+  }, [inSlideshow, item?.id, item?.folder, item?.folder_chain]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Full folder list, used to derive breadcrumbs synchronously. Loaded by the
+     dashboard normally; fetch it here too so a direct media URL still gets
+     breadcrumbs without waiting for anything else. */
+  useEffect(() => {
+    if (folders.length > 0) return;
+    let cancelled = false;
+    fetchFolders()
+      .then(list => { if (!cancelled && Array.isArray(list)) setFolders(list); })
+      .catch(err => console.error('Failed to load folders:', err));
+    return () => { cancelled = true; };
+  }, [folders.length]);
 
   useEffect(() => {
     if (inSlideshow) return;
@@ -138,23 +187,19 @@ export default function MediaPage() {
           if (!cancelled && cachedItem) { setItem(cachedItem); setLoading(false); }
         }
         setLoadingMessage('Fetching media item…');
-        const mediaItem = await fetchMediaById(mediaId);
+        /* Authoritative fetch: returns null when the record no longer exists, so
+           a stale IndexedDB copy is dropped instead of being shown. On a network
+           error it still falls back to the cached item. */
+        const mediaItem = await fetchMediaById(mediaId, { skipCache: true });
         if (cancelled) return;
+        if (!mediaItem) { setItem(null); setLoading(false); return; }
         setItem(mediaItem);
         setLoading(false);
 
-        // Cached item may lack folder_chain (stored before the server change).
-        // Force a fresh fetch when needed so breadcrumbs show up immediately.
-        let freshItem = mediaItem;
-        if (mediaItem.folder && !mediaItem.folder_chain) {
-          freshItem = await fetchMediaById(mediaId, { skipCache: true });
-          if (cancelled) return;
-          setItem(freshItem);
-        }
+        const freshItem = mediaItem;
 
         if (freshItem.folder_chain) {
           const chain = freshItem.folder_chain;
-          setFolders(chain);
           setFolder(chain[chain.length - 1] || null);
           const { items: cachedSiblings } = await idbGetMedia({ folder: freshItem.folder, sort });
           if (!cancelled && cachedSiblings.length > 0) setFolderMedia(applySort(cachedSiblings, sort));
@@ -175,6 +220,24 @@ export default function MediaPage() {
     return () => { cancelled = true; };
   }, [inSlideshow, navContext]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Surface a merge action only when the item on screen shares its content hash
+     with other visible copies. Runs during a slideshow too (Shuffle is a
+     slideshow session); `handleMerge` drops the merged copies from the
+     slideshow queue so navigation never lands on a deleted file. */
+  useEffect(() => {
+    const mediaId = Number(id);
+    if (!Number.isInteger(mediaId)) return;
+    let cancelled = false;
+    fetchMediaDuplicates(mediaId)
+      .then(result => { if (!cancelled) setDuplicates({ ids: result.ids ?? [], count: result.count ?? 0, items: result.items ?? [] }); })
+      .catch(err => {
+        if (cancelled) return;
+        console.error('Failed to check duplicates:', err);
+        setDuplicates({ ids: [], count: 0, items: [] });
+      });
+    return () => { cancelled = true; };
+  }, [id, inSlideshow, signal]);
+
   const TERMINAL = [MEDIA_STATUS.READY, MEDIA_STATUS.ERROR];
   useEffect(() => {
     if (!item || item.type !== MEDIA_TYPE.VIDEO || TERMINAL.includes(item.status)) return;
@@ -193,6 +256,21 @@ export default function MediaPage() {
   const hasPrev = inSlideshow ? slideshow.history.length > 0 : currentIndex > 0;
   const hasNext = inSlideshow ? navItems.length > 1 : currentIndex < navItems.length - 1;
 
+  /* The item we're on was deleted (e.g. on another device): skip to its next
+     neighbour instead of showing "Media not found". Only when the id is part of
+     the sequence being navigated, so a bad URL still shows the not-found page. */
+  useEffect(() => {
+    if (loading || item) return;
+    const missingId = Number(id);
+    const idx = navItems.findIndex(m => m.id === missingId);
+    if (idx === -1) return;
+    const fallback = navItems[idx + 1] || navItems[idx - 1];
+    setFolderMedia(list => list.filter(m => m.id !== missingId));
+    setLikedNavList(list => list.filter(m => m.id !== missingId));
+    if (inSlideshow) removeSlideshowItem(missingId);
+    if (fallback) navigate(`/media/${fallback.id}`, { replace: true, state: location.state });
+  }, [item, loading, id, navItems, inSlideshow, navigate, location.state, removeSlideshowItem]);
+
   useEffect(() => {
     if (!inSlideshow || !slideshow.current) return;
     navigate(`/media/${slideshow.current.id}`, { replace: true });
@@ -207,15 +285,22 @@ export default function MediaPage() {
 
   const preloadRefs = useRef([]);
   useEffect(() => {
-    if (!inSlideshow) return;
+    /* Preload the next media the viewer will actually render so next/prev
+       navigation feels instant. Images are warmed via /image/:id (the URL the
+       viewer shows, not the thumbnail). Videos are skipped — preloading video
+       streams is too expensive. This runs for both slideshow and folder/liked
+       navigation. */
+    const sequence = inSlideshow ? slideshow.items : navItems;
+    const startIdx = inSlideshow ? slideshow.currentIndex : currentIndex;
+    if (startIdx < 0) return;
     preloadRefs.current = [1, 2].flatMap(offset => {
-      const next = slideshow.items[slideshow.currentIndex + offset];
+      const next = sequence[startIdx + offset];
       if (!next || next.type !== MEDIA_TYPE.IMAGE) return [];
       const img = new Image();
       img.src = getImageUrl(next.id);
       return [img];
     });
-  }, [inSlideshow, slideshow.currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [inSlideshow, slideshow.currentIndex, currentIndex, navItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goPrev = useCallback(() => {
     if (!hasPrev) return;
@@ -278,15 +363,24 @@ export default function MediaPage() {
 
   const handleLike = useCallback(async () => {
     if (!item) return;
-    const originalLikes = item.likes || 0;
-    setItem(prev => ({ ...prev, likes: originalLikes + 1 }));
+    const mediaId = item.id;
+    /* Optimistic: bump immediately (functional so rapid presses each add one).
+       The requests themselves are coalesced into one by the like debounce. */
+    setItem(prev => (prev ? { ...prev, likes: (prev.likes || 0) + 1 } : prev));
     try {
-      const { likedCount } = await likeMediaApi(item.id);
+      const { item: updated, likedCount } = await likeMediaApi(mediaId);
+      if (updated) setItem(prev => (prev && prev.id === mediaId ? { ...prev, ...updated } : prev));
       /* Update the sidebar liked count directly from the response. */
       if (likedCount != null) setLikedCount(likedCount);
+    } catch (err) {
+      console.error('Failed to like media:', err);
+      /* Re-sync with the server (the likes were not applied). */
+      try {
+        const fresh = await fetchMediaById(mediaId, { skipCache: true });
+        if (fresh) setItem(prev => (prev && prev.id === mediaId ? fresh : prev));
+      } catch { /* ignore */ }
     }
-    catch (err) { console.error('Failed to like media:', err); setItem(prev => ({ ...prev, likes: originalLikes })); }
-  }, [item, setLikedCount]);
+  }, [item?.id, setLikedCount]);
 
   const handleTouchStart = useCallback((e) => {
     if (e.touches.length !== 1) return;
@@ -313,8 +407,6 @@ export default function MediaPage() {
     if (Math.abs(dx) < 50) return;
     if (dx < 0) goNext(); else goPrev();
   }, [goNext, goPrev, showMobileNavPanel]);
-
-  const { removeItem: removeSlideshowItem } = slideshow;
 
   const handleSetFolderThumbnail = useCallback(async (time = null) => {
     if (!item || !folder) return;
@@ -363,8 +455,16 @@ export default function MediaPage() {
       ? slideshowNext
       : folderIdx >= 0 ? (folderNext ?? slideshowNext) : slideshowNext;
 
-    if (nextItem) navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
-    else navigate(isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard'), { replace: true });
+    if (nextItem) {
+      /* In a slideshow the route change alone does not update the displayed
+         item: the slideshow effect only re-runs when the sequence advances,
+         and up/down folder navigation does not advance it. Follow the next
+         item explicitly so the deleted media is never left on screen. */
+      if (inSlideshow) setItem(nextItem);
+      navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
+    } else {
+      navigate(isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard'), { replace: true });
+    }
 
     /* Drop the deleted item from both the slideshow and the folder sibling
        list so subsequent up/down navigation doesn't target a dead id. */
@@ -381,6 +481,81 @@ export default function MediaPage() {
       dispatch({ type: actions.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
     }
   }, [item, navItems, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump, isLikedNav]);
+
+  /* Merge this item's duplicate copies into it. The item on screen is passed as
+     `keepId` so the current variant wins the purge; likes and tags are combined
+     server-side and the other files are removed from disk. */
+  const handleMerge = useCallback(async () => {
+    if (!item || duplicates.count < 2 || !duplicates.ids.includes(item.id)) return;
+    setShowMerge(false);
+    try {
+      const result = await mergeDuplicatesApi({ ids: duplicates.ids, keepId: item.id });
+      const master = result.media;
+      /* Drop every merged-away copy from all navigation lists (slideshow, folder
+         siblings, liked) so next/prev can never land on a deleted file. This
+         includes the current item when a surviving copy became the master. */
+      const removed = new Set((result.removedIds ?? []).map(Number));
+      if (inSlideshow) removed.forEach(id => removeSlideshowItem(id));
+      if (removed.size > 0) {
+        setFolderMedia(list => list.filter(m => !removed.has(m.id)));
+        setLikedNavList(list => list.filter(m => !removed.has(m.id)));
+      }
+      if (master) {
+        if (master.id !== item.id) {
+          /* The current item's file was missing, so a surviving copy won.
+             Follow the master so the URL and view stay in sync. */
+          setItem(master);
+          if (!inSlideshow) navigate(`/media/${master.id}`, { replace: true, state: location.state });
+        } else {
+          setItem(prev => (prev ? { ...prev, ...master } : prev));
+        }
+      }
+      setDuplicates({ ids: [master?.id ?? item.id], count: 1, items: master ? [master] : [] });
+      bump();
+      dispatch({ type: actions.TOAST_SHOWN, message: `Merged ${result.merged} duplicate${result.merged === 1 ? '' : 's'}`, toastType: 'success' });
+    } catch (err) {
+      console.error('Failed to merge duplicates:', err);
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not merge duplicates', toastType: 'error' });
+    }
+  }, [item, duplicates, bump, dispatch, navigate, location.state, inSlideshow, removeSlideshowItem]);
+
+  /* Ask the server to repair the current item. `force` discards the existing
+     transcoded output and re-encodes from the original (for a "ready" file that
+     won't play); otherwise it reconciles the record with what's on disk. */
+  const runRepair = useCallback(async (force) => {
+    if (!item) return;
+    setFixing(true);
+    try {
+      const result = await repairFailed({ ids: [item.id], force });
+      if (result.repaired > 0) {
+        const detail = result.requeued > 0 ? 're-queued for transcoding' : 'restored';
+        dispatch({ type: actions.TOAST_SHOWN, message: `${force ? 'Re-transcoding' : 'Fixed'} — ${detail}`, toastType: 'success' });
+        try {
+          const fresh = await fetchMediaById(item.id, { skipCache: true });
+          setItem(fresh);
+        } catch { /* keep the current item; polling will catch up */ }
+        setPlaybackError(false);
+        bump();
+      } else {
+        dispatch({
+          type: actions.TOAST_SHOWN,
+          message: force ? 'Could not re-transcode — original file is missing' : 'Could not fix this media',
+          toastType: 'error',
+        });
+      }
+    } catch (err) {
+      console.error('Failed to repair media:', err);
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not repair media', toastType: 'error' });
+    } finally {
+      setFixing(false);
+    }
+  }, [item, dispatch, bump]);
+
+  const handleFix = useCallback(() => runRepair(false), [runRepair]);
+  const handleRetranscode = useCallback(() => runRepair(true), [runRepair]);
+
+  /* A new item gets a fresh playback state. */
+  useEffect(() => { setPlaybackError(false); }, [id]);
 
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -461,7 +636,7 @@ export default function MediaPage() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT') return;
-      if (showDelete) return; /* Delete modal captures its own keys */
+      if (showDelete || showMerge) return; /* modals capture their own keys */
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
       if (e.key === 'ArrowUp') { e.preventDefault(); goFolderPrev(); }
@@ -475,7 +650,7 @@ export default function MediaPage() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete, showDelete]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete, showDelete, showMerge]);
 
   /* Delete confirmation modal: Enter confirms, Escape closes. Escape already
      works via the shared Modal component; wire Enter here. */
@@ -497,9 +672,29 @@ export default function MediaPage() {
       .catch(() => setFileStatus({ ok: false, error: 'Could not check status' }));
   }, [showInfo, item]);
 
+  /* Breadcrumbs are derived synchronously from the item's folder path using the
+     already-loaded folder list, so they render on the first paint — no async
+     chain fetch and no empty bar in between. `item.folder_chain` (returned by
+     /media/:id) is preferred when present. */
   const breadcrumbs = useMemo(() => {
-    return item?.folder_chain ?? [];
-  }, [item?.folder_chain]);
+    if (item?.folder_chain?.length) return item.folder_chain;
+    if (!item?.folder || folders.length === 0) return [];
+
+    const byPath = new Map(folders.map(f => [f.path, f]));
+    const byId = new Map(folders.map(f => [f.id, f]));
+    const target = byPath.get(item.folder);
+    if (!target) return [];
+
+    const chain = [];
+    const seen = new Set();
+    let node = target;
+    while (node && !seen.has(node.id)) {
+      seen.add(node.id);
+      chain.unshift({ id: node.id, path: node.path, name: node.name });
+      node = node.parentId != null ? byId.get(node.parentId) : null;
+    }
+    return chain;
+  }, [item?.folder_chain, item?.folder, folders]);
 
   const backTarget = isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard');
   const goBack = useCallback(() => {
@@ -521,6 +716,9 @@ export default function MediaPage() {
 
   const isImage = item.type === MEDIA_TYPE.IMAGE;
   const mediaUrl = getMediaUrl(item);
+  /* Only offer merging when the loaded duplicate group actually contains the
+     item on screen, so a stale group from a previous item never leaks in. */
+  const canMerge = duplicates.count > 1 && duplicates.ids.includes(item.id);
 
   /* Overflow actions (Download + "Use as...") shared by the desktop action bar
      and the mobile kebab menu so the two never drift apart. `onAction`
@@ -577,6 +775,15 @@ export default function MediaPage() {
             <p className="media-error-msg">Processing failed</p>
             {item.job_error && <p className="media-error-detail">{item.job_error}</p>}
             <p className="media-error-path">{item.path}</p>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Icon name="wrench" className="icon-sm" />}
+              onClick={handleFix}
+              disabled={fixing}
+            >
+              {fixing ? 'Fixing…' : 'Fix'}
+            </Button>
           </div>
         ) : item.status !== MEDIA_STATUS.READY ? (
           <div className="media-processing">
@@ -612,7 +819,7 @@ export default function MediaPage() {
             })()}
           </div>
         ) : (
-          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} />
+          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} onError={() => setPlaybackError(true)} />
         )}
 
         <IconButton
@@ -768,6 +975,21 @@ export default function MediaPage() {
           <div className="viewer-actions">
             <LikeButton count={item.likes || 0} onLike={handleLike} />
             <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
+            {canMerge && (
+              <Button variant="ghost" size="sm" icon={<Icon name="copy" className="icon-sm" />} onClick={() => setShowMerge(true)}>
+                Merge {duplicates.count} copies
+              </Button>
+            )}
+            {item.status === MEDIA_STATUS.ERROR && (
+              <Button variant="ghost" size="sm" icon={<Icon name="wrench" className="icon-sm" />} onClick={handleFix} disabled={fixing}>
+                {fixing ? 'Fixing…' : 'Fix'}
+              </Button>
+            )}
+            {!isImage && playbackError && (
+              <Button variant="ghost" size="sm" icon={<Icon name="refresh" className="icon-sm" />} onClick={handleRetranscode} disabled={fixing}>
+                {fixing ? 'Working…' : (item.transcoded_path ? 'Re-transcode' : 'Transcode')}
+              </Button>
+            )}
             {renderOverflowActions('viewer-overflow-hidden')}
             <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={() => setShowDelete(true)} className="viewer-action-push">Delete</Button>
             <IconButton
@@ -844,6 +1066,38 @@ export default function MediaPage() {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Button variant="ghost" size="sm" onClick={() => setShowDelete(false)}>Cancel</Button>
           <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={handleDelete}>Delete</Button>
+        </div>
+      </Modal>
+
+      <Modal open={showMerge} onClose={() => setShowMerge(false)} title="Merge duplicates">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="warning" className="icon-md text-mut" />
+          <p className="text-mut">
+            Merge <strong>{duplicates.count - 1}</strong> duplicate cop{duplicates.count - 1 === 1 ? 'y' : 'ies'} into this one? "<strong>{item?.title}</strong>" is kept, its likes and tags are combined with the other copies, and their files are deleted from disk.
+          </p>
+        </div>
+        {duplicates.items.length > 0 && (
+          <ul className="duplicate-path-list">
+            {duplicates.items.map(dup => {
+              const kept = dup.id === item.id;
+              return (
+                <li key={dup.id} className={`duplicate-path-item${kept ? ' duplicate-path-kept' : ''}`}>
+                  <DuplicateThumb media={dup} />
+                  <div className="duplicate-path-info">
+                    <span className="duplicate-path-text" title={dup.path}>{dup.path}</span>
+                    <span className="duplicate-path-status">
+                      <Icon name={kept ? 'copy' : 'trash'} className="icon-sm" />
+                      {kept ? 'Kept' : 'Will be deleted'}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" size="sm" onClick={() => setShowMerge(false)}>Cancel</Button>
+          <Button variant="primary" size="sm" icon={<Icon name="copy" className="icon-sm" />} onClick={handleMerge}>Merge</Button>
         </div>
       </Modal>
     </div>

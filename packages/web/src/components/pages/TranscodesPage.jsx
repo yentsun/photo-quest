@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { JOB_STATUS } from '@photo-quest/shared';
 import { useJobs } from '../../contexts/JobProgressContext.jsx';
-import { pauseJobs, resumeJobs, cancelJob } from '../../utils/api.js';
+import { pauseJobs, resumeJobs, cancelJob, retryJob } from '../../utils/api.js';
 import { Button, Icon, ProgressBar } from '../ui/index.js';
 import { EmptyState } from '../layout/index.js';
 
@@ -12,6 +12,7 @@ const STATUS_LABEL = {
   [JOB_STATUS.PAUSED]: 'Paused',
   [JOB_STATUS.COMPLETED]: 'Done',
   [JOB_STATUS.FAILED]: 'Failed',
+  [JOB_STATUS.CANCELLED]: 'Cancelled',
 };
 
 const STATUS_ORDER = {
@@ -19,8 +20,15 @@ const STATUS_ORDER = {
   [JOB_STATUS.PENDING]: 1,
   [JOB_STATUS.PAUSED]: 2,
   [JOB_STATUS.FAILED]: 3,
-  [JOB_STATUS.COMPLETED]: 4,
+  [JOB_STATUS.CANCELLED]: 4,
+  [JOB_STATUS.COMPLETED]: 5,
 };
+
+/** A job can be cancelled while it is still queued, running or paused. */
+const CANCELLABLE = [JOB_STATUS.PENDING, JOB_STATUS.RUNNING, JOB_STATUS.PAUSED];
+
+/** A cancelled or failed job can be put back on the queue. */
+const RETRYABLE = [JOB_STATUS.CANCELLED, JOB_STATUS.FAILED];
 
 export default function TranscodesPage() {
   const jobs = useJobs();
@@ -49,6 +57,10 @@ export default function TranscodesPage() {
 
   const handleCancel = useCallback(async (id) => {
     try { await cancelJob(id); } catch (err) { console.error('Failed to cancel:', err); }
+  }, []);
+
+  const handleRetry = useCallback(async (id) => {
+    try { await retryJob(id); } catch (err) { console.error('Failed to retry:', err); }
   }, []);
 
   return (
@@ -100,7 +112,17 @@ export default function TranscodesPage() {
                   <span className="transcode-error" title={job.error}>{job.error}</span>
                 )}
 
-                {job.status !== JOB_STATUS.COMPLETED && (
+                {RETRYABLE.includes(job.status) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRetry(job.id)}
+                    icon={<Icon name="refresh" className="icon-sm" />}
+                  >
+                    Retry
+                  </Button>
+                )}
+                {CANCELLABLE.includes(job.status) && (
                   <Button
                     variant="ghost"
                     size="sm"

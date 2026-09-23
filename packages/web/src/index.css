@@ -495,6 +495,57 @@ body {
   gap: 6px;
   flex-shrink: 0;
 }
+.duplicate-group-selected { outline: 1px solid var(--sol-accent); outline-offset: 4px; }
+.duplicate-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 20px;
+  background: var(--sol-surface);
+  border: 1px solid var(--sol-border);
+  border-radius: 8px;
+}
+.duplicate-bulk-count { font-size: var(--fs-sm); font-weight: 600; color: var(--sol-text-em); margin-right: auto; }
+
+/* Duplicate copies listed inside the merge confirmation modal */
+.duplicate-path-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.duplicate-path-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-xs);
+  color: var(--sol-text-mut);
+}
+.duplicate-path-item svg { flex-shrink: 0; }
+.duplicate-path-kept { color: var(--sol-text-em); }
+.duplicate-path-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.duplicate-path-text { word-break: break-all; }
+.duplicate-path-status { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); }
+.duplicate-thumb {
+  flex-shrink: 0;
+  display: block;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--sol-bg);
+  border: 1px solid var(--sol-border);
+}
+.duplicate-thumb-fallback { display: flex; align-items: center; justify-content: center; }
+
+/* ─── Checkbox ─── */
+.checkbox { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.checkbox input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--sol-accent); cursor: pointer; }
+.checkbox-label { font-size: var(--fs-sm); color: var(--sol-text-mut); }
 
 /* ─── Media card ─── */
 .media-card {
@@ -1004,6 +1055,7 @@ body {
 .transcode-status--paused { color: var(--sol-orange, #d19a4a); }
 .transcode-status--completed { color: var(--sol-text-mut); }
 .transcode-status--failed { color: var(--sol-red); }
+.transcode-status--cancelled { color: var(--sol-text-mut); }
 .transcode-row .ascii-meter { width: 160px; flex-shrink: 0; }
 .transcode-error { color: var(--sol-red); font-size: var(--fs-xs); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

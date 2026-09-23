@@ -3,24 +3,27 @@
  *
  * Kojo op: accessed as `kojo.ops.likeMedia(id)`.
  *
- * Likes are cumulative -- each call adds 1 to the total count.
- * There is no limit on how many times a media item can be liked.
+ * Likes are cumulative -- each call adds `count` (default 1) to the total, so a
+ * burst of rapid clicks can be coalesced into a single request. There is no
+ * limit on how many times a media item can be liked.
  *
- * When a like transitions a media item from unliked (0) to liked (1),
+ * When a like transitions a media item from unliked (0) to liked (>0),
  * the returned row carries a `likedCount` field with the new total of
  * liked items (hidden = 0 AND likes > 0) so the client can update the
  * sidebar without an extra request. Re-liking an already-liked item
  * leaves `likedCount` undefined (the total is unchanged).
  *
  * @param {number|string} id - The media record's primary key.
+ * @param {number} [count] - How many likes to add (clamped to 1..30).
  * @returns {Object|null} The updated media row, or null if not found.
  */
 
-export default function (id) {
+export default function (id, count = 1) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  logger.debug(`id=${id}`);
+  const n = Math.max(1, Math.min(30, Math.floor(Number(count) || 1)));
+  logger.debug(`id=${id} count=${n}`);
 
   const existing = db.prepare('SELECT likes FROM media WHERE id = ?').get(Number(id));
   if (!existing) {
@@ -31,8 +34,8 @@ export default function (id) {
   const newlyLiked = existing.likes === 0;
 
   db.prepare(
-    "UPDATE media SET likes = likes + 1, updated_at = datetime('now') WHERE id = ?"
-  ).run(Number(id));
+    "UPDATE media SET likes = likes + ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(n, Number(id));
 
   const media = db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id));
 

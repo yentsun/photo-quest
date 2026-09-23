@@ -1,5 +1,5 @@
 /**
- * @file Tests for the scanMedia op — db-backed import queue (LAW 2.3).
+ * @file Tests for the scanMedia op — db-backed import queue.
  *
  * Tests cover:
  *  - Discovery phase: scan record + import_queue population
@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync as Database } from 'node:sqlite';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, SCAN_STATUS, IMPORT_STATUS, MEDIA_STATUS } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE, SCAN_STATUS, IMPORT_STATUS, MEDIA_STATUS, HASH_VERSION } from '@photo-quest/shared';
 import scanMedia, { processOneItem, resumeIncompleteScans, abortDiscoveryWalk } from '../ops/scanMedia.js';
 
 /** Create a temp directory tree with nested folders and media files. */
@@ -53,6 +53,7 @@ function makeDb() {
   db.exec(CREATE_SCANS_TABLE);
   db.exec(CREATE_IMPORT_QUEUE_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
+  db.exec(CREATE_FAILED_SNAPSHOT_TABLE);
   db.exec("ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
   return db;
 }
@@ -237,7 +238,7 @@ test('scanMedia — processing phase', async (t) => {
     t.assert.strictEqual(byTitle.family.folder, path.join(root, 'other'));
   });
 
-  await t.test('sets status to ready for images and pending for videos', async () => {
+  await t.test('sets status to ready for images and videos (no default transcoding)', async () => {
     const db = makeDb();
     const { ctx } = makeContext(db);
     const scan = scanMedia.bind(ctx);
@@ -251,8 +252,8 @@ test('scanMedia — processing phase', async (t) => {
     t.assert.strictEqual(byTitle.photo.status, MEDIA_STATUS.READY);
     t.assert.strictEqual(byTitle.nested.status, MEDIA_STATUS.READY);
     t.assert.strictEqual(byTitle.family.status, MEDIA_STATUS.READY);
-    t.assert.strictEqual(byTitle.video.status, MEDIA_STATUS.PENDING);
-    t.assert.strictEqual(byTitle.deep_clip.status, MEDIA_STATUS.PENDING);
+    t.assert.strictEqual(byTitle.video.status, MEDIA_STATUS.READY);
+    t.assert.strictEqual(byTitle.deep_clip.status, MEDIA_STATUS.READY);
   });
 
   await t.test('hashes the complete file contents', async () => {
@@ -267,9 +268,28 @@ test('scanMedia — processing phase', async (t) => {
     await processOneItem(db, 1, first, ctx[1]);
     await processOneItem(db, 2, second, ctx[1]);
 
-    const firstHash = db.prepare('SELECT hash FROM media WHERE path = ?').get(first).hash;
-    const secondHash = db.prepare('SELECT hash FROM media WHERE path = ?').get(second).hash;
-    t.assert.notStrictEqual(firstHash, secondHash);
+    const firstRow = db.prepare('SELECT hash, hash_version FROM media WHERE path = ?').get(first);
+    const secondRow = db.prepare('SELECT hash, hash_version FROM media WHERE path = ?').get(second);
+    t.assert.notStrictEqual(firstRow.hash, secondRow.hash);
+    /* Files sharing only a 64 KB prefix + size must not collide (issue #63). */
+    t.assert.strictEqual(firstRow.hash_version, HASH_VERSION);
+    t.assert.strictEqual(secondRow.hash_version, HASH_VERSION);
+  });
+
+  await t.test('gives byte-identical files the same hash and stamps the current version', async () => {
+    const db = makeDb();
+    const { ctx } = makeContext(db);
+    const first = path.join(root, 'identical-a.jpg');
+    const second = path.join(root, 'identical-b.jpg');
+    fs.writeFileSync(first, 'same-bytes');
+    fs.writeFileSync(second, 'same-bytes');
+
+    await processOneItem(db, 1, first, ctx[1]);
+    await processOneItem(db, 2, second, ctx[1]);
+
+    const rows = db.prepare('SELECT hash, hash_version FROM media ORDER BY path').all();
+    t.assert.strictEqual(rows[0].hash, rows[1].hash);
+    t.assert.strictEqual(rows[0].hash_version, HASH_VERSION);
   });
 
   await t.test('marks queue items as completed after processing', async () => {
@@ -368,7 +388,7 @@ test('scanMedia — deduplication', async (t) => {
     t.assert.strictEqual(allMedia(db).length, 5);
   });
 
-  await t.test('backfills date_taken for pre-existing records without re-queueing', async () => {
+  await t.test('refreshes date_taken for pre-existing records without re-queueing', async () => {
     const db = makeDb();
     const { ctx } = makeContext(db);
     const scan = scanMedia.bind(ctx);
@@ -377,18 +397,19 @@ test('scanMedia — deduplication', async (t) => {
     const { scanId: scan1 } = await scan(root);
     await drainQueue(db, scan1, ctx[1]);
 
-    // Simulate a pre-migration record: null out date_taken on one existing row.
+    // Change the file timestamp after import; Refresh must recompute its date.
     const target = db.prepare('SELECT id, path FROM media WHERE path = ?').get(path.join(root, 'photo.jpg'));
-    db.prepare('UPDATE media SET date_taken = NULL WHERE id = ?').run(target.id);
+    const refreshedDate = new Date('2026-09-13T16:34:51.000Z');
+    fs.utimesSync(target.path, refreshedDate, refreshedDate);
 
-    // Second scan finds no new files but must backfill date_taken.
+    // Second scan finds no new files but must refresh date_taken.
     const result2 = await scan(root);
     t.assert.strictEqual(result2.total, 0);
     const items = allQueueItems(db, result2.scanId);
     t.assert.strictEqual(items.length, 0); // no re-queue (issue #32)
 
     const refreshed = db.prepare('SELECT date_taken FROM media WHERE id = ?').get(target.id);
-    t.assert.ok(refreshed.date_taken, 'date_taken should be backfilled on refresh');
+    t.assert.strictEqual(refreshed.date_taken, refreshedDate.toISOString());
   });
 });
 

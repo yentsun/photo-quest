@@ -50,6 +50,10 @@ export const clientRoutes = {
 
   /** Duplicate media section -- groups items sharing the same content hash. */
   duplicates: '/duplicates',
+
+  /** Failed media section -- items whose file is missing/unreadable or whose
+   *  processing failed, grouped by content hash. */
+  failed: '/failed',
 };
 
 // ---------------------------------------------------------------------------
@@ -88,6 +92,9 @@ export const apiRoutes = {
 
   /** PATCH -- set a custom thumbnail frame for a video. */
   mediaThumbnail: '/media/:id/thumbnail',
+
+  /** GET  -- list the visible copies sharing this media item's content hash. */
+  mediaDuplicates: '/media/:id/duplicates',
 
   /** POST -- open the media file in the OS default player (server machine). */
   mediaOpen: '/media/:id/open',
@@ -135,6 +142,9 @@ export const apiRoutes = {
   /** POST -- cancel a single job by its numeric ID. */
   jobCancel: '/jobs/:id/cancel',
 
+  /** POST -- re-queue a cancelled or failed job by its numeric ID. */
+  jobRetry: '/jobs/:id/retry',
+
   /** GET  -- Server-Sent Events (SSE) endpoint.  The server pushes real-time
    *  job progress updates to connected clients over this long-lived
    *  connection. */
@@ -163,4 +173,11 @@ export const apiRoutes = {
 
   /** POST -- delete every record in a duplicate group. Body: { hash }. */
   duplicatesDelete: '/duplicates/delete',
+
+  /** GET  -- list media whose file is missing/unreadable or whose processing
+   *  failed, grouped by content hash. */
+  failed: '/failed',
+
+  /** POST -- try to repair failed media. Body: { ids } or { all: true }. */
+  failedRepair: '/failed/repair',
 };

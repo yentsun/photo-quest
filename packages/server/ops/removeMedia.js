@@ -2,7 +2,7 @@
  * @file Delete a media record by ID, its jobs, and the file from disk.
  *
  * Kojo op: accessed as `kojo.ops.removeMedia(id)`.
- * LAW 1.34: removes from library AND deletes from disk in one action.
+ * Removes from library AND deletes from disk in one action.
  *
  * @param {number|string} id - The media record's primary key.
  * @returns {{ deleted: boolean, path: string|null }} Whether a row was removed and its path.
@@ -11,6 +11,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { removeFromFailedSnapshot } from './listFailed.js';
+import { broadcastSse } from '../src/sse.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const THUMBS_DIR = path.join(__dirname, '..', 'thumbs');
@@ -48,6 +50,7 @@ export default function (id) {
   logger.debug(`db delete changes=${result.changes}`);
 
   if (result.changes > 0) {
+    removeFromFailedSnapshot(kojo, [Number(id)]);
     for (const p of [filePath]) {
       if (!p) continue;
       try {
@@ -88,6 +91,12 @@ export default function (id) {
     }
   } else {
     logger.debug(`nothing deleted (id not found): id=${id}`);
+  }
+
+  /* Tell connected clients to drop this record from their caches so a removed
+     media never lingers in a grid. */
+  if (result.changes > 0) {
+    broadcastSse({ type: 'media_removed', ids: [Number(id)] });
   }
 
   return { deleted: result.changes > 0, path: filePath };

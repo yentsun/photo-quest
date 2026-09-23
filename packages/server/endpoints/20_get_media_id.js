@@ -6,7 +6,6 @@
  */
 
 import { json } from '../src/http.js';
-import { hasQueuedTranscode } from '../ops/transcodeNow.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -21,12 +20,8 @@ export default async (kojo, logger) => {
       return json(res, 404, { error: 'Media not found' });
     }
 
-    const INCOMPLETE = ['pending', 'probing', 'probed', 'transcoding'];
-    if (row.type === 'video' && INCOMPLETE.includes(row.status) && !hasQueuedTranscode(row.id)) {
-      logger.debug(`[GET /media/:id] queueing on-demand transcode for id=${params.id} (status=${row.status})`);
-      kojo.ops.transcodeNow(row.id);
-    }
-
+    /* No transcoding is triggered here: videos stream their original file by
+       default. Transcoding is only started by an explicit user action. */
     logger.debug(`[GET /media/:id] found: id=${params.id} status=${row.status}`);
     json(res, 200, row);
   });

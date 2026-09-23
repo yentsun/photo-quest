@@ -16,7 +16,7 @@ import Root from './Root';
 import TranscodeMonitor from './TranscodeMonitor';
 import Dashboard from './Dashboard';
 import ServerGate from './ServerGate.jsx';
-import { LikedPage, FolderPage, MediaPage, TagsPage, TagPage, TranscodesPage, DuplicatesPage } from './pages/index.js';
+import { LikedPage, FolderPage, MediaPage, TagsPage, TagPage, TranscodesPage, DuplicatesPage, FailedPage } from './pages/index.js';
 import ToasterMessage from './ToasterMessage';
 
 /** Persists the current view so a sleep/wake reload can resume it. The very
@@ -73,6 +73,7 @@ export default function Router() {
                     <Route path={r.tag} element={<TagPage />} />
                     <Route path={r.transcodes} element={<TranscodesPage />} />
                     <Route path={r.duplicates} element={<DuplicatesPage />} />
+                    <Route path={r.failed} element={<FailedPage />} />
                   </Route>
                   <Route path="*" element={<Navigate to={r.root} />} />
                 </Routes>

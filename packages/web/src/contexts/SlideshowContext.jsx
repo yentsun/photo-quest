@@ -1,6 +1,6 @@
 /**
  * @file Slideshow state management context.
- * LAW 1.27: slideshow is manual (no auto-advance), uses the unified MediaPage viewer.
+ * Slideshow is manual (no auto-advance) and uses the unified MediaPage viewer.
  *
  * Persistence: the active slideshow session (order, sequence, current index,
  * history, total, and the fetch source) is written to sessionStorage so it
@@ -127,6 +127,10 @@ function reducer(state, action) {
 
     case 'REMOVE_ITEM': {
       const removedIdx = state.items.findIndex(m => m.id === action.id);
+      /* The id may not be part of the sequence at all — e.g. a folder sibling
+         reached via up/down navigation during a shuffle. Without this guard
+         every history index would be decremented and the stack corrupted. */
+      if (removedIdx === -1) return state;
       const newItems = state.items.filter(m => m.id !== action.id);
       if (newItems.length === 0) return { ...initialState };
       const newHistory = state.history

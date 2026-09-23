@@ -5,7 +5,7 @@ import { IconButton, Icon, ProgressBar } from './ui/index.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
 import { useJobs, useJobProgressUpdater } from '../contexts/JobProgressContext.jsx';
-import { fetchJobs, cancelScan } from '../utils/api.js';
+import { fetchJobs, cancelScan, purgeMedia } from '../utils/api.js';
 import { discoverServer, redirectToServer } from '../services/serverPool.js';
 import { resolveApiUrl } from '../config/apiBase.js';
 import { JOB_STATUS } from '@photo-quest/shared';
@@ -25,6 +25,9 @@ import { JOB_STATUS } from '@photo-quest/shared';
 function RefreshToaster() {
   const [progress, setProgress] = useState(null);
   const trackedScanRef = useRef(null);
+  /* Media ids the server removed, batched so a merge/cleanup triggers one purge. */
+  const pendingRemovals = useRef(new Set());
+  const removalTimer = useRef(null);
   const { bump } = useRefresh();
   const { isScanning, setIsScanning, statusMessage, abortRefresh } = useScan();
 
@@ -88,6 +91,21 @@ function RefreshToaster() {
             setTimeout(bump, 500);
             return;
           }
+
+          /* Records removed server-side (delete, merge, cleanup): drop them from
+             the caches and re-fetch so they vanish from the grids. */
+          if (data.type === 'media_removed') {
+            for (const id of data.ids || []) pendingRemovals.current.add(id);
+            if (!removalTimer.current) {
+              removalTimer.current = setTimeout(() => {
+                removalTimer.current = null;
+                const ids = [...pendingRemovals.current];
+                pendingRemovals.current.clear();
+                purgeMedia(ids).finally(() => bump());
+              }, 300);
+            }
+            return;
+          }
         } catch { /* ignore parse errors */ }
       };
 
@@ -95,7 +113,12 @@ function RefreshToaster() {
     };
 
     connect();
-    return () => { destroyed = true; clearTimeout(reconnectTimer); es?.close(); };
+    return () => {
+      destroyed = true;
+      clearTimeout(reconnectTimer);
+      if (removalTimer.current) clearTimeout(removalTimer.current);
+      es?.close();
+    };
   }, [bump, setIsScanning, syncFromServer]);
 
   useEffect(() => {
