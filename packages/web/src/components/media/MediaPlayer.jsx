@@ -30,6 +30,10 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   const [buffering, setBuffering] = useState(true);
   const [error, setError] = useState(null);
   const [speed, setSpeed] = useState(readSavedSpeed);
+  /* Mirror the native controls: shown on pointer movement, then faded out after
+   * a short idle period (or as soon as the pointer leaves the player). */
+  const [controlsVisible, setControlsVisible] = useState(false);
+  const hideTimerRef = useRef(null);
   /* Offset of the overlay controls from the container's top-right corner, so
    * they sit on the picture rather than the letterbox bars. The video element
    * is aspect-fitted by its max-width/max-height, so its box *is* the picture. */
@@ -131,6 +135,29 @@ const MediaPlayer = forwardRef(function MediaPlayer({
     } catch {}
   };
 
+  /* Native controls stay up while the video is paused and auto-hide during
+   * playback, so the same rule drives the speed toggle. */
+  const isPaused = () => videoRef.current?.paused ?? true;
+
+  const scheduleHide = () => {
+    clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => {
+      if (!isPaused()) setControlsVisible(false);
+    }, 2500);
+  };
+
+  const showControls = () => {
+    setControlsVisible(true);
+    scheduleHide();
+  };
+
+  const hideControls = () => {
+    clearTimeout(hideTimerRef.current);
+    if (!isPaused()) setControlsVisible(false);
+  };
+
+  useEffect(() => () => clearTimeout(hideTimerRef.current), []);
+
   return (
     <div className="media-player" ref={containerRef}>
       {buffering && !error && (
@@ -155,8 +182,13 @@ const MediaPlayer = forwardRef(function MediaPlayer({
         onLoadedData={maybeStartPlayback}
         onProgress={maybeStartPlayback}
         onCanPlay={maybeStartPlayback}
+        onMouseMove={showControls}
+        onMouseLeave={hideControls}
+        onTouchStart={showControls}
         onWaiting={() => setBuffering(true)}
-        onPlaying={() => setBuffering(false)}
+        onPlaying={() => { setBuffering(false); showControls(); }}
+        onPlay={showControls}
+        onPause={() => { clearTimeout(hideTimerRef.current); setControlsVisible(true); }}
         onVolumeChange={handleVolumeChange}
         onError={() => { setBuffering(false); setError('This video could not be played.'); onError?.(); }}
       />
@@ -164,11 +196,13 @@ const MediaPlayer = forwardRef(function MediaPlayer({
         <Button
           variant="ghost"
           size="sm"
-          className="media-player-speed"
+          className={['media-player-speed', controlsVisible && 'is-visible'].filter(Boolean).join(' ')}
           style={overlayInset}
           aria-label={`Playback speed: ${speed}x`}
           title={`Playback speed ${speed}x (next: ${nextSpeed}x)`}
           onClick={cycleSpeed}
+          onMouseEnter={() => { clearTimeout(hideTimerRef.current); setControlsVisible(true); }}
+          onMouseLeave={scheduleHide}
         >
           {speed}x
         </Button>

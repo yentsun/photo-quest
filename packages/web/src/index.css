@@ -787,7 +787,13 @@ body {
   width: 52px; height: 30px; padding: 0;
   background: rgba(0, 0, 0, 0.5); border-color: transparent;
   color: rgba(255, 255, 255, 0.85); font-variant-numeric: tabular-nums;
+  /* Mimic the native controls: faded out until the player is hovered, then
+     faded back out after the pointer idles or leaves. */
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease, background 0.15s ease, color 0.15s ease;
 }
+.media-player-speed.is-visible,
+.media-player-speed:focus-visible { opacity: 1; pointer-events: auto; }
 .media-player-speed:hover { background: rgba(0, 0, 0, 0.75); color: #fff; border-color: transparent; }
 
 /* ─── Media viewer ─── */
