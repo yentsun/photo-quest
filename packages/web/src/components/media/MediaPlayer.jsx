@@ -3,17 +3,17 @@ import Button from '../ui/Button.jsx';
 import Loader from '../ui/Loader.jsx';
 
 const SPEED_STORAGE_KEY = 'player_speed';
-const SPEED_NORMAL = 1;
-const SPEED_SLOW = 0.5;
+/* Playback speeds offered by the toggle, cycled in this order. */
+const SPEEDS = [1, 0.5, 0.25];
 
 /* Reads the saved playback speed, falling back to normal speed when nothing
  * valid is stored (or storage is unavailable, e.g. private browsing). */
 function readSavedSpeed() {
   try {
     const saved = Number(localStorage.getItem(SPEED_STORAGE_KEY));
-    return saved === SPEED_SLOW ? SPEED_SLOW : SPEED_NORMAL;
+    return SPEEDS.includes(saved) ? saved : 1;
   } catch {
-    return SPEED_NORMAL;
+    return 1;
   }
 }
 
@@ -122,11 +122,12 @@ const MediaPlayer = forwardRef(function MediaPlayer({
     } catch {}
   };
 
-  const toggleSpeed = () => {
-    const next = speed === SPEED_SLOW ? SPEED_NORMAL : SPEED_SLOW;
-    setSpeed(next);
+  const nextSpeed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+
+  const cycleSpeed = () => {
+    setSpeed(nextSpeed);
     try {
-      localStorage.setItem(SPEED_STORAGE_KEY, String(next));
+      localStorage.setItem(SPEED_STORAGE_KEY, String(nextSpeed));
     } catch {}
   };
 
@@ -166,8 +167,8 @@ const MediaPlayer = forwardRef(function MediaPlayer({
           className="media-player-speed"
           style={overlayInset}
           aria-label={`Playback speed: ${speed}x`}
-          title={speed === SPEED_SLOW ? 'Switch to normal speed' : 'Switch to 0.5x speed'}
-          onClick={toggleSpeed}
+          title={`Playback speed ${speed}x (next: ${nextSpeed}x)`}
+          onClick={cycleSpeed}
         >
           {speed}x
         </Button>

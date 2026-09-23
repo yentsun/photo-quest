@@ -783,7 +783,8 @@ body {
    the picture instead of the letterbox bars. */
 .media-player-speed {
   position: absolute; z-index: 20;
-  min-width: 44px; height: 30px; padding: 0 10px;
+  /* Fixed width so the label doesn't shift between 1x / 0.5x / 0.25x. */
+  width: 52px; height: 30px; padding: 0;
   background: rgba(0, 0, 0, 0.5); border-color: transparent;
   color: rgba(255, 255, 255, 0.85); font-variant-numeric: tabular-nums;
 }
