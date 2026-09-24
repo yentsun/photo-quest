@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Loader from '../ui/Loader.jsx';
+import useMediaMagnifier from '../../hooks/useMediaMagnifier.js';
 
-export default function ImageViewer({ src, alt = '', className = '' }) {
+export default function ImageViewer({ src, alt = '', className = '', onMagnify }) {
   const [status, setStatus] = useState('loading');
+  const containerRef = useRef(null);
+  const mediaRef = useRef(null);
+  const magnifier = useMediaMagnifier({ mediaRef, containerRef, src, enabled: status === 'loaded', onMagnify });
 
   useEffect(() => {
     let cancelled = false;
@@ -19,7 +23,7 @@ export default function ImageViewer({ src, alt = '', className = '' }) {
   }, [src]);
 
   return (
-    <div className="image-viewer">
+    <div className="image-viewer" ref={containerRef}>
       {status === 'loading' && (
         <div className="image-viewer-state">
           <Loader message={alt ? `"${alt}"…` : null} />
@@ -31,6 +35,8 @@ export default function ImageViewer({ src, alt = '', className = '' }) {
         </div>
       )}
       <img
+        {...magnifier.mediaProps}
+        ref={mediaRef}
         src={src}
         alt={alt}
         className={['image-viewer-img', status !== 'loaded' ? 'image-viewer-img-hidden' : '', className].filter(Boolean).join(' ')}

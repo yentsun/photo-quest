@@ -1,6 +1,7 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef, useState } from 'react';
 import Button from '../ui/Button.jsx';
 import Loader from '../ui/Loader.jsx';
+import useMediaMagnifier from '../../hooks/useMediaMagnifier.js';
 
 const SPEED_STORAGE_KEY = 'player_speed';
 /* Playback speeds offered by the toggle, cycled in this order. */
@@ -23,12 +24,14 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   autoPlay = true,
   onEnded,
   onError,
+  onMagnify,
   className = '',
 }, ref) {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const [buffering, setBuffering] = useState(true);
   const [error, setError] = useState(null);
+  const magnifier = useMediaMagnifier({ mediaRef: videoRef, containerRef, src, enabled: !buffering && !error, onMagnify });
   const [speed, setSpeed] = useState(readSavedSpeed);
   /* Mirror the native controls: shown on pointer movement, then faded out after
    * a short idle period (or as soon as the pointer leaves the player). */
@@ -171,11 +174,12 @@ const MediaPlayer = forwardRef(function MediaPlayer({
         </div>
       )}
       <video
+        {...magnifier.mediaProps}
         ref={videoRef}
         src={src}
         preload="auto"
         className={['media-player-video', className].filter(Boolean).join(' ')}
-        controls={!buffering}
+        controls={!buffering && !magnifier.active}
         loop
         onEnded={onEnded}
         playsInline
@@ -192,7 +196,7 @@ const MediaPlayer = forwardRef(function MediaPlayer({
         onVolumeChange={handleVolumeChange}
         onError={() => { setBuffering(false); setError('This video could not be played.'); onError?.(); }}
       />
-      {!error && (
+      {!error && !magnifier.active && (
         <Button
           variant="ghost"
           size="sm"

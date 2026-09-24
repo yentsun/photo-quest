@@ -763,6 +763,16 @@ body {
 .image-viewer { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .image-viewer-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 .image-viewer-img-hidden { visibility: hidden; }
+/* Scope gesture ownership to media, leaving navigation and video controls as
+   unscaled siblings. Disable native image dragging/callouts during a hold. */
+.image-viewer-img, .media-player-video {
+  transform-origin: 0 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.image-viewer-img { cursor: zoom-in; }
+[data-magnified="true"] { cursor: grabbing; will-change: transform; }
 .image-viewer-state {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;

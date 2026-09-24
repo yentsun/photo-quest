@@ -12,6 +12,7 @@ import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fe
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
+import { isVideoControlPress } from '../../utils/mediaMagnifier.js';
 
 const FETCH_LIMIT = 10000;
 
@@ -81,7 +82,6 @@ export default function MediaPage() {
   const mediaViewportRef = useRef(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
-  const touchStartOnControl = useRef(false);
   /* Folder chains for slideshow items, which come from a list endpoint that
      does not embed `folder_chain`. Keyed by folder path so each folder is
      fetched at most once per session. */
@@ -381,12 +381,18 @@ export default function MediaPage() {
     }
   }, [item?.id, setLikedCount]);
 
+  const cancelTouchGesture = useCallback(() => {
+    touchStartX.current = null;
+    touchStartY.current = null;
+  }, []);
+
   const handleTouchStart = useCallback((e) => {
-    if (e.touches.length !== 1) return;
+    cancelTouchGesture();
+    if (e.touches.length !== 1 || e.target.closest('button, input, a')) return;
+    if (e.target.tagName === 'VIDEO' && isVideoControlPress(e.target.getBoundingClientRect(), e.touches[0].clientY)) return;
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
-    touchStartOnControl.current = !!e.target.closest('button');
-  }, []);
+  }, [cancelTouchGesture]);
 
   const showMobileNavPanel = useCallback(() => {
     setShowMobileNav(true);
@@ -395,17 +401,15 @@ export default function MediaPage() {
   }, []);
 
   const handleTouchEnd = useCallback((e) => {
-    if (e.changedTouches.length !== 1 || touchStartX.current === null) return;
+    if (e.changedTouches.length !== 1 || touchStartX.current === null) { cancelTouchGesture(); return; }
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = e.changedTouches[0].clientY - touchStartY.current;
-    touchStartX.current = null;
-    touchStartY.current = null;
-    touchStartOnControl.current = false;
+    cancelTouchGesture();
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist < 10) { showMobileNavPanel(); return; }
-    if (Math.abs(dx) < 50) return;
+    if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return;
     if (dx < 0) goNext(); else goPrev();
-  }, [goNext, goPrev, showMobileNavPanel]);
+  }, [goNext, goPrev, showMobileNavPanel, cancelTouchGesture]);
 
   const handleSetFolderThumbnail = useCallback(async (time = null) => {
     if (!item || !folder) return;
@@ -766,9 +770,10 @@ export default function MediaPage() {
         ref={mediaViewportRef}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={cancelTouchGesture}
       >
         {isImage ? (
-          <ImageViewer src={mediaUrl} alt={item.title} />
+          <ImageViewer src={mediaUrl} alt={item.title} onMagnify={cancelTouchGesture} />
         ) : item.status === MEDIA_STATUS.ERROR ? (
           <div className="media-error">
             <p className="media-error-msg">Processing failed</p>
@@ -818,7 +823,7 @@ export default function MediaPage() {
             })()}
           </div>
         ) : (
-          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} onError={() => setPlaybackError(true)} />
+          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} onError={() => setPlaybackError(true)} onMagnify={cancelTouchGesture} />
         )}
 
         <IconButton
