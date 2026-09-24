@@ -15,21 +15,12 @@ import { Button, Icon, Loader, Modal, ProgressBar } from './ui/index.js';
 const LOADING = 'loading';
 const ERROR = 'error';
 
-/** Host (host:port) shown as a server's label. */
-function serverHost(url) {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
-
-/** Full storage report for one server. */
-function ServerStorage({ server }) {
-  if (server.status === LOADING) {
+/** Full storage report for one device. */
+function DeviceStorage({ device }) {
+  if (device.status === LOADING) {
     return <Loader message="Reading storage…" />;
   }
-  if (server.status === ERROR) {
+  if (device.status === ERROR) {
     return (
       <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>
         Could not reach this server.
@@ -37,7 +28,7 @@ function ServerStorage({ server }) {
     );
   }
 
-  const { stats } = server;
+  const { stats } = device;
   return (
     <>
       <dl className="storage-rows">
@@ -87,12 +78,12 @@ function ServerStorage({ server }) {
 }
 
 /**
- * Detail modal for one server: its storage report, plus the library/database
- * controls when it is the server the app is currently connected to.
+ * Detail modal for one device: its addresses and storage report, plus the
+ * library/database controls when it is the server the app is connected to.
  *
- * @param {{ server: Object|null, onClose: Function }} props
+ * @param {{ device: Object|null, onClose: Function }} props
  */
-export default function ServerDetailModal({ server, onClose }) {
+export default function ServerDetailModal({ device, onClose }) {
   const { bump } = useRefresh();
   const [libraryInfo, setLibraryInfo] = useState(null);
   const [libraryError, setLibraryError] = useState(null);
@@ -102,8 +93,8 @@ export default function ServerDetailModal({ server, onClose }) {
   const [backupStatus, setBackupStatus] = useState(null);
   const [manifestStatus, setManifestStatus] = useState(null);
 
-  /* Reset when a different server is opened. Keyed by url so that a storage
-     stats update on the same server (which replaces the object) does not clear
+  /* Reset when a different device is opened. Keyed by id so that a storage
+     stats update on the same device (which replaces the object) does not clear
      the library state fetched below. */
   useEffect(() => {
     setLibraryInfo(null);
@@ -114,13 +105,13 @@ export default function ServerDetailModal({ server, onClose }) {
     setBackupStatus(null);
     setManifestStatus(null);
 
-    if (!server || !server.current) return;
+    if (!device || !device.current) return;
     let cancelled = false;
     fetchLibraryStatus()
       .then((info) => { if (!cancelled) setLibraryInfo(info); })
       .catch((err) => { if (!cancelled) setLibraryError(err.message); });
     return () => { cancelled = true; };
-  }, [server?.url, server?.current]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [device?.id, device?.current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleBackupDatabase = async () => {
     setBackupStatus({ loading: true });
@@ -181,15 +172,27 @@ export default function ServerDetailModal({ server, onClose }) {
   };
 
   return (
-    <Modal open={!!server} onClose={onClose} title={server ? serverHost(server.url) : ''}>
-      {server && (
+    <Modal open={!!device} onClose={onClose} title={device ? device.name : ''}>
+      {device && (
         <>
           <section className="storage-section">
-            <p className="storage-title">Storage</p>
-            <ServerStorage server={server} />
+            <p className="storage-title">Addresses</p>
+            <ul className="server-addresses">
+              {device.urls.map((url) => (
+                <li key={url} className={url === device.best ? 'server-address server-address-best' : 'server-address'}>
+                  <span className="server-address-url" title={url}>{url}</span>
+                  {url === device.best && <span className="server-address-tag">in use</span>}
+                </li>
+              ))}
+            </ul>
           </section>
 
-          {server.current && (
+          <section className="storage-section">
+            <p className="storage-title">Storage</p>
+            <DeviceStorage device={device} />
+          </section>
+
+          {device.current && (
             <>
               <div className="library-info">
                 <p className="library-info-label">Currently connected</p>
@@ -282,7 +285,7 @@ export default function ServerDetailModal({ server, onClose }) {
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <Button variant="ghost" onClick={onClose}>Close</Button>
-            {server.current && (
+            {device.current && (
               <Button
                 variant="primary"
                 onClick={handleConnectLibrary}

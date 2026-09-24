@@ -805,8 +805,22 @@ body {
 }
 .server-row-summary { font-size: var(--fs-xs); color: var(--sol-text-mut); }
 .server-row-tail { display: flex; align-items: center; gap: 8px; flex-shrink: 0; color: var(--sol-text-mut); }
-.server-row-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
 .server-status-error { font-size: var(--fs-xs); color: var(--sol-red); margin: 0; }
+.server-addresses {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.server-address {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 8px 10px; background: var(--sol-dim);
+  border: 1px solid var(--sol-border); border-radius: 6px;
+}
+.server-address-best { border-color: var(--sol-accent); }
+.server-address-url {
+  font-size: var(--fs-sm); color: var(--sol-text-em);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.server-address-tag { font-size: var(--fs-xs); color: var(--sol-accent); flex-shrink: 0; }
 
 
 /* ─── Image viewer ─── */

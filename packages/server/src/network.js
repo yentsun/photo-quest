@@ -49,6 +49,17 @@ export function listReachableIPv4(interfaces = os.networkInterfaces()) {
 }
 
 /**
+ * The machine's hostname. Used to identify the same server across the several
+ * addresses it may be reachable at (localhost, LAN IP, tunnel), so clients can
+ * group those addresses into one device.
+ *
+ * @returns {string}
+ */
+export function getDeviceName() {
+  return os.hostname();
+}
+
+/**
  * Resolve the canonical (preferred, stable) address and the alternatives.
  *
  * Preference order:

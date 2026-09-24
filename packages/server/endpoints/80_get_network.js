@@ -3,7 +3,7 @@
  */
 
 import { json } from '../src/http.js';
-import { getServerAddresses } from '../src/network.js';
+import { getServerAddresses, getDeviceName } from '../src/network.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -14,6 +14,9 @@ export default async (kojo, logger) => {
     const { canonical, alternatives } = getServerAddresses();
 
     json(res, 200, {
+      /* Stable device identity so clients can recognise the same server
+         reached through different addresses. */
+      name: getDeviceName(),
       local: `http://localhost:${port}`,
       /* Primary recommended address: a stable, non-tunnel LAN IP. */
       network: canonical ? `http://${canonical}:${port}` : null,

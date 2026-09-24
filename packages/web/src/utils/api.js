@@ -720,6 +720,22 @@ export async function fetchNetworkInfo() {
   return response.json();
 }
 
+/**
+ * Fetch a server's identity/network info from any base URL.
+ *
+ * @param {string} [baseUrl] - Server base URL. When omitted, the current origin.
+ * @param {{ timeout?: number }} [options] - Abort after `timeout` ms.
+ */
+export async function fetchServerInfo(baseUrl = '', { timeout } = {}) {
+  const url = baseUrl ? new URL(apiRoutes.network, baseUrl).toString() : apiRoutes.network;
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}),
+  });
+  if (!response.ok) throw new Error('Failed to fetch server info');
+  return response.json();
+}
+
 export async function fetchFolders() {
   // IDB-first: return cached folders immediately if available
   let idbFolders = null;
