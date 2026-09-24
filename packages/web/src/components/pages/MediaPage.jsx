@@ -13,6 +13,7 @@ import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
 import { isVideoControlPress } from '../../utils/mediaMagnifier.js';
+import { readSavedSpeed, nextSpeed, saveSpeed } from '../../utils/playbackSpeed.js';
 import useMediaMagnifier from '../../hooks/useMediaMagnifier.js';
 
 const FETCH_LIMIT = 10000;
@@ -75,6 +76,7 @@ export default function MediaPage() {
   const [suggestionIndex, setSuggestionIndex] = useState(-1);
   const tagInputRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [speed, setSpeed] = useState(readSavedSpeed);
   const [showMore, setShowMore] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [duplicates, setDuplicates] = useState({ ids: [], count: 0, items: [] });
@@ -394,6 +396,17 @@ export default function MediaPage() {
     cancelTouchGesture();
     magnifier.toggle();
   }, [cancelTouchGesture, magnifier.toggle]);
+
+  const cycleSpeed = useCallback(() => {
+    setSpeed(prev => {
+      const next = nextSpeed(prev);
+      saveSpeed(next);
+      return next;
+    });
+  }, []);
+
+  /* Element fullscreen is unavailable on iPhone Safari, so hide the control. */
+  const canFullscreen = typeof document !== 'undefined' && !!document.fullscreenEnabled;
 
   const handleTouchStart = useCallback((e) => {
     cancelTouchGesture();
@@ -833,7 +846,7 @@ export default function MediaPage() {
             })()}
           </div>
         ) : (
-          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} mediaRef={mediaElRef} mediaProps={magnifier.mediaProps} magnifierActive={magnifier.active} onError={() => setPlaybackError(true)} />
+          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} speed={speed} mediaRef={mediaElRef} mediaProps={magnifier.mediaProps} magnifierActive={magnifier.active} onError={() => setPlaybackError(true)} />
         )}
 
         <IconButton
@@ -894,30 +907,36 @@ export default function MediaPage() {
             {isImage && (
               <IconButton variant="overlay" icon={<Icon name="next" className="icon-md" />} label="Next" onClick={goNext} disabled={!hasNext} />
             )}
-            <IconButton
-              variant="overlay"
-              icon={<Icon name={magnifier.active ? 'zoomOut' : 'zoomIn'} className="icon-md" />}
-              label={magnifier.active ? 'Exit magnifier' : 'Magnify'}
-              onClick={toggleMagnifier}
-            />
           </div>
         )}
 
-        <IconButton
-          variant="overlay"
-          icon={<Icon name={isFullscreen ? 'minimize' : 'maximize'} className="icon-md" />}
-          label={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-          onClick={toggleFullscreen}
-          className="viewer-nav viewer-nav-fs"
-        />
-
-        <IconButton
-          variant="overlay"
-          icon={<Icon name={magnifier.active ? 'zoomOut' : 'zoomIn'} className="icon-md" />}
-          label={magnifier.active ? 'Exit magnifier' : 'Magnify'}
-          onClick={toggleMagnifier}
-          className="viewer-nav viewer-nav-zoom"
-        />
+        <div className="viewer-controls">
+          {!isImage && item.status === MEDIA_STATUS.READY && (
+            <Button
+              variant="ghost"
+              className="viewer-controls-speed"
+              aria-label={`Playback speed: ${speed}x`}
+              title={`Playback speed ${speed}x (next: ${nextSpeed(speed)}x)`}
+              onClick={cycleSpeed}
+            >
+              {speed}x
+            </Button>
+          )}
+          <IconButton
+            variant="overlay"
+            icon={<Icon name={magnifier.active ? 'zoomOut' : 'zoomIn'} className="icon-md" />}
+            label={magnifier.active ? 'Exit magnifier' : 'Magnify'}
+            onClick={toggleMagnifier}
+          />
+          {canFullscreen && (
+            <IconButton
+              variant="overlay"
+              icon={<Icon name={isFullscreen ? 'minimize' : 'maximize'} className="icon-md" />}
+              label={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
+              onClick={toggleFullscreen}
+            />
+          )}
+        </div>
 
         {isFullscreen && navItems.length > 1 && (
           <div className="viewer-counter">
