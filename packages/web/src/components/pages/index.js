@@ -10,3 +10,4 @@ export { default as TagPage } from './TagPage.jsx';
 export { default as TranscodesPage } from './TranscodesPage.jsx';
 export { default as DuplicatesPage } from './DuplicatesPage.jsx';
 export { default as FailedPage } from './FailedPage.jsx';
+export { default as ConnectionsPage } from './ConnectionsPage.jsx';

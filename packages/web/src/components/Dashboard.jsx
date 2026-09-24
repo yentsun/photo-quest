@@ -4,11 +4,10 @@ import { useMediaActions } from '../hooks/useMedia.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
-import { fetchFolders, fetchMedia, getLastFolders, pickLibraryFile, connectLibrary, fetchLibraryStatus, resetMediaCaches, fetchStorageStats, downloadLibraryBackup, downloadMediaManifest } from '../utils/api.js';
+import { fetchFolders, fetchMedia, getLastFolders } from '../utils/api.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache.js';
-import { formatBytes } from '../utils/format.js';
 import usePersistedState from '../hooks/usePersistedState.js';
-import { idbGetFolders, idbClearCache } from '../services/idb.js';
+import { idbGetFolders } from '../services/idb.js';
 import { FolderCard, MediaGrid } from './media/index.js';
 import { EmptyState } from './layout/index.js';
 import { Button, Icon, Input, Loader, Modal, ProgressBar, Select } from './ui/index.js';
@@ -94,17 +93,6 @@ export default function Dashboard() {
   const [selectedPath, setSelectedPath] = useState(null);
   const [browsing, setBrowsing] = useState(false);
   const { pathValid, pathError, pathInfo, checking, validate, reset } = usePathValidation();
-
-  const [showLibrary, setShowLibrary] = useState(false);
-  const [pickedPath, setPickedPath] = useState(null);
-  const [libraryStatus, setLibraryStatus] = useState(null);
-  const [libraryInfo, setLibraryInfo] = useState(null);
-  const [libraryError, setLibraryError] = useState(null);
-  const [cacheStatus, setCacheStatus] = useState(null);
-  const [storageStats, setStorageStats] = useState(null);
-  const [storageError, setStorageError] = useState(null);
-  const [backupStatus, setBackupStatus] = useState(null);
-  const [manifestStatus, setManifestStatus] = useState(null);
 
   const [folders, setFolders] = useState(() => {
     if (isPageCacheValid('dashboard', signal)) return getPageCache('dashboard').data.folders;
@@ -265,95 +253,6 @@ export default function Dashboard() {
     finally { setBrowsing(false); }
   };
 
-  /* Storage stats are fetched when the Connections modal opens — they stat
-     files on the server, so they are never loaded for the dashboard itself. */
-  const loadStorage = useCallback(() => {
-    setStorageError(null);
-    fetchStorageStats()
-      .then(setStorageStats)
-      .catch((err) => {
-        console.error('Failed to fetch storage stats:', err);
-        setStorageError(err.message);
-      });
-  }, []);
-
-  const handleOpenLibrary = async () => {
-    setPickedPath(null);
-    setLibraryStatus(null);
-    setLibraryInfo(null);
-    setLibraryError(null);
-    setCacheStatus(null);
-    setBackupStatus(null);
-    setManifestStatus(null);
-    setShowLibrary(true);
-    /* Kick both off together — the stats sweep can be the slower of the two. */
-    loadStorage();
-    try {
-      const info = await fetchLibraryStatus();
-      setLibraryInfo(info);
-    } catch (err) {
-      setLibraryError(err.message);
-    }
-  };
-
-  const handleBackupDatabase = async () => {
-    setBackupStatus({ loading: true });
-    try {
-      await downloadLibraryBackup();
-      setBackupStatus({ success: true });
-    } catch (err) {
-      console.error('Failed to download database backup:', err);
-      setBackupStatus({ error: err.message });
-    }
-  };
-
-  const handleDownloadManifest = async (format) => {
-    setManifestStatus({ loading: true });
-    try {
-      await downloadMediaManifest(format);
-      setManifestStatus({ success: true });
-    } catch (err) {
-      console.error('Failed to download media manifest:', err);
-      setManifestStatus({ error: err.message });
-    }
-  };
-
-  const handlePickLibrary = async () => {
-    setLibraryStatus(null);
-    setPickedPath(null);
-    try {
-      const result = await pickLibraryFile();
-      if (!result.cancelled) setPickedPath(result.path);
-    } catch (err) {
-      setLibraryStatus({ error: err.message });
-    }
-  };
-
-  const handleConnectLibrary = async () => {
-    if (!pickedPath) return;
-    setLibraryStatus({ loading: true });
-    try {
-      await connectLibrary(pickedPath);
-      setLibraryStatus({ success: true });
-    } catch (err) {
-      setLibraryStatus({ error: err.message });
-    }
-  };
-
-  const handleClearCache = async () => {
-    setCacheStatus({ loading: true });
-    try {
-      await idbClearCache();
-      resetMediaCaches();
-      setCacheStatus({ success: true });
-      bump();
-      // Also invalidate the in-memory session cache so the next fetch is fresh.
-      setTimeout(() => setCacheStatus(null), 2500);
-    } catch (err) {
-      setCacheStatus({ error: err.message });
-    }
-  };
-
   const handleAddFolder = async () => {
     if (!selectedPath || !pathValid) return;
     setImportProgress(null);
@@ -417,9 +316,6 @@ export default function Dashboard() {
           )}
           <Button variant="ghost" size="sm" onClick={() => setShowAddFolder(true)} disabled={isScanning} icon={<Icon name="folder" className="icon-sm" />}>
             <span className="sm-show">Add Folder</span>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handleOpenLibrary} title="View or switch the connected database" icon={<Icon name="database" className="icon-sm" />}>
-            <span className="sm-show">Connections</span>
           </Button>
           <Button
             variant={debouncedSearch ? 'primary' : 'ghost'}
@@ -519,161 +415,6 @@ export default function Dashboard() {
           action={{ label: 'Add Folder', onClick: () => setShowAddFolder(true) }}
         />
       )}
-
-      <Modal open={showLibrary} onClose={() => setShowLibrary(false)} title="Connections">
-        <div className="library-info">
-          <p className="library-info-label">Currently connected</p>
-          {libraryInfo ? (
-            <>
-              <p className="library-info-name">{libraryInfo.name}</p>
-              <p className="library-info-path" title={libraryInfo.path}>{libraryInfo.path}</p>
-              {libraryInfo.items != null && (
-                <p className="library-info-meta">{libraryInfo.items.toLocaleString()} items</p>
-              )}
-            </>
-          ) : libraryError ? (
-            <p className="text-mut" style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>
-              Could not load connection info: {libraryError}
-            </p>
-          ) : (
-            <p className="text-mut" style={{ fontSize: 'var(--fs-sm)' }}>Loading…</p>
-          )}
-        </div>
-
-        <section className="storage-section">
-          <p className="storage-title">Storage</p>
-
-          {storageError ? (
-            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>
-              Could not load storage stats: {storageError}
-            </p>
-          ) : storageStats ? (
-            <>
-              <dl className="storage-rows">
-                <div className="storage-row">
-                  <dt>Database</dt>
-                  <dd title="Includes the write-ahead log">
-                    {formatBytes(storageStats.db.bytes + storageStats.db.walBytes + storageStats.db.shmBytes)}
-                  </dd>
-                </div>
-                <div className="storage-row">
-                  <dt>Thumbnails</dt>
-                  <dd>
-                    {formatBytes(storageStats.thumbs.bytes)}
-                    <span className="storage-row-note"> · {storageStats.thumbs.count.toLocaleString()} files</span>
-                  </dd>
-                </div>
-                <div className="storage-row">
-                  <dt>Transcoded</dt>
-                  <dd>
-                    {formatBytes(storageStats.transcodes.bytes)}
-                    <span className="storage-row-note"> · {storageStats.transcodes.count.toLocaleString()} files</span>
-                  </dd>
-                </div>
-                <div className="storage-row">
-                  <dt>Originals</dt>
-                  <dd>
-                    {formatBytes(storageStats.originals.bytes)}
-                    <span className="storage-row-note">
-                      {' · '}{storageStats.originals.images.toLocaleString()} images,{' '}
-                      {storageStats.originals.videos.toLocaleString()} videos
-                    </span>
-                  </dd>
-                </div>
-              </dl>
-
-              {storageStats.volumes.map((volume) => (
-                <div className="storage-volume" key={volume.path}>
-                  <div className="storage-volume-head">
-                    <span className="storage-volume-path" title={volume.path}>{volume.path}</span>
-                    <span>{formatBytes(volume.free)} free of {formatBytes(volume.total)}</span>
-                  </div>
-                  <ProgressBar value={volume.used} max={volume.total} width={20} />
-                </div>
-              ))}
-            </>
-          ) : (
-            <p className="text-mut" style={{ fontSize: 'var(--fs-sm)' }}>Loading…</p>
-          )}
-
-          <div className="storage-backups">
-            <Button
-              variant="ghost"
-              onClick={handleBackupDatabase}
-              disabled={backupStatus?.loading}
-              icon={<Icon name="database" className="icon-sm" />}
-            >
-              {backupStatus?.loading ? 'Preparing…' : 'Database backup'}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => handleDownloadManifest('csv')}
-              disabled={manifestStatus?.loading}
-              icon={<Icon name="download" className="icon-sm" />}
-            >
-              {manifestStatus?.loading ? 'Preparing…' : 'Manifest (CSV)'}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => handleDownloadManifest('json')}
-              disabled={manifestStatus?.loading}
-            >
-              Manifest (JSON)
-            </Button>
-          </div>
-          {backupStatus?.success && (
-            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Database backup downloaded.</p>
-          )}
-          {backupStatus?.error && (
-            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{backupStatus.error}</p>
-          )}
-          {manifestStatus?.success && (
-            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Manifest downloaded.</p>
-          )}
-          {manifestStatus?.error && (
-            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{manifestStatus.error}</p>
-          )}
-          <p className="text-mut" style={{ fontSize: 'var(--fs-xs)' }}>
-            The database backup is a consistent snapshot of your library. The manifest lists every
-            media file's path and metadata — the files themselves stay where they are.
-          </p>
-        </section>
-
-        <p className="text-mut" style={{ fontSize: 'var(--fs-sm)', marginTop: 16 }}>
-          Open a different <code style={{ color: 'var(--sol-text-em)' }}>.db</code> file from another Photo Quest installation to switch the connection.
-        </p>
-        <Button variant="ghost" onClick={handlePickLibrary} icon={<Icon name="database" className="icon-sm" />}>
-          Open another connection…
-        </Button>
-        {pickedPath && (
-          <div className="path-preview">{pickedPath}</div>
-        )}
-        <Button variant="ghost" onClick={handleClearCache} disabled={cacheStatus?.loading} icon={<Icon name="refresh" className="icon-sm" />}>
-          {cacheStatus?.loading ? 'Clearing…' : 'Clean cache'}
-        </Button>
-        {cacheStatus?.success && (
-          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Cache cleared — data will reload from the server.</p>
-        )}
-        {cacheStatus?.error && (
-          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{cacheStatus.error}</p>
-        )}
-        {libraryStatus?.error && (
-          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{libraryStatus.error}</p>
-        )}
-        {libraryStatus?.success && (
-          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Connection switched — the app is restarting…</p>
-        )}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <Button variant="ghost" onClick={() => setShowLibrary(false)}>Close</Button>
-          <Button
-            variant="primary"
-            onClick={handleConnectLibrary}
-            disabled={!pickedPath || libraryStatus?.loading || libraryStatus?.success}
-          >
-            {libraryStatus?.loading ? 'Connecting…' : 'Switch to this connection'}
-          </Button>
-        </div>
-      </Modal>
 
       <Modal open={searchOpen} onClose={() => setSearchOpen(false)} title="Search">
         <div className="search-wrap">

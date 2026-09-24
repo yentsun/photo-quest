@@ -857,8 +857,19 @@ export async function fetchLibraryStatus() {
   return response.json();
 }
 
-export async function fetchStorageStats() {
-  const response = await fetch(apiRoutes.storage);
+/**
+ * Fetch the storage report from a server.
+ *
+ * @param {string} [baseUrl] - Server base URL (e.g. `http://host:8080/`). When
+ *   omitted the request goes to the current origin.
+ * @param {{ timeout?: number }} [options] - Abort the request after `timeout` ms.
+ */
+export async function fetchStorageStats(baseUrl = '', { timeout } = {}) {
+  const url = baseUrl ? new URL(apiRoutes.storage, baseUrl).toString() : apiRoutes.storage;
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}),
+  });
   if (!response.ok) throw new Error('Failed to fetch storage stats');
   return response.json();
 }

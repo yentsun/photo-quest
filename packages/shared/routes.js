@@ -54,6 +54,9 @@ export const clientRoutes = {
   /** Failed media section -- items whose file is missing/unreadable or whose
    *  processing failed, grouped by content hash. */
   failed: '/failed',
+
+  /** Connections section -- known servers and their storage usage. */
+  connections: '/connections',
 };
 
 // ---------------------------------------------------------------------------
