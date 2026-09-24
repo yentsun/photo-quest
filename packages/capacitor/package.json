@@ -1,0 +1,23 @@
+{
+  "name": "@photo-quest/capacitor",
+  "version": "0.12.0",
+  "private": true,
+  "type": "module",
+  "description": "Native iOS/Android wrapper for the Photo Quest web app, using Capacitor.",
+  "scripts": {
+    "sync": "pnpm --filter @photo-quest/web build && cap sync",
+    "copy": "pnpm --filter @photo-quest/web build && cap copy",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios",
+    "build:android": "pnpm --filter @photo-quest/web build && cap sync && cap build android",
+    "build:ios": "pnpm --filter @photo-quest/web build && cap sync && cap build ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}

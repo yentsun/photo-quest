@@ -8,6 +8,8 @@
  * probes each known server and redirects to the first one that responds.
  */
 
+import { resolveApiUrl } from '../config/apiBase.js';
+
 const STORAGE_KEY = 'photoquest.knownServers';
 const ACTIVE_KEY = 'photoquest.activeServer';
 
@@ -87,28 +89,68 @@ export function setActiveServer(url) {
   } catch {}
 }
 
-/** True if the current origin is the Photo Quest server (served by it). */
-function isCurrentOriginReachable() {
-  // A light probe: the server serves the web app, so a same-origin fetch of
-  // a known endpoint that returns JSON (not the SPA fallback) confirms it.
-  return fetch('/network', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
-    .then(r => (r.ok ? true : Promise.reject(new Error('not ok'))))
-    .catch(() => false);
+/**
+ * True when a parsed body actually looks like the Photo Quest `/network`
+ * payload. A static host (or the Vite preview server) answers unknown paths
+ * with the SPA `index.html` and HTTP 200, so `res.ok` alone would mistake the
+ * UI host for the API server. Requiring the JSON shape is what distinguishes
+ * them.
+ *
+ * @param {unknown} data
+ * @returns {boolean}
+ */
+function isNetworkPayload(data) {
+  return !!data && typeof data === 'object'
+    && (typeof data.port === 'number' || 'canonical' in data || 'local' in data);
 }
 
 /**
- * Probe a candidate server base URL. Resolves true if it responds.
- * Same-origin and cross-origin are both supported (server sends CORS headers).
- * Uses a short timeout so an unroutable/stale address fails fast instead of
- * stalling boot for the browser's default connect timeout (~20s+).
+ * Fetch and validate `/network` from a candidate server.
+ *
+ * @param {string|null} [base] Absolute server base URL. Pass null/'' to probe
+ *   the configured API base (or the page origin when none is configured).
+ * @param {{ timeout?: number }} [opts]
+ * @returns {Promise<Object|null>} The `/network` payload, or null when nothing
+ *   that is really a Photo Quest server answered.
+ */
+export async function fetchServerNetwork(base = null, { timeout = 3000 } = {}) {
+  const normalized = base ? (normalizeServerUrl(base) ?? base) : null;
+  const path = normalized ? `${normalized}network` : '/network';
+  try {
+    const res = await fetch(resolveApiUrl(path), { cache: 'no-store', signal: AbortSignal.timeout(timeout) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return isNetworkPayload(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True if the app's current base is a reachable Photo Quest server. */
+function isCurrentOriginReachable() {
+  return fetchServerNetwork(null).then(Boolean);
+}
+
+/**
+ * Probe a candidate server base URL. Resolves true only when a real Photo
+ * Quest server answers (see {@link fetchServerNetwork}). Same-origin and
+ * cross-origin are both supported (the server sends CORS headers). Uses a
+ * short timeout so an unroutable/stale address fails fast instead of stalling
+ * boot for the browser's default connect timeout (~20s+).
  */
 async function probeServer(base) {
-  try {
-    const res = await fetch(`${base}network`, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  return (await fetchServerNetwork(base)) !== null;
+}
+
+/**
+ * Public probe of a single server base URL. Resolves true if `/network`
+ * responds with a valid Photo Quest payload. Used by the connect screen and
+ * the connections view to validate a candidate address.
+ * @param {string} base
+ * @returns {Promise<boolean>}
+ */
+export function probeServerUrl(base) {
+  return probeServer(base);
 }
 
 /**
@@ -154,4 +196,23 @@ export function redirectToServer(base) {
   if (base === currentServerUrl()) return;
   const target = new URL(base, window.location.href).toString();
   window.location.replace(target);
+}
+
+/**
+ * Seed the known-server pool from a `/network` payload. Registers the
+ * `local`, `canonical`/`network`, and every `alternatives` URL so the pool
+ * covers the same machine, the stable LAN interface, and tunnel addresses
+ * (e.g. WireGuard). Returns the newly added URLs.
+ *
+ * @param {{ local?: string, canonical?: string, network?: string, alternatives?: string[] }} network
+ * @returns {string[]}
+ */
+export function seedFromNetwork(network) {
+  const added = [];
+  const push = (url) => { if (url && addKnownServer(url)) added.push(normalizeServerUrl(url)); };
+  push(network?.local);
+  push(network?.canonical);
+  push(network?.network); // legacy alias for canonical
+  for (const alt of network?.alternatives ?? []) push(alt);
+  return added;
 }

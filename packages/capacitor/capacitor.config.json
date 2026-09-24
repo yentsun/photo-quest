@@ -1,0 +1,10 @@
+{
+  "appId": "com.photoquest.app",
+  "appName": "Photo Quest",
+  "webDir": "../web/dist",
+  "server": {
+    "androidScheme": "http",
+    "iosScheme": "capacitor",
+    "cleartext": true
+  }
+}

@@ -12,6 +12,7 @@
  */
 
 import { apiRoutes, MEDIA_TYPE } from '@photo-quest/shared';
+import { resolveApiUrl, apiOrigin } from '../config/apiBase.js';
 import {
   idbGetMedia,
   idbGetMediaById,
@@ -23,6 +24,11 @@ import {
   idbReplaceFolders,
   idbPruneMedia,
 } from '../services/idb.js';
+
+/** Fetch a server URL (relative or absolute) through the configured API base. */
+function apiFetch(path, opts) {
+  return fetch(resolveApiUrl(path), opts);
+}
 
 // ---------------------------------------------------------------------------
 // In-memory session cache
@@ -144,9 +150,9 @@ export async function purgeMedia(ids = []) {
  * @returns {Promise<number[]>}
  */
 export async function fetchMediaIds() {
-  const url = new URL(apiRoutes.media, window.location.origin);
+  const url = new URL(apiRoutes.media, apiOrigin());
   url.searchParams.set('ids', '1');
-  const response = await fetch(url);
+  const response = await apiFetch(url);
   if (!response.ok) throw new Error('Failed to fetch media ids');
   const { ids } = await response.json();
   return ids ?? [];
@@ -268,7 +274,7 @@ export async function refreshFailedCount() {
 
 async function _fetchMediaFromServer(url, opts) {
   const t0 = performance.now();
-  const response = await fetch(url, opts.random ? { cache: 'no-store' } : undefined);
+  const response = await apiFetch(url, opts.random ? { cache: 'no-store' } : undefined);
   if (!response.ok) throw new Error('Failed to fetch media');
   const data = await response.json();
   const bodySize = JSON.stringify(data.items[0] ?? {}).length * data.items.length;
@@ -282,7 +288,7 @@ async function _fetchMediaFromServer(url, opts) {
 }
 
 async function _fetchFoldersFromServer() {
-  const response = await fetch(apiRoutes.folders);
+  const response = await apiFetch(apiRoutes.folders);
   if (!response.ok) throw new Error('Failed to fetch folders');
   const folders = await response.json();
   _foldersCache = folders;
@@ -297,7 +303,7 @@ async function _fetchFoldersFromServer() {
 // ---------------------------------------------------------------------------
 
 export async function fetchTags() {
-  const response = await fetch(apiRoutes.tags);
+  const response = await apiFetch(apiRoutes.tags);
   if (!response.ok) throw new Error('Failed to fetch tags');
   const data = await response.json();
   _tagsCache = data;
@@ -305,7 +311,7 @@ export async function fetchTags() {
 }
 
 export async function fetchDuplicates({ countOnly = false, limit, offset, timeout } = {}) {
-  const url = new URL(apiRoutes.duplicates, window.location.origin);
+  const url = new URL(apiRoutes.duplicates, apiOrigin());
   if (countOnly) url.searchParams.set('count', '1');
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
@@ -313,7 +319,7 @@ export async function fetchDuplicates({ countOnly = false, limit, offset, timeou
   /* The duplicate badge must never hang the UI — if the server is slow or the
      library path is wedged, bail out rather than block rendering. */
   if (timeout != null) opts.signal = AbortSignal.timeout(timeout);
-  const response = await fetch(url, opts);
+  const response = await apiFetch(url, opts);
   if (!response.ok) throw new Error('Failed to fetch duplicates');
   return response.json();
 }
@@ -329,14 +335,14 @@ export async function fetchDuplicates({ countOnly = false, limit, offset, timeou
  * @returns {Promise<{ groups?: Object[], groupCount: number, failedCount: number, refreshing?: boolean }>}
  */
 export async function fetchFailed({ countOnly = false, limit, offset, refresh = false, timeout } = {}) {
-  const url = new URL(apiRoutes.failed, window.location.origin);
+  const url = new URL(apiRoutes.failed, apiOrigin());
   if (countOnly) url.searchParams.set('count', '1');
   if (refresh) url.searchParams.set('refresh', '1');
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
   const opts = {};
   if (timeout != null) opts.signal = AbortSignal.timeout(timeout);
-  const response = await fetch(url, opts);
+  const response = await apiFetch(url, opts);
   if (!response.ok) throw new Error('Failed to fetch failed media');
   return response.json();
 }
@@ -353,7 +359,7 @@ export async function fetchFailed({ countOnly = false, limit, offset, refresh = 
 export async function repairFailed({ ids, all = false, force = false } = {}) {
   const payload = all ? { all: true } : { ids };
   if (force) payload.force = true;
-  const response = await fetch(apiRoutes.failedRepair, {
+  const response = await apiFetch(apiRoutes.failedRepair, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -373,13 +379,13 @@ export async function repairFailed({ ids, all = false, force = false } = {}) {
  * @returns {Promise<{ hash: string|null, ids: number[], count: number, items: Object[] }>}
  */
 export async function fetchMediaDuplicates(id) {
-  const response = await fetch(`${apiRoutes.media}/${id}/duplicates`);
+  const response = await apiFetch(`${apiRoutes.media}/${id}/duplicates`);
   if (!response.ok) throw new Error('Failed to fetch media duplicates');
   return response.json();
 }
 
 export async function mergeDuplicates({ ids, keepId }) {
-  const response = await fetch(apiRoutes.duplicatesMerge, {
+  const response = await apiFetch(apiRoutes.duplicatesMerge, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(keepId != null ? { ids, keepId } : { ids }),
@@ -396,7 +402,7 @@ export async function mergeDuplicates({ ids, keepId }) {
 }
 
 export async function deleteDuplicates({ ids }) {
-  const response = await fetch(apiRoutes.duplicatesDelete, {
+  const response = await apiFetch(apiRoutes.duplicatesDelete, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ids }),
@@ -411,7 +417,7 @@ export async function deleteDuplicates({ ids }) {
 }
 
 export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type, skipCache = false } = {}) {
-  const url = new URL(apiRoutes.media, window.location.origin);
+  const url = new URL(apiRoutes.media, apiOrigin());
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
   if (folder != null) url.searchParams.set('folder', folder);
@@ -495,7 +501,7 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
       _mediaCache.set(idbItem.id, idbItem);
       // Refresh from server in background. A 404 means the record is gone, so
       // purge the stale cache instead of keeping it around.
-      fetch(`${apiRoutes.media}/${id}`, { headers: { 'Accept': 'application/json' } })
+      apiFetch(`${apiRoutes.media}/${id}`, { headers: { 'Accept': 'application/json' } })
         .then(async r => {
           if (r.status === 404) { await forgetMedia(id); return; }
           if (!r.ok) return;
@@ -510,7 +516,7 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
 
   // No IDB data — wait for the server
   try {
-    const response = await fetch(`${apiRoutes.media}/${id}`, {
+    const response = await apiFetch(`${apiRoutes.media}/${id}`, {
       headers: { 'Accept': 'application/json' },
     });
     if (response.status === 404) { await forgetMedia(id); return null; }
@@ -528,41 +534,41 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
 }
 
 export async function requestTranscode(id) {
-  await fetch(`/media/${id}/transcode`, { method: 'POST' });
+  await apiFetch(`/media/${id}/transcode`, { method: 'POST' });
 }
 
 export async function fetchJobs() {
-  const response = await fetch('/jobs');
+  const response = await apiFetch('/jobs');
   if (!response.ok) throw new Error('Failed to fetch jobs');
   return response.json();
 }
 
 export async function pauseJobs() {
-  const response = await fetch('/jobs/pause', { method: 'POST' });
+  const response = await apiFetch('/jobs/pause', { method: 'POST' });
   if (!response.ok) throw new Error('Failed to pause transcodes');
   return response.json();
 }
 
 export async function resumeJobs() {
-  const response = await fetch('/jobs/resume', { method: 'POST' });
+  const response = await apiFetch('/jobs/resume', { method: 'POST' });
   if (!response.ok) throw new Error('Failed to resume transcodes');
   return response.json();
 }
 
 export async function cancelJob(id) {
-  const response = await fetch(`/jobs/${id}/cancel`, { method: 'POST' });
+  const response = await apiFetch(`/jobs/${id}/cancel`, { method: 'POST' });
   if (!response.ok) throw new Error('Failed to cancel job');
   return response.json();
 }
 
 export async function retryJob(id) {
-  const response = await fetch(apiRoutes.jobRetry.replace(':id', id), { method: 'POST' });
+  const response = await apiFetch(apiRoutes.jobRetry.replace(':id', id), { method: 'POST' });
   if (!response.ok) throw new Error('Failed to retry job');
   return response.json();
 }
 
 export async function updateMediaTags(id, tags) {
-  const response = await fetch(`/media/${id}/tags`, {
+  const response = await apiFetch(`/media/${id}/tags`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tags }),
@@ -579,7 +585,7 @@ export async function updateMediaTags(id, tags) {
 }
 
 export async function renameMedia(id, title) {
-  const response = await fetch(`/media/${id}/title`, {
+  const response = await apiFetch(`/media/${id}/title`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title }),
@@ -611,7 +617,7 @@ async function flushLikeSeries(id) {
   _likeSeries.delete(id);
 
   try {
-    const response = await fetch(`/media/${id}/like?count=${entry.count}`, { method: 'PATCH' });
+    const response = await apiFetch(`/media/${id}/like?count=${entry.count}`, { method: 'PATCH' });
     if (!response.ok) throw new Error('Failed to like media');
     const data = await response.json();
     const { likedCount, ...item } = data;
@@ -658,7 +664,7 @@ export async function deleteMedia(id) {
   const cached = _mediaCache.get(id);
   const folderPath = cached?.folder;
 
-  const response = await fetch(`/media/${id}`, {
+  const response = await apiFetch(`/media/${id}`, {
     method: 'DELETE',
   });
   if (!response.ok) {
@@ -672,7 +678,7 @@ export async function deleteMedia(id) {
 }
 
 export async function scanMedia(path) {
-  const response = await fetch(apiRoutes.mediaScan, {
+  const response = await apiFetch(apiRoutes.mediaScan, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path }),
@@ -684,7 +690,7 @@ export async function scanMedia(path) {
 }
 
 export async function cancelScan(scanId) {
-  const response = await fetch(`/scans/${scanId}/cancel`, {
+  const response = await apiFetch(`/scans/${scanId}/cancel`, {
     method: 'POST',
   });
   if (!response.ok) {
@@ -695,16 +701,16 @@ export async function cancelScan(scanId) {
 }
 
 export function getStreamUrl(id) {
-  return `/stream/${id}`;
+  return resolveApiUrl(`/stream/${id}`);
 }
 
 export function getImageUrl(id) {
-  return `/image/${id}`;
+  return resolveApiUrl(`/image/${id}`);
 }
 
 export function getThumbUrl(id, time = null) {
-  if (time == null) return `/thumb/${id}`;
-  return `/thumb/${id}?time=${time}`;
+  if (time == null) return resolveApiUrl(`/thumb/${id}`);
+  return resolveApiUrl(`/thumb/${id}?time=${time}`);
 }
 
 export function getMediaUrl(media) {
@@ -713,7 +719,7 @@ export function getMediaUrl(media) {
 }
 
 export async function fetchNetworkInfo() {
-  const response = await fetch(apiRoutes.network);
+  const response = await apiFetch(apiRoutes.network);
   if (!response.ok) {
     throw new Error('Failed to fetch network info');
   }
@@ -750,7 +756,7 @@ export async function fetchFoldersForParent(parentId) {
   if (inflight) return inflight;
 
   const promise = (async () => {
-    const response = await fetch(`/folders?parent=${parentId}`);
+    const response = await apiFetch(`/folders?parent=${parentId}`);
     if (!response.ok) throw new Error('Failed to fetch folder scope');
     return response.json();
   })();
@@ -771,13 +777,13 @@ export async function fetchFoldersForParent(parentId) {
  * @returns {Promise<Object[]>}
  */
 export async function fetchFolderChain(folderPath) {
-  const response = await fetch(`/folders?path=${encodeURIComponent(folderPath)}`);
+  const response = await apiFetch(`/folders?path=${encodeURIComponent(folderPath)}`);
   if (!response.ok) throw new Error('Failed to fetch folder chain');
   return response.json();
 }
 
 export async function removeFolder(folderId) {
-  const response = await fetch(`/media/folder/${folderId}`, {
+  const response = await apiFetch(`/media/folder/${folderId}`, {
     method: 'DELETE',
   });
   /* 404 means the folder isn't in the connected DB (e.g. stale cache from a
@@ -798,7 +804,7 @@ export async function removeFolder(folderId) {
 }
 
 export async function renameFolder(folderId, name) {
-  const response = await fetch(`/folders/${folderId}`, {
+  const response = await apiFetch(`/folders/${folderId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -810,7 +816,7 @@ export async function renameFolder(folderId, name) {
 export async function setFolderThumbnail(folderId, mediaId, time = null) {
   const payload = { thumbnailMediaId: mediaId };
   if (time != null) payload.thumbnailTime = time;
-  const response = await fetch(`/folders/${folderId}`, {
+  const response = await apiFetch(`/folders/${folderId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -820,7 +826,7 @@ export async function setFolderThumbnail(folderId, mediaId, time = null) {
 }
 
 export async function setVideoThumbnail(mediaId, time) {
-  const response = await fetch(`/media/${mediaId}/thumbnail`, {
+  const response = await apiFetch(`/media/${mediaId}/thumbnail`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ thumbnailTime: time }),
@@ -830,31 +836,6 @@ export async function setVideoThumbnail(mediaId, time) {
   _mediaCache.set(item.id, item);
   idbPutMedia(item).catch(() => {});
   return item;
-}
-
-export async function pickLibraryFile() {
-  const response = await fetch(apiRoutes.libraryPick, { method: 'POST' });
-  if (!response.ok) throw new Error('Could not open file picker');
-  return response.json();
-}
-
-export async function connectLibrary(libraryPath) {
-  const response = await fetch(apiRoutes.libraryConnect, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: libraryPath }),
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || 'Failed to connect library');
-  }
-  return response.json();
-}
-
-export async function fetchLibraryStatus() {
-  const response = await fetch(apiRoutes.libraryStatus);
-  if (!response.ok) throw new Error('Failed to fetch library status');
-  return response.json();
 }
 
 export async function downloadMedia(media) {

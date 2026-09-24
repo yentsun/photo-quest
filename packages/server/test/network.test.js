@@ -51,6 +51,25 @@ const DOCKER = {
   internal: false,
   cidr: '172.17.0.1/16',
 };
+/* A vendor-named VPN adapter (name matches no tunnel keyword): point-to-point
+ * /32 address and an all-zero MAC, like a real WireGuard client interface. */
+const VPN = {
+  address: '10.0.0.3',
+  netmask: '255.255.255.255',
+  family: 'IPv4',
+  mac: '00:00:00:00:00:00',
+  internal: false,
+  cidr: '10.0.0.3/32',
+};
+/* A /24 address but an all-zero MAC -- a virtual adapter, not a physical NIC. */
+const VIRTUAL = {
+  address: '10.1.2.3',
+  netmask: '255.255.255.0',
+  family: 'IPv4',
+  mac: '00:00:00:00:00:00',
+  internal: false,
+  cidr: '10.1.2.3/24',
+};
 
 /** Typical host: a stable LAN eth0 plus a WG tunnel, plus loopback/IPv6. */
 function typical() {
@@ -78,6 +97,27 @@ test('listReachableIPv4()', async (t) => {
     t.assert.strictEqual(rows[0].address, '192.168.1.20');
     t.assert.strictEqual(rows[0].kind, 'normal');
     t.assert.strictEqual(rows[1].address, '10.0.0.5');
+    t.assert.strictEqual(rows[1].kind, 'tunnel');
+  });
+
+  await t.test('demotes a vendor-named VPN by its address shape, not its name', (t) => {
+    const rows = listReachableIPv4({ 'BitLionFull': [VPN], 'Ethernet': [LAN] });
+    t.assert.strictEqual(rows[0].address, '192.168.1.20');
+    t.assert.strictEqual(rows[0].kind, 'normal');
+    t.assert.strictEqual(rows[1].address, '10.0.0.3');
+    t.assert.strictEqual(rows[1].kind, 'tunnel');
+  });
+
+  await t.test('demotes a /32 address even without a cidr field (netmask fallback)', (t) => {
+    const rows = listReachableIPv4({ 'MyVPN': [{ ...VPN, cidr: undefined }] });
+    t.assert.strictEqual(rows[0].kind, 'tunnel');
+  });
+
+  await t.test('demotes an interface with an all-zero MAC', (t) => {
+    const rows = listReachableIPv4({ 'eth0': [LAN], 'vEthernet (WSL)': [VIRTUAL] });
+    t.assert.strictEqual(rows[0].address, '192.168.1.20');
+    t.assert.strictEqual(rows[0].kind, 'normal');
+    t.assert.strictEqual(rows[1].address, '10.1.2.3');
     t.assert.strictEqual(rows[1].kind, 'tunnel');
   });
 });
@@ -135,5 +175,23 @@ test('getServerAddresses()', async (t) => {
     });
     t.assert.strictEqual(canonical, '192.168.1.20');
     t.assert.deepEqual(alternatives, ['172.17.0.1', '10.0.0.5']);
+  });
+
+  await t.test('prefers the LAN over a vendor-named /32 VPN (#53)', (t) => {
+    const { canonical, alternatives } = getServerAddresses({
+      'BitLionFull': [VPN],
+      'Ethernet': [LAN],
+    });
+    t.assert.strictEqual(canonical, '192.168.1.20');
+    t.assert.deepEqual(alternatives, ['10.0.0.3']);
+  });
+
+  await t.test('prefers the LAN over a virtual adapter with an all-zero MAC', (t) => {
+    const { canonical, alternatives } = getServerAddresses({
+      'eth0': [LAN],
+      'vEthernet (WSL)': [VIRTUAL],
+    });
+    t.assert.strictEqual(canonical, '192.168.1.20');
+    t.assert.deepEqual(alternatives, ['10.1.2.3']);
   });
 });

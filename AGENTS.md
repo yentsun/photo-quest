@@ -17,7 +17,8 @@ This file provides guidance to coding agents when working with code in this repo
 
 - `pnpm install` — Install all workspace dependencies
 - `pnpm dev` — Run all packages (web + server + worker) in parallel
-- `pnpm dev:web` — Vite dev server (port from `config.webappPort`)
+- `pnpm dev:web` — Build the web app and serve `dist` statically with **no API proxy** (port from `config.webappPort`); the app must connect to the server via the Connect screen
+- `pnpm --filter @photo-quest/web dev` — Vite dev server (HMR, proxies the API — the app is same-origin)
 - `pnpm dev:server` — Node HTTP server (port from `config.serverPort`)
 - `pnpm dev:worker` — Worker process
 - `pnpm build` — Production build of web package
@@ -60,7 +61,7 @@ Independent Node.js process that polls the SQLite job queue. Uses Node.js built-
 
 ## Releasing
 
-- Bump the `version` field in all 5 `package.json` files (root, web, server, shared, electron) to the new version.
+- Bump the `version` field in all package.json files (root, web, server, shared, electron, capacitor) to the new version.
 - Update the changelog in `docs/` with change notes.
 - Commit with the version number as the message (e.g. `0.6.0`), push to master.
 - Create an annotated tag `v<version>` (e.g. `git tag -a v0.6.0 -m "0.6.0"`), push the tag.

@@ -3,9 +3,11 @@ import { NavLink, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { clientRoutes } from '@photo-quest/shared';
 import { fetchNetworkInfo, getCachedCounts, refreshCounts, refreshDuplicatesCount, refreshFailedCount } from '../../utils/api.js';
-import { addKnownServer, currentServerUrl } from '../../services/serverPool.js';
+import { addKnownServer, currentServerUrl, seedFromNetwork } from '../../services/serverPool.js';
+import { getApiBase } from '../../config/apiBase.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { Button, Icon, Modal } from '../ui/index.js';
+import ConnectionsModal from '../ConnectionsModal.jsx';
 
 const NAV_ITEMS = [
   { to: clientRoutes.dashboard, icon: 'folder', label: 'Library', countKey: 'library' },
@@ -18,6 +20,7 @@ const NAV_ITEMS = [
 export default function Header({ collapsed, onToggle }) {
   const [networkUrl, setNetworkUrl] = useState(null);
   const [showQr, setShowQr] = useState(false);
+  const [showConnections, setShowConnections] = useState(false);
   const [copied, setCopied] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
@@ -61,21 +64,28 @@ export default function Header({ collapsed, onToggle }) {
   }, [signal, setLibraryCount, setLikedCount, setTagCount, setDuplicatesCount, setFailedCount]);
 
   useEffect(() => {
-    /* Always record the current origin — it is the server when the app is
-       served from it, even if the /network LAN probe fails. */
-    addKnownServer(currentServerUrl());
+    /* Record the server we are actually talking to: the configured base, or the
+       page origin when the app was served by the server itself. In a bundled
+       shell the origin is just the UI host and must not enter the pool. */
+    addKnownServer(getApiBase() || currentServerUrl());
+    const fallbackBase = getApiBase() || window.location.origin;
     fetchNetworkInfo()
       .then(info => {
+        /* Register every address the server advertises (localhost, stable LAN
+           IP, tunnels) so the Connections view can offer them. */
+        seedFromNetwork(info);
         if (info.ip) {
-          const port = window.location.port;
-          setNetworkUrl(`http://${info.ip}${port ? `:${port}` : ''}`);
+          /* The port comes from the server's /network payload, not the page —
+             in a bundled (Capacitor) shell the page origin is localhost. */
+          const port = info.port ? `:${info.port}` : '';
+          setNetworkUrl(`http://${info.ip}${port}`);
         } else {
-          setNetworkUrl(window.location.origin);
+          setNetworkUrl(fallbackBase);
         }
       })
       .catch(err => {
         console.error('Failed to fetch network info:', err);
-        setNetworkUrl(window.location.origin);
+        setNetworkUrl(fallbackBase);
       });
   }, []);
 
@@ -222,6 +232,17 @@ export default function Header({ collapsed, onToggle }) {
             </Button>
           )}
 
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowConnections(true)}
+            title="Servers this app can connect to"
+            icon={<Icon name="connect" className="icon-sm" />}
+            className="btn-full"
+          >
+            <span className="nav-label">Connections</span>
+          </Button>
+
           <button className="sidebar-toggle" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
             <Icon name={collapsed ? 'next' : 'prev'} className="icon-sm" />
           </button>
@@ -246,6 +267,8 @@ export default function Header({ collapsed, onToggle }) {
           </div>
         </Modal>
       )}
+
+      <ConnectionsModal open={showConnections} onClose={() => setShowConnections(false)} />
 
       <Modal open={showInstallHelp} onClose={() => setShowInstallHelp(false)} title="Install Photo Quest">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 'var(--fs-sm)' }}>
