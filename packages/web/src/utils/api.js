@@ -857,6 +857,59 @@ export async function fetchLibraryStatus() {
   return response.json();
 }
 
+export async function fetchStorageStats() {
+  const response = await fetch(apiRoutes.storage);
+  if (!response.ok) throw new Error('Failed to fetch storage stats');
+  return response.json();
+}
+
+/** `YYYY-MM-DD` suffix for downloaded backup filenames. */
+function dateStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Fetch `url` and hand the response to the browser as a download.
+ *
+ * A plain link/navigation would be swallowed by the SPA fallback served for
+ * browser navigations (see src/http.js), so downloads go through fetch and a
+ * blob the same way `downloadMedia` does.
+ */
+async function downloadFrom(url, filename) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Download failed');
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(objectUrl);
+}
+
+/** Download a consistent snapshot of the library database. */
+export async function downloadLibraryBackup() {
+  return downloadFrom(apiRoutes.storageBackup, `photo-quest-backup-${dateStamp()}.db`);
+}
+
+/**
+ * Download a manifest of every media record.
+ *
+ * @param {'csv'|'json'} [format]
+ */
+export async function downloadMediaManifest(format = 'csv') {
+  return downloadFrom(
+    `${apiRoutes.storageManifest}?format=${format}`,
+    `photo-quest-manifest-${dateStamp()}.${format}`
+  );
+}
+
 export async function downloadMedia(media) {
   try {
     const url = getMediaUrl(media);

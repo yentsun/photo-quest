@@ -5,6 +5,7 @@
  */
 
 import test from 'node:test';
+import { Writable } from 'node:stream';
 import { DatabaseSync as Database } from 'node:sqlite';
 import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE } from '@photo-quest/shared';
 import config from '@photo-quest/shared/config.js';
@@ -25,6 +26,9 @@ import endpoint_delete from '../endpoints/40_delete_media_id.js';
 import endpoint_delete_folder from '../endpoints/45_delete_media_folder.js';
 import endpoint_patch_folder from '../endpoints/16_patch_folder_id.js';
 import endpoint_patch_media_thumbnail from '../endpoints/17_patch_media_id_thumbnail.js';
+import endpoint_get_storage from '../endpoints/85_get_storage.js';
+import endpoint_get_storage_backup from '../endpoints/86_get_storage_backup.js';
+import endpoint_get_storage_manifest from '../endpoints/87_get_storage_manifest.js';
 
 let db;
 let kojo;
@@ -40,6 +44,9 @@ async function setup() {
   db.exec(CREATE_MEDIA_TABLE);
   db.exec(CREATE_JOBS_TABLE);
   db.exec(CREATE_FOLDERS_TABLE);
+  /* The real database gains `tags` through a migration (see src/db.js), so the
+     fixture needs it too for endpoints that read the column. */
+  db.exec("ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
 
   routes = [];
 
@@ -182,6 +189,9 @@ async function setup() {
   await endpoint_delete_folder(kojo, logger);
   await endpoint_patch_folder(kojo, logger);
   await endpoint_patch_media_thumbnail(kojo, logger);
+  await endpoint_get_storage(kojo, logger);
+  await endpoint_get_storage_backup(kojo, logger);
+  await endpoint_get_storage_manifest(kojo, logger);
 }
 
 function mockRes() {
@@ -200,6 +210,45 @@ function mockRes() {
       res._body = data ? JSON.parse(data) : null;
     },
   };
+  return res;
+}
+
+/** Response mock that captures a raw (non-JSON) body. */
+function mockRawRes() {
+  const res = {
+    _status: null,
+    _headers: {},
+    _body: null,
+    writeHead(status, headers = {}) {
+      res._status = status;
+      Object.assign(res._headers, headers);
+    },
+    setHeader(key, val) {
+      res._headers[key] = val;
+    },
+    end(data) {
+      res._body = data ?? null;
+    },
+  };
+  return res;
+}
+
+/** Writable response mock for handlers that stream a file. */
+function mockStreamRes() {
+  const res = new Writable({
+    write(chunk, _encoding, callback) {
+      res._chunks.push(Buffer.from(chunk));
+      callback();
+    },
+  });
+  res._chunks = [];
+  res._status = null;
+  res._headers = {};
+  res.writeHead = (status, headers = {}) => {
+    res._status = status;
+    Object.assign(res._headers, headers);
+  };
+  res.setHeader = (key, val) => { res._headers[key] = val; };
   return res;
 }
 
@@ -905,6 +954,97 @@ test('POST /duplicates/delete', async (t) => {
     await promise;
 
     t.assert.strictEqual(res._status, 400);
+  });
+});
+
+test('GET /storage', async (t) => {
+  await setup();
+
+  await t.test('reports every storage category', async () => {
+    db.exec("INSERT INTO media (path, title, type, folder, size, status) VALUES ('/a.jpg', 'A', 'image', '/media', 100, 'ready')");
+    db.exec("INSERT INTO media (path, title, type, folder, size, status) VALUES ('/b.mp4', 'B', 'video', '/media', 200, 'ready')");
+    db.exec("INSERT INTO media (path, title, type, folder, size, status, hidden) VALUES ('/gone.jpg', 'Gone', 'image', '/media', 999, 'ready', 1)");
+
+    const route = findRoute('GET', '/storage');
+    const res = mockRes();
+
+    await route.handler(mockReq('GET', '/storage'), res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(typeof res._body.db.path, 'string');
+    t.assert.strictEqual(typeof res._body.thumbs.bytes, 'number');
+    t.assert.strictEqual(typeof res._body.transcodes.count, 'number');
+
+    /* Hidden records do not count towards what the library occupies. */
+    t.assert.strictEqual(res._body.originals.count, 2);
+    t.assert.strictEqual(res._body.originals.bytes, 300);
+    t.assert.strictEqual(res._body.originals.images, 1);
+    t.assert.strictEqual(res._body.originals.videos, 1);
+
+    t.assert.ok(Array.isArray(res._body.volumes));
+  });
+});
+
+test('GET /storage/manifest', async (t) => {
+  await setup();
+
+  await t.test('returns a CSV attachment with a header row', async () => {
+    db.exec("INSERT INTO media (path, title, type, size, tags, status) VALUES ('/a.jpg', 'A', 'image', 10, '[\"beach\"]', 'ready')");
+
+    const route = findRoute('GET', '/storage/manifest');
+    const res = mockRawRes();
+
+    await route.handler(mockReq('GET', '/storage/manifest'), res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.ok(res._headers['Content-Type'].startsWith('text/csv'));
+    t.assert.ok(res._headers['Content-Disposition'].includes('.csv'));
+
+    const lines = res._body.replace('\ufeff', '').trim().split('\r\n');
+    t.assert.strictEqual(lines.length, 2);
+    t.assert.ok(lines[1].includes('/a.jpg'));
+    t.assert.ok(lines[1].includes('beach'));
+  });
+
+  await t.test('returns JSON when ?format=json is requested', async () => {
+    db.exec("INSERT INTO media (path, title, type, status) VALUES ('/json.jpg', 'Json', 'image', 'ready')");
+
+    const route = findRoute('GET', '/storage/manifest');
+    const res = mockRawRes();
+
+    await route.handler(mockReq('GET', '/storage/manifest?format=json'), res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.ok(res._headers['Content-Type'].startsWith('application/json'));
+    t.assert.ok(res._headers['Content-Disposition'].includes('.json'));
+
+    const body = JSON.parse(res._body);
+    const item = body.items.find((row) => row.path === '/json.jpg');
+    t.assert.ok(item);
+    t.assert.strictEqual(body.count, body.items.length);
+    t.assert.deepStrictEqual(item.tags, []);
+  });
+});
+
+test('GET /storage/backup', async (t) => {
+  await setup();
+
+  await t.test('streams a valid SQLite snapshot', async () => {
+    db.exec("INSERT INTO media (path, title, type, status) VALUES ('/a.jpg', 'A', 'image', 'ready')");
+
+    const route = findRoute('GET', '/storage/backup');
+    const res = mockStreamRes();
+    const finished = new Promise((resolve) => res.on('finish', resolve));
+
+    await route.handler(mockReq('GET', '/storage/backup'), res);
+    await finished;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.ok(res._headers['Content-Disposition'].includes('.db'));
+
+    const body = Buffer.concat(res._chunks);
+    t.assert.ok(body.length > 0);
+    t.assert.strictEqual(body.subarray(0, 15).toString('latin1'), 'SQLite format 3');
   });
 });
 

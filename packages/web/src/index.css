@@ -758,6 +758,32 @@ body {
   margin: 0; font-size: var(--fs-sm); color: var(--sol-accent);
 }
 
+/* Storage section of the Connections modal */
+.storage-section { display: flex; flex-direction: column; gap: 10px; }
+.storage-title {
+  margin: 0; font-size: var(--fs-xs);
+  color: var(--sol-text-mut); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.storage-rows {
+  margin: 0; padding: 10px 12px;
+  background: var(--sol-dim); border: 1px solid var(--sol-border); border-radius: 6px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.storage-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.storage-row dt { margin: 0; font-size: var(--fs-sm); color: var(--sol-text-mut); }
+.storage-row dd { margin: 0; font-size: var(--fs-sm); color: var(--sol-text-em); text-align: right; }
+.storage-row-note { color: var(--sol-text-mut); }
+.storage-volume { display: flex; flex-direction: column; gap: 4px; }
+.storage-volume-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  font-size: var(--fs-xs); color: var(--sol-text-mut);
+}
+.storage-volume-path {
+  color: var(--sol-text-em);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.storage-backups { display: flex; flex-wrap: wrap; gap: 8px; }
+
 
 /* ─── Image viewer ─── */
 .image-viewer { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }

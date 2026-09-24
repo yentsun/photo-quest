@@ -4,8 +4,9 @@ import { useMediaActions } from '../hooks/useMedia.js';
 import { useRefresh } from '../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../contexts/SlideshowContext.jsx';
 import { useScan } from '../contexts/ScanContext.jsx';
-import { fetchFolders, fetchMedia, getLastFolders, pickLibraryFile, connectLibrary, fetchLibraryStatus, resetMediaCaches } from '../utils/api.js';
+import { fetchFolders, fetchMedia, getLastFolders, pickLibraryFile, connectLibrary, fetchLibraryStatus, resetMediaCaches, fetchStorageStats, downloadLibraryBackup, downloadMediaManifest } from '../utils/api.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../utils/pageCache.js';
+import { formatBytes } from '../utils/format.js';
 import usePersistedState from '../hooks/usePersistedState.js';
 import { idbGetFolders, idbClearCache } from '../services/idb.js';
 import { FolderCard, MediaGrid } from './media/index.js';
@@ -100,6 +101,10 @@ export default function Dashboard() {
   const [libraryInfo, setLibraryInfo] = useState(null);
   const [libraryError, setLibraryError] = useState(null);
   const [cacheStatus, setCacheStatus] = useState(null);
+  const [storageStats, setStorageStats] = useState(null);
+  const [storageError, setStorageError] = useState(null);
+  const [backupStatus, setBackupStatus] = useState(null);
+  const [manifestStatus, setManifestStatus] = useState(null);
 
   const [folders, setFolders] = useState(() => {
     if (isPageCacheValid('dashboard', signal)) return getPageCache('dashboard').data.folders;
@@ -260,18 +265,56 @@ export default function Dashboard() {
     finally { setBrowsing(false); }
   };
 
+  /* Storage stats are fetched when the Connections modal opens — they stat
+     files on the server, so they are never loaded for the dashboard itself. */
+  const loadStorage = useCallback(() => {
+    setStorageError(null);
+    fetchStorageStats()
+      .then(setStorageStats)
+      .catch((err) => {
+        console.error('Failed to fetch storage stats:', err);
+        setStorageError(err.message);
+      });
+  }, []);
+
   const handleOpenLibrary = async () => {
     setPickedPath(null);
     setLibraryStatus(null);
     setLibraryInfo(null);
     setLibraryError(null);
     setCacheStatus(null);
+    setBackupStatus(null);
+    setManifestStatus(null);
     setShowLibrary(true);
+    /* Kick both off together — the stats sweep can be the slower of the two. */
+    loadStorage();
     try {
       const info = await fetchLibraryStatus();
       setLibraryInfo(info);
     } catch (err) {
       setLibraryError(err.message);
+    }
+  };
+
+  const handleBackupDatabase = async () => {
+    setBackupStatus({ loading: true });
+    try {
+      await downloadLibraryBackup();
+      setBackupStatus({ success: true });
+    } catch (err) {
+      console.error('Failed to download database backup:', err);
+      setBackupStatus({ error: err.message });
+    }
+  };
+
+  const handleDownloadManifest = async (format) => {
+    setManifestStatus({ loading: true });
+    try {
+      await downloadMediaManifest(format);
+      setManifestStatus({ success: true });
+    } catch (err) {
+      console.error('Failed to download media manifest:', err);
+      setManifestStatus({ error: err.message });
     }
   };
 
@@ -496,6 +539,105 @@ export default function Dashboard() {
             <p className="text-mut" style={{ fontSize: 'var(--fs-sm)' }}>Loading…</p>
           )}
         </div>
+
+        <section className="storage-section">
+          <p className="storage-title">Storage</p>
+
+          {storageError ? (
+            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>
+              Could not load storage stats: {storageError}
+            </p>
+          ) : storageStats ? (
+            <>
+              <dl className="storage-rows">
+                <div className="storage-row">
+                  <dt>Database</dt>
+                  <dd title="Includes the write-ahead log">
+                    {formatBytes(storageStats.db.bytes + storageStats.db.walBytes + storageStats.db.shmBytes)}
+                  </dd>
+                </div>
+                <div className="storage-row">
+                  <dt>Thumbnails</dt>
+                  <dd>
+                    {formatBytes(storageStats.thumbs.bytes)}
+                    <span className="storage-row-note"> · {storageStats.thumbs.count.toLocaleString()} files</span>
+                  </dd>
+                </div>
+                <div className="storage-row">
+                  <dt>Transcoded</dt>
+                  <dd>
+                    {formatBytes(storageStats.transcodes.bytes)}
+                    <span className="storage-row-note"> · {storageStats.transcodes.count.toLocaleString()} files</span>
+                  </dd>
+                </div>
+                <div className="storage-row">
+                  <dt>Originals</dt>
+                  <dd>
+                    {formatBytes(storageStats.originals.bytes)}
+                    <span className="storage-row-note">
+                      {' · '}{storageStats.originals.images.toLocaleString()} images,{' '}
+                      {storageStats.originals.videos.toLocaleString()} videos
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+
+              {storageStats.volumes.map((volume) => (
+                <div className="storage-volume" key={volume.path}>
+                  <div className="storage-volume-head">
+                    <span className="storage-volume-path" title={volume.path}>{volume.path}</span>
+                    <span>{formatBytes(volume.free)} free of {formatBytes(volume.total)}</span>
+                  </div>
+                  <ProgressBar value={volume.used} max={volume.total} width={20} />
+                </div>
+              ))}
+            </>
+          ) : (
+            <p className="text-mut" style={{ fontSize: 'var(--fs-sm)' }}>Loading…</p>
+          )}
+
+          <div className="storage-backups">
+            <Button
+              variant="ghost"
+              onClick={handleBackupDatabase}
+              disabled={backupStatus?.loading}
+              icon={<Icon name="database" className="icon-sm" />}
+            >
+              {backupStatus?.loading ? 'Preparing…' : 'Database backup'}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => handleDownloadManifest('csv')}
+              disabled={manifestStatus?.loading}
+              icon={<Icon name="download" className="icon-sm" />}
+            >
+              {manifestStatus?.loading ? 'Preparing…' : 'Manifest (CSV)'}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => handleDownloadManifest('json')}
+              disabled={manifestStatus?.loading}
+            >
+              Manifest (JSON)
+            </Button>
+          </div>
+          {backupStatus?.success && (
+            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Database backup downloaded.</p>
+          )}
+          {backupStatus?.error && (
+            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{backupStatus.error}</p>
+          )}
+          {manifestStatus?.success && (
+            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-green)' }}>Manifest downloaded.</p>
+          )}
+          {manifestStatus?.error && (
+            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--sol-red)' }}>{manifestStatus.error}</p>
+          )}
+          <p className="text-mut" style={{ fontSize: 'var(--fs-xs)' }}>
+            The database backup is a consistent snapshot of your library. The manifest lists every
+            media file's path and metadata — the files themselves stay where they are.
+          </p>
+        </section>
 
         <p className="text-mut" style={{ fontSize: 'var(--fs-sm)', marginTop: 16 }}>
           Open a different <code style={{ color: 'var(--sol-text-em)' }}>.db</code> file from another Photo Quest installation to switch the connection.
