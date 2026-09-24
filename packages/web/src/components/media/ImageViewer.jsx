@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Loader from '../ui/Loader.jsx';
 
-export default function ImageViewer({ src, alt = '', className = '' }) {
+export default function ImageViewer({ src, alt = '', className = '', mediaRef, mediaProps }) {
   const [status, setStatus] = useState('loading');
 
   useEffect(() => {
@@ -31,6 +31,8 @@ export default function ImageViewer({ src, alt = '', className = '' }) {
         </div>
       )}
       <img
+        {...mediaProps}
+        ref={mediaRef}
         src={src}
         alt={alt}
         className={['image-viewer-img', status !== 'loaded' ? 'image-viewer-img-hidden' : '', className].filter(Boolean).join(' ')}

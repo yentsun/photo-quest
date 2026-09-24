@@ -12,6 +12,9 @@ import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fe
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
+import { isVideoControlPress } from '../../utils/mediaMagnifier.js';
+import { readSavedSpeed, nextSpeed, saveSpeed } from '../../utils/playbackSpeed.js';
+import useMediaMagnifier from '../../hooks/useMediaMagnifier.js';
 
 const FETCH_LIMIT = 10000;
 
@@ -73,6 +76,7 @@ export default function MediaPage() {
   const [suggestionIndex, setSuggestionIndex] = useState(-1);
   const tagInputRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [speed, setSpeed] = useState(readSavedSpeed);
   const [showMore, setShowMore] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [duplicates, setDuplicates] = useState({ ids: [], count: 0, items: [] });
@@ -81,7 +85,6 @@ export default function MediaPage() {
   const mediaViewportRef = useRef(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
-  const touchStartOnControl = useRef(false);
   /* Folder chains for slideshow items, which come from a list endpoint that
      does not embed `folder_chain`. Keyed by folder path so each folder is
      fetched at most once per session. */
@@ -381,12 +384,37 @@ export default function MediaPage() {
     }
   }, [item?.id, setLikedCount]);
 
+  const cancelTouchGesture = useCallback(() => {
+    touchStartX.current = null;
+    touchStartY.current = null;
+  }, []);
+
+  const mediaElRef = useRef(null);
+  const mediaUrl = item ? getMediaUrl(item) : null;
+  const magnifier = useMediaMagnifier({ mediaRef: mediaElRef, containerRef: mediaViewportRef, src: mediaUrl });
+  const toggleMagnifier = useCallback(() => {
+    cancelTouchGesture();
+    magnifier.toggle();
+  }, [cancelTouchGesture, magnifier.toggle]);
+
+  const cycleSpeed = useCallback(() => {
+    setSpeed(prev => {
+      const next = nextSpeed(prev);
+      saveSpeed(next);
+      return next;
+    });
+  }, []);
+
+  /* Element fullscreen is unavailable on iPhone Safari, so hide the control. */
+  const canFullscreen = typeof document !== 'undefined' && !!document.fullscreenEnabled;
+
   const handleTouchStart = useCallback((e) => {
-    if (e.touches.length !== 1) return;
+    cancelTouchGesture();
+    if (e.touches.length !== 1 || e.target.closest('button, input, a')) return;
+    if (e.target.tagName === 'VIDEO' && isVideoControlPress(e.target.getBoundingClientRect(), e.touches[0].clientY)) return;
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
-    touchStartOnControl.current = !!e.target.closest('button');
-  }, []);
+  }, [cancelTouchGesture]);
 
   const showMobileNavPanel = useCallback(() => {
     setShowMobileNav(true);
@@ -395,17 +423,17 @@ export default function MediaPage() {
   }, []);
 
   const handleTouchEnd = useCallback((e) => {
-    if (e.changedTouches.length !== 1 || touchStartX.current === null) return;
+    if (e.changedTouches.length !== 1 || touchStartX.current === null) { cancelTouchGesture(); return; }
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = e.changedTouches[0].clientY - touchStartY.current;
-    touchStartX.current = null;
-    touchStartY.current = null;
-    touchStartOnControl.current = false;
+    cancelTouchGesture();
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist < 10) { showMobileNavPanel(); return; }
-    if (Math.abs(dx) < 50) return;
+    /* While magnified the same drag pans the picture, never navigates. */
+    if (magnifier.active) return;
+    if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return;
     if (dx < 0) goNext(); else goPrev();
-  }, [goNext, goPrev, showMobileNavPanel]);
+  }, [goNext, goPrev, showMobileNavPanel, cancelTouchGesture, magnifier.active]);
 
   const handleSetFolderThumbnail = useCallback(async (time = null) => {
     if (!item || !folder) return;
@@ -714,7 +742,6 @@ export default function MediaPage() {
   }
 
   const isImage = item.type === MEDIA_TYPE.IMAGE;
-  const mediaUrl = getMediaUrl(item);
   /* Only offer merging when the loaded duplicate group actually contains the
      item on screen, so a stale group from a previous item never leaks in. */
   const canMerge = duplicates.count > 1 && duplicates.ids.includes(item.id);
@@ -766,9 +793,10 @@ export default function MediaPage() {
         ref={mediaViewportRef}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={cancelTouchGesture}
       >
         {isImage ? (
-          <ImageViewer src={mediaUrl} alt={item.title} />
+          <ImageViewer src={mediaUrl} alt={item.title} mediaRef={mediaElRef} mediaProps={magnifier.mediaProps} />
         ) : item.status === MEDIA_STATUS.ERROR ? (
           <div className="media-error">
             <p className="media-error-msg">Processing failed</p>
@@ -818,7 +846,7 @@ export default function MediaPage() {
             })()}
           </div>
         ) : (
-          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} onError={() => setPlaybackError(true)} />
+          <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} speed={speed} mediaRef={mediaElRef} mediaProps={magnifier.mediaProps} magnifierActive={magnifier.active} onError={() => setPlaybackError(true)} />
         )}
 
         <IconButton
@@ -882,13 +910,33 @@ export default function MediaPage() {
           </div>
         )}
 
-        <IconButton
-          variant="overlay"
-          icon={<Icon name={isFullscreen ? 'minimize' : 'maximize'} className="icon-md" />}
-          label={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-          onClick={toggleFullscreen}
-          className="viewer-nav viewer-nav-fs"
-        />
+        <div className="viewer-controls">
+          {!isImage && item.status === MEDIA_STATUS.READY && (
+            <Button
+              variant="ghost"
+              className="viewer-controls-speed"
+              aria-label={`Playback speed: ${speed}x`}
+              title={`Playback speed ${speed}x (next: ${nextSpeed(speed)}x)`}
+              onClick={cycleSpeed}
+            >
+              {speed}x
+            </Button>
+          )}
+          <IconButton
+            variant="overlay"
+            icon={<Icon name={magnifier.active ? 'zoomOut' : 'zoomIn'} className="icon-md" />}
+            label={magnifier.active ? 'Exit magnifier' : 'Magnify'}
+            onClick={toggleMagnifier}
+          />
+          {canFullscreen && (
+            <IconButton
+              variant="overlay"
+              icon={<Icon name={isFullscreen ? 'minimize' : 'maximize'} className="icon-md" />}
+              label={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
+              onClick={toggleFullscreen}
+            />
+          )}
+        </div>
 
         {isFullscreen && navItems.length > 1 && (
           <div className="viewer-counter">

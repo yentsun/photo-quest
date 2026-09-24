@@ -827,6 +827,18 @@ body {
 .image-viewer { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .image-viewer-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 .image-viewer-img-hidden { visibility: hidden; }
+/* Scope gesture ownership to media, leaving navigation and video controls as
+   unscaled siblings. Touch/selection are only suspended while the user has
+   explicitly turned the magnifier on, so native long-press stays available. */
+.image-viewer-img, .media-player-video { transform-origin: 0 0; }
+.image-viewer-img { cursor: zoom-in; }
+[data-magnified="true"] {
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  cursor: grabbing;
+  will-change: transform;
+}
 .image-viewer-state {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
@@ -843,22 +855,6 @@ body {
 }
 .media-player-label { color: var(--sol-text-em); font-size: var(--fs-sm); }
 .media-player-error { color: var(--sol-red); font-size: var(--fs-sm); }
-/* top/right are set inline from the measured video box so the control tracks
-   the picture instead of the letterbox bars. */
-.media-player-speed {
-  position: absolute; z-index: 20;
-  /* Fixed width so the label doesn't shift between 1x / 0.5x / 0.25x. */
-  width: 52px; height: 30px; padding: 0;
-  background: rgba(0, 0, 0, 0.5); border-color: transparent;
-  color: rgba(255, 255, 255, 0.85); font-variant-numeric: tabular-nums;
-  /* Mimic the native controls: faded out until the player is hovered, then
-     faded back out after the pointer idles or leaves. */
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.25s ease, background 0.15s ease, color 0.15s ease;
-}
-.media-player-speed.is-visible,
-.media-player-speed:focus-visible { opacity: 1; pointer-events: auto; }
-.media-player-speed:hover { background: rgba(0, 0, 0, 0.75); color: #fff; border-color: transparent; }
 
 /* ─── Media viewer ─── */
 .viewer { position: fixed; inset: 0; z-index: 21; display: flex; flex-direction: column; }
@@ -934,23 +930,35 @@ body {
 .viewer-nav-right { right: 8px; top: 50%; transform: translateY(-50%); }
 .viewer-nav-up    { top: 8px;   left: 50%; transform: translateX(-50%); }
 .viewer-nav-down  { bottom: 8px; left: 50%; transform: translateX(-50%); }
-.viewer-nav-fs   { position: absolute; top: 8px; right: 8px; z-index: 2; }
 .viewer-counter {
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
   padding: 2px 12px; background: rgba(0,0,0,0.6); color: rgba(255,255,255,0.8);
   font-size: var(--fs-sm); z-index: 2;
 }
 
-/* Fullscreen: fade nav in on viewport hover */
+/* Same-rank viewer controls (playback speed, magnify, fullscreen) live in one
+   panel so they never overlap each other. */
+.viewer-controls {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  display: flex; align-items: center; gap: 4px;
+}
+.viewer-controls-speed {
+  width: 42px; height: var(--row-h); padding: 0;
+  background: rgba(0,0,0,0.5); border-color: transparent;
+  color: rgba(255,255,255,0.85); font-size: var(--fs-sm); font-variant-numeric: tabular-nums;
+}
+.viewer-controls-speed:hover { background: rgba(0,0,0,0.75); color: #fff; border-color: transparent; }
+
+/* Fullscreen: fade the overlay controls in on viewport hover */
 .viewer-fullscreen .viewer-nav { opacity: 0; transition: opacity 0.15s; }
 .viewer-fullscreen .viewer-viewport:hover .viewer-nav { opacity: 1; }
-.viewer-fullscreen .viewer-nav-fs { opacity: 0; transition: opacity 0.15s; }
-.viewer-fullscreen .viewer-viewport:hover .viewer-nav-fs { opacity: 1; }
+.viewer-fullscreen .viewer-controls { opacity: 0; transition: opacity 0.15s; }
+.viewer-fullscreen .viewer-viewport:hover .viewer-controls { opacity: 1; }
 .viewer-fullscreen .viewer-counter { opacity: 0; transition: opacity 0.15s; }
 .viewer-fullscreen .viewer-viewport:hover .viewer-counter { opacity: 1; }
 
-/* Nav hidden on mobile */
-@media (max-width: 639px) { .viewer-nav { display: none; } .viewer-nav-fs { display: none; } }
+/* Arrow nav hidden on mobile; the control panel stays available. */
+@media (max-width: 639px) { .viewer-nav { display: none; } }
 
 /* ─── Mobile layout ─── */
 @media (max-width: 639px) {
