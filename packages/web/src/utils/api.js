@@ -720,6 +720,22 @@ export async function fetchNetworkInfo() {
   return response.json();
 }
 
+/**
+ * Fetch a server's identity/network info from any base URL.
+ *
+ * @param {string} [baseUrl] - Server base URL. When omitted, the current origin.
+ * @param {{ timeout?: number }} [options] - Abort after `timeout` ms.
+ */
+export async function fetchServerInfo(baseUrl = '', { timeout } = {}) {
+  const url = baseUrl ? new URL(apiRoutes.network, baseUrl).toString() : apiRoutes.network;
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}),
+  });
+  if (!response.ok) throw new Error('Failed to fetch server info');
+  return response.json();
+}
+
 export async function fetchFolders() {
   // IDB-first: return cached folders immediately if available
   let idbFolders = null;
@@ -855,6 +871,70 @@ export async function fetchLibraryStatus() {
   const response = await fetch(apiRoutes.libraryStatus);
   if (!response.ok) throw new Error('Failed to fetch library status');
   return response.json();
+}
+
+/**
+ * Fetch the storage report from a server.
+ *
+ * @param {string} [baseUrl] - Server base URL (e.g. `http://host:8080/`). When
+ *   omitted the request goes to the current origin.
+ * @param {{ timeout?: number }} [options] - Abort the request after `timeout` ms.
+ */
+export async function fetchStorageStats(baseUrl = '', { timeout } = {}) {
+  const url = baseUrl ? new URL(apiRoutes.storage, baseUrl).toString() : apiRoutes.storage;
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}),
+  });
+  if (!response.ok) throw new Error('Failed to fetch storage stats');
+  return response.json();
+}
+
+/** `YYYY-MM-DD` suffix for downloaded backup filenames. */
+function dateStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Fetch `url` and hand the response to the browser as a download.
+ *
+ * A plain link/navigation would be swallowed by the SPA fallback served for
+ * browser navigations (see src/http.js), so downloads go through fetch and a
+ * blob the same way `downloadMedia` does.
+ */
+async function downloadFrom(url, filename) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Download failed');
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(objectUrl);
+}
+
+/** Download a consistent snapshot of the library database. */
+export async function downloadLibraryBackup() {
+  return downloadFrom(apiRoutes.storageBackup, `photo-quest-backup-${dateStamp()}.db`);
+}
+
+/**
+ * Download a manifest of every media record.
+ *
+ * @param {'csv'|'json'} [format]
+ */
+export async function downloadMediaManifest(format = 'csv') {
+  return downloadFrom(
+    `${apiRoutes.storageManifest}?format=${format}`,
+    `photo-quest-manifest-${dateStamp()}.${format}`
+  );
 }
 
 export async function downloadMedia(media) {

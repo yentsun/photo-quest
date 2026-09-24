@@ -54,6 +54,9 @@ export const clientRoutes = {
   /** Failed media section -- items whose file is missing/unreadable or whose
    *  processing failed, grouped by content hash. */
   failed: '/failed',
+
+  /** Connections section -- known servers and their storage usage. */
+  connections: '/connections',
 };
 
 // ---------------------------------------------------------------------------
@@ -161,6 +164,17 @@ export const apiRoutes = {
 
   /** GET  -- Current library status (connected DB path, name, item counts). */
   libraryStatus: '/library',
+
+  /** GET  -- Disk usage stats for the library (database, thumbnails,
+   *  transcoded outputs, originals) plus free space per involved volume. */
+  storage: '/storage',
+
+  /** GET  -- Download a consistent snapshot of the library database. */
+  storageBackup: '/storage/backup',
+
+  /** GET  -- Download a manifest of every media item. `?format=csv` (default)
+   *  or `?format=json`. */
+  storageManifest: '/storage/manifest',
 
   /** POST -- Upload a media file from a mobile client. Body: { fileName, data: base64 }. */
   mediaUpload: '/media/upload',

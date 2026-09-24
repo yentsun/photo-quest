@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: clientRoutes.tags, icon: 'list', label: 'Tags', countKey: 'tags' },
   { to: clientRoutes.duplicates, icon: 'copy', label: 'Duplicates', countKey: 'duplicates' },
   { to: clientRoutes.failed, icon: 'warning', label: 'Failed', countKey: 'failed' },
+  { to: clientRoutes.connections, icon: 'network', label: 'Connections' },
 ];
 
 export default function Header({ collapsed, onToggle }) {

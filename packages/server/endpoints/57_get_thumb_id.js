@@ -17,14 +17,11 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import ffmpegBin from 'ffmpeg-static';
 import sharp from 'sharp';
 import { MEDIA_TYPE } from '@photo-quest/shared';
 import { json } from '../src/http.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const THUMBS_DIR = path.join(__dirname, '..', 'thumbs');
+import { THUMBS_DIR } from '../src/paths.js';
 
 /** In-flight generation promises keyed by media ID + optional time — prevents duplicate work on concurrent requests. */
 const inFlight = new Map();
