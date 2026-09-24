@@ -71,7 +71,7 @@ export default defineConfig({
 
         /* Don't cache API data endpoints -- they should always hit the server. */
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/media\/(?!\d+$)/, /^\/stream/, /^\/image/, /^\/thumb/, /^\/jobs/, /^\/folders/, /^\/tags$/, /^\/library$/],
+        navigateFallbackDenylist: [/^\/media\/(?!\d+$)/, /^\/stream/, /^\/image/, /^\/thumb/, /^\/jobs/, /^\/folders/, /^\/tags$/, /^\/library$/, /^\/storage/],
 
         /* Runtime caching — serve previously viewed media offline. */
         runtimeCaching: [
@@ -177,6 +177,7 @@ export default defineConfig({
       '/open-folder': API_TARGET,
       '/tags': API_TARGET,
       '/library': API_TARGET,
+      '/storage': API_TARGET,
       '/duplicates': {
         target: API_TARGET,
         bypass(req) {

@@ -18,6 +18,7 @@ import config from '@photo-quest/shared/config.js';
 import { initDb } from './src/db.js';
 import { resumeIncompleteScans } from './ops/scanMedia.js';
 import { resumePendingTranscodes } from './ops/transcodeNow.js';
+import { THUMBS_DIR } from './src/paths.js';
 
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -25,7 +26,6 @@ import fs from 'node:fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOG_PATH = path.join(__dirname, 'photo-quest.log');
-const THUMBS_DIR = path.join(__dirname, 'thumbs');
 
 /* Tee stdout/stderr to both the original stream and a log file. */
 const logStream = fs.createWriteStream(LOG_PATH, { flags: 'a' });
