@@ -1,6 +1,4 @@
-export const MAGNIFIER_DELAY = 450;
 export const MAGNIFIER_SCALE = 3;
-const MOVE_TOLERANCE = 10;
 
 /* Translation is relative to the fitted media's top-left (transform-origin: 0 0).
  * A dimension smaller than the viewport stays centered, including letterboxing. */
@@ -17,93 +15,78 @@ export function clampMagnifier(media, viewport, x, y, scale = MAGNIFIER_SCALE) {
   };
 }
 
-/* Native video controls are browser-owned, so reserve their bottom strip rather
- * than attempting to inspect their closed shadow DOM. Short presses elsewhere
- * retain the browser's normal playback behaviour. */
+/* Native video controls are browser-owned. While the magnifier is off, a swipe
+ * that starts on their strip must not navigate. */
 export function isVideoControlPress(rect, clientY) {
   return clientY >= rect.bottom - Math.min(64, rect.height / 3);
 }
 
-/* Framework-independent gesture state so timing, cancellation, and bounds can
- * be tested without a browser. The hook supplies DOM measurement/capture. */
-export function createMediaMagnifier({ measure, capture, release, onChange, onConsume }) {
-  let gesture = null;
-  let timer = null;
-  let suppressClick = false;
+/*
+ * Button-toggled magnifier. Unlike a hold gesture it never intercepts native
+ * long-press / image-menu behaviour: it stays dormant until the user presses
+ * the magnifier button, and only then captures pointer drags to pan.
+ *
+ * Framework-independent so the bounds, toggle and pan logic can be tested
+ * without a browser; the hook supplies DOM measurement and wires the element.
+ */
+export function createMediaMagnifier({ measure, onChange }) {
+  let zoom = null;
+  /* Bounds captured when the magnifier opened; a resize interrupts instead of
+   * going stale, so they stay valid for the whole session. */
+  let bounds = null;
+  let pan = null;
 
-  const cancel = () => {
-    clearTimeout(timer);
-    timer = null;
-    const previous = gesture;
-    gesture = null;
-    if (previous?.zoom) {
+  const clear = () => {
+    pan = null;
+    bounds = null;
+    if (zoom) {
+      zoom = null;
       onChange(null);
-      release(previous.pointerId);
     }
   };
 
   return {
-    start(event) {
-      if (gesture || event.isPrimary === false) {
-        if (gesture) onConsume();
-        cancel();
-        return;
-      }
-      if (event.button !== 0) return;
-      suppressClick = false;
-      const bounds = measure(event);
-      if (!bounds || !bounds.media.width || !bounds.media.height) return;
-      gesture = { pointerId: event.pointerId, pointerType: event.pointerType, x: event.clientX, y: event.clientY, ...bounds };
-      timer = setTimeout(() => {
-        timer = null;
-        const g = gesture;
-        if (!g) return;
-        if (!capture(g.pointerId)) { cancel(); return; }
-        g.zoom = clampMagnifier(g.media, g.viewport,
-          (1 - MAGNIFIER_SCALE) * (g.x - g.media.left),
-          (1 - MAGNIFIER_SCALE) * (g.y - g.media.top));
-        suppressClick = true;
-        onConsume();
-        onChange(g.zoom);
-      }, MAGNIFIER_DELAY);
+    /* Toggle the magnifier, anchored at the media centre. Returns true when it
+       ends up active. */
+    toggle() {
+      if (zoom) { clear(); return false; }
+      const next = measure();
+      if (!next || !next.media.width || !next.media.height) return false;
+      bounds = next;
+      zoom = clampMagnifier(next.media, next.viewport,
+        (1 - MAGNIFIER_SCALE) * (next.media.width / 2),
+        (1 - MAGNIFIER_SCALE) * (next.media.height / 2));
+      onChange(zoom);
+      return true;
     },
-    move(event) {
-      const g = gesture;
-      if (!g || event.pointerId !== g.pointerId) return;
-      const dx = event.clientX - g.x;
-      const dy = event.clientY - g.y;
-      if (!g.zoom) {
-        if (Math.hypot(dx, dy) >= MOVE_TOLERANCE) cancel();
-        return;
-      }
+
+    deactivate: clear,
+
+    /* While active, a primary-button drag on the media pans the enlarged view. */
+    panStart(event) {
+      if (!zoom || event.button !== 0) return;
+      pan = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      try { event.currentTarget?.setPointerCapture(event.pointerId); } catch { /* capture is best-effort */ }
+    },
+
+    panMove(event) {
+      if (!zoom || !pan || event.pointerId !== pan.pointerId) return;
+      const dx = event.clientX - pan.x;
+      const dy = event.clientY - pan.y;
+      if (!dx && !dy) return;
       event.preventDefault();
-      g.zoom = clampMagnifier(g.media, g.viewport, g.zoom.x + dx, g.zoom.y + dy);
-      g.x = event.clientX;
-      g.y = event.clientY;
-      onChange(g.zoom);
+      pan.x = event.clientX;
+      pan.y = event.clientY;
+      zoom = clampMagnifier(bounds.media, bounds.viewport, zoom.x + dx, zoom.y + dy);
+      onChange(zoom);
     },
-    end(event) {
-      if (gesture?.pointerId !== event.pointerId) return;
-      if (gesture.zoom) event.preventDefault();
-      cancel();
+
+    panEnd(event) {
+      if (!pan || event.pointerId !== pan.pointerId) return;
+      try { event.currentTarget?.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+      pan = null;
     },
-    leave() {
-      if (!gesture?.zoom) cancel();
-    },
-    click(event) {
-      if (!suppressClick || event.detail === 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-    },
-    contextMenu(event) {
-      const pointerType = event.pointerType ?? event.nativeEvent?.pointerType;
-      if (gesture?.pointerType === 'touch' || gesture?.pointerType === 'pen' ||
-          (suppressClick && (pointerType === 'touch' || pointerType === 'pen'))) event.preventDefault();
-    },
-    interrupt() {
-      if (gesture) onConsume();
-      cancel();
-    },
-    cancel,
+
+    interrupt: clear,
   };
 }
