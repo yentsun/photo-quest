@@ -3,6 +3,9 @@ import { EFFECT_TYPE, EFFECT_LIMITS, effectCount } from '@photo-quest/shared';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+/* A heart centred on (0,0), roughly one unit in each direction. */
+const HEART_PATH = 'M0 1.2 C-1 0.3 -1 -0.6 -0.5 -0.9 C-0.15 -1.1 0 -0.8 0 -0.6 C0 -0.8 0.15 -1.1 0.5 -0.9 C1 -0.6 1 0.3 0 1.2 Z';
+
 /** Parse a raw config (server/IDB may hand us a JSON string). */
 function readConfig(config) {
   if (!config) return null;
@@ -160,6 +163,22 @@ export default function DoodleOverlay({
     };
   });
 
+  const hearts = Array.from({ length: count }, (_, i) => {
+    const angle = (i / count) * Math.PI * 2 + Math.PI / count;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    const size = radius * (0.28 + ((i * 37) % 100) / 100 * 0.34);
+    const rise = radius * (2.6 + ((i * 53) % 100) / 100 * 2.2);
+    const drift = (i % 2 === 0 ? 1 : -1) * radius * (0.15 + ((i * 17) % 100) / 100 * 0.5);
+    return {
+      key: i,
+      transform: `translate(${x} ${y}) scale(${size})`,
+      rise: `${rise}px`,
+      drift: `${drift}px`,
+      delay: `${(i / count) * 0.7}s`,
+    };
+  });
+
   return (
     <div
       className={`doodle-overlay${editing ? ' doodle-overlay-editing' : ''}`}
@@ -194,6 +213,20 @@ export default function DoodleOverlay({
             {arrows.map(arrow => (
               <g key={arrow.key} className="doodle-arrow" style={{ '--ax': arrow.ax, '--ay': arrow.ay }}>
                 <path className="doodle-arrow-path" d={arrow.d} />
+              </g>
+            ))}
+          </g>
+        )}
+
+        {!editing && shown.type === EFFECT_TYPE.HEARTS && (
+          <g className="doodle-hearts">
+            {hearts.map(heart => (
+              <g
+                key={heart.key}
+                className="doodle-heart"
+                style={{ '--rise': heart.rise, '--drift': heart.drift, animationDelay: heart.delay }}
+              >
+                <path className="doodle-heart-path" d={HEART_PATH} transform={heart.transform} />
               </g>
             ))}
           </g>

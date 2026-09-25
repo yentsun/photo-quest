@@ -1,7 +1,7 @@
 /**
  * @file PATCH /media/:id/effect -- Set or clear the animated doodle effect.
  *
- * Body: { effectConfig: { type, center: { x, y }, radius } | null }
+ * Body: { effectConfig: { type, center: { x, y }, radius, count } | null }
  */
 
 import { json, parseBody } from '../src/http.js';

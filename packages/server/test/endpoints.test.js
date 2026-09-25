@@ -766,6 +766,23 @@ test('PATCH /media/:id/effect', async (t) => {
     t.assert.strictEqual(res._body.effect_config.type, 'arrows');
   });
 
+  await t.test('accepts the hearts effect type', async (t) => {
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status) VALUES (?, ?, ?, ?)").run('D:\\pics\\hearts.jpg', 'Hearts', 'image', 'ready');
+
+    const route = findRoute('PATCH', '/media/:id/effect');
+    const req = mockReq('PATCH', `/media/${mediaId}/effect`, {
+      effectConfig: { type: 'hearts', center: { x: 0.5, y: 0.5 }, radius: 0.2 },
+    });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(mediaId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.effect_config.type, 'hearts');
+  });
+
   await t.test('clears the effect when passed null', async (t) => {
     const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status, effect_config) VALUES (?, ?, ?, ?, ?)").run('D:\\pics\\clear.jpg', 'Clear', 'image', 'ready', JSON.stringify({ type: 'rays', center: { x: 0.5, y: 0.5 }, radius: 0.15 }));
 
