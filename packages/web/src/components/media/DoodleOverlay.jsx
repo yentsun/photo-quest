@@ -130,7 +130,7 @@ export default function DoodleOverlay({
       y1: cy + Math.sin(angle) * inner,
       x2: cx + Math.cos(angle) * outer,
       y2: cy + Math.sin(angle) * outer,
-      delay: `${(i / RAY_COUNT) * 0.8}s`,
+      delay: `${(i / RAY_COUNT) * 0.53}s`,
     };
   });
 
