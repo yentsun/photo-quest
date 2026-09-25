@@ -976,6 +976,27 @@ body {
   100% { stroke-dashoffset: -1.05; }
 }
 
+/* Arrows pulse in toward the accent circle and back out, twice, then vanish. */
+.doodle-arrow {
+  animation: doodle-arrow 1.6s ease-in-out 1 forwards;
+}
+.doodle-arrow-path {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.75));
+}
+@keyframes doodle-arrow {
+  0%   { transform: translate(var(--ax), var(--ay)); opacity: 1; }
+  25%  { transform: translate(0, 0); opacity: 1; }
+  50%  { transform: translate(var(--ax), var(--ay)); opacity: 1; }
+  75%  { transform: translate(0, 0); opacity: 1; }
+  92%  { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(0, 0); opacity: 0; }
+}
+
 /* Editor: draggable circle plus a resize handle on the +x axis. */
 .doodle-accent-move {
   fill: rgba(38, 139, 210, 0.18);
@@ -1010,6 +1031,8 @@ body {
   border-radius: 8px;
 }
 .doodle-editor-hint { color: rgba(255, 255, 255, 0.7); font-size: var(--fs-sm); margin-right: 4px; }
+.doodle-editor-type { width: 96px; }
+.doodle-editor-count { width: 56px; }
 @media (max-width: 639px) { .doodle-editor-hint { display: none; } }
 
 

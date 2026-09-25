@@ -733,7 +733,7 @@ test('PATCH /media/:id/effect', async (t) => {
 
     const route = findRoute('PATCH', '/media/:id/effect');
     const req = mockReq('PATCH', `/media/${mediaId}/effect`, {
-      effectConfig: { type: 'rays', center: { x: 0.25, y: 2 }, radius: 5 },
+      effectConfig: { type: 'rays', center: { x: 0.25, y: 2 }, radius: 5, count: 100 },
     });
     const res = mockRes();
 
@@ -746,6 +746,24 @@ test('PATCH /media/:id/effect', async (t) => {
     t.assert.strictEqual(res._body.effect_config.center.x, 0.25);
     t.assert.strictEqual(res._body.effect_config.center.y, 1);
     t.assert.strictEqual(res._body.effect_config.radius, 0.75);
+    t.assert.strictEqual(res._body.effect_config.count, 24);
+  });
+
+  await t.test('accepts the arrows effect type', async (t) => {
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status) VALUES (?, ?, ?, ?)").run('D:\\pics\\arrows.jpg', 'Arrows', 'image', 'ready');
+
+    const route = findRoute('PATCH', '/media/:id/effect');
+    const req = mockReq('PATCH', `/media/${mediaId}/effect`, {
+      effectConfig: { type: 'arrows', center: { x: 0.5, y: 0.5 }, radius: 0.2 },
+    });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(mediaId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.effect_config.type, 'arrows');
   });
 
   await t.test('clears the effect when passed null', async (t) => {

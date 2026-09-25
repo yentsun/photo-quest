@@ -4,10 +4,10 @@ import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import GlobalContext from '../../globalContext.js';
-import { actions, MEDIA_TYPE, MEDIA_STATUS, EFFECT_TYPE } from '@photo-quest/shared';
+import { actions, MEDIA_TYPE, MEDIA_STATUS, EFFECT_TYPE, EFFECT_TYPE_OPTIONS, effectCount } from '@photo-quest/shared';
 import { ImageViewer, MediaPlayer, LikeButton, DuplicateThumb, DoodleOverlay } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
+import { Button, Icon, IconButton, Loader, Modal, ProgressBar, Select, Input } from '../ui/index.js';
 import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, renameMedia, updateMediaTags, updateMediaEffect, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi, repairFailed } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
@@ -19,7 +19,7 @@ import useMediaMagnifier from '../../hooks/useMediaMagnifier.js';
 const FETCH_LIMIT = 10000;
 
 /** Starting point when a photo has no effect yet. */
-const DEFAULT_EFFECT = { type: EFFECT_TYPE.RAYS, center: { x: 0.5, y: 0.5 }, radius: 0.15 };
+const DEFAULT_EFFECT = { type: EFFECT_TYPE.RAYS, center: { x: 0.5, y: 0.5 }, radius: 0.15, count: effectCount(EFFECT_TYPE.RAYS).default };
 
 function byName(a, b) {
   return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
@@ -408,7 +408,7 @@ export default function MediaPage() {
     if (magnifier.active) magnifier.toggle();
     const existing = item.effect_config;
     setEffectDraft(existing
-      ? { ...existing, center: { ...existing.center } }
+      ? { ...existing, center: { ...existing.center }, count: existing.count ?? effectCount(existing.type).default }
       : { ...DEFAULT_EFFECT, center: { ...DEFAULT_EFFECT.center } });
     setEditingEffect(true);
   }, [item, cancelTouchGesture, magnifier]);
@@ -416,6 +416,26 @@ export default function MediaPage() {
   const cancelEffectEdit = useCallback(() => {
     setEditingEffect(false);
     setEffectDraft(null);
+  }, []);
+
+  const changeEffectType = useCallback((type) => {
+    setEffectDraft(prev => {
+      if (!prev) return prev;
+      const { default: def, min, max } = effectCount(type);
+      const requested = Number(prev.count);
+      const count = Number.isFinite(requested) ? Math.min(max, Math.max(min, Math.round(requested))) : def;
+      return { ...prev, type, count };
+    });
+  }, []);
+
+  const changeEffectCount = useCallback((value) => {
+    setEffectDraft(prev => {
+      if (!prev) return prev;
+      const { min, max } = effectCount(prev.type);
+      const requested = Math.round(Number(value));
+      if (!Number.isFinite(requested)) return { ...prev, count: min };
+      return { ...prev, count: Math.min(max, Math.max(min, requested)) };
+    });
   }, []);
 
   const saveEffect = useCallback(async () => {
@@ -926,6 +946,22 @@ export default function MediaPage() {
 
         {editingEffect && (
           <div className="doodle-editor-bar">
+            <Select
+              className="doodle-editor-type"
+              value={effectDraft?.type || EFFECT_TYPE.RAYS}
+              onChange={e => changeEffectType(e.target.value)}
+              options={EFFECT_TYPE_OPTIONS}
+            />
+            <Input
+              className="doodle-editor-count"
+              type="number"
+              aria-label="Number of elements"
+              title="Number of elements"
+              min={effectCount(effectDraft?.type || EFFECT_TYPE.RAYS).min}
+              max={effectCount(effectDraft?.type || EFFECT_TYPE.RAYS).max}
+              value={effectDraft?.count ?? ''}
+              onChange={e => changeEffectCount(e.target.value)}
+            />
             <span className="doodle-editor-hint">Drag the circle to move it, drag the handle to resize.</span>
             <Button variant="ghost" size="sm" onClick={cancelEffectEdit}>Cancel</Button>
             {item.effect_config && (

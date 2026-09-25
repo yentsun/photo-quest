@@ -21,7 +21,7 @@ export { actions, words, toasterTimeout, slideshowInterval, HASH_VERSION, MEDIA_
 export { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE } from './schema.js';
 
 /* Animated doodle effect types, bounds, and the shared config normaliser. */
-export { EFFECT_TYPE, EFFECT_LIMITS, normalizeEffectConfig } from './effects.js';
+export { EFFECT_TYPE, EFFECT_TYPE_OPTIONS, EFFECT_COUNT, effectCount, EFFECT_LIMITS, normalizeEffectConfig } from './effects.js';
 
 /* Route maps for the React client (clientRoutes) and the Express-like HTTP
  * API (apiRoutes). Keeping them here lets the front-end and back-end reference

@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { EFFECT_TYPE, EFFECT_LIMITS } from '@photo-quest/shared';
-
-const RAY_COUNT = 12;
+import { EFFECT_TYPE, EFFECT_LIMITS, effectCount } from '@photo-quest/shared';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -115,13 +113,14 @@ export default function DoodleOverlay({
   const width = rect.width;
   const height = rect.height;
   const minSide = Math.min(width, height);
-  const shown = parsed || { type: EFFECT_TYPE.RAYS, center: { x: 0.5, y: 0.5 }, radius: 0.15 };
+  const shown = parsed || { type: EFFECT_TYPE.RAYS, center: { x: 0.5, y: 0.5 }, radius: 0.15, count: effectCount(EFFECT_TYPE.RAYS).default };
   const cx = shown.center.x * width;
   const cy = shown.center.y * height;
   const radius = shown.radius * minSide;
+  const count = shown.count || effectCount(shown.type).default;
 
-  const rays = Array.from({ length: RAY_COUNT }, (_, i) => {
-    const angle = (i / RAY_COUNT) * Math.PI * 2;
+  const rays = Array.from({ length: count }, (_, i) => {
+    const angle = (i / count) * Math.PI * 2;
     const outer = radius * (2.1 + (i % 3) * 0.3);
     return {
       key: i,
@@ -129,6 +128,35 @@ export default function DoodleOverlay({
       y1: cy + Math.sin(angle) * radius,
       x2: cx + Math.cos(angle) * outer,
       y2: cy + Math.sin(angle) * outer,
+    };
+  });
+
+  const arrows = Array.from({ length: count }, (_, i) => {
+    const angle = (i / count) * Math.PI * 2 + Math.PI / count;
+    const dirX = Math.cos(angle);
+    const dirY = Math.sin(angle);
+    const perpX = -dirY;
+    const perpY = dirX;
+    /* Head sits on the circle edge, shaft trails outward behind it. */
+    const tipX = cx + dirX * radius;
+    const tipY = cy + dirY * radius;
+    const shaft = radius * 0.55;
+    const headLen = radius * 0.34;
+    const headWidth = radius * 0.22;
+    const tailX = tipX + dirX * shaft;
+    const tailY = tipY + dirY * shaft;
+    const barbX = tipX + dirX * headLen;
+    const barbY = tipY + dirY * headLen;
+    const b1x = barbX + perpX * headWidth;
+    const b1y = barbY + perpY * headWidth;
+    const b2x = barbX - perpX * headWidth;
+    const b2y = barbY - perpY * headWidth;
+    const start = radius * 1.8;
+    return {
+      key: i,
+      d: `M ${tailX} ${tailY} L ${tipX} ${tipY} M ${b1x} ${b1y} L ${tipX} ${tipY} L ${b2x} ${b2y}`,
+      ax: `${dirX * start}px`,
+      ay: `${dirY * start}px`,
     };
   });
 
@@ -157,6 +185,16 @@ export default function DoodleOverlay({
                 y2={ray.y2}
                 pathLength="1"
               />
+            ))}
+          </g>
+        )}
+
+        {!editing && shown.type === EFFECT_TYPE.ARROWS && (
+          <g className="doodle-arrows">
+            {arrows.map(arrow => (
+              <g key={arrow.key} className="doodle-arrow" style={{ '--ax': arrow.ax, '--ay': arrow.ay }}>
+                <path className="doodle-arrow-path" d={arrow.d} />
+              </g>
             ))}
           </g>
         )}
