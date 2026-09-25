@@ -958,15 +958,15 @@ body {
 }
 .doodle-overlay-svg { display: block; overflow: visible; }
 
-/* Rays drawn from the accent circle, pulsing outward in a staggered wave. */
+/* Rays drawn from the accent circle, pulsing outward once in a chalky white. */
 .doodle-ray {
-  stroke: var(--sol-yellow);
+  stroke: rgba(255, 255, 255, 0.92);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: doodle-ray 2.2s ease-out infinite;
-  filter: drop-shadow(0 0 3px rgba(181, 137, 0, 0.55));
+  animation: doodle-ray 2.2s ease-out 1 forwards;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
 }
 @keyframes doodle-ray {
   0%   { stroke-dashoffset: 1; opacity: 0; }
@@ -977,15 +977,17 @@ body {
 }
 .doodle-accent-ring {
   fill: none;
-  stroke: var(--sol-yellow);
+  stroke: rgba(255, 255, 255, 0.92);
   stroke-width: 2.5;
   stroke-linecap: round;
   opacity: 0.85;
-  animation: doodle-ring 3s ease-in-out infinite;
+  animation: doodle-ring 3s ease-in-out 1 forwards;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.45));
 }
 @keyframes doodle-ring {
-  0%, 100% { opacity: 0.45; }
-  50%      { opacity: 0.95; }
+  0%   { opacity: 0.35; }
+  50%  { opacity: 0.95; }
+  100% { opacity: 0.35; }
 }
 
 /* Editor: draggable circle plus a resize handle on the +x axis. */
