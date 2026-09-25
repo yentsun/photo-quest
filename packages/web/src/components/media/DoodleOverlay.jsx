@@ -122,7 +122,7 @@ export default function DoodleOverlay({
 
   const rays = Array.from({ length: RAY_COUNT }, (_, i) => {
     const angle = (i / RAY_COUNT) * Math.PI * 2;
-    const outer = radius * (1.55 + (i % 3) * 0.18);
+    const outer = radius * (2.1 + (i % 3) * 0.3);
     return {
       key: i,
       x1: cx + Math.cos(angle) * radius,
