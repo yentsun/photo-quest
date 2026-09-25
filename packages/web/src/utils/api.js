@@ -45,6 +45,21 @@ function parseTags(item) {
   return item;
 }
 
+function parseEffect(item) {
+  if (!item) return item;
+  if (typeof item.effect_config === 'string') {
+    try { item.effect_config = JSON.parse(item.effect_config); } catch { item.effect_config = null; }
+  } else if (item.effect_config === undefined) {
+    item.effect_config = null;
+  }
+  return item;
+}
+
+/** Parse every JSON-encoded column a media row carries. */
+function parseMediaMeta(item) {
+  return parseEffect(parseTags(item));
+}
+
 /** @type {Object[]|null} Last successfully fetched folder list. */
 let _foldersCache = null;
 
@@ -106,7 +121,7 @@ async function syncMediaCache(ids = [], replacements = []) {
     updates.push(idbDeleteMedia(id));
   }
   for (const item of replacements) {
-    const parsed = parseTags(item);
+    const parsed = parseMediaMeta(item);
     _mediaCache.set(parsed.id, parsed);
     updates.push(idbPutMedia(parsed));
   }
@@ -273,7 +288,7 @@ async function _fetchMediaFromServer(url, opts) {
   const data = await response.json();
   const bodySize = JSON.stringify(data.items[0] ?? {}).length * data.items.length;
   console.log(`[DBG][api] SERVER /media ${(performance.now() - t0).toFixed(0)}ms items=${data.items.length} total=${data.total} est=${(bodySize / 1048576).toFixed(1)}MB folder=${opts.folder}`);
-  for (const item of data.items) { parseTags(item); _mediaCache.set(item.id, item); }
+  for (const item of data.items) { parseMediaMeta(item); _mediaCache.set(item.id, item); }
   if (opts.folder != null && !opts.random && !opts.liked && !opts.search && (!opts.offset || opts.offset === 0)) {
     _folderMediaCache.set(opts.folder, { items: data.items, total: data.total });
   }
@@ -491,7 +506,7 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
     } catch (e) { /* ignore */ }
 
     if (idbItem) {
-      parseTags(idbItem);
+      parseMediaMeta(idbItem);
       _mediaCache.set(idbItem.id, idbItem);
       // Refresh from server in background. A 404 means the record is gone, so
       // purge the stale cache instead of keeping it around.
@@ -499,7 +514,7 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
         .then(async r => {
           if (r.status === 404) { await forgetMedia(id); return; }
           if (!r.ok) return;
-          const item = parseTags(await r.json());
+          const item = parseMediaMeta(await r.json());
           _mediaCache.set(item.id, item);
           idbPutMedia(item).catch(() => {});
         })
@@ -515,7 +530,7 @@ export async function fetchMediaById(id, { skipCache = false } = {}) {
     });
     if (response.status === 404) { await forgetMedia(id); return null; }
     if (!response.ok) throw new Error('Failed to fetch media item');
-    const item = parseTags(await response.json());
+    const item = parseMediaMeta(await response.json());
     _mediaCache.set(item.id, item);
     idbPutMedia(item).catch(err => console.warn('[idb] putMedia failed:', err));
     return item;
@@ -569,13 +584,26 @@ export async function updateMediaTags(id, tags) {
   });
   if (!response.ok) throw new Error('Failed to update tags');
   const data = await response.json();
-  const item = parseTags(data);
+  const item = parseMediaMeta(data);
   _mediaCache.set(item.id, item);
   _tagsCache = null; // invalidate — tag counts may have changed
   idbPutMedia(item).catch(err => console.warn('[idb] putMedia (tags) failed:', err));
   /* The server returns the updated distinct tag count; surface it so the
      sidebar can update without an extra /tags request. */
   return { item, tagCount: data.tagCount };
+}
+
+export async function updateMediaEffect(id, effectConfig) {
+  const response = await fetch(apiRoutes.mediaEffect.replace(':id', id), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ effectConfig }),
+  });
+  if (!response.ok) throw new Error('Failed to update effect');
+  const item = parseMediaMeta(await response.json());
+  _mediaCache.set(item.id, item);
+  idbPutMedia(item).catch(err => console.warn('[idb] putMedia (effect) failed:', err));
+  return item;
 }
 
 export async function renameMedia(id, title) {
@@ -842,7 +870,7 @@ export async function setVideoThumbnail(mediaId, time) {
     body: JSON.stringify({ thumbnailTime: time }),
   });
   if (!response.ok) throw new Error('Failed to set video thumbnail');
-  const item = parseTags(await response.json());
+  const item = parseMediaMeta(await response.json());
   _mediaCache.set(item.id, item);
   idbPutMedia(item).catch(() => {});
   return item;

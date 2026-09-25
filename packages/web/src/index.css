@@ -949,6 +949,109 @@ body {
 }
 .viewer-controls-speed:hover { background: rgba(0,0,0,0.75); color: #fff; border-color: transparent; }
 
+/* ─── Doodle effect overlay ─── */
+.doodle-overlay {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  transform-origin: 0 0;
+}
+.doodle-overlay-svg { display: block; overflow: visible; }
+
+/* Rays drawn from the accent circle, pulsing outward once in a chalky white. */
+.doodle-ray {
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 4;
+  stroke-linecap: round;
+  /* A short dash that travels from the circle edge to past the tip, so the
+     motion reads as movement rather than a fade. The final offset clears the
+     path completely so no dot is left behind. */
+  stroke-dasharray: 0.28 1.06;
+  stroke-dashoffset: 0.28;
+  animation: doodle-ray 0.73s linear 1 forwards;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.75));
+}
+@keyframes doodle-ray {
+  0%   { stroke-dashoffset: 0.28; }
+  100% { stroke-dashoffset: -1.05; }
+}
+
+/* Arrows pulse in toward the accent circle and back out, twice, then vanish. */
+.doodle-arrow {
+  animation: doodle-arrow 1.6s ease-in-out 1 forwards;
+}
+.doodle-arrow-path {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.75));
+}
+@keyframes doodle-arrow {
+  0%   { transform: translate(var(--ax), var(--ay)); opacity: 1; }
+  25%  { transform: translate(0, 0); opacity: 1; }
+  50%  { transform: translate(var(--ax), var(--ay)); opacity: 1; }
+  75%  { transform: translate(0, 0); opacity: 1; }
+  92%  { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(0, 0); opacity: 0; }
+}
+
+/* Hearts of varied sizes rising from the accent circle edge, then popping. */
+.doodle-heart {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: doodle-heart 1.2s linear 1 both;
+}
+.doodle-heart-path {
+  fill: rgba(255, 175, 195, 0.95);
+  filter: drop-shadow(0 0 5px rgba(255, 150, 180, 0.75));
+}
+@keyframes doodle-heart {
+  0%   { transform: translate(0, 0) scale(0.35); opacity: 0; }
+  10%  { opacity: 1; }
+  100% { transform: translate(var(--drift), calc(var(--rise) * -1.05)) scale(1.5); opacity: 0; }
+}
+
+/* Editor: draggable circle plus a resize handle on the +x axis. */
+.doodle-accent-move {
+  fill: rgba(38, 139, 210, 0.18);
+  pointer-events: all;
+  cursor: move;
+}
+.doodle-accent-outline {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+  pointer-events: none;
+}
+.doodle-accent-handle-line { stroke: rgba(255, 255, 255, 0.6); stroke-width: 1; stroke-dasharray: 3 3; }
+.doodle-accent-handle {
+  fill: var(--sol-accent);
+  stroke: #fff;
+  stroke-width: 2;
+  pointer-events: all;
+  cursor: nwse-resize;
+}
+.doodle-accent-center { fill: #fff; pointer-events: none; }
+
+.doodle-editor-bar {
+  position: absolute;
+  bottom: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 3;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid var(--sol-border);
+  border-radius: 8px;
+}
+.doodle-editor-hint { color: rgba(255, 255, 255, 0.7); font-size: var(--fs-sm); margin-right: 4px; }
+.doodle-editor-type { width: 96px; }
+.doodle-editor-count { width: 56px; }
+@media (max-width: 639px) { .doodle-editor-hint { display: none; } }
+
+
 /* Fullscreen: fade the overlay controls in on viewport hover */
 .viewer-fullscreen .viewer-nav { opacity: 0; transition: opacity 0.15s; }
 .viewer-fullscreen .viewer-viewport:hover .viewer-nav { opacity: 1; }
