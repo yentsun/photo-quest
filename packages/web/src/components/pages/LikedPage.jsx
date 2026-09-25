@@ -4,6 +4,7 @@ import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchMedia } from '../../utils/api.js';
 import { getPageCache, setPageCache, isPageCacheValid } from '../../utils/pageCache.js';
+import { getCachedLiked, setCachedLiked } from '../../utils/likedCache.js';
 import { idbGetMedia } from '../../services/idb.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
@@ -47,18 +48,25 @@ export default function LikedPage() {
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const _pc = isPageCacheValid('liked', signal) ? getPageCache('liked') : null;
+  /* A persisted snapshot lets a cold start paint the first pages immediately
+     while the fresh list loads in the background. */
+  const _persisted = _pc ? null : getCachedLiked();
 
-  const [likedMedia, setLikedMedia] = useState(_pc?.data.likedMedia ?? []);
-  const [total, setTotal] = useState(_pc?.data.total ?? 0);
-  const [loading, setLoading] = useState(!_pc);
+  const [likedMedia, setLikedMedia] = useState(_pc?.data.likedMedia ?? _persisted?.items ?? []);
+  const [total, setTotal] = useState(_pc?.data.total ?? _persisted?.total ?? 0);
+  const [loading, setLoading] = useState(!_pc && !_persisted);
 
   useEffect(() => {
     if (isPageCacheValid('liked', signal)) return;
     let cancelled = false;
 
     idbGetMedia({ liked: true, limit: FETCH_LIMIT })
-      .then(({ items }) => {
-        if (!cancelled && items.length > 0 && likedMedia.length === 0) { setLikedMedia(items); setLoading(false); }
+      .then(({ items, total: t }) => {
+        if (cancelled || items.length === 0) return;
+        setLikedMedia(items);
+        if (t != null) setTotal(t);
+        setLoading(false);
+        setCachedLiked(items, t);
       })
       .catch(() => {});
 
@@ -69,6 +77,7 @@ export default function LikedPage() {
         setTotal(t);
         setLoading(false);
         setPageCache('liked', { likedMedia: items, total: t }, signal);
+        setCachedLiked(items, t);
       })
       .catch(err => { console.error('Failed to fetch liked media:', err); if (!cancelled) setLoading(false); });
 

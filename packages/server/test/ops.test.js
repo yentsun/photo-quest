@@ -25,6 +25,7 @@ import deleteDuplicates from '../ops/deleteDuplicates.js';
 import getMediaById from '../ops/getMediaById.js';
 import removeMedia from '../ops/removeMedia.js';
 import likeMedia from '../ops/likeMedia.js';
+import resetLikes from '../ops/resetLikes.js';
 import updateTags from '../ops/updateTags.js';
 import updateEffect from '../ops/updateEffect.js';
 
@@ -1070,6 +1071,38 @@ test('likeMedia op', async (t) => {
     const ctx = makeContext(db);
 
     t.assert.strictEqual(callOp(likeMedia, ctx, 9999), null);
+  });
+});
+
+test('resetLikes op', async (t) => {
+  await t.test('resets likes to zero and returns likedCount', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertMedia(db, '/reset.jpg', 'Reset');
+    db.prepare('UPDATE media SET likes = 5 WHERE id = ?').run(id);
+
+    const result = callOp(resetLikes, ctx, id);
+    t.assert.strictEqual(result.likes, 0);
+    t.assert.strictEqual(result.likedCount, 0);
+  });
+
+  await t.test('omits likedCount for an item already at zero', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertMedia(db, '/reset2.jpg', 'Reset 2');
+    const result = callOp(resetLikes, ctx, id);
+
+    t.assert.strictEqual(result.likes, 0);
+    t.assert.strictEqual(result.likedCount, undefined);
+  });
+
+  await t.test('returns null for a non-existent id', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    t.assert.strictEqual(callOp(resetLikes, ctx, 9999), null);
   });
 });
 

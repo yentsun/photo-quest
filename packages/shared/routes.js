@@ -90,6 +90,9 @@ export const apiRoutes = {
   /** PATCH -- increment the like count for a media item. */
   mediaLike: '/media/:id/like',
 
+  /** DELETE -- reset the like count for a media item to zero. */
+  mediaLikesReset: '/media/:id/likes',
+
   /** PATCH -- update the tags array for a media item. */
   mediaTags: '/media/:id/tags',
 

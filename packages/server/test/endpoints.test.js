@@ -20,6 +20,7 @@ import endpoint_post_failed_repair from '../endpoints/97_post_failed_repair.js';
 import endpoint_post_duplicates_merge from '../endpoints/94_post_duplicates_merge.js';
 import endpoint_post_duplicates_delete from '../endpoints/95_post_duplicates_delete.js';
 import endpoint_patch_like from '../endpoints/25_patch_media_id_like.js';
+import endpoint_delete_likes from '../endpoints/26_delete_media_id_likes.js';
 import endpoint_post_scan from '../endpoints/30_post_media_scan.js';
 import endpoint_post_add from '../endpoints/35_post_media_add.js';
 import endpoint_delete from '../endpoints/40_delete_media_id.js';
@@ -163,6 +164,18 @@ async function setup() {
         const result = db.prepare('DELETE FROM media WHERE id = ?').run(Number(id));
         return { deleted: result.changes > 0 };
       },
+      resetLikes: function(id) {
+        const existing = db.prepare('SELECT likes FROM media WHERE id = ?').get(Number(id));
+        if (!existing) return null;
+        const wasLiked = (existing.likes || 0) > 0;
+        db.prepare("UPDATE media SET likes = 0, updated_at = datetime('now') WHERE id = ?").run(Number(id));
+        const media = this.getMediaById(id);
+        if (wasLiked) {
+          const { total } = db.prepare('SELECT COUNT(*) AS total FROM media WHERE hidden = 0 AND likes > 0').get();
+          media.likedCount = total;
+        }
+        return media;
+      },
       addMedia: function(folderId, folderName, files) {
         let added = 0;
         for (const file of files) {
@@ -194,6 +207,7 @@ async function setup() {
   await endpoint_post_duplicates_merge(kojo, logger);
   await endpoint_post_duplicates_delete(kojo, logger);
   await endpoint_patch_like(kojo, logger);
+  await endpoint_delete_likes(kojo, logger);
   await endpoint_post_add(kojo, logger);
   await endpoint_delete(kojo, logger);
   await endpoint_delete_folder(kojo, logger);
@@ -431,6 +445,34 @@ test('PATCH /media/:id/like', async (t) => {
   await t.test('returns 404 for non-existent', async () => {
     const route = findRoute('PATCH', '/media/:id/like');
     const req = mockReq('PATCH', '/media/99999/like');
+    const res = mockRes();
+
+    await route.handler(req, res, { id: '99999' });
+
+    t.assert.strictEqual(res._status, 404);
+  });
+});
+
+test('DELETE /media/:id/likes', async (t) => {
+  await setup();
+
+  await t.test('resets the like count to zero', async () => {
+    const { lastInsertRowid: id } = db.prepare("INSERT INTO media (path, title, type, status, likes) VALUES ('reset.jpg', 'Reset', 'image', 'ready', 7)").run();
+
+    const route = findRoute('DELETE', '/media/:id/likes');
+    const req = mockReq('DELETE', `/media/${id}/likes`);
+    const res = mockRes();
+
+    await route.handler(req, res, { id: String(id) });
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.likes, 0);
+    t.assert.strictEqual(res._body.likedCount, 0);
+  });
+
+  await t.test('returns 404 for non-existent', async () => {
+    const route = findRoute('DELETE', '/media/:id/likes');
+    const req = mockReq('DELETE', '/media/99999/likes');
     const res = mockRes();
 
     await route.handler(req, res, { id: '99999' });

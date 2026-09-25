@@ -12,3 +12,8 @@ export function isPageCacheValid(key, signal) {
   const entry = _cache.get(key);
   return entry != null && entry.signal === signal;
 }
+
+/** Drop a cached page so the next mount refetches it. */
+export function invalidatePageCache(key) {
+  _cache.delete(key);
+}

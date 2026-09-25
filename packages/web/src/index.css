@@ -1180,6 +1180,7 @@ body {
 .info-table td:first-child { color: var(--sol-text-mut); white-space: nowrap; padding-right: 14px; }
 .info-table td:last-child { color: var(--sol-text-em); word-break: break-all; }
 .info-table tr:last-child td { border-bottom: none; }
+.info-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
 
 /* ─── Tags page ─── */
 .tag-list { display: flex; flex-wrap: wrap; gap: 10px; }

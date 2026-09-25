@@ -23,6 +23,8 @@ import {
   idbReplaceFolders,
   idbPruneMedia,
 } from '../services/idb.js';
+import { invalidatePageCache } from './pageCache.js';
+import { setCachedLiked, upsertCachedLiked, removeCachedLiked } from './likedCache.js';
 
 // ---------------------------------------------------------------------------
 // In-memory session cache
@@ -289,6 +291,9 @@ async function _fetchMediaFromServer(url, opts) {
   const bodySize = JSON.stringify(data.items[0] ?? {}).length * data.items.length;
   console.log(`[DBG][api] SERVER /media ${(performance.now() - t0).toFixed(0)}ms items=${data.items.length} total=${data.total} est=${(bodySize / 1048576).toFixed(1)}MB folder=${opts.folder}`);
   for (const item of data.items) { parseMediaMeta(item); _mediaCache.set(item.id, item); }
+  /* Persist a liked snapshot so the Liked page can paint instantly next time.
+     Skip count-only responses (limit 0) so they don't wipe the cached items. */
+  if (opts.liked && opts.limit !== 0 && data.items.length > 0) setCachedLiked(data.items, data.total);
   if (opts.folder != null && !opts.random && !opts.liked && !opts.search && (!opts.offset || opts.offset === 0)) {
     _folderMediaCache.set(opts.folder, { items: data.items, total: data.total });
   }
@@ -606,6 +611,18 @@ export async function updateMediaEffect(id, effectConfig) {
   return item;
 }
 
+export async function resetMediaLikes(id) {
+  const response = await fetch(apiRoutes.mediaLikesReset.replace(':id', id), { method: 'DELETE' });
+  if (!response.ok) throw new Error('Failed to reset likes');
+  const data = await response.json();
+  const item = parseMediaMeta(data);
+  _mediaCache.set(item.id, item);
+  idbPutMedia(item).catch(() => {});
+  removeCachedLiked(item.id);
+  invalidatePageCache('liked');
+  return { item, likedCount: data.likedCount };
+}
+
 export async function renameMedia(id, title) {
   const response = await fetch(`/media/${id}/title`, {
     method: 'PATCH',
@@ -645,6 +662,13 @@ async function flushLikeSeries(id) {
     const { likedCount, ...item } = data;
     _mediaCache.set(item.id, item);
     idbPutMedia(item).catch(() => {});
+    /* Keep the Liked page snapshot/page-cache in sync so the item appears there
+       without a manual refresh. */
+    parseMediaMeta(item);
+    if ((item.likes || 0) > 0) {
+      upsertCachedLiked(item);
+      invalidatePageCache('liked');
+    }
     /* The server returns the updated liked count (only when an item transitions
        to liked); surface it so the sidebar updates without an extra request. */
     entry.waiters.forEach(w => w.resolve({ item, likedCount }));

@@ -8,7 +8,7 @@ import { actions, MEDIA_TYPE, MEDIA_STATUS, EFFECT_TYPE, EFFECT_TYPE_OPTIONS, ef
 import { ImageViewer, MediaPlayer, LikeButton, DuplicateThumb, DoodleOverlay } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar, Select, Input } from '../ui/index.js';
-import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, renameMedia, updateMediaTags, updateMediaEffect, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi, repairFailed } from '../../utils/api.js';
+import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, resetMediaLikes, renameMedia, updateMediaTags, updateMediaEffect, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi, repairFailed } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -388,6 +388,23 @@ export default function MediaPage() {
       } catch { /* ignore */ }
     }
   }, [item?.id, setLikedCount]);
+
+  const handleResetLikes = useCallback(async () => {
+    if (!item || !(item.likes > 0)) return;
+    const targetId = item.id;
+    const previous = item.likes || 0;
+    setItem(prev => (prev?.id === targetId ? { ...prev, likes: 0 } : prev));
+    try {
+      const { item: updated, likedCount } = await resetMediaLikes(targetId);
+      if (updated) setItem(prev => (prev?.id === targetId ? { ...prev, ...updated } : prev));
+      if (likedCount != null) setLikedCount(likedCount);
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Likes reset to 0', toastType: 'success' });
+    } catch (err) {
+      console.error('Failed to reset likes:', err);
+      setItem(prev => (prev?.id === targetId ? { ...prev, likes: previous } : prev));
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not reset likes', toastType: 'error' });
+    }
+  }, [item, setLikedCount, dispatch]);
 
   const cancelTouchGesture = useCallback(() => {
     touchStartX.current = null;
@@ -1225,6 +1242,17 @@ export default function MediaPage() {
             ))}
           </tbody>
         </table>
+        <div className="info-actions">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Icon name="heart" className="icon-sm" />}
+            onClick={handleResetLikes}
+            disabled={!(item.likes > 0)}
+          >
+            Reset likes{(item.likes || 0) > 0 ? ` (${item.likes})` : ''}
+          </Button>
+        </div>
       </Modal>
 
       <Modal open={showMore} onClose={() => setShowMore(false)} title="More actions" className="viewer-more-modal">
