@@ -963,17 +963,16 @@ body {
   stroke: rgba(255, 255, 255, 0.95);
   stroke-width: 4;
   stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: doodle-ray 0.73s ease-out 1 forwards;
+  /* A short dash that travels from the circle edge to past the tip, so the
+     motion reads as movement rather than a fade. */
+  stroke-dasharray: 0.28 1;
+  stroke-dashoffset: 0.28;
+  animation: doodle-ray 0.73s linear 1 forwards;
   filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.75));
 }
 @keyframes doodle-ray {
-  0%   { stroke-dashoffset: 1; opacity: 0; }
-  10%  { opacity: 1; }
-  60%  { stroke-dashoffset: 0; opacity: 1; }
-  80%  { stroke-dashoffset: 0; opacity: 1; }
-  100% { stroke-dashoffset: 0; opacity: 0; }
+  0%   { stroke-dashoffset: 0.28; }
+  100% { stroke-dashoffset: -1; }
 }
 
 /* Editor: draggable circle plus a resize handle on the +x axis. */
