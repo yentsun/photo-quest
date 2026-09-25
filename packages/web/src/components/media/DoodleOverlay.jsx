@@ -164,7 +164,7 @@ export default function DoodleOverlay({
           </g>
         )}
 
-        {editing ? (
+        {editing && (
           <g className="doodle-accent-editor">
             <circle className="doodle-accent-move" cx={cx} cy={cy} r={radius} onPointerDown={handlePointerDown('move')} />
             <circle className="doodle-accent-outline" cx={cx} cy={cy} r={radius} />
@@ -183,10 +183,6 @@ export default function DoodleOverlay({
               onPointerDown={handlePointerDown('resize')}
             />
             <circle className="doodle-accent-center" cx={cx} cy={cy} r={3} />
-          </g>
-        ) : (
-          <g className="doodle-accent">
-            <circle className="doodle-accent-ring" cx={cx} cy={cy} r={radius} />
           </g>
         )}
       </svg>
