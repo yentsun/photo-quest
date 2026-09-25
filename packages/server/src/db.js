@@ -115,6 +115,7 @@ function migrateDb() {
     'ALTER TABLE folders ADD COLUMN thumbnail_media_id INTEGER REFERENCES media(id) ON DELETE SET NULL',
     'ALTER TABLE folders ADD COLUMN thumbnail_time REAL',
     'ALTER TABLE media ADD COLUMN thumbnail_time REAL',
+    'ALTER TABLE media ADD COLUMN effect_config TEXT',
   ];
 
   for (const sql of migrations) {

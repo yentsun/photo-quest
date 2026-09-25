@@ -26,6 +26,7 @@ import getMediaById from '../ops/getMediaById.js';
 import removeMedia from '../ops/removeMedia.js';
 import likeMedia from '../ops/likeMedia.js';
 import updateTags from '../ops/updateTags.js';
+import updateEffect from '../ops/updateEffect.js';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -40,6 +41,7 @@ function freshDb() {
   db.exec(CREATE_FOLDERS_TABLE);
   db.exec(CREATE_FAILED_SNAPSHOT_TABLE);
   db.exec("ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
+  db.exec('ALTER TABLE media ADD COLUMN effect_config TEXT');
   return db;
 }
 
@@ -1101,6 +1103,37 @@ test('updateTags op', async (t) => {
     const ctx = makeContext(db);
 
     t.assert.strictEqual(callOp(updateTags, ctx, 9999, ['x']), null);
+  });
+});
+
+test('updateEffect op', async (t) => {
+  await t.test('stores a parsed effect config', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertMedia(db, '/effect.jpg', 'Effect');
+    const config = { type: 'rays', center: { x: 0.4, y: 0.6 }, radius: 0.2 };
+    const result = callOp(updateEffect, ctx, id, config);
+
+    t.assert.deepStrictEqual(result.effect_config, config);
+  });
+
+  await t.test('clears the effect when passed null', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    const id = insertMedia(db, '/effect2.jpg', 'Effect 2');
+    callOp(updateEffect, ctx, id, { type: 'rays', center: { x: 0.5, y: 0.5 }, radius: 0.15 });
+    const result = callOp(updateEffect, ctx, id, null);
+
+    t.assert.strictEqual(result.effect_config, null);
+  });
+
+  await t.test('returns null for a non-existent id', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+
+    t.assert.strictEqual(callOp(updateEffect, ctx, 9999, { type: 'rays', center: { x: 0.5, y: 0.5 }, radius: 0.1 }), null);
   });
 });
 

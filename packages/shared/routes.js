@@ -93,6 +93,9 @@ export const apiRoutes = {
   /** PATCH -- update the tags array for a media item. */
   mediaTags: '/media/:id/tags',
 
+  /** PATCH -- set or clear the animated doodle effect for a media item. */
+  mediaEffect: '/media/:id/effect',
+
   /** PATCH -- set a custom thumbnail frame for a video. */
   mediaThumbnail: '/media/:id/thumbnail',
 

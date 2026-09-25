@@ -26,6 +26,7 @@ import endpoint_delete from '../endpoints/40_delete_media_id.js';
 import endpoint_delete_folder from '../endpoints/45_delete_media_folder.js';
 import endpoint_patch_folder from '../endpoints/16_patch_folder_id.js';
 import endpoint_patch_media_thumbnail from '../endpoints/17_patch_media_id_thumbnail.js';
+import endpoint_patch_media_effect from '../endpoints/31_patch_media_id_effect.js';
 import endpoint_get_storage from '../endpoints/85_get_storage.js';
 import endpoint_get_storage_backup from '../endpoints/86_get_storage_backup.js';
 import endpoint_get_storage_manifest from '../endpoints/87_get_storage_manifest.js';
@@ -47,6 +48,7 @@ async function setup() {
   /* The real database gains `tags` through a migration (see src/db.js), so the
      fixture needs it too for endpoints that read the column. */
   db.exec("ALTER TABLE media ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
+  db.exec('ALTER TABLE media ADD COLUMN effect_config TEXT');
 
   routes = [];
 
@@ -105,6 +107,14 @@ async function setup() {
       },
       getMediaById: function(id) {
         return db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id)) || null;
+      },
+      updateEffect: function(id, config) {
+        const json = config == null ? null : JSON.stringify(config);
+        const result = db.prepare("UPDATE media SET effect_config = ?, updated_at = datetime('now') WHERE id = ?").run(json, Number(id));
+        if (result.changes === 0) return null;
+        const media = db.prepare('SELECT * FROM media WHERE id = ?').get(Number(id));
+        media.effect_config = media.effect_config ? JSON.parse(media.effect_config) : null;
+        return media;
       },
       getMediaDuplicates: function(id) {
         const media = db.prepare('SELECT id, hash FROM media WHERE id = ? AND hidden = 0').get(Number(id));
@@ -189,6 +199,7 @@ async function setup() {
   await endpoint_delete_folder(kojo, logger);
   await endpoint_patch_folder(kojo, logger);
   await endpoint_patch_media_thumbnail(kojo, logger);
+  await endpoint_patch_media_effect(kojo, logger);
   await endpoint_get_storage(kojo, logger);
   await endpoint_get_storage_backup(kojo, logger);
   await endpoint_get_storage_manifest(kojo, logger);
@@ -704,6 +715,74 @@ test('PATCH /media/:id/thumbnail', async (t) => {
   await t.test('returns 404 for non-existent media', async (t) => {
     const route = findRoute('PATCH', '/media/:id/thumbnail');
     const req = mockReq('PATCH', '/media/99999/thumbnail', { thumbnailTime: 5 });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: '99999' });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 404);
+  });
+});
+
+test('PATCH /media/:id/effect', async (t) => {
+  await setup();
+
+  await t.test('saves a normalised effect config', async (t) => {
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status) VALUES (?, ?, ?, ?)").run('D:\\pics\\photo.jpg', 'Photo', 'image', 'ready');
+
+    const route = findRoute('PATCH', '/media/:id/effect');
+    const req = mockReq('PATCH', `/media/${mediaId}/effect`, {
+      effectConfig: { type: 'rays', center: { x: 0.25, y: 2 }, radius: 5 },
+    });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(mediaId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.effect_config.type, 'rays');
+    t.assert.strictEqual(res._body.effect_config.center.x, 0.25);
+    t.assert.strictEqual(res._body.effect_config.center.y, 1);
+    t.assert.strictEqual(res._body.effect_config.radius, 0.75);
+  });
+
+  await t.test('clears the effect when passed null', async (t) => {
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status, effect_config) VALUES (?, ?, ?, ?, ?)").run('D:\\pics\\clear.jpg', 'Clear', 'image', 'ready', JSON.stringify({ type: 'rays', center: { x: 0.5, y: 0.5 }, radius: 0.15 }));
+
+    const route = findRoute('PATCH', '/media/:id/effect');
+    const req = mockReq('PATCH', `/media/${mediaId}/effect`, { effectConfig: null });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(mediaId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(res._body.effect_config, null);
+
+    const row = db.prepare('SELECT effect_config FROM media WHERE id = ?').get(mediaId);
+    t.assert.strictEqual(row.effect_config, null);
+  });
+
+  await t.test('rejects an invalid effect config', async (t) => {
+    const { lastInsertRowid: mediaId } = db.prepare("INSERT INTO media (path, title, type, status) VALUES (?, ?, ?, ?)").run('D:\\pics\\bad.jpg', 'Bad', 'image', 'ready');
+
+    const route = findRoute('PATCH', '/media/:id/effect');
+    const req = mockReq('PATCH', `/media/${mediaId}/effect`, { effectConfig: { type: 'nope', center: { x: 0.5, y: 0.5 }, radius: 0.1 } });
+    const res = mockRes();
+
+    const promise = route.handler(req, res, { id: String(mediaId) });
+    req.emit();
+    await promise;
+
+    t.assert.strictEqual(res._status, 400);
+  });
+
+  await t.test('returns 404 for non-existent media', async (t) => {
+    const route = findRoute('PATCH', '/media/:id/effect');
+    const req = mockReq('PATCH', '/media/99999/effect', { effectConfig: { type: 'rays', center: { x: 0.5, y: 0.5 }, radius: 0.1 } });
     const res = mockRes();
 
     const promise = route.handler(req, res, { id: '99999' });

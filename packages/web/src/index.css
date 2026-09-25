@@ -949,6 +949,82 @@ body {
 }
 .viewer-controls-speed:hover { background: rgba(0,0,0,0.75); color: #fff; border-color: transparent; }
 
+/* ─── Doodle effect overlay ─── */
+.doodle-overlay {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  transform-origin: 0 0;
+}
+.doodle-overlay-svg { display: block; overflow: visible; }
+
+/* Rays drawn from the accent circle, pulsing outward in a staggered wave. */
+.doodle-ray {
+  stroke: var(--sol-yellow);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: doodle-ray 2.2s ease-out infinite;
+  filter: drop-shadow(0 0 3px rgba(181, 137, 0, 0.55));
+}
+@keyframes doodle-ray {
+  0%   { stroke-dashoffset: 1; opacity: 0; }
+  15%  { opacity: 1; }
+  55%  { stroke-dashoffset: 0; opacity: 1; }
+  85%  { stroke-dashoffset: 0; opacity: 0; }
+  100% { stroke-dashoffset: 1; opacity: 0; }
+}
+.doodle-accent-ring {
+  fill: none;
+  stroke: var(--sol-yellow);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0.85;
+  animation: doodle-ring 3s ease-in-out infinite;
+}
+@keyframes doodle-ring {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 0.95; }
+}
+
+/* Editor: draggable circle plus a resize handle on the +x axis. */
+.doodle-accent-move {
+  fill: rgba(38, 139, 210, 0.18);
+  pointer-events: all;
+  cursor: move;
+}
+.doodle-accent-outline {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+  pointer-events: none;
+}
+.doodle-accent-handle-line { stroke: rgba(255, 255, 255, 0.6); stroke-width: 1; stroke-dasharray: 3 3; }
+.doodle-accent-handle {
+  fill: var(--sol-accent);
+  stroke: #fff;
+  stroke-width: 2;
+  pointer-events: all;
+  cursor: nwse-resize;
+}
+.doodle-accent-center { fill: #fff; pointer-events: none; }
+
+.doodle-editor-bar {
+  position: absolute;
+  bottom: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 3;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid var(--sol-border);
+  border-radius: 8px;
+}
+.doodle-editor-hint { color: rgba(255, 255, 255, 0.7); font-size: var(--fs-sm); margin-right: 4px; }
+@media (max-width: 639px) { .doodle-editor-hint { display: none; } }
+
+
 /* Fullscreen: fade the overlay controls in on viewport hover */
 .viewer-fullscreen .viewer-nav { opacity: 0; transition: opacity 0.15s; }
 .viewer-fullscreen .viewer-viewport:hover .viewer-nav { opacity: 1; }

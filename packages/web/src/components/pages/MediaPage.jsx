@@ -4,11 +4,11 @@ import { useMediaActions } from '../../hooks/useMedia.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import GlobalContext from '../../globalContext.js';
-import { actions, MEDIA_TYPE, MEDIA_STATUS } from '@photo-quest/shared';
-import { ImageViewer, MediaPlayer, LikeButton, DuplicateThumb } from '../media/index.js';
+import { actions, MEDIA_TYPE, MEDIA_STATUS, EFFECT_TYPE } from '@photo-quest/shared';
+import { ImageViewer, MediaPlayer, LikeButton, DuplicateThumb, DoodleOverlay } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar } from '../ui/index.js';
-import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, renameMedia, updateMediaTags, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi, repairFailed } from '../../utils/api.js';
+import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, renameMedia, updateMediaTags, updateMediaEffect, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi, repairFailed } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -17,6 +17,9 @@ import { readSavedSpeed, nextSpeed, saveSpeed } from '../../utils/playbackSpeed.
 import useMediaMagnifier from '../../hooks/useMediaMagnifier.js';
 
 const FETCH_LIMIT = 10000;
+
+/** Starting point when a photo has no effect yet. */
+const DEFAULT_EFFECT = { type: EFFECT_TYPE.RAYS, center: { x: 0.5, y: 0.5 }, radius: 0.15 };
 
 function byName(a, b) {
   return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
@@ -78,6 +81,8 @@ export default function MediaPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [speed, setSpeed] = useState(readSavedSpeed);
   const [showMore, setShowMore] = useState(false);
+  const [editingEffect, setEditingEffect] = useState(false);
+  const [effectDraft, setEffectDraft] = useState(null);
   const [showDelete, setShowDelete] = useState(false);
   const [duplicates, setDuplicates] = useState({ ids: [], count: 0, items: [] });
   const [showMerge, setShowMerge] = useState(false);
@@ -397,6 +402,58 @@ export default function MediaPage() {
     magnifier.toggle();
   }, [cancelTouchGesture, magnifier.toggle]);
 
+  const startEffectEdit = useCallback(() => {
+    if (!item || item.type !== MEDIA_TYPE.IMAGE) return;
+    cancelTouchGesture();
+    if (magnifier.active) magnifier.toggle();
+    const existing = item.effect_config;
+    setEffectDraft(existing
+      ? { ...existing, center: { ...existing.center } }
+      : { ...DEFAULT_EFFECT, center: { ...DEFAULT_EFFECT.center } });
+    setEditingEffect(true);
+  }, [item, cancelTouchGesture, magnifier]);
+
+  const cancelEffectEdit = useCallback(() => {
+    setEditingEffect(false);
+    setEffectDraft(null);
+  }, []);
+
+  const saveEffect = useCallback(async () => {
+    if (!item || !effectDraft) return;
+    const targetId = item.id;
+    const previous = item.effect_config ?? null;
+    setItem(prev => (prev?.id === targetId ? { ...prev, effect_config: effectDraft } : prev));
+    setEditingEffect(false);
+    setEffectDraft(null);
+    try {
+      const updated = await updateMediaEffect(targetId, effectDraft);
+      setItem(prev => (prev?.id === targetId ? { ...prev, ...updated } : prev));
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Doodle effect saved', toastType: 'success' });
+    } catch (err) {
+      console.error('Failed to save effect:', err);
+      setItem(prev => (prev?.id === targetId ? { ...prev, effect_config: previous } : prev));
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not save effect', toastType: 'error' });
+    }
+  }, [item, effectDraft, dispatch]);
+
+  const removeEffect = useCallback(async () => {
+    if (!item) return;
+    const targetId = item.id;
+    const previous = item.effect_config ?? null;
+    setItem(prev => (prev?.id === targetId ? { ...prev, effect_config: null } : prev));
+    setEditingEffect(false);
+    setEffectDraft(null);
+    try {
+      const updated = await updateMediaEffect(targetId, null);
+      setItem(prev => (prev?.id === targetId ? { ...prev, ...updated } : prev));
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Doodle effect removed', toastType: 'success' });
+    } catch (err) {
+      console.error('Failed to remove effect:', err);
+      setItem(prev => (prev?.id === targetId ? { ...prev, effect_config: previous } : prev));
+      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not remove effect', toastType: 'error' });
+    }
+  }, [item, dispatch]);
+
   const cycleSpeed = useCallback(() => {
     setSpeed(prev => {
       const next = nextSpeed(prev);
@@ -410,11 +467,12 @@ export default function MediaPage() {
 
   const handleTouchStart = useCallback((e) => {
     cancelTouchGesture();
+    if (editingEffect) return;
     if (e.touches.length !== 1 || e.target.closest('button, input, a')) return;
     if (e.target.tagName === 'VIDEO' && isVideoControlPress(e.target.getBoundingClientRect(), e.touches[0].clientY)) return;
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
-  }, [cancelTouchGesture]);
+  }, [cancelTouchGesture, editingEffect]);
 
   const showMobileNavPanel = useCallback(() => {
     setShowMobileNav(true);
@@ -423,6 +481,7 @@ export default function MediaPage() {
   }, []);
 
   const handleTouchEnd = useCallback((e) => {
+    if (editingEffect) { cancelTouchGesture(); return; }
     if (e.changedTouches.length !== 1 || touchStartX.current === null) { cancelTouchGesture(); return; }
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = e.changedTouches[0].clientY - touchStartY.current;
@@ -433,7 +492,7 @@ export default function MediaPage() {
     if (magnifier.active) return;
     if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return;
     if (dx < 0) goNext(); else goPrev();
-  }, [goNext, goPrev, showMobileNavPanel, cancelTouchGesture, magnifier.active]);
+  }, [goNext, goPrev, showMobileNavPanel, cancelTouchGesture, magnifier.active, editingEffect]);
 
   const handleSetFolderThumbnail = useCallback(async (time = null) => {
     if (!item || !folder) return;
@@ -582,7 +641,7 @@ export default function MediaPage() {
   const handleRetranscode = useCallback(() => runRepair(true), [runRepair]);
 
   /* A new item gets a fresh playback state. */
-  useEffect(() => { setPlaybackError(false); }, [id]);
+  useEffect(() => { setPlaybackError(false); setEditingEffect(false); setEffectDraft(null); }, [id]);
 
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -663,6 +722,10 @@ export default function MediaPage() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT') return;
+      if (editingEffect) {
+        if (e.key === 'Escape') { e.preventDefault(); cancelEffectEdit(); }
+        return;
+      }
       if (showDelete || showMerge) return; /* modals capture their own keys */
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
@@ -677,7 +740,7 @@ export default function MediaPage() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete, showDelete, showMerge]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete, showDelete, showMerge, editingEffect, cancelEffectEdit]);
 
   /* Delete confirmation modal: Enter confirms, Escape closes. Escape already
      works via the shared Modal component; wire Enter here. */
@@ -849,6 +912,28 @@ export default function MediaPage() {
           <MediaPlayer ref={playerRef} src={mediaUrl} title={item.title} speed={speed} mediaRef={mediaElRef} mediaProps={magnifier.mediaProps} magnifierActive={magnifier.active} onError={() => setPlaybackError(true)} />
         )}
 
+        {isImage && (
+          <DoodleOverlay
+            mediaRef={mediaElRef}
+            containerRef={mediaViewportRef}
+            config={editingEffect ? effectDraft : item.effect_config}
+            editing={editingEffect}
+            transform={magnifier.mediaProps.style}
+            onChange={setEffectDraft}
+          />
+        )}
+
+        {editingEffect && (
+          <div className="doodle-editor-bar">
+            <span className="doodle-editor-hint">Drag the circle to move it, drag the handle to resize.</span>
+            <Button variant="ghost" size="sm" onClick={cancelEffectEdit}>Cancel</Button>
+            {item.effect_config && (
+              <Button variant="danger" size="sm" icon={<Icon name="trash" className="icon-sm" />} onClick={removeEffect}>Remove</Button>
+            )}
+            <Button variant="primary" size="sm" icon={<Icon name="sparkles" className="icon-sm" />} onClick={saveEffect}>Save</Button>
+          </div>
+        )}
+
         <IconButton
           variant="overlay"
           icon={<Icon name="prev" className="icon-xl" />}
@@ -927,6 +1012,7 @@ export default function MediaPage() {
             icon={<Icon name={magnifier.active ? 'zoomOut' : 'zoomIn'} className="icon-md" />}
             label={magnifier.active ? 'Exit magnifier' : 'Magnify'}
             onClick={toggleMagnifier}
+            disabled={editingEffect}
           />
           {canFullscreen && (
             <IconButton
@@ -1022,6 +1108,9 @@ export default function MediaPage() {
           <div className="viewer-actions">
             <LikeButton count={item.likes || 0} onLike={handleLike} />
             <Button variant="ghost" size="sm" icon={<Icon name="info" className="icon-sm" />} onClick={() => setShowInfo(true)}>Info</Button>
+            {isImage && (
+              <Button variant="ghost" size="sm" icon={<Icon name="sparkles" className="icon-sm" />} onClick={startEffectEdit}>Effect</Button>
+            )}
             {canMerge && (
               <Button variant="ghost" size="sm" icon={<Icon name="copy" className="icon-sm" />} onClick={() => setShowMerge(true)}>
                 Merge {duplicates.count} copies
