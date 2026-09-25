@@ -125,8 +125,8 @@ export default function DoodleOverlay({
     const outer = radius * (1.55 + (i % 3) * 0.18);
     return {
       key: i,
-      x1: cx,
-      y1: cy,
+      x1: cx + Math.cos(angle) * radius,
+      y1: cy + Math.sin(angle) * radius,
       x2: cx + Math.cos(angle) * outer,
       y2: cy + Math.sin(angle) * outer,
     };
