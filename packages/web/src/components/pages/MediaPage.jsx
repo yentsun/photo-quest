@@ -914,6 +914,7 @@ export default function MediaPage() {
 
         {isImage && (
           <DoodleOverlay
+            key={item.id}
             mediaRef={mediaElRef}
             containerRef={mediaViewportRef}
             config={editingEffect ? effectDraft : item.effect_config}
