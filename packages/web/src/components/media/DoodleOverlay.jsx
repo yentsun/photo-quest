@@ -122,15 +122,13 @@ export default function DoodleOverlay({
 
   const rays = Array.from({ length: RAY_COUNT }, (_, i) => {
     const angle = (i / RAY_COUNT) * Math.PI * 2;
-    const inner = radius * 1.06;
     const outer = radius * (1.55 + (i % 3) * 0.18);
     return {
       key: i,
-      x1: cx + Math.cos(angle) * inner,
-      y1: cy + Math.sin(angle) * inner,
+      x1: cx,
+      y1: cy,
       x2: cx + Math.cos(angle) * outer,
       y2: cy + Math.sin(angle) * outer,
-      delay: `${(i / RAY_COUNT) * 0.53}s`,
     };
   });
 
@@ -158,7 +156,6 @@ export default function DoodleOverlay({
                 x2={ray.x2}
                 y2={ray.y2}
                 pathLength="1"
-                style={{ animationDelay: ray.delay }}
               />
             ))}
           </g>
