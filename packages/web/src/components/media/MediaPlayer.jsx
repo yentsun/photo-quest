@@ -25,6 +25,9 @@ const MediaPlayer = forwardRef(function MediaPlayer({
   if (src !== renderedSrc) {
     setRenderedSrc(src);
     setBuffering(true);
+    /* Clear any previous failure too, otherwise its overlay lingers over the
+       next video. */
+    setError(null);
     startedRef.current = false;
   }
 
