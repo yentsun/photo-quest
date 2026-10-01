@@ -559,7 +559,7 @@ export default function FolderPage() {
         )}
       </Modal>
 
-      <Modal open={showRemove} onClose={() => setShowRemove(false)} title="Remove folder">
+      <Modal open={showRemove} onClose={() => setShowRemove(false)} onConfirm={confirmRemove} title="Remove folder">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon name="warning" className="icon-md text-mut" />
           <p className="text-mut">

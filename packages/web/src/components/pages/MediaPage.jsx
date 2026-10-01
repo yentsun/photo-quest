@@ -756,6 +756,10 @@ export default function MediaPage() {
     setAddingTag(false); setTagDraft(''); setSuggestionIndex(-1); applyTag(trimmed);
   }, [tagDraft, applyTag]);
 
+  /* Only offer merging when the loaded duplicate group actually contains the
+     item on screen, so a stale group from a previous item never leaks in. */
+  const canMerge = duplicates.count > 1 && duplicates.ids.includes(item?.id);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT') return;
@@ -774,21 +778,11 @@ export default function MediaPage() {
       if (e.key === 'f') toggleFullscreen();
       if (e.key === 'Delete') setShowDelete(true);
       if (e.key === 't' || e.key === 'T') setAddingTag(true);
+      if ((e.key === 'm' || e.key === 'M') && canMerge) setShowMerge(true);
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete, showDelete, showMerge, editingEffect, cancelEffectEdit]);
-
-  /* Delete confirmation modal: Enter confirms, Escape closes. Escape already
-     works via the shared Modal component; wire Enter here. */
-  useEffect(() => {
-    if (!showDelete) return;
-    const handleDeleteKey = (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); handleDelete(); }
-    };
-    document.addEventListener('keydown', handleDeleteKey);
-    return () => document.removeEventListener('keydown', handleDeleteKey);
-  }, [showDelete, handleDelete]);
+  }, [goPrev, goNext, goFolderPrev, goFolderNext, handleLike, toggleFullscreen, setShowDelete, showDelete, showMerge, editingEffect, cancelEffectEdit, canMerge]);
 
   useEffect(() => {
     if (!showInfo || !item) return;
@@ -842,9 +836,6 @@ export default function MediaPage() {
   }
 
   const isImage = item.type === MEDIA_TYPE.IMAGE;
-  /* Only offer merging when the loaded duplicate group actually contains the
-     item on screen, so a stale group from a previous item never leaks in. */
-  const canMerge = duplicates.count > 1 && duplicates.ids.includes(item.id);
 
   /* Overflow actions (Download + "Use as...") shared by the desktop action bar
      and the mobile kebab menu so the two never drift apart. `onAction`
@@ -1166,7 +1157,7 @@ export default function MediaPage() {
               <Button variant="ghost" size="sm" icon={<Icon name="sparkles" className="icon-sm" />} onClick={startEffectEdit}>Effect</Button>
             )}
             {canMerge && (
-              <Button variant="ghost" size="sm" icon={<Icon name="copy" className="icon-sm" />} onClick={() => setShowMerge(true)}>
+              <Button variant="ghost" size="sm" icon={<Icon name="copy" className="icon-sm" />} title="Merge duplicates (M)" onClick={() => setShowMerge(true)}>
                 Merge {duplicates.count} copies
               </Button>
             )}
@@ -1259,7 +1250,7 @@ export default function MediaPage() {
         {renderOverflowActions('', () => setShowMore(false))}
       </Modal>
 
-      <Modal open={showDelete} onClose={() => setShowDelete(false)} title="Delete media">
+      <Modal open={showDelete} onClose={() => setShowDelete(false)} onConfirm={handleDelete} title="Delete media">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon name="warning" className="icon-md text-mut" />
           <p className="text-mut">Delete "<strong>{item?.title}</strong>"? This will remove it from the library and delete the file from disk.</p>
@@ -1270,7 +1261,7 @@ export default function MediaPage() {
         </div>
       </Modal>
 
-      <Modal open={showMerge} onClose={() => setShowMerge(false)} title="Merge duplicates">
+      <Modal open={showMerge} onClose={() => setShowMerge(false)} onConfirm={handleMerge} title="Merge duplicates">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon name="warning" className="icon-md text-mut" />
           <p className="text-mut">

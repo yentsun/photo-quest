@@ -231,7 +231,7 @@ export default function DuplicatesPage() {
         </div>
       )}
 
-      <Modal open={!!confirm} onClose={() => setConfirm(null)} title={confirmMeta?.title}>
+      <Modal open={!!confirm} onClose={() => setConfirm(null)} onConfirm={runConfirm} title={confirmMeta?.title}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon name="warning" className="icon-md text-mut" />
           <p className="text-mut">{confirmMeta?.body}</p>
