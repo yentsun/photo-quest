@@ -1220,7 +1220,9 @@ body {
 
 /* Refresh / import toaster — stacking report of scan progress + status */
 .refresh-toaster-stack {
-  position: fixed; bottom: 16px; right: 16px; z-index: 9999;
+  /* Sit clear of the media viewer's bottom info bar (and the other
+     bottom-anchored controls) so the toasts never cover those buttons. */
+  position: fixed; bottom: 110px; right: 16px; z-index: 9999;
   display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
 }
 .refresh-toaster { position: static; min-width: 280px; }
