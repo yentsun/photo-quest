@@ -129,7 +129,14 @@ export default function MediaPage() {
 
   useEffect(() => {
     if (!inSlideshow) return;
-    const currentItem = slideshow.current;
+    /* The slideshow holds a snapshot taken when the session started, so this
+       item may be stale: liking (or tagging, or editing the effect) updates the
+       item on screen and the session cache, but not the slideshow's `items`
+       array. Merge the cached version over the snapshot so going next → back
+       does not revert those edits. */
+    const snapshot = slideshow.current;
+    const cached = snapshot ? getLastMediaItem(snapshot.id) : null;
+    const currentItem = snapshot && cached ? { ...snapshot, ...cached } : snapshot;
     setItem(currentItem);
     setLoading(false);
     if (currentItem?.folder_chain) {
