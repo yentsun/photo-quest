@@ -420,7 +420,9 @@ export async function mergeDuplicates({ ids, keepId }) {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || 'Failed to merge duplicates');
+    const error = new Error(body.error || 'Failed to merge duplicates');
+    if (body.code) error.code = body.code;
+    throw error;
   }
   const data = await response.json();
   /* The master's likes/tags changed and the other copies are gone — sync the
@@ -437,7 +439,9 @@ export async function deleteDuplicates({ ids }) {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || 'Failed to delete duplicates');
+    const error = new Error(body.error || 'Failed to delete duplicates');
+    if (body.code) error.code = body.code;
+    throw error;
   }
   const data = await response.json();
   await syncMediaCache(data.removedIds ?? [], []);
