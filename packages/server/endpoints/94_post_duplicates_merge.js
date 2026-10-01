@@ -26,7 +26,7 @@ export default async (kojo, logger) => {
     logger.debug(`[POST /duplicates/merge] ids=${ids.join(',')} keepId=${keepId} merged=${result.merged} deletedFiles=${result.deletedFiles}`);
 
     if (result.status) {
-      return json(res, result.status, { error: result.error });
+      return json(res, result.status, { error: result.error, code: result.code, reconciled: result.reconciled });
     }
 
     json(res, 200, result);

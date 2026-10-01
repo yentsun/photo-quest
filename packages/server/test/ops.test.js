@@ -11,7 +11,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync as Database } from 'node:sqlite';
-import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE } from '@photo-quest/shared';
+import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE, HASH_VERSION } from '@photo-quest/shared';
+import { computeFileHash } from '../src/fileHash.js';
 
 /* Import the raw op functions. */
 import listMedia from '../ops/listMedia.js';
@@ -930,7 +931,7 @@ test('mergeDuplicates op', async (t) => {
     t.assert.strictEqual(result.media.id, b);
   });
 
-  await t.test('rejects when surviving files differ', (t) => {
+  await t.test('rejects and reconciles when surviving files differ', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const onePath = writeFixtureFile(root, 'one.jpg', 'one');
@@ -940,9 +941,42 @@ test('mergeDuplicates op', async (t) => {
 
     const result = callOp(mergeDuplicates, ctx, { ids: [a, b] });
 
-    t.assert.strictEqual(result.status, 400);
+    /* Both stored hashes were stale, so the group was a false positive: the op
+       corrects them and reports the conflict instead of deleting either copy. */
+    t.assert.strictEqual(result.status, 409);
+    t.assert.strictEqual(result.code, 'STALE_DUPLICATES');
+    t.assert.strictEqual(result.reconciled, 2);
     t.assert.ok(callOp(getMediaById, ctx, a));
     t.assert.ok(callOp(getMediaById, ctx, b));
+
+    const rowA = db.prepare('SELECT hash, hash_version FROM media WHERE id = ?').get(a);
+    const rowB = db.prepare('SELECT hash, hash_version FROM media WHERE id = ?').get(b);
+    t.assert.strictEqual(rowA.hash, await computeFileHash(onePath));
+    t.assert.strictEqual(rowB.hash, await computeFileHash(twoPath));
+    t.assert.strictEqual(rowA.hash_version, HASH_VERSION);
+    t.assert.strictEqual(rowB.hash_version, HASH_VERSION);
+  });
+
+  await t.test('corrects only the stale hash in a false group', async (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const keepPath = writeFixtureFile(root, 'keep.jpg', 'keep-content');
+    const stalePath = writeFixtureFile(root, 'stale.jpg', 'stale-content');
+    const keepHash = await computeFileHash(keepPath);
+    /* The stale record was hashed before its file was replaced, so it still
+       carries the other file's content hash and looks like a duplicate. */
+    const keep = db.prepare("INSERT INTO media (path, title, status, hash, hash_version) VALUES (?, 'Keep', 'ready', ?, ?)").run(keepPath, keepHash, HASH_VERSION).lastInsertRowid;
+    const stale = db.prepare("INSERT INTO media (path, title, status, hash, hash_version) VALUES (?, 'Stale', 'ready', ?, ?)").run(stalePath, keepHash, HASH_VERSION).lastInsertRowid;
+
+    const result = callOp(mergeDuplicates, ctx, { ids: [keep, stale] });
+
+    t.assert.strictEqual(result.status, 409);
+    t.assert.strictEqual(result.reconciled, 1);
+    t.assert.strictEqual(db.prepare('SELECT hash FROM media WHERE id = ?').get(keep).hash, keepHash);
+    t.assert.strictEqual(db.prepare('SELECT hash FROM media WHERE id = ?').get(stale).hash, await computeFileHash(stalePath));
+    /* The false group is gone: neither item reports a duplicate anymore. */
+    t.assert.strictEqual(callOp(getMediaDuplicates, ctx, keep).count, 0);
+    t.assert.strictEqual(callOp(getMediaDuplicates, ctx, stale).count, 0);
   });
 });
 
@@ -997,6 +1031,26 @@ test('deleteDuplicates op', async (t) => {
     t.assert.deepStrictEqual([...result.removedIds].sort((x, y) => x - y), [a, b]);
     t.assert.strictEqual(callOp(getMediaById, ctx, a), null);
     t.assert.strictEqual(callOp(getMediaById, ctx, b), null);
+  });
+
+  await t.test('rejects and reconciles a false group instead of deleting', async (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const onePath = writeFixtureFile(root, 'one.jpg', 'one');
+    const twoPath = writeFixtureFile(root, 'two.jpg', 'two');
+    const a = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'One', 'ready', 'same')").run(onePath).lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'Two', 'ready', 'same')").run(twoPath).lastInsertRowid;
+
+    const result = callOp(deleteDuplicates, ctx, { ids: [a, b] });
+
+    t.assert.strictEqual(result.status, 409);
+    t.assert.strictEqual(result.code, 'STALE_DUPLICATES');
+    t.assert.strictEqual(result.reconciled, 2);
+    /* Nothing was deleted from the library or disk. */
+    t.assert.ok(callOp(getMediaById, ctx, a));
+    t.assert.ok(callOp(getMediaById, ctx, b));
+    t.assert.ok(fs.existsSync(onePath));
+    t.assert.ok(fs.existsSync(twoPath));
   });
 });
 

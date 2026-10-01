@@ -7,8 +7,17 @@
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { HASH_VERSION } from '@photo-quest/shared';
+import { HASH_LENGTH } from './fileHash.js';
 
 const CHUNK_SIZE = 1024 * 1024;
+
+/** Normalise an id list to unique positive integers. */
+export function normalizeIds(ids) {
+  return [...new Set((Array.isArray(ids) ? ids : []).map(Number))]
+    .filter(Number.isInteger)
+    .filter(id => id > 0);
+}
 
 function hashFile(filePath) {
   let fd;
@@ -53,9 +62,7 @@ export function findVerifiedDuplicateGroups(items) {
  * Confirm every selected record still exists and has identical file contents.
  */
 export function getVerifiedDuplicateGroup(db, ids) {
-  const normalizedIds = [...new Set((Array.isArray(ids) ? ids : []).map(Number))]
-    .filter(Number.isInteger)
-    .filter(id => id > 0);
+  const normalizedIds = normalizeIds(ids);
   if (normalizedIds.length < 2) return null;
 
   const placeholders = normalizedIds.map(() => '?').join(', ');
@@ -86,4 +93,45 @@ export function getVerifiedDuplicateGroup(db, ids) {
   }
 
   return { hash: contentHash || items[0].hash, items, existing, missing };
+}
+
+/**
+ * Correct stored hashes that no longer match the file on disk.
+ *
+ * A row stamped with the current `HASH_VERSION` is normally never re-hashed, so
+ * a file replaced after it was scanned keeps a stale hash and can keep appearing
+ * in a duplicate group that no longer exists. Destructive duplicate actions call
+ * this after full-content verification fails, so the correction is persisted and
+ * the false group stops being offered. Missing or unreadable files are left
+ * untouched (their stored hash is still the best available).
+ *
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {number[]} ids
+ * @returns {number} Number of records whose stored hash was corrected.
+ */
+export function reconcileStaleHashes(db, ids) {
+  const normalizedIds = normalizeIds(ids);
+  if (normalizedIds.length === 0) return 0;
+
+  const placeholders = normalizedIds.map(() => '?').join(', ');
+  const items = db.prepare(
+    `SELECT id, path, hash FROM media WHERE id IN (${placeholders})`
+  ).all(...normalizedIds);
+
+  const update = db.prepare(
+    "UPDATE media SET hash = ?, hash_version = ?, updated_at = datetime('now') WHERE id = ?"
+  );
+
+  let reconciled = 0;
+  for (const item of items) {
+    const fullHash = hashFile(item.path);
+    if (!fullHash) continue;
+    /* `media.hash` stores only the first `HASH_LENGTH` hex chars, matching
+       `computeFileHash`, so truncate before comparing and persisting. */
+    const actualHash = fullHash.substring(0, HASH_LENGTH);
+    if (actualHash === item.hash) continue;
+    update.run(actualHash, HASH_VERSION, item.id);
+    reconciled++;
+  }
+  return reconciled;
 }

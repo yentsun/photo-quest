@@ -654,7 +654,19 @@ export default function MediaPage() {
       dispatch({ type: actions.TOAST_SHOWN, message: `Merged ${result.merged} duplicate${result.merged === 1 ? '' : 's'}`, toastType: 'success' });
     } catch (err) {
       console.error('Failed to merge duplicates:', err);
-      dispatch({ type: actions.TOAST_SHOWN, message: 'Could not merge duplicates', toastType: 'error' });
+      /* The group can be built from a stale stored hash (the file was replaced
+         after it was scanned). Refetch so the now-invalid merge action
+         disappears, and report the stale case distinctly. */
+      try {
+        const fresh = await fetchMediaDuplicates(item.id);
+        setDuplicates({ ids: fresh.ids ?? [], count: fresh.count ?? 0, items: fresh.items ?? [] });
+      } catch { /* keep the current duplicate state */ }
+      const stale = err?.code === 'STALE_DUPLICATES';
+      dispatch({
+        type: actions.TOAST_SHOWN,
+        message: stale ? 'No longer duplicates — refreshed' : 'Could not merge duplicates',
+        toastType: stale ? 'info' : 'error',
+      });
     }
   }, [item, duplicates, bump, dispatch, navigate, location.state, inSlideshow, removeSlideshowItem]);
 
