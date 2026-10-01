@@ -16,7 +16,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path'; // still used for ext detection
-import { json } from '../src/http.js';
+import { json, sendFile } from '../src/http.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -87,7 +87,7 @@ export default async (kojo, logger) => {
         'Content-Type': contentType,
       });
 
-      fs.createReadStream(filePath, { start, end }).pipe(res);
+      sendFile(res, filePath, { start, end });
     } else {
       logger.debug(`[GET /stream/:id] 200 full file (${fileSize} bytes)`);
       res.writeHead(200, {
@@ -96,7 +96,7 @@ export default async (kojo, logger) => {
         'Accept-Ranges': 'bytes',
       });
 
-      fs.createReadStream(filePath).pipe(res);
+      sendFile(res, filePath);
     }
   });
 };

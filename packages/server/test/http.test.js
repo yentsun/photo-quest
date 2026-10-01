@@ -3,7 +3,11 @@
  */
 
 import test from 'node:test';
-import { json, parseBody, matchRoute } from '../src/http.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { Writable } from 'node:stream';
+import { json, parseBody, matchRoute, sendFile } from '../src/http.js';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers -- minimal mock objects for http.ServerResponse / Request  */
@@ -51,6 +55,66 @@ test('json()', async (t) => {
 
     t.assert.strictEqual(res._status, 404);
     t.assert.strictEqual(JSON.parse(res._body).error, 'Not found');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  sendFile()                                                        */
+/* ------------------------------------------------------------------ */
+
+test('sendFile()', async (t) => {
+  /** Writable response mock that captures the body and tracks headersSent. */
+  function mockStreamRes() {
+    const res = new Writable({
+      write(chunk, _enc, cb) { res._body += chunk.toString(); cb(); },
+    });
+    res._body = '';
+    res._status = null;
+    res._headers = {};
+    res._headersSent = false;
+    Object.defineProperty(res, 'headersSent', { get: () => res._headersSent });
+    res.writeHead = (status, headers = {}) => {
+      res._status = status;
+      res._headersSent = true;
+      Object.assign(res._headers, headers);
+    };
+    return res;
+  }
+
+  await t.test('pipes file contents to the response', async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pq-http-'));
+    const file = path.join(dir, 'a.txt');
+    fs.writeFileSync(file, 'hello');
+    const res = mockStreamRes();
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+
+    sendFile(res, file);
+    await new Promise((resolve) => res.on('finish', resolve));
+
+    t.assert.strictEqual(res._body, 'hello');
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  await t.test('reports 404 when the file is missing and headers are not sent', async (t) => {
+    const res = mockStreamRes();
+
+    /* Must not throw an unhandled 'error' event -- that is what crashed the
+       server when a merge deleted a thumbnail mid-request. */
+    sendFile(res, path.join(os.tmpdir(), 'pq-does-not-exist-12345.txt'));
+    await new Promise((resolve) => res.on('finish', resolve));
+
+    t.assert.strictEqual(res._status, 404);
+    t.assert.strictEqual(res._body, 'Not found');
+  });
+
+  await t.test('aborts the response when the file vanishes after headers are sent', async (t) => {
+    const res = mockStreamRes();
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+
+    sendFile(res, path.join(os.tmpdir(), 'pq-does-not-exist-67890.txt'));
+    await new Promise((resolve) => res.on('close', resolve));
+
+    t.assert.strictEqual(res.destroyed, true);
   });
 });
 

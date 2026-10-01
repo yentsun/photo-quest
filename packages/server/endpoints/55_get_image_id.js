@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
-import { json } from '../src/http.js';
+import { json, sendFile } from '../src/http.js';
 
 export default async (kojo, logger) => {
   kojo.ops.addHttpRoute({
@@ -57,7 +57,7 @@ export default async (kojo, logger) => {
         'Content-Type': contentType,
         'Cache-Control': 'public, max-age=31536000',
       });
-      return fs.createReadStream(filePath).pipe(res);
+      return sendFile(res, filePath);
     }
 
     /* Always run through sharp.rotate() which auto-rotates based on EXIF.
@@ -85,6 +85,6 @@ export default async (kojo, logger) => {
       'Content-Type': contentType,
       'Cache-Control': 'public, max-age=31536000',
     });
-    fs.createReadStream(filePath).pipe(res);
+    sendFile(res, filePath);
   });
 };

@@ -14,13 +14,12 @@
  */
 
 import { spawn } from 'node:child_process';
-import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import ffmpegBin from 'ffmpeg-static';
 import sharp from 'sharp';
 import { MEDIA_TYPE } from '@photo-quest/shared';
-import { json } from '../src/http.js';
+import { json, sendFile } from '../src/http.js';
 import { THUMBS_DIR } from '../src/paths.js';
 
 /** In-flight generation promises keyed by media ID + optional time — prevents duplicate work on concurrent requests. */
@@ -124,7 +123,7 @@ export default async (kojo, logger) => {
         'Content-Length': stat.size,
         'Cache-Control': 'public, max-age=86400',
       });
-      return fs.createReadStream(sourcePath).pipe(res);
+      return sendFile(res, sourcePath);
     }
 
     try { await fsp.access(THUMBS_DIR); } catch { await fsp.mkdir(THUMBS_DIR, { recursive: true }); }
@@ -162,6 +161,6 @@ export default async (kojo, logger) => {
       'Content-Length': stat.size,
       'Cache-Control': 'public, max-age=86400',
     });
-    fs.createReadStream(thumbPath).pipe(res);
+    sendFile(res, thumbPath);
   });
 };

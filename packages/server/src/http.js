@@ -2,12 +2,44 @@
  * @file Shared HTTP helpers used by all endpoint handlers.
  */
 
+import fs from 'node:fs';
+
 /**
  * Send a JSON response.
  */
 export function json(res, statusCode, data) {
   res.writeHead(statusCode, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(data));
+}
+
+/**
+ * Stream a file to the response, guarding against read errors.
+ *
+ * A file can disappear between the caller's existence check and the actual
+ * read (e.g. a duplicate merge deletes a thumbnail mid-request). A
+ * `ReadStream` with no 'error' listener emits an unhandled 'error' event and
+ * takes the whole process down, so this always attaches one: if the response
+ * has not started it reports 404 (or 500 for any other read failure),
+ * otherwise it aborts the response so the client does not hang.
+ *
+ * @param {import('http').ServerResponse} res
+ * @param {string} filePath
+ * @param {import('fs').CreateReadStreamOptions} [options]
+ * @returns {import('fs').ReadStream}
+ */
+export function sendFile(res, filePath, options) {
+  const stream = fs.createReadStream(filePath, options);
+  stream.on('error', (err) => {
+    if (res.headersSent) {
+      res.destroy();
+    } else {
+      const status = err.code === 'ENOENT' ? 404 : 500;
+      res.writeHead(status, { 'Content-Type': 'text/plain' });
+      res.end(status === 404 ? 'Not found' : 'Read error');
+    }
+  });
+  stream.pipe(res);
+  return stream;
 }
 
 /**

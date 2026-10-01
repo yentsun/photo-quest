@@ -13,7 +13,7 @@ import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { json } from '../src/http.js';
+import { json, sendFile } from '../src/http.js';
 import { getServerAddresses } from '../src/network.js';
 import { destroyAllSseClients } from '../src/sse.js';
 
@@ -179,6 +179,6 @@ function serveStatic(pathname, res) {
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
   res.writeHead(200, { 'Content-Type': contentType });
-  fs.createReadStream(filePath).pipe(res);
+  sendFile(res, filePath);
   return true;
 }
