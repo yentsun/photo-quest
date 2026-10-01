@@ -8,7 +8,7 @@ import { actions, MEDIA_TYPE, MEDIA_STATUS, EFFECT_TYPE, EFFECT_TYPE_OPTIONS, ef
 import { ImageViewer, MediaPlayer, LikeButton, DuplicateThumb, DoodleOverlay } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { Button, Icon, IconButton, Loader, Modal, ProgressBar, Select, Input } from '../ui/index.js';
-import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, resetMediaLikes, renameMedia, updateMediaTags, updateMediaEffect, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi, repairFailed } from '../../utils/api.js';
+import { getMediaUrl, getImageUrl, downloadMedia, fetchMediaById, fetchMedia, fetchTags, fetchFolders, likeMedia as likeMediaApi, resetMediaLikes, renameMedia, updateMediaTags, updateMediaEffect, setFolderThumbnail, setVideoThumbnail, getLastMediaItem, cacheMediaItem, getLastFolders, fetchMediaDuplicates, mergeDuplicates as mergeDuplicatesApi, repairFailed } from '../../utils/api.js';
 import { useJobProgress } from '../../contexts/JobProgressContext.jsx';
 import { idbGetMediaById, idbGetMedia } from '../../services/idb.js';
 import { getPageCache } from '../../utils/pageCache.js';
@@ -97,6 +97,15 @@ export default function MediaPage() {
 
   const inSlideshow = slideshow.active;
 
+  /* Slideshow snapshots and folder sibling lists are both taken separately from
+     the item on screen, so likes/tags/effect edits never update them. Merge the
+     latest cached version over such a snapshot so navigating away and back does
+     not revert those edits. */
+  function withCachedEdits(base) {
+    const cached = base ? getLastMediaItem(base.id) : null;
+    return base && cached ? { ...base, ...cached } : base;
+  }
+
   const [item, setItem] = useState(() => {
     if (inSlideshow) return slideshow.current;
     return getLastMediaItem(Number(id)) || null;
@@ -129,14 +138,7 @@ export default function MediaPage() {
 
   useEffect(() => {
     if (!inSlideshow) return;
-    /* The slideshow holds a snapshot taken when the session started, so this
-       item may be stale: liking (or tagging, or editing the effect) updates the
-       item on screen and the session cache, but not the slideshow's `items`
-       array. Merge the cached version over the snapshot so going next → back
-       does not revert those edits. */
-    const snapshot = slideshow.current;
-    const cached = snapshot ? getLastMediaItem(snapshot.id) : null;
-    const currentItem = snapshot && cached ? { ...snapshot, ...cached } : snapshot;
+    const currentItem = withCachedEdits(slideshow.current);
     setItem(currentItem);
     setLoading(false);
     if (currentItem?.folder_chain) {
@@ -359,14 +361,14 @@ export default function MediaPage() {
     if (!hasFolderPrev) return;
     const siblings = await ensureFolderSiblings();
     const idx = siblings.findIndex(m => m.id === Number(id));
-    if (idx > 0) { setItem(siblings[idx - 1]); navigate(`/media/${siblings[idx - 1].id}`, { replace: true, state: location.state }); }
+    if (idx > 0) { setItem(withCachedEdits(siblings[idx - 1])); navigate(`/media/${siblings[idx - 1].id}`, { replace: true, state: location.state }); }
   }, [hasFolderPrev, ensureFolderSiblings, id, navigate, location.state]);
 
   const goFolderNext = useCallback(async () => {
     if (!hasFolderNext) return;
     const siblings = await ensureFolderSiblings();
     const idx = siblings.findIndex(m => m.id === Number(id));
-    if (idx >= 0 && idx < siblings.length - 1) { setItem(siblings[idx + 1]); navigate(`/media/${siblings[idx + 1].id}`, { replace: true, state: location.state }); }
+    if (idx >= 0 && idx < siblings.length - 1) { setItem(withCachedEdits(siblings[idx + 1])); navigate(`/media/${siblings[idx + 1].id}`, { replace: true, state: location.state }); }
   }, [hasFolderNext, ensureFolderSiblings, id, navigate, location.state]);
 
   const toggleFullscreen = useCallback(() => {
@@ -378,12 +380,19 @@ export default function MediaPage() {
   const handleLike = useCallback(async () => {
     if (!item) return;
     const mediaId = item.id;
-    /* Optimistic: bump immediately (functional so rapid presses each add one).
-       The requests themselves are coalesced into one by the like debounce. */
-    setItem(prev => (prev ? { ...prev, likes: (prev.likes || 0) + 1 } : prev));
+    /* Optimistic: bump immediately (functional so rapid presses each add one)
+       and mirror it into the session cache, so navigation reconciliation
+       (slideshow or folder up/down) sees the new count even before the
+       debounced request is flushed. */
+    setItem(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, likes: (prev.likes || 0) + 1 };
+      cacheMediaItem(next);
+      return next;
+    });
     try {
       const { item: updated, likedCount } = await likeMediaApi(mediaId);
-      if (updated) setItem(prev => (prev && prev.id === mediaId ? { ...prev, ...updated } : prev));
+      if (updated) setItem(prev => (prev && prev.id === mediaId ? cacheMediaItem({ ...prev, ...updated }) : prev));
       /* Update the sidebar liked count directly from the response. */
       if (likedCount != null) setLikedCount(likedCount);
     } catch (err) {
@@ -391,7 +400,7 @@ export default function MediaPage() {
       /* Re-sync with the server (the likes were not applied). */
       try {
         const fresh = await fetchMediaById(mediaId, { skipCache: true });
-        if (fresh) setItem(prev => (prev && prev.id === mediaId ? fresh : prev));
+        if (fresh) setItem(prev => (prev && prev.id === mediaId ? cacheMediaItem(fresh) : prev));
       } catch { /* ignore */ }
     }
   }, [item?.id, setLikedCount]);

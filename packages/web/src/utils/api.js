@@ -100,6 +100,20 @@ export function getLastTags() { return _tagsCache; }
 export function getLastMediaItem(id) { return _mediaCache.get(id) ?? null; }
 
 /**
+ * Write an already-loaded media item into the session cache so later reads
+ * (`getLastMediaItem`) see it. Used for optimistic edits (e.g. liking) that must
+ * be visible to navigation reconciliation before the server round-trip lands.
+ *
+ * @param {Object} item
+ * @returns {Object} the cached item
+ */
+export function cacheMediaItem(item) {
+  if (!item || item.id == null) return item;
+  _mediaCache.set(Number(item.id), item);
+  return item;
+}
+
+/**
  * Returns the last page-1 media result for a folder path, or null if not yet loaded.
  * @param {string} folderPath
  * @returns {{ items: Object[], total: number }|null}
