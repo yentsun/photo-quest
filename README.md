@@ -4,10 +4,19 @@ A self-hosted media library PWA for browsing, organizing, and enjoying your phot
 
 ## Features
 
-- **Cross-device access** - View your media library from any device on your network
-- **Native folder picker** - Add folders using your browser's file picker
+- **Cross-device access** - View your media library from any device on your network, as an installable PWA or via the QR code in the sidebar
+- **Native folder picker** - Add folders using your browser's file picker, with recursive indexing of multiple folders
+- **Tags** - Tag media and browse everything by tag
+- **Like system** - Like your favorite media, unlimited likes per item, and reset likes from the Info panel
+- **Duplicate detection** - Group byte-identical copies by full-content hash, then merge them into one record (keeping likes and tags) or delete the extras
+- **Failed media** - Find files that are missing or failed processing, and fix or merge them
+- **Animated doodle effects** - Draw an accent circle on a photo and play rays, arrows, or hearts over it
+- **Magnifier** - Zoom 3x into a photo or video and drag to pan
+- **Playback speed** - Cycle videos through 1x, 0.5x, and 0.25x
 - **Slideshow mode** - Full-screen slideshows with random or sequential order
-- **Like system** - Like your favorite media, unlimited likes per item
+- **Transcoding** - On-demand transcoding to MP4 with a pause/resume queue
+- **Storage & backups** - Disk usage stats, one-click database backup, and CSV/JSON library manifests
+- **Connections** - Discover and switch between known servers, each with its own storage summary
 - **Offline support** - PWA caches viewed media for offline access
 - **Responsive UI** - Works on desktop and mobile
 
@@ -46,6 +55,8 @@ use `pnpm dev` instead.
 3. Browse your media in the Library view
 4. Click a thumbnail to view it, or click **Shuffle** to start a slideshow
 5. Like your favorites — they appear in the **Liked** section
+6. Open a photo and use **Effect** to draw a doodle overlay (rays, arrows, or hearts)
+7. Open **Duplicates** to merge or delete byte-identical copies, or **Failed** to repair broken records
 
 ### Keyboard shortcuts
 
@@ -56,10 +67,11 @@ use `pnpm dev` instead.
 | Space | Play/pause video |
 | Enter | Like |
 | T | Add a tag |
+| M | Merge duplicate copies (when present) |
 | F | Toggle fullscreen |
 | I | Show media info |
 | Delete | Delete media |
-| Escape | Exit fullscreen |
+| Escape | Exit fullscreen or magnifier, cancel an effect edit |
 
 ### Accessing from other devices
 
