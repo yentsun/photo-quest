@@ -60,9 +60,12 @@ export default function LikedPage() {
     if (isPageCacheValid('liked', signal)) return;
     let cancelled = false;
 
+    /* IndexedDB can paint instantly on a cold start, but it may hold only a
+       partial snapshot. Never let it clobber a list we already have — the
+       server fetch below is authoritative and bypasses the IDB-first cache. */
     idbGetMedia({ liked: true, limit: FETCH_LIMIT })
       .then(({ items, total: t }) => {
-        if (cancelled || items.length === 0) return;
+        if (cancelled || items.length === 0 || likedMedia.length > 0) return;
         setLikedMedia(items);
         if (t != null) setTotal(t);
         setLoading(false);
@@ -70,7 +73,7 @@ export default function LikedPage() {
       })
       .catch(() => {});
 
-    fetchMedia({ liked: true, limit: FETCH_LIMIT })
+    fetchMedia({ liked: true, limit: FETCH_LIMIT, skipCache: true })
       .then(({ items, total: t }) => {
         if (cancelled) return;
         setLikedMedia(items);
