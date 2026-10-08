@@ -14,6 +14,20 @@ import { removeFromFailedSnapshot } from './listFailed.js';
 import { broadcastSse } from '../src/sse.js';
 import { THUMBS_DIR } from '../src/paths.js';
 
+/**
+ * Whether another media record still references `file` as its original path or
+ * its transcoded output. `path` is UNIQUE, so the cross-reference that matters
+ * is one row's `path` being another row's `transcoded_path` — the scanner can
+ * import a transcode output as its own media. Removing the derived row must
+ * never unlink the original record's playable file.
+ */
+function referencedByAnother(db, id, file) {
+  if (!file) return false;
+  return Boolean(db.prepare(
+    'SELECT id FROM media WHERE id != ? AND (path = ? OR transcoded_path = ?)'
+  ).get(id, file, file));
+}
+
 export default function (id) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
@@ -29,18 +43,18 @@ export default function (id) {
   const filePath = row ? row.path : null;
   const transcodedPath = row ? row.transcoded_path : null;
 
-  /* Check whether the transcoded file is shared by another media record
-     before deleting. Prevents accidentally deleting a file that another
-     record (e.g. a duplicate imported from the same folder) also points to. */
-  let keepTranscoded = false;
-  if (transcodedPath) {
-    const shared = db.prepare(
-      'SELECT id FROM media WHERE id != ? AND (path = ? OR transcoded_path = ?)'
-    ).get(Number(id), transcodedPath, transcodedPath);
-    if (shared) {
-      logger.debug(`transcoded path ${transcodedPath} also referenced by media ${shared.id}, will not delete`);
-      keepTranscoded = true;
-    }
+  /* Check whether either file is still referenced by another media record
+     before deleting. `path` is UNIQUE, so the real case is a row whose `path`
+     is another record's `transcoded_path` (a transcode output imported as its
+     own media by an earlier scan). Deleting the derived row must never destroy
+     the original record's playable file, and vice versa. */
+  const keepFile = referencedByAnother(db, Number(id), filePath);
+  const keepTranscoded = referencedByAnother(db, Number(id), transcodedPath);
+  if (keepFile) {
+    logger.debug(`original path ${filePath} is another record's transcoded_path, will not delete`);
+  }
+  if (keepTranscoded) {
+    logger.debug(`transcoded path ${transcodedPath} is also referenced by another media, will not delete`);
   }
 
   const result = db.prepare('DELETE FROM media WHERE id = ?').run(Number(id));
@@ -48,13 +62,12 @@ export default function (id) {
 
   if (result.changes > 0) {
     removeFromFailedSnapshot(kojo, [Number(id)]);
-    for (const p of [filePath]) {
-      if (!p) continue;
+    if (filePath && !keepFile) {
       try {
-        fs.unlinkSync(p);
-        logger.info(`Deleted file from disk: ${p}`);
+        fs.unlinkSync(filePath);
+        logger.info(`Deleted file from disk: ${filePath}`);
       } catch (err) {
-        logger.warn(`Could not delete file from disk: ${p} — ${err.message}`);
+        logger.warn(`Could not delete file from disk: ${filePath} — ${err.message}`);
       }
     }
 

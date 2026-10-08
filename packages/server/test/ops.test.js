@@ -1259,5 +1259,33 @@ test('removeMedia op', async (t) => {
 
     t.assert.strictEqual(count, 0);
   });
+
+  await t.test('keeps a file another record references as its transcoded_path', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'remove-media-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+    /* A scan imported the transcode output as its own media, so the derived
+       row's `path` is the original record's `transcoded_path`. Removing the
+       derived row must not unlink the file the original still streams. */
+    const converted = writeFixtureFile(root, 'clip_converted.mp4', 'converted');
+    const original = db.prepare(
+      "INSERT INTO media (path, title, status, transcoded_path) VALUES (?, 'Original', 'ready', ?)"
+    ).run(path.join(root, 'clip.mov'), converted).lastInsertRowid;
+    const derived = db.prepare(
+      "INSERT INTO media (path, title, status) VALUES (?, 'Derived', 'ready')"
+    ).run(converted).lastInsertRowid;
+
+    const result = callOp(removeMedia, ctx, derived);
+
+    t.assert.strictEqual(result.deleted, true);
+    t.assert.ok(fs.existsSync(converted), 'the original record keeps its transcoded file');
+    t.assert.strictEqual(callOp(getMediaById, ctx, derived), null);
+    t.assert.strictEqual(
+      db.prepare('SELECT transcoded_path FROM media WHERE id = ?').get(original).transcoded_path,
+      converted
+    );
+  });
 });
 

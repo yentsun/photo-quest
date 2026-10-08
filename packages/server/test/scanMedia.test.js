@@ -18,6 +18,11 @@ import { DatabaseSync as Database } from 'node:sqlite';
 import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_SCANS_TABLE, CREATE_IMPORT_QUEUE_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE, SCAN_STATUS, IMPORT_STATUS, MEDIA_STATUS, HASH_VERSION } from '@photo-quest/shared';
 import scanMedia, { processOneItem, resumeIncompleteScans, abortDiscoveryWalk } from '../ops/scanMedia.js';
 
+/* These tests drive the import queue synchronously via drainQueue(), so the
+   background scan worker must not spawn: it opens the real `DB_PATH` database
+   (not this suite's in-memory one) and can mutate the live library. */
+process.env.SCAN_WORKER_DISABLED = '1';
+
 /** Create a temp directory tree with nested folders and media files. */
 function createFixtureTree() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'scan-test-'));
@@ -536,6 +541,44 @@ test('scanMedia — resume after interruption', async (t) => {
 
     t.assert.strictEqual(allMedia(db).length, 4);
     t.assert.strictEqual(getScan(db, scanId).processed, 4);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Derived transcode outputs                                          */
+/* ------------------------------------------------------------------ */
+
+test('scanMedia — transcode outputs', async (t) => {
+  let root;
+
+  t.beforeEach(() => { root = createFixtureTree(); });
+  t.afterEach(() => { cleanup(root); });
+
+  await t.test('does not import a file that is another record\'s transcoded_path', async () => {
+    const db = makeDb();
+    const { ctx } = makeContext(db);
+
+    /* An already-transcoded record claims the derived output. Re-scanning the
+       folder must not turn that output into its own media row, because deleting
+       such a row would unlink the original record's playable file. */
+    const converted = path.join(root, 'photo_converted.mp4');
+    fs.writeFileSync(converted, 'converted-bytes');
+    db.prepare(
+      "INSERT INTO media (path, title, status, transcoded_path) VALUES (?, 'Photo', 'ready', ?)"
+    ).run(path.join(root, 'photo.mov'), converted);
+
+    const scan = bindScanMedia(db);
+    const result = await scan(root);
+    await drainQueue(db, result.scanId, ctx[1]);
+
+    const convertedItem = allQueueItems(db, result.scanId).find(i => i.path === converted);
+    t.assert.ok(convertedItem, 'the derived output was discovered by the scan');
+    t.assert.strictEqual(convertedItem.status, IMPORT_STATUS.COMPLETED);
+    t.assert.strictEqual(
+      allMedia(db).some(row => row.path === converted),
+      false,
+      'no media row was created for the derived output'
+    );
   });
 });
 

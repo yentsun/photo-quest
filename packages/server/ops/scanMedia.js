@@ -78,6 +78,17 @@ export async function processOneItem(db, itemId, filePath, logger) {
     return;
   }
 
+  /* Transcode outputs are derived artifacts, not user media. Importing them as
+     their own records creates bogus "duplicates" whose removal would delete the
+     original record's playable file, so skip any file another record claims as
+     its transcoded_path. */
+  const derived = db.prepare('SELECT id FROM media WHERE transcoded_path = ?').get(filePath);
+  if (derived) {
+    logger.debug(`skipping transcode output of media id=${derived.id}: ${filePath}`);
+    db.prepare('UPDATE import_queue SET status = ? WHERE id = ?').run(IMPORT_STATUS.COMPLETED, itemId);
+    return;
+  }
+
   logger.debug(`computing hash for ${filePath}`);
   const hash = await computeFileHash(filePath);
   logger.debug(`hash=${hash}`);
@@ -151,8 +162,16 @@ export function abortDiscoveryWalk() {
  * Ensure the single worker thread is running.
  * If it is already running it will naturally pick up items from the new
  * scan that were just added to import_queue — no second thread needed.
+ *
+ * Set `SCAN_WORKER_DISABLED=1` to suppress it. Tests drive the queue
+ * synchronously and must not spawn a worker, which would open the real
+ * `DB_PATH` database rather than their in-memory one.
  */
 function ensureScanWorker(logger) {
+  if (process.env.SCAN_WORKER_DISABLED === '1') {
+    logger.debug('scan worker disabled (SCAN_WORKER_DISABLED)');
+    return;
+  }
   if (activeWorker) return;
 
   const worker = new Worker(WORKER_PATH, { workerData: { dbPath: DB_PATH } });
