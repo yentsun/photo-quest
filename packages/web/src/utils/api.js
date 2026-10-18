@@ -23,7 +23,7 @@ import {
   idbReplaceFolders,
   idbPruneMedia,
 } from '../services/idb.js';
-import { invalidatePageCache } from './pageCache.js';
+import { getPageCache, invalidatePageCache } from './pageCache.js';
 import { setCachedLiked, upsertCachedLiked, removeCachedLiked } from './likedCache.js';
 
 // ---------------------------------------------------------------------------
@@ -121,6 +121,69 @@ export function cacheMediaItem(item) {
 export function getLastFolderMedia(folderPath) { return _folderMediaCache.get(folderPath) ?? null; }
 
 /**
+ * Drop removed ids from the cached Timeline day lists and apply updated
+ * metadata for surviving copies. Keeps the page cache consistent when the
+ * Timeline is not mounted (merge/delete happens on another page).
+ *
+ * @param {Array<number|string>} removedIds
+ * @param {Object[]} [replacements]
+ */
+function syncTimelineCache(removedIds = [], replacements = []) {
+  const data = getPageCache('timeline')?.data;
+  if (!data?.dayItems) return;
+
+  const removed = new Set(removedIds.map(Number));
+  const updatedById = new Map(replacements.map(item => [Number(item.id), item]));
+  if (removed.size === 0 && updatedById.size === 0) return;
+
+  const removedByDay = {};
+  let changed = false;
+  const nextDayItems = {};
+
+  for (const [day, items] of Object.entries(data.dayItems)) {
+    let removedHere = 0;
+    const nextItems = [];
+
+    for (const item of items) {
+      const id = Number(item.id);
+      if (removed.has(id)) {
+        removedHere += 1;
+        changed = true;
+        continue;
+      }
+      const replacement = updatedById.get(id);
+      if (replacement) {
+        nextItems.push(replacement);
+        changed = true;
+      } else {
+        nextItems.push(item);
+      }
+    }
+
+    nextDayItems[day] = nextItems;
+    if (removedHere > 0) {
+      removedByDay[day] = removedHere;
+      if (data.dayOffsets) {
+        data.dayOffsets[day] = Math.max(0, (data.dayOffsets[day] ?? 0) - removedHere);
+      }
+    }
+  }
+
+  if (!changed) return;
+  data.dayItems = nextDayItems;
+
+  if (Array.isArray(data.days)) {
+    data.days = data.days
+      .map(day => (
+        removedByDay[day.key]
+          ? { ...day, count: Math.max(0, day.count - removedByDay[day.key]) }
+          : day
+      ))
+      .filter(day => day.count > 0);
+  }
+}
+
+/**
  * Remove media ids from the in-memory + IDB media caches and upsert
  * replacements. Called after destructive operations (deleting or merging
  * media) so the UI reflects the change immediately, without a hard refresh.
@@ -141,6 +204,7 @@ async function syncMediaCache(ids = [], replacements = []) {
     _mediaCache.set(parsed.id, parsed);
     updates.push(idbPutMedia(parsed));
   }
+  syncTimelineCache(ids, replacements);
   _folderMediaCache.clear();
   _foldersCache = null;
   _tagsCache = null;
@@ -164,6 +228,7 @@ export async function purgeMedia(ids = []) {
     _mediaCache.delete(Number(id));
     updates.push(idbDeleteMedia(id));
   }
+  syncTimelineCache(ids);
   _folderMediaCache.clear();
   await Promise.all(updates.map(update => update.catch(err => {
     console.warn('[idb] purge failed:', err);
@@ -571,6 +636,7 @@ export async function fetchMediaDays({ from, to, type } = {}) {
 async function forgetMedia(id) {
   const numericId = Number(id);
   _mediaCache.delete(numericId);
+  syncTimelineCache([numericId]);
   try { await idbDeleteMedia(numericId); } catch { /* ignore */ }
 }
 
@@ -790,6 +856,7 @@ export async function deleteMedia(id) {
   }
   const result = await response.json();
   _mediaCache.delete(id);
+  syncTimelineCache([id]);
   if (folderPath) _folderMediaCache.delete(folderPath);
   idbDeleteMedia(id).catch(() => {});
   return result;
