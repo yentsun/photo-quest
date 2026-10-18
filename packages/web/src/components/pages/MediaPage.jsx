@@ -122,8 +122,12 @@ export default function MediaPage() {
         ?? getPageCache(`folder:${f.id}:filename`)?.data?.directMedia
         ?? [];
   });
+  const likedType = location.state?.likedType || 'all';
+  const likedTypeParam = likedType === 'all' ? undefined : likedType;
   const [likedNavList, setLikedNavList] = useState(() =>
-    navContext === 'liked' ? (getPageCache('liked')?.data?.likedMedia ?? []) : []
+    navContext === 'liked'
+      ? (getPageCache(`liked:${likedType}`)?.data?.likedMedia ?? [])
+      : []
   );
   const [timelineNavList, setTimelineNavList] = useState(() =>
     navContext === 'timeline' ? (getPageCache('timeline')?.data?.items ?? []) : []
@@ -233,11 +237,11 @@ export default function MediaPage() {
   useEffect(() => {
     if (inSlideshow || navContext !== 'liked') return;
     let cancelled = false;
-    fetchMedia({ liked: true, limit: FETCH_LIMIT })
+    fetchMedia({ liked: true, type: likedTypeParam, limit: FETCH_LIMIT })
       .then(({ items }) => { if (!cancelled) setLikedNavList(items); })
       .catch(err => console.error('Failed to load liked nav list:', err));
     return () => { cancelled = true; };
-  }, [inSlideshow, navContext]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [inSlideshow, navContext, likedType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Surface a merge action only when the item on screen shares its content hash
      with other visible copies. Runs during a slideshow too (Shuffle is a

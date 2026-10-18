@@ -8,8 +8,9 @@ import { getCachedLiked, setCachedLiked } from '../../utils/likedCache.js';
 import { idbGetMedia } from '../../services/idb.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, Loader } from '../ui/index.js';
+import { Button, Icon, Loader, Select } from '../ui/index.js';
 import useSwipePagination from '../../hooks/useSwipePagination.js';
+import usePersistedState from '../../hooks/usePersistedState.js';
 
 const PAGE_SIZE = 30;
 const FETCH_LIMIT = 10000;
@@ -47,45 +48,58 @@ export default function LikedPage() {
 
   useEffect(() => { slideshow.stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const _pc = isPageCacheValid('liked', signal) ? getPageCache('liked') : null;
+  const [mediaType, setMediaType] = usePersistedState('liked:type', 'all');
+  const typeParam = mediaType === 'all' ? undefined : mediaType;
+  const cacheKey = `liked:${mediaType}`;
+
+  const _pc = isPageCacheValid(cacheKey, signal) ? getPageCache(cacheKey) : null;
   /* A persisted snapshot lets a cold start paint the first pages immediately
-     while the fresh list loads in the background. */
-  const _persisted = _pc ? null : getCachedLiked();
+     while the fresh list loads in the background. It only covers "all" likes. */
+  const _persisted = mediaType === 'all' && !_pc ? getCachedLiked() : null;
 
   const [likedMedia, setLikedMedia] = useState(_pc?.data.likedMedia ?? _persisted?.items ?? []);
   const [total, setTotal] = useState(_pc?.data.total ?? _persisted?.total ?? 0);
   const [loading, setLoading] = useState(!_pc && !_persisted);
 
   useEffect(() => {
-    if (isPageCacheValid('liked', signal)) return;
     let cancelled = false;
 
     /* IndexedDB can paint instantly on a cold start, but it may hold only a
        partial snapshot. Never let it clobber a list we already have — the
        server fetch below is authoritative and bypasses the IDB-first cache. */
-    idbGetMedia({ liked: true, limit: FETCH_LIMIT })
+    idbGetMedia({ liked: true, type: typeParam, limit: FETCH_LIMIT })
       .then(({ items, total: t }) => {
         if (cancelled || items.length === 0 || likedMedia.length > 0) return;
         setLikedMedia(items);
         if (t != null) setTotal(t);
         setLoading(false);
-        setCachedLiked(items, t);
+        if (mediaType === 'all') setCachedLiked(items, t);
       })
       .catch(() => {});
 
-    fetchMedia({ liked: true, limit: FETCH_LIMIT, skipCache: true })
+    fetchMedia({ liked: true, type: typeParam, limit: FETCH_LIMIT, skipCache: true })
       .then(({ items, total: t }) => {
         if (cancelled) return;
         setLikedMedia(items);
         setTotal(t);
         setLoading(false);
-        setPageCache('liked', { likedMedia: items, total: t }, signal);
-        setCachedLiked(items, t);
+        setPageCache(cacheKey, { likedMedia: items, total: t }, signal);
+        if (mediaType === 'all') setCachedLiked(items, t);
       })
       .catch(err => { console.error('Failed to fetch liked media:', err); if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [signal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [signal, mediaType]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTypeChange = useCallback((next) => {
+    if (next === mediaType) return;
+    setMediaType(next);
+    setLikedMedia([]);
+    setTotal(0);
+    setLoading(true);
+    setSearchParams({}, { replace: true });
+    document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [mediaType, setSearchParams]);
 
   const totalPages = Math.max(1, Math.ceil(likedMedia.length / PAGE_SIZE));
   const displayItems = useMemo(() => likedMedia.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [likedMedia, page]);
@@ -116,44 +130,60 @@ export default function LikedPage() {
     return `${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()} items`;
   })();
 
-  if (loading) return <div className="page-loader"><Loader message="Fetching your liked media…" /></div>;
-
   return (
     <div className="page" {...swipe}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Liked</h1>
-          <p className="page-subtitle">{itemLabel || '0 items'}</p>
+          <p className="page-subtitle">{loading ? 'Loading…' : itemLabel || '0 items'}</p>
         </div>
-        {likedMedia.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={handleShuffle} icon={<Icon name="shuffle" className="icon-sm" />}>
-            Shuffle
-          </Button>
-        )}
+        <div className="page-actions">
+          <Select
+            value={mediaType}
+            onChange={e => handleTypeChange(e.target.value)}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'image', label: 'Photos' },
+              { value: 'video', label: 'Videos' },
+            ]}
+            title="Media type"
+          />
+          {likedMedia.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={handleShuffle} icon={<Icon name="shuffle" className="icon-sm" />}>
+              Shuffle
+            </Button>
+          )}
+        </div>
       </div>
 
-      <MediaGrid
-        items={displayItems}
-        onItemClick={m => navigate(`/media/${m.id}`, { state: { context: 'liked' } })}
-        emptyState={
-          <EmptyState
-            icon={<Icon name="heart" className="icon-2xl" />}
-            title="No liked items"
-            description="Like photos and videos in your library to see them here."
+      {loading ? (
+        <div className="page-loader"><Loader message="Fetching your liked media…" /></div>
+      ) : (
+        <>
+          <MediaGrid
+            items={displayItems}
+            onItemClick={m => navigate(`/media/${m.id}`, { state: { context: 'liked', likedType: mediaType } })}
+            emptyState={
+              <EmptyState
+                icon={<Icon name="heart" className="icon-2xl" />}
+                title={mediaType === 'image' ? 'No liked photos' : mediaType === 'video' ? 'No liked videos' : 'No liked items'}
+                description="Like photos and videos in your library to see them here."
+              />
+            }
           />
-        }
-      />
 
-      {totalPages > 1 && (
-        <div className="pagination-row">
-          <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => goToPage(page - 1)} icon={<Icon name="prev" className="icon-sm" />} />
-          {getPageNumbers(page, totalPages).map((p, i) =>
-            p === '…'
-              ? <span key={`ellipsis-${i}`} className="pagination-ellipsis">…</span>
-              : <Button key={p} variant={p === page ? 'primary' : 'ghost'} size="sm" onClick={() => goToPage(p)}>{p + 1}</Button>
+          {totalPages > 1 && (
+            <div className="pagination-row">
+              <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => goToPage(page - 1)} icon={<Icon name="prev" className="icon-sm" />} />
+              {getPageNumbers(page, totalPages).map((p, i) =>
+                p === '…'
+                  ? <span key={`ellipsis-${i}`} className="pagination-ellipsis">…</span>
+                  : <Button key={p} variant={p === page ? 'primary' : 'ghost'} size="sm" onClick={() => goToPage(p)}>{p + 1}</Button>
+              )}
+              <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => goToPage(page + 1)} icon={<Icon name="next" className="icon-sm" />} />
+            </div>
           )}
-          <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => goToPage(page + 1)} icon={<Icon name="next" className="icon-sm" />} />
-        </div>
+        </>
       )}
     </div>
   );

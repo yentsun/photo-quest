@@ -5,7 +5,7 @@ import { useSlideshow } from '../../contexts/SlideshowContext.jsx';
 import { fetchMedia } from '../../utils/api.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { Button, Icon, Loader } from '../ui/index.js';
+import { Button, Icon, Loader, Select } from '../ui/index.js';
 
 const PAGE_SIZE = 30;
 
@@ -36,6 +36,8 @@ export default function TagPage() {
   const [media, setMedia] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [mediaType, setMediaType] = useState('all');
+  const typeParam = mediaType === 'all' ? undefined : mediaType;
 
   const [searchParams, setSearchParams] = useSearchParams();
   const paramPage = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
@@ -59,7 +61,7 @@ export default function TagPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchMedia({ tag: decodedTag, limit: PAGE_SIZE, offset: page * PAGE_SIZE })
+    fetchMedia({ tag: decodedTag, type: typeParam, limit: PAGE_SIZE, offset: page * PAGE_SIZE })
       .then(({ items, total: t }) => {
         if (cancelled) return;
         setMedia(items);
@@ -68,7 +70,17 @@ export default function TagPage() {
       })
       .catch(err => { console.error('Failed to fetch tagged media:', err); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [decodedTag, page, signal]);
+  }, [decodedTag, page, signal, mediaType]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTypeChange = useCallback((next) => {
+    if (next === mediaType) return;
+    setMediaType(next);
+    setMedia([]);
+    setTotal(0);
+    setLoading(true);
+    setSearchParams({}, { replace: true });
+    document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [mediaType, setSearchParams]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -93,8 +105,6 @@ export default function TagPage() {
     }
   }, [slideshow.active, slideshow.current, navigate]);
 
-  if (loading) return <div className="page-loader"><Loader message={`"${decodedTag}"...`} /></div>;
-
   return (
     <div className="page">
       <div className="page-header">
@@ -104,16 +114,30 @@ export default function TagPage() {
             <span className="breadcrumb-sep">/</span>
             <h1 className="page-title">{decodedTag}</h1>
           </div>
-          <p className="page-subtitle">{itemLabel || '0 items'}</p>
+          <p className="page-subtitle">{loading ? 'Loading…' : itemLabel || '0 items'}</p>
         </div>
-        {total > 0 && (
-          <Button variant="ghost" size="sm" onClick={handleShuffle} icon={<Icon name="shuffle" className="icon-sm" />}>
-            Shuffle
-          </Button>
-        )}
+        <div className="page-actions">
+          <Select
+            value={mediaType}
+            onChange={e => handleTypeChange(e.target.value)}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'image', label: 'Photos' },
+              { value: 'video', label: 'Videos' },
+            ]}
+            title="Media type"
+          />
+          {total > 0 && (
+            <Button variant="ghost" size="sm" onClick={handleShuffle} icon={<Icon name="shuffle" className="icon-sm" />}>
+              Shuffle
+            </Button>
+          )}
+        </div>
       </div>
 
-      {media.length > 0 ? (
+      {loading ? (
+        <div className="page-loader"><Loader message={`"${decodedTag}"...`} /></div>
+      ) : media.length > 0 ? (
         <>
           <MediaGrid
             items={media}

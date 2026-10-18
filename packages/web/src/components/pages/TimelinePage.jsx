@@ -15,19 +15,20 @@ import { getPageCache, isPageCacheValid, setPageCache } from '../../utils/pageCa
 import { formatDayLabel, groupMediaByDay } from '../../utils/timeline.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
-import { DateRangePicker, Icon, Loader } from '../ui/index.js';
+import { DateRangePicker, Icon, Loader, Select } from '../ui/index.js';
 
 const PAGE_SIZE = 60;
 
 export default function TimelinePage() {
   const navigate = useNavigate();
-  const { signal } = useRefresh();
+  const { signal, libraryCount } = useRefresh();
 
   /* Keep the loaded pages and range when the user opens an item and comes
      back. A stale signal (media changed) keeps the range but refetches. */
   const previousCache = getPageCache('timeline')?.data;
   const validCache = isPageCacheValid('timeline', signal) ? previousCache : null;
   const [range, setRange] = useState(previousCache?.range ?? { start: null, end: null });
+  const [mediaType, setMediaType] = useState(previousCache?.type ?? 'all');
   const [items, setItems] = useState(validCache?.items ?? []);
   const [total, setTotal] = useState(validCache?.total ?? 0);
   const [loading, setLoading] = useState(!validCache);
@@ -40,6 +41,7 @@ export default function TimelinePage() {
   const skipInitialFetchRef = useRef(Boolean(validCache));
 
   const { start: from, end: to } = range;
+  const typeParam = mediaType === 'all' ? undefined : mediaType;
 
   useEffect(() => {
     if (skipInitialFetchRef.current) {
@@ -59,7 +61,7 @@ export default function TimelinePage() {
     loadingMoreRef.current = false;
     setLoadingMore(false);
 
-    fetchMedia({ limit: PAGE_SIZE, offset: 0, from, to, skipCache: true })
+    fetchMedia({ limit: PAGE_SIZE, offset: 0, from, to, type: typeParam, skipCache: true })
       .then((data) => {
         if (cancelled || requestId !== requestRef.current) return;
         setItems(data.items);
@@ -74,7 +76,7 @@ export default function TimelinePage() {
       });
 
     return () => { cancelled = true; };
-  }, [from, to, signal]);
+  }, [from, to, typeParam, signal]);
 
   const loadMore = useCallback(() => {
     if (loadingMoreRef.current) return;
@@ -86,7 +88,7 @@ export default function TimelinePage() {
     const requestId = requestRef.current;
     const offset = offsetRef.current;
 
-    fetchMedia({ limit: PAGE_SIZE, offset, from, to, skipCache: true })
+    fetchMedia({ limit: PAGE_SIZE, offset, from, to, type: typeParam, skipCache: true })
       .then((data) => {
         if (requestId !== requestRef.current) return;
 
@@ -106,17 +108,29 @@ export default function TimelinePage() {
         loadingMoreRef.current = false;
         setLoadingMore(false);
       });
-  }, [from, to, total]);
+  }, [from, to, typeParam, total]);
 
   useEffect(() => {
     if (loading || error) return;
-    setPageCache('timeline', { range, items, total }, signal);
-  }, [range, items, total, loading, error, signal]);
+    setPageCache('timeline', { range, type: mediaType, items, total }, signal);
+  }, [range, mediaType, items, total, loading, error, signal]);
 
   const handleRangeChange = useCallback((next) => {
     setRange(next);
+    setItems([]);
+    setTotal(0);
+    setLoading(true);
     document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
+
+  const handleTypeChange = useCallback((next) => {
+    if (next === mediaType) return;
+    setMediaType(next);
+    setItems([]);
+    setTotal(0);
+    setLoading(true);
+    document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [mediaType]);
 
   const openItem = useCallback((media) => {
     navigate(`/media/${media.id}`, { state: { context: 'timeline' } });
@@ -130,15 +144,24 @@ export default function TimelinePage() {
   })), [items]);
 
   const hasMore = items.length < total;
+  const filtersApplied = Boolean(from || to) || mediaType !== 'all';
   const subtitle = loading
     ? 'Loading…'
     : error
       ? 'Could not load'
       : total === 0
         ? 'No items'
-        : hasMore
-          ? `${items.length.toLocaleString()} of ${total.toLocaleString()} items`
+        : filtersApplied && libraryCount != null
+          ? `${total.toLocaleString()} of ${libraryCount.toLocaleString()} items`
           : `${total.toLocaleString()} item${total === 1 ? '' : 's'}`;
+
+  const clearFilters = () => {
+    setRange({ start: null, end: null });
+    setMediaType('all');
+    setItems([]);
+    setTotal(0);
+    setLoading(true);
+  };
 
   return (
     <div className="page">
@@ -148,6 +171,16 @@ export default function TimelinePage() {
           <p className="page-subtitle">{subtitle}</p>
         </div>
         <div className="page-actions">
+          <Select
+            value={mediaType}
+            onChange={e => handleTypeChange(e.target.value)}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'image', label: 'Photos' },
+              { value: 'video', label: 'Videos' },
+            ]}
+            title="Media type"
+          />
           <DateRangePicker
             start={from}
             end={to}
@@ -173,13 +206,13 @@ export default function TimelinePage() {
           emptyState={
             <EmptyState
               icon={<Icon name="calendar" className="icon-2xl" />}
-              title={from ? 'No media in this range' : 'No media yet'}
-              description={from
-                ? 'Try a wider date range.'
+              title={filtersApplied ? 'No matching media' : 'No media yet'}
+              description={filtersApplied
+                ? 'Try a wider date range or a different media type.'
                 : 'Import a folder to see your photos and videos here.'}
-              action={from ? {
-                label: 'Clear date range',
-                onClick: () => handleRangeChange({ start: null, end: null }),
+              action={filtersApplied ? {
+                label: 'Clear filters',
+                onClick: clearFilters,
               } : undefined}
             />
           }
