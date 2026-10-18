@@ -214,20 +214,20 @@ export function resetMediaCaches() {
 // ---------------------------------------------------------------------------
 // Sidebar count badges (cached — never "live" over the full library)
 // ---------------------------------------------------------------------------
-// Library / Liked / Tags / Duplicates counts are cached in-memory + localStorage
+// Timeline / Folders / Liked / Tags / Duplicates counts are cached in-memory + localStorage
 // so the badges render instantly on every load and are never recomputed by
 // scanning the whole media store. They are refreshed against the cheap server
 // COUNT endpoints (which return just a total) only on data-change signals.
 
 const COUNTS_STORAGE_KEY = 'photoquest.counts-v2';
-const EMPTY_COUNTS = { library: null, liked: null, tags: null, duplicates: null, failed: null };
+const EMPTY_COUNTS = { library: null, folders: null, liked: null, tags: null, duplicates: null, failed: null };
 
-/** @type {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null, failed: number|null }} */
+/** @type {{ library: number|null, folders: number|null, liked: number|null, tags: number|null, duplicates: number|null, failed: number|null }} */
 let _countsCache = null;
 
 /**
  * Return the cached badge counts (or nulls on first run / cleared storage).
- * @returns {{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null, failed: number|null }}
+ * @returns {{ library: number|null, folders: number|null, liked: number|null, tags: number|null, duplicates: number|null, failed: number|null }}
  */
 export function getCachedCounts() {
   if (_countsCache) return _countsCache;
@@ -248,7 +248,7 @@ function persistCounts(counts) {
 /**
  * Cheaply refresh the badge counts from the server (COUNT-only requests) and
  * cache the result. Server-only; never touches the IDB snapshot.
- * @returns {Promise<{ library: number|null, liked: number|null, tags: number|null, duplicates: number|null }>}
+ * @returns {Promise<{ library: number|null, folders: number|null, liked: number|null, tags: number|null, duplicates: number|null, failed: number|null }>}
  */
 export async function refreshCounts() {
   const [library, liked, tags] = await Promise.all([
@@ -257,14 +257,32 @@ export async function refreshCounts() {
     fetchTags().then(d => d.length).catch(() => null),
   ]);
   const cached = getCachedCounts();
-  const counts = { library, liked, tags, duplicates: cached.duplicates, failed: cached.failed };
+  const counts = { library, folders: cached.folders, liked, tags, duplicates: cached.duplicates, failed: cached.failed };
   persistCounts(counts);
   return counts;
 }
 
 /**
+ * Refresh just the Folders badge. The full `/folders` payload is heavier than
+ * the other counts, so it stays separate and can never delay them. The badge
+ * matches the root folder cards the Folders page shows.
+ *
+ * @returns {Promise<number|null>}
+ */
+export async function refreshFolderCount() {
+  /* Prefer the server so a just-added/removed folder is reflected; fall back
+     to the IDB snapshot when offline. Concurrent callers share the request. */
+  const folders = await _fetchFoldersFromServer()
+    .catch(() => fetchFolders())
+    .then(data => data.filter(folder => folder.parentId == null).length)
+    .catch(() => null);
+  if (folders != null) persistCounts({ ...getCachedCounts(), folders });
+  return folders;
+}
+
+/**
  * Refresh just the Duplicate badge count in the background. Kept separate so a
- * slow duplicate request can never delay the Library / Liked / Tags counts.
+ * slow duplicate request can never delay the Timeline / Folders / Liked / Tags counts.
  * Timed out so a pathological server can't hang it either. The result is
  * persisted to the count cache and returned so callers can update the badge.
  *
@@ -315,15 +333,29 @@ async function _fetchMediaFromServer(url, opts) {
   return data;
 }
 
+let _foldersInFlight = null;
+
 async function _fetchFoldersFromServer() {
-  const response = await fetch(apiRoutes.folders);
-  if (!response.ok) throw new Error('Failed to fetch folders');
-  const folders = await response.json();
-  _foldersCache = folders;
-  /* Replace (not merge) so stale folder rows from a previous connection/db
-     don't survive as phantom entries in the UI. */
-  idbReplaceFolders(folders).catch(err => console.warn('[idb] replaceFolders failed:', err));
-  return folders;
+  /* The header badge and the Folders page both ask for this list on mount;
+     share one request instead of hitting the server twice. */
+  if (_foldersInFlight) return _foldersInFlight;
+
+  _foldersInFlight = (async () => {
+    const response = await fetch(apiRoutes.folders);
+    if (!response.ok) throw new Error('Failed to fetch folders');
+    const folders = await response.json();
+    _foldersCache = folders;
+    /* Replace (not merge) so stale folder rows from a previous connection/db
+       don't survive as phantom entries in the UI. */
+    idbReplaceFolders(folders).catch(err => console.warn('[idb] replaceFolders failed:', err));
+    return folders;
+  })();
+
+  try {
+    return await _foldersInFlight;
+  } finally {
+    _foldersInFlight = null;
+  }
 }
 
 // ---------------------------------------------------------------------------

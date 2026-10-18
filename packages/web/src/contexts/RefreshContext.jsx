@@ -11,10 +11,11 @@ const RefreshContext = createContext();
 
 export function RefreshProvider({ children }) {
   const [signal, setSignal] = useState(0);
-  /* Per-section counts shown in the sidebar badge (Library / Liked / Tags /
-     Duplicates / Failed). Kept here so any component can update them and the
-     sidebar reflects the latest value without a full page refetch. */
+  /* Per-section counts shown in the sidebar badge (Timeline / Folders / Liked /
+     Tags / Duplicates / Failed). Kept here so any component can update them and
+     the sidebar reflects the latest value without a full page refetch. */
   const [libraryCount, setLibraryCount] = useState(null);
+  const [folderCount, setFolderCount] = useState(null);
   const [likedCount, setLikedCount] = useState(null);
   const [tagCount, setTagCount] = useState(null);
   const [duplicatesCount, setDuplicatesCount] = useState(null);
@@ -25,7 +26,7 @@ export function RefreshProvider({ children }) {
   }, []);
 
   return (
-    <RefreshContext.Provider value={{ signal, bump, libraryCount, setLibraryCount, likedCount, setLikedCount, tagCount, setTagCount, duplicatesCount, setDuplicatesCount, failedCount, setFailedCount }}>
+    <RefreshContext.Provider value={{ signal, bump, libraryCount, setLibraryCount, folderCount, setFolderCount, likedCount, setLikedCount, tagCount, setTagCount, duplicatesCount, setDuplicatesCount, failedCount, setFailedCount }}>
       {children}
     </RefreshContext.Provider>
   );

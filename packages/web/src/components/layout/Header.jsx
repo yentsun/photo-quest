@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { clientRoutes } from '@photo-quest/shared';
-import { fetchNetworkInfo, getCachedCounts, refreshCounts, refreshDuplicatesCount, refreshFailedCount } from '../../utils/api.js';
+import { fetchNetworkInfo, getCachedCounts, refreshCounts, refreshFolderCount, refreshDuplicatesCount, refreshFailedCount } from '../../utils/api.js';
 import { addKnownServer, currentServerUrl } from '../../services/serverPool.js';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { Button, Icon, Modal } from '../ui/index.js';
 
 const NAV_ITEMS = [
-  { to: clientRoutes.timeline, icon: 'calendar', label: 'Timeline' },
-  { to: clientRoutes.dashboard, icon: 'folder', label: 'Folders', countKey: 'library' },
+  { to: clientRoutes.timeline, icon: 'calendar', label: 'Timeline', countKey: 'library' },
+  { to: clientRoutes.dashboard, icon: 'folder', label: 'Folders', countKey: 'folders' },
   { to: clientRoutes.liked, icon: 'heart', label: 'Liked', countKey: 'liked' },
   { to: clientRoutes.tags, icon: 'list', label: 'Tags', countKey: 'tags' },
   { to: clientRoutes.duplicates, icon: 'copy', label: 'Duplicates', countKey: 'duplicates' },
@@ -24,7 +24,7 @@ export default function Header({ collapsed, onToggle }) {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
-  const { signal, libraryCount, setLibraryCount, likedCount, setLikedCount, tagCount, setTagCount, duplicatesCount, setDuplicatesCount, failedCount, setFailedCount } = useRefresh();
+  const { signal, libraryCount, setLibraryCount, folderCount, setFolderCount, likedCount, setLikedCount, tagCount, setTagCount, duplicatesCount, setDuplicatesCount, failedCount, setFailedCount } = useRefresh();
 
   /* Load the per-section counts shown next to the nav items. These are cached
      (localStorage) so the badges render instantly on load, and are only
@@ -33,11 +33,12 @@ export default function Header({ collapsed, onToggle }) {
   useEffect(() => {
     const cached = getCachedCounts();
     if (cached.library != null) setLibraryCount(cached.library);
+    if (cached.folders != null) setFolderCount(cached.folders);
     if (cached.liked != null) setLikedCount(cached.liked);
     if (cached.tags != null) setTagCount(cached.tags);
     if (cached.duplicates != null) setDuplicatesCount(cached.duplicates);
     if (cached.failed != null) setFailedCount(cached.failed);
-  }, [setLibraryCount, setLikedCount, setTagCount, setDuplicatesCount, setFailedCount]);
+  }, [setLibraryCount, setFolderCount, setLikedCount, setTagCount, setDuplicatesCount, setFailedCount]);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,8 +48,13 @@ export default function Header({ collapsed, onToggle }) {
       if (counts.liked != null) setLikedCount(counts.liked);
       if (counts.tags != null) setTagCount(counts.tags);
     });
+    /* Folder count loads the folder list, so keep it off the cheap counts. */
+    refreshFolderCount().then(folders => {
+      if (cancelled) return;
+      if (folders != null) setFolderCount(folders);
+    });
     /* Duplicate badge is refreshed separately so a slow duplicate request can
-       never delay the cheap Library / Liked / Tags counts. */
+       never delay the cheap Timeline / Liked / Tags counts. */
     refreshDuplicatesCount().then(duplicates => {
       if (cancelled) return;
       if (duplicates != null) setDuplicatesCount(duplicates);
@@ -60,7 +66,7 @@ export default function Header({ collapsed, onToggle }) {
       if (failed != null) setFailedCount(failed);
     });
     return () => { cancelled = true; };
-  }, [signal, setLibraryCount, setLikedCount, setTagCount, setDuplicatesCount, setFailedCount]);
+  }, [signal, setLibraryCount, setFolderCount, setLikedCount, setTagCount, setDuplicatesCount, setFailedCount]);
 
   useEffect(() => {
     /* Always record the current origin — it is the server when the app is
@@ -167,6 +173,7 @@ export default function Header({ collapsed, onToggle }) {
             const activeClass = ({ isActive }) => `nav-item${isActive ? ' active' : ''}`;
             const count =
               item.countKey === 'library' ? libraryCount
+              : item.countKey === 'folders' ? folderCount
               : item.countKey === 'liked' ? likedCount
               : item.countKey === 'tags' ? tagCount
               : item.countKey === 'duplicates' ? duplicatesCount
