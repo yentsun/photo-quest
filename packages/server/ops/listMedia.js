@@ -19,12 +19,12 @@ function nextDay(date) {
   return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
 }
 
-export default function ({ from, to, limit, offset, folder, subtree, liked, random, sort, search, tag, type } = {}) {
+export default function ({ from, to, daysOnly, limit, offset, folder, subtree, liked, random, sort, search, tag, type } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
   const tStart = performance.now();
 
-  logger.debug(`from=${from} to=${to} folder=${folder} subtree=${subtree} liked=${liked} random=${random} sort=${sort} search=${search} tag=${tag} type=${type} limit=${limit} offset=${offset}`);
+  logger.debug(`from=${from} to=${to} daysOnly=${daysOnly} folder=${folder} subtree=${subtree} liked=${liked} random=${random} sort=${sort} search=${search} tag=${tag} type=${type} limit=${limit} offset=${offset}`);
 
   const conditions = ['hidden = 0'];
   const params = [];
@@ -81,6 +81,18 @@ export default function ({ from, to, limit, offset, folder, subtree, liked, rand
 
   const where = conditions.join(' AND ');
   logger.debug(`WHERE: ${where}`);
+
+  /* Timeline uses actual per-day totals, not just the items loaded so far.
+     Group with the same filters and day key the client derives from the raw
+     date (first ten characters, or "unknown"). */
+  if (daysOnly) {
+    const dayExpr = `CASE WHEN substr(${dateExpr}, 1, 10) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' THEN substr(${dateExpr}, 1, 10) ELSE 'unknown' END`;
+    const days = db.prepare(
+      `SELECT ${dayExpr} AS day, COUNT(*) AS count FROM media WHERE ${where} GROUP BY day ORDER BY day DESC`
+    ).all(...params);
+    console.log(`[DBG][listMedia] DAYS ${(performance.now() - tStart).toFixed(0)}ms days=${days.length} type=${type}`);
+    return { days };
+  }
 
   const tCount = performance.now();
   const { total } = db.prepare(`SELECT COUNT(*) AS total FROM media WHERE ${where}`).get(...params);

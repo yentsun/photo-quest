@@ -151,6 +151,40 @@ test('listMedia op', async (t) => {
     const toOnly = callOp(listMedia, ctx, { to: '2026-10-01' });
     t.assert.deepStrictEqual(toOnly.items.map(r => r.title).sort(), ['A', 'E']);
   });
+
+  await t.test('daysOnly returns actual per-day totals with the same filters', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const insert = (filePath, title, type, dateTaken) => db.prepare(
+      "INSERT INTO media (path, title, type, status, date_taken) VALUES (?, ?, ?, 'ready', ?)"
+    ).run(filePath, title, type, dateTaken);
+
+    insert('/a.jpg', 'A', 'image', '2026-10-01T01:00:00.000Z');
+    insert('/b.jpg', 'B', 'image', '2026-10-01T02:00:00.000Z');
+    insert('/c.mp4', 'C', 'video', '2026-10-02T03:00:00.000Z');
+    insert('/d.jpg', 'D', 'image', '2026-10-03T04:00:00.000Z');
+
+    const all = callOp(listMedia, ctx, {
+      daysOnly: true,
+      from: '2026-10-01',
+      to: '2026-10-02',
+    });
+    t.assert.deepStrictEqual(all.days.map(({ day, count }) => ({ day, count })), [
+      { day: '2026-10-02', count: 1 },
+      { day: '2026-10-01', count: 2 },
+    ]);
+
+    const images = callOp(listMedia, ctx, {
+      daysOnly: true,
+      from: '2026-10-01',
+      to: '2026-10-02',
+      type: 'image',
+    });
+    t.assert.deepStrictEqual(
+      images.days.map(({ day, count }) => ({ day, count })),
+      [{ day: '2026-10-01', count: 2 }],
+    );
+  });
 });
 
 test('listDuplicates op', async (t) => {

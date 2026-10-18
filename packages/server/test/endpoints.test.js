@@ -67,6 +67,14 @@ async function setup() {
       },
       listMedia: function(opts = {}) {
         lastListMediaOpts = opts;
+        if (opts.daysOnly) {
+          return {
+            days: [
+              { day: '2026-10-02', count: 3 },
+              { day: '2026-10-01', count: 2 },
+            ],
+          };
+        }
         const { total } = db.prepare('SELECT COUNT(*) AS total FROM media').get();
         const items = db.prepare('SELECT * FROM media ORDER BY created_at DESC').all();
         return { items, total };
@@ -359,6 +367,24 @@ test('GET /media', async (t) => {
     t.assert.strictEqual(lastListMediaOpts.to, '2026-10-31');
     t.assert.strictEqual(lastListMediaOpts.limit, 60);
     t.assert.strictEqual(lastListMediaOpts.offset, 120);
+  });
+
+  await t.test('?days=1 returns per-day totals for the same filters', async () => {
+    const route = findRoute('GET', '/media');
+    const req = mockReq('GET', '/media?days=1&from=2026-10-01&to=2026-10-02&type=image');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.deepStrictEqual(res._body.days, [
+      { day: '2026-10-02', count: 3 },
+      { day: '2026-10-01', count: 2 },
+    ]);
+    t.assert.strictEqual(lastListMediaOpts.daysOnly, true);
+    t.assert.strictEqual(lastListMediaOpts.from, '2026-10-01');
+    t.assert.strictEqual(lastListMediaOpts.to, '2026-10-02');
+    t.assert.strictEqual(lastListMediaOpts.type, 'image');
   });
 });
 

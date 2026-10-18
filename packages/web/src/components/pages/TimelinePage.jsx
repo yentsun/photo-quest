@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
-import { fetchMedia } from '../../utils/api.js';
+import { fetchMedia, fetchMediaDays } from '../../utils/api.js';
 import { getPageCache, isPageCacheValid, setPageCache } from '../../utils/pageCache.js';
 import { formatDayLabel, groupMediaByDay } from '../../utils/timeline.js';
 import { MediaGrid } from '../media/index.js';
@@ -31,6 +31,8 @@ export default function TimelinePage() {
   const [mediaType, setMediaType] = useState(previousCache?.type ?? 'all');
   const [items, setItems] = useState(validCache?.items ?? []);
   const [total, setTotal] = useState(validCache?.total ?? 0);
+  const [dayCounts, setDayCounts] = useState(previousCache?.dayCounts ?? {});
+  const [collapsedDays, setCollapsedDays] = useState(() => new Set(previousCache?.collapsedDays ?? []));
   const [loading, setLoading] = useState(!validCache);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
@@ -78,6 +80,26 @@ export default function TimelinePage() {
     return () => { cancelled = true; };
   }, [from, to, typeParam, signal]);
 
+  /* Actual totals per day for the current filters, independent of how many
+     items have been paged in. */
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchMediaDays({ from, to, type: typeParam })
+      .then((rows) => {
+        if (cancelled) return;
+        const counts = {};
+        for (const row of rows) counts[row.day] = row.count;
+        setDayCounts(counts);
+      })
+      .catch((err) => {
+        console.error('Failed to load timeline day counts:', err);
+        if (!cancelled) setDayCounts({});
+      });
+
+    return () => { cancelled = true; };
+  }, [from, to, typeParam, signal]);
+
   const loadMore = useCallback(() => {
     if (loadingMoreRef.current) return;
     if (offsetRef.current >= total) return;
@@ -112,13 +134,21 @@ export default function TimelinePage() {
 
   useEffect(() => {
     if (loading || error) return;
-    setPageCache('timeline', { range, type: mediaType, items, total }, signal);
-  }, [range, mediaType, items, total, loading, error, signal]);
+    setPageCache('timeline', {
+      range,
+      type: mediaType,
+      dayCounts,
+      collapsedDays: [...collapsedDays],
+      items,
+      total,
+    }, signal);
+  }, [range, mediaType, dayCounts, collapsedDays, items, total, loading, error, signal]);
 
   const handleRangeChange = useCallback((next) => {
     setRange(next);
     setItems([]);
     setTotal(0);
+    setDayCounts({});
     setLoading(true);
     document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
@@ -128,20 +158,37 @@ export default function TimelinePage() {
     setMediaType(next);
     setItems([]);
     setTotal(0);
+    setDayCounts({});
     setLoading(true);
     document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
   }, [mediaType]);
+
+  const toggleDay = useCallback((key) => {
+    setCollapsedDays((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   const openItem = useCallback((media) => {
     navigate(`/media/${media.id}`, { state: { context: 'timeline' } });
   }, [navigate]);
 
-  const sections = useMemo(() => groupMediaByDay(items).map(group => ({
-    key: group.key,
-    title: formatDayLabel(group.key),
-    meta: `${group.items.length.toLocaleString()} item${group.items.length === 1 ? '' : 's'}`,
-    items: group.items,
-  })), [items]);
+  const allLoaded = total > 0 && items.length >= total;
+  const sections = useMemo(() => groupMediaByDay(items).map(group => {
+    const count = dayCounts[group.key] ?? (allLoaded ? group.items.length : undefined);
+    return {
+      key: group.key,
+      title: formatDayLabel(group.key),
+      meta: count != null
+        ? `${count.toLocaleString()} item${count === 1 ? '' : 's'}`
+        : undefined,
+      items: group.items,
+      collapsed: collapsedDays.has(group.key),
+    };
+  }), [items, dayCounts, collapsedDays, allLoaded]);
 
   const hasMore = items.length < total;
   const filtersApplied = Boolean(from || to) || mediaType !== 'all';
@@ -160,6 +207,7 @@ export default function TimelinePage() {
     setMediaType('all');
     setItems([]);
     setTotal(0);
+    setDayCounts({});
     setLoading(true);
   };
 
@@ -201,6 +249,7 @@ export default function TimelinePage() {
         <MediaGrid
           sections={sections}
           onItemClick={openItem}
+          onToggleSection={toggleDay}
           onNearEnd={hasMore ? loadMore : undefined}
           loadingMore={loadingMore}
           emptyState={

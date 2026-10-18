@@ -544,6 +544,26 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
 }
 
 /**
+ * Fetch per-day media totals for the same filters as `fetchMedia`.
+ * Timeline headers use these so a partly loaded day still shows its real count.
+ *
+ * @param {{ from?: string, to?: string, type?: string }} [filters]
+ * @returns {Promise<{ day: string, count: number }[]>}
+ */
+export async function fetchMediaDays({ from, to, type } = {}) {
+  const url = new URL(apiRoutes.media, window.location.origin);
+  url.searchParams.set('days', '1');
+  if (from != null) url.searchParams.set('from', from);
+  if (to != null) url.searchParams.set('to', to);
+  if (type != null) url.searchParams.set('type', type);
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Failed to fetch media days');
+  const data = await response.json();
+  return data.days ?? [];
+}
+
+/**
  * Drop a media item from the in-memory + IndexedDB caches. Used when the server
  * reports the record no longer exists (404) so a stale cached copy is not
  * rendered again.

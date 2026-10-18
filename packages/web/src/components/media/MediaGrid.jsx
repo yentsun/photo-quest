@@ -1,11 +1,13 @@
 import { useRef, useEffect } from 'react';
 import MediaCard from './MediaCard.jsx';
+import { Button, Icon } from '../ui/index.js';
 
 /**
  * Render media as a flat grid, or as titled sections (e.g. Timeline days).
  *
  * `sections` takes precedence over `items`; each section is
- * `{ key, title?, meta?, items }`. An optional `onNearEnd` callback drives
+ * `{ key, title?, meta?, items, collapsed? }`. `onToggleSection(key)` makes a
+ * titled section collapsible. An optional `onNearEnd` callback drives
  * auto-loading through a bottom sentinel; `loadingMore` renders the indicator
  * in that sentinel.
  */
@@ -13,6 +15,7 @@ export default function MediaGrid({
   items = [],
   sections,
   onItemClick,
+  onToggleSection,
   emptyState,
   onNearEnd,
   loadingMore = false,
@@ -43,11 +46,21 @@ export default function MediaGrid({
       {groups.map(group => (
         group.title ? (
           <section key={group.key} className="media-section">
-            <div className="media-section-head">
-              <h2 className="media-section-title">{group.title}</h2>
+            <Button
+              variant="text"
+              size="sm"
+              className="media-section-head"
+              aria-expanded={!group.collapsed}
+              onClick={() => onToggleSection?.(group.key)}
+            >
+              <span className="media-section-title">{group.title}</span>
               {group.meta && <span className="media-section-meta">{group.meta}</span>}
-            </div>
-            <div className="item-grid">{renderCards(group.items)}</div>
+              <Icon
+                name={group.collapsed ? 'next' : 'down'}
+                className="icon-sm media-section-chevron"
+              />
+            </Button>
+            {!group.collapsed && <div className="item-grid">{renderCards(group.items)}</div>}
           </section>
         ) : (
           <div key={group.key} className="item-grid">{renderCards(group.items)}</div>
