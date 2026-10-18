@@ -52,6 +52,14 @@ function safeTags(tags) {
   return [];
 }
 
+/** Flatten the timeline page cache into the same day order the page shows. */
+function timelineItemsFromCache() {
+  const data = getPageCache('timeline')?.data;
+  if (!data?.days) return [];
+  const visibleDays = data.days.slice(0, data.visibleDayCount ?? data.days.length);
+  return visibleDays.flatMap(day => data.dayItems?.[day.key] ?? []);
+}
+
 export default function MediaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -130,7 +138,7 @@ export default function MediaPage() {
       : []
   );
   const [timelineNavList, setTimelineNavList] = useState(() =>
-    navContext === 'timeline' ? (getPageCache('timeline')?.data?.items ?? []) : []
+    navContext === 'timeline' ? timelineItemsFromCache() : []
   );
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [folder, setFolder] = useState(() => {
@@ -647,6 +655,7 @@ export default function MediaPage() {
       if (removed.size > 0) {
         setFolderMedia(list => list.filter(m => !removed.has(m.id)));
         setLikedNavList(list => list.filter(m => !removed.has(m.id)));
+        setTimelineNavList(list => list.filter(m => !removed.has(m.id)));
       }
       if (master) {
         if (master.id !== item.id) {
