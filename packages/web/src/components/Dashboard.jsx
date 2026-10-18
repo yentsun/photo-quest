@@ -289,7 +289,7 @@ export default function Dashboard() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Library</h1>
+          <h1 className="page-title">Folders</h1>
           <p className="page-subtitle">{totalMedia} items</p>
         </div>
         <div className="page-actions">

@@ -858,7 +858,7 @@ export default function MediaPage() {
         icon={<Icon name="image" className="icon-2xl" />}
         title="Media not found"
         description="This media item doesn't exist."
-        action={{ label: 'Go to Library', onClick: () => navigate('/dashboard') }}
+        action={{ label: 'Go to Folders', onClick: () => navigate('/dashboard') }}
       />
     );
   }
@@ -893,7 +893,7 @@ export default function MediaPage() {
             onClick={goBack}
           />
           <nav className="breadcrumb-nav">
-            <Button variant="text" onClick={() => navigate('/dashboard')}>Library</Button>
+            <Button variant="text" onClick={() => navigate('/dashboard')}>Folders</Button>
             {breadcrumbs.map((crumb) => {
               const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
               return (

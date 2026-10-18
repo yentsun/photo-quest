@@ -8,7 +8,7 @@ import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { Button, Icon, Modal } from '../ui/index.js';
 
 const NAV_ITEMS = [
-  { to: clientRoutes.dashboard, icon: 'folder', label: 'Library', countKey: 'library' },
+  { to: clientRoutes.dashboard, icon: 'folder', label: 'Folders', countKey: 'library' },
   { to: clientRoutes.liked, icon: 'heart', label: 'Liked', countKey: 'liked' },
   { to: clientRoutes.tags, icon: 'list', label: 'Tags', countKey: 'tags' },
   { to: clientRoutes.duplicates, icon: 'copy', label: 'Duplicates', countKey: 'duplicates' },

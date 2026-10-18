@@ -406,7 +406,7 @@ export default function FolderPage() {
     <div className="page" {...swipe}>
       {breadcrumbs.length > 0 && (
         <nav className="breadcrumb-nav">
-          <Button variant="text" onClick={() => navigate('/dashboard')}>Library</Button>
+          <Button variant="text" onClick={() => navigate('/dashboard')}>Folders</Button>
           {breadcrumbs.map((crumb, i) => {
             const name = getFolderName(crumb);
             const isLast = i === breadcrumbs.length - 1;
