@@ -1,10 +1,9 @@
 /**
- * @file Timeline page -- the whole library, newest first, grouped by day.
+ * @file Timeline page -- the whole library grouped by day.
  *
- * Pages are fetched from the server in date order (`limit`/`offset`) and the
- * next page loads automatically when the bottom sentinel scrolls into view.
- * The date filter is applied server-side via `from`/`to`, so an empty or
- * narrow range never downloads the whole library.
+ * Day totals come from `/media?days=1`; each day's items load independently
+ * (60 at a time) when its section scrolls near the viewport. Collapsing a day
+ * removes its sentinel, so the next day's section starts loading immediately.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,42 +11,42 @@ import { useNavigate } from 'react-router-dom';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { fetchMedia, fetchMediaDays } from '../../utils/api.js';
 import { getPageCache, isPageCacheValid, setPageCache } from '../../utils/pageCache.js';
-import { formatDayLabel, groupMediaByDay } from '../../utils/timeline.js';
+import { formatDayLabel } from '../../utils/timeline.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { DateRangePicker, Icon, Loader, Select } from '../ui/index.js';
 
 const PAGE_SIZE = 60;
+const EMPTY_RANGE = { start: null, end: null };
 
 export default function TimelinePage() {
   const navigate = useNavigate();
   const { signal, libraryCount } = useRefresh();
 
-  /* Keep the loaded pages and range when the user opens an item and comes
-     back. A stale signal (media changed) keeps the range but refetches. */
+  /* Keep loaded days and the filter when opening an item and coming back. */
   const previousCache = getPageCache('timeline')?.data;
   const validCache = isPageCacheValid('timeline', signal) ? previousCache : null;
-  const [range, setRange] = useState(previousCache?.range ?? { start: null, end: null });
+
+  const [range, setRange] = useState(previousCache?.range ?? EMPTY_RANGE);
   const [mediaType, setMediaType] = useState(previousCache?.type ?? 'all');
-  const [items, setItems] = useState(validCache?.items ?? []);
-  const [total, setTotal] = useState(validCache?.total ?? 0);
-  const [dayCounts, setDayCounts] = useState(previousCache?.dayCounts ?? {});
+  const [days, setDays] = useState(validCache?.days ?? []);
+  const [dayItems, setDayItems] = useState(validCache?.dayItems ?? {});
   const [collapsedDays, setCollapsedDays] = useState(() => new Set(previousCache?.collapsedDays ?? []));
+  const [loadingDays, setLoadingDays] = useState(() => new Set());
   const [loading, setLoading] = useState(!validCache);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
 
-  const offsetRef = useRef(validCache?.items.length ?? 0);
-  const loadingMoreRef = useRef(false);
+  const dayOffsetsRef = useRef(validCache?.dayOffsets ?? {});
+  const loadingDaysRef = useRef(new Set());
   const requestRef = useRef(0);
-  const skipInitialFetchRef = useRef(Boolean(validCache));
+  const skipInitialCountsRef = useRef(Boolean(validCache));
 
   const { start: from, end: to } = range;
   const typeParam = mediaType === 'all' ? undefined : mediaType;
 
   useEffect(() => {
-    if (skipInitialFetchRef.current) {
-      skipInitialFetchRef.current = false;
+    if (skipInitialCountsRef.current) {
+      skipInitialCountsRef.current = false;
       return undefined;
     }
 
@@ -57,18 +56,16 @@ export default function TimelinePage() {
 
     setLoading(true);
     setError(null);
-    setItems([]);
-    setTotal(0);
-    offsetRef.current = 0;
-    loadingMoreRef.current = false;
-    setLoadingMore(false);
+    setDays([]);
+    setDayItems({});
+    dayOffsetsRef.current = {};
+    loadingDaysRef.current = new Set();
+    setLoadingDays(new Set());
 
-    fetchMedia({ limit: PAGE_SIZE, offset: 0, from, to, type: typeParam, skipCache: true })
-      .then((data) => {
+    fetchMediaDays({ from, to, type: typeParam })
+      .then((rows) => {
         if (cancelled || requestId !== requestRef.current) return;
-        setItems(data.items);
-        setTotal(data.total);
-        offsetRef.current = data.items.length;
+        setDays(rows.map(row => ({ key: row.day, count: row.count })));
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
@@ -80,75 +77,70 @@ export default function TimelinePage() {
     return () => { cancelled = true; };
   }, [from, to, typeParam, signal]);
 
-  /* Actual totals per day for the current filters, independent of how many
-     items have been paged in. */
-  useEffect(() => {
-    let cancelled = false;
+  const loadDay = useCallback(async (key) => {
+    if (loadingDaysRef.current.has(key)) return;
 
-    fetchMediaDays({ from, to, type: typeParam })
-      .then((rows) => {
-        if (cancelled) return;
-        const counts = {};
-        for (const row of rows) counts[row.day] = row.count;
-        setDayCounts(counts);
-      })
-      .catch((err) => {
-        console.error('Failed to load timeline day counts:', err);
-        if (!cancelled) setDayCounts({});
-      });
+    const day = days.find(entry => entry.key === key);
+    if (!day) return;
 
-    return () => { cancelled = true; };
-  }, [from, to, typeParam, signal]);
-
-  const loadMore = useCallback(() => {
-    if (loadingMoreRef.current) return;
-    if (offsetRef.current >= total) return;
-
-    loadingMoreRef.current = true;
-    setLoadingMore(true);
+    const offset = dayOffsetsRef.current[key] ?? 0;
+    if (offset >= day.count) return;
 
     const requestId = requestRef.current;
-    const offset = offsetRef.current;
+    loadingDaysRef.current.add(key);
+    setLoadingDays(new Set(loadingDaysRef.current));
 
-    fetchMedia({ limit: PAGE_SIZE, offset, from, to, type: typeParam, skipCache: true })
-      .then((data) => {
-        if (requestId !== requestRef.current) return;
-
-        offsetRef.current = offset + data.items.length;
-        setItems((previous) => {
-          const seen = new Set(previous.map(item => item.id));
-          const fresh = data.items.filter(item => !seen.has(item.id));
-          return fresh.length > 0 ? [...previous, ...fresh] : previous;
-        });
-
-        /* A short page with a stale `total` would otherwise make the sentinel
-           keep requesting the same empty offset forever. */
-        setTotal(data.items.length === 0 ? offset : data.total);
-      })
-      .catch((err) => console.error('Failed to load the next timeline page:', err))
-      .finally(() => {
-        loadingMoreRef.current = false;
-        setLoadingMore(false);
+    try {
+      const data = await fetchMedia({
+        from: key,
+        to: key,
+        type: typeParam,
+        limit: PAGE_SIZE,
+        offset,
+        skipCache: true,
       });
-  }, [from, to, typeParam, total]);
+      if (requestId !== requestRef.current) return;
+
+      setDayItems((previous) => {
+        const existing = previous[key] ?? [];
+        const seen = new Set(existing.map(item => item.id));
+        const fresh = data.items.filter(item => !seen.has(item.id));
+        return fresh.length > 0 ? { ...previous, [key]: [...existing, ...fresh] } : previous;
+      });
+      dayOffsetsRef.current[key] = offset + data.items.length;
+
+      if (data.total !== day.count) {
+        setDays(previous => previous.map(entry => (
+          entry.key === key ? { ...entry, count: data.total } : entry
+        )));
+      }
+    } catch (err) {
+      console.error('Failed to load timeline day:', err);
+    } finally {
+      if (requestId === requestRef.current) {
+        loadingDaysRef.current.delete(key);
+        setLoadingDays(new Set(loadingDaysRef.current));
+      }
+    }
+  }, [days, typeParam]);
 
   useEffect(() => {
     if (loading || error) return;
     setPageCache('timeline', {
       range,
       type: mediaType,
-      dayCounts,
+      days,
+      dayItems,
+      dayOffsets: dayOffsetsRef.current,
       collapsedDays: [...collapsedDays],
-      items,
-      total,
     }, signal);
-  }, [range, mediaType, dayCounts, collapsedDays, items, total, loading, error, signal]);
+  }, [range, mediaType, days, dayItems, collapsedDays, loading, error, signal]);
 
   const handleRangeChange = useCallback((next) => {
     setRange(next);
-    setItems([]);
-    setTotal(0);
-    setDayCounts({});
+    setDays([]);
+    setDayItems({});
+    dayOffsetsRef.current = {};
     setLoading(true);
     document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
@@ -156,9 +148,9 @@ export default function TimelinePage() {
   const handleTypeChange = useCallback((next) => {
     if (next === mediaType) return;
     setMediaType(next);
-    setItems([]);
-    setTotal(0);
-    setDayCounts({});
+    setDays([]);
+    setDayItems({});
+    dayOffsetsRef.current = {};
     setLoading(true);
     document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
   }, [mediaType]);
@@ -172,44 +164,52 @@ export default function TimelinePage() {
     });
   }, []);
 
+  const clearFilters = () => {
+    setRange(EMPTY_RANGE);
+    setMediaType('all');
+    setDays([]);
+    setDayItems({});
+    dayOffsetsRef.current = {};
+    setLoading(true);
+  };
+
   const openItem = useCallback((media) => {
     navigate(`/media/${media.id}`, { state: { context: 'timeline' } });
   }, [navigate]);
 
-  const allLoaded = total > 0 && items.length >= total;
-  const sections = useMemo(() => groupMediaByDay(items).map(group => {
-    const count = dayCounts[group.key] ?? (allLoaded ? group.items.length : undefined);
-    return {
-      key: group.key,
-      title: formatDayLabel(group.key),
-      meta: count != null
-        ? `${count.toLocaleString()} item${count === 1 ? '' : 's'}`
-        : undefined,
-      items: group.items,
-      collapsed: collapsedDays.has(group.key),
-    };
-  }), [items, dayCounts, collapsedDays, allLoaded]);
+  const labels = useMemo(
+    () => Object.fromEntries(days.map(day => [day.key, formatDayLabel(day.key)])),
+    [days],
+  );
 
-  const hasMore = items.length < total;
+  const sections = useMemo(() => days.map((day) => {
+    const items = dayItems[day.key] ?? [];
+    return {
+      key: day.key,
+      title: labels[day.key],
+      meta: `${day.count.toLocaleString()} item${day.count === 1 ? '' : 's'}`,
+      items,
+      collapsed: collapsedDays.has(day.key),
+      hasMore: items.length < day.count,
+      loadingMore: loadingDays.has(day.key),
+      onLoadMore: () => loadDay(day.key),
+    };
+  }), [days, dayItems, labels, collapsedDays, loadingDays, loadDay]);
+
+  const filteredTotal = useMemo(
+    () => days.reduce((sum, day) => sum + day.count, 0),
+    [days],
+  );
   const filtersApplied = Boolean(from || to) || mediaType !== 'all';
   const subtitle = loading
     ? 'Loading…'
     : error
       ? 'Could not load'
-      : total === 0
+      : filteredTotal === 0
         ? 'No items'
         : filtersApplied && libraryCount != null
-          ? `${total.toLocaleString()} of ${libraryCount.toLocaleString()} items`
-          : `${total.toLocaleString()} item${total === 1 ? '' : 's'}`;
-
-  const clearFilters = () => {
-    setRange({ start: null, end: null });
-    setMediaType('all');
-    setItems([]);
-    setTotal(0);
-    setDayCounts({});
-    setLoading(true);
-  };
+          ? `${filteredTotal.toLocaleString()} of ${libraryCount.toLocaleString()} items`
+          : `${filteredTotal.toLocaleString()} item${filteredTotal === 1 ? '' : 's'}`;
 
   return (
     <div className="page">
@@ -237,7 +237,7 @@ export default function TimelinePage() {
         </div>
       </div>
 
-      {loading && items.length === 0 ? (
+      {loading ? (
         <div className="page-loader"><Loader message="Building your timeline…" /></div>
       ) : error ? (
         <EmptyState
@@ -245,26 +245,23 @@ export default function TimelinePage() {
           title="Could not load timeline"
           description={error}
         />
+      ) : days.length === 0 ? (
+        <EmptyState
+          icon={<Icon name="calendar" className="icon-2xl" />}
+          title={filtersApplied ? 'No matching media' : 'No media yet'}
+          description={filtersApplied
+            ? 'Try a wider date range or a different media type.'
+            : 'Import a folder to see your photos and videos here.'}
+          action={filtersApplied ? {
+            label: 'Clear filters',
+            onClick: clearFilters,
+          } : undefined}
+        />
       ) : (
         <MediaGrid
           sections={sections}
           onItemClick={openItem}
           onToggleSection={toggleDay}
-          onNearEnd={hasMore ? loadMore : undefined}
-          loadingMore={loadingMore}
-          emptyState={
-            <EmptyState
-              icon={<Icon name="calendar" className="icon-2xl" />}
-              title={filtersApplied ? 'No matching media' : 'No media yet'}
-              description={filtersApplied
-                ? 'Try a wider date range or a different media type.'
-                : 'Import a folder to see your photos and videos here.'}
-              action={filtersApplied ? {
-                label: 'Clear filters',
-                onClick: clearFilters,
-              } : undefined}
-            />
-          }
         />
       )}
     </div>

@@ -6,10 +6,11 @@ import { Button, Icon } from '../ui/index.js';
  * Render media as a flat grid, or as titled sections (e.g. Timeline days).
  *
  * `sections` takes precedence over `items`; each section is
- * `{ key, title?, meta?, items, collapsed? }`. `onToggleSection(key)` makes a
- * titled section collapsible. An optional `onNearEnd` callback drives
- * auto-loading through a bottom sentinel; `loadingMore` renders the indicator
- * in that sentinel.
+ * `{ key, title?, meta?, items, collapsed?, hasMore?, loadingMore?, onLoadMore? }`.
+ * `onToggleSection(key)` makes a titled section collapsible. A section with
+ * `hasMore` gets its own bottom sentinel that calls `onLoadMore()` when it
+ * scrolls near the viewport. The optional top-level `onNearEnd` sentinel is
+ * kept for flat, non-sectioned lists.
  */
 export default function MediaGrid({
   items = [],
@@ -21,6 +22,10 @@ export default function MediaGrid({
   loadingMore = false,
 }) {
   const sentinelRef = useRef(null);
+  const sectionObserverRef = useRef(null);
+  const sectionNodesRef = useRef(new Map());
+  const sectionRefCallbacksRef = useRef(new Map());
+  const sectionLoadersRef = useRef(new Map());
 
   useEffect(() => {
     if (!onNearEnd || !sentinelRef.current) return;
@@ -32,10 +37,53 @@ export default function MediaGrid({
     return () => observer.disconnect();
   }, [onNearEnd]);
 
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const key = entry.target.dataset.sectionKey;
+        sectionLoadersRef.current.get(key)?.();
+      }
+    }, { rootMargin: '400px' });
+
+    sectionObserverRef.current = observer;
+    for (const node of sectionNodesRef.current.values()) observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+      sectionObserverRef.current = null;
+    };
+  }, []);
+
   const groups = sections ?? [{ key: 'all', items }];
   const itemCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
+  sectionLoadersRef.current = new Map();
+  for (const group of groups) {
+    if (group.onLoadMore) sectionLoadersRef.current.set(group.key, group.onLoadMore);
+  }
+
   if (itemCount === 0 && emptyState) return emptyState;
+
+  const getSectionSentinelRef = (key) => {
+    let callback = sectionRefCallbacksRef.current.get(key);
+    if (!callback) {
+      callback = (node) => {
+        const previous = sectionNodesRef.current.get(key);
+        if (previous === node) return;
+        if (previous) sectionObserverRef.current?.unobserve(previous);
+        if (node) {
+          sectionNodesRef.current.set(key, node);
+          node.dataset.sectionKey = key;
+          sectionObserverRef.current?.observe(node);
+        } else {
+          sectionNodesRef.current.delete(key);
+        }
+      };
+      sectionRefCallbacksRef.current.set(key, callback);
+    }
+    return callback;
+  };
 
   const renderCards = groupItems => groupItems.map(media => (
     <MediaCard key={media.id} media={media} onClick={onItemClick} />
@@ -60,7 +108,21 @@ export default function MediaGrid({
                 className="icon-sm media-section-chevron"
               />
             </Button>
-            {!group.collapsed && <div className="item-grid">{renderCards(group.items)}</div>}
+            {!group.collapsed && (
+              <>
+                <div className="item-grid">{renderCards(group.items)}</div>
+                {(group.hasMore || group.loadingMore) && (
+                  <div ref={getSectionSentinelRef(group.key)} className="grid-sentinel">
+                    {group.loadingMore && (
+                      <div className="loading-row">
+                        <span className="spinner spinner-sm" />
+                        Loading…
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </section>
         ) : (
           <div key={group.key} className="item-grid">{renderCards(group.items)}</div>
