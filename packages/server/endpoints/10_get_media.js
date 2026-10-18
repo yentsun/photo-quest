@@ -21,6 +21,8 @@ export default async (kojo, logger) => {
       return json(res, 200, { ids });
     }
 
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
     const limit = url.searchParams.get('limit');
     const offset = url.searchParams.get('offset');
     const folder = url.searchParams.get('folder');
@@ -33,6 +35,8 @@ export default async (kojo, logger) => {
     const type = url.searchParams.get('type');
 
     const opts = {};
+    if (from != null) opts.from = from;
+    if (to != null) opts.to = to;
     if (limit != null) opts.limit = Number(limit);
     if (offset != null) opts.offset = Number(offset);
     if (folder != null) opts.folder = folder;

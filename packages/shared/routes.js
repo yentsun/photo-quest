@@ -30,6 +30,9 @@ export const clientRoutes = {
   /** Main media library dashboard -- the default landing page. */
   dashboard: '/dashboard',
 
+  /** Chronological, day-grouped view of the whole library. */
+  timeline: '/timeline',
+
   /** Liked media section -- shows items with likes > 0. */
   liked: '/liked',
 

@@ -35,6 +35,7 @@ import endpoint_get_storage_manifest from '../endpoints/87_get_storage_manifest.
 let db;
 let kojo;
 let routes;
+let lastListMediaOpts;
 
 /* ------------------------------------------------------------------ */
 /*  Setup                                                              */
@@ -52,6 +53,7 @@ async function setup() {
   db.exec('ALTER TABLE media ADD COLUMN effect_config TEXT');
 
   routes = [];
+  lastListMediaOpts = null;
 
   kojo = {
     get: (key) => {
@@ -63,7 +65,8 @@ async function setup() {
       addHttpRoute: (config, handler) => {
         routes.push({ ...config, handler });
       },
-      listMedia: function() {
+      listMedia: function(opts = {}) {
+        lastListMediaOpts = opts;
         const { total } = db.prepare('SELECT COUNT(*) AS total FROM media').get();
         const items = db.prepare('SELECT * FROM media ORDER BY created_at DESC').all();
         return { items, total };
@@ -342,6 +345,20 @@ test('GET /media', async (t) => {
     t.assert.ok(Array.isArray(res._body.ids));
     t.assert.strictEqual(res._body.ids.length, 1);
     t.assert.strictEqual('items' in res._body, false);
+  });
+
+  await t.test('forwards the date range and paging params', async () => {
+    const route = findRoute('GET', '/media');
+    const req = mockReq('GET', '/media?from=2026-10-01&to=2026-10-31&limit=60&offset=120');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(lastListMediaOpts.from, '2026-10-01');
+    t.assert.strictEqual(lastListMediaOpts.to, '2026-10-31');
+    t.assert.strictEqual(lastListMediaOpts.limit, 60);
+    t.assert.strictEqual(lastListMediaOpts.offset, 120);
   });
 });
 

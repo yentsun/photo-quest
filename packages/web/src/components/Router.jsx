@@ -15,7 +15,7 @@ import ErrorBoundary from './ErrorBoundary';
 import Root from './Root';
 import TranscodeMonitor from './TranscodeMonitor';
 import Dashboard from './Dashboard';
-import { LikedPage, FolderPage, MediaPage, TagsPage, TagPage, TranscodesPage, DuplicatesPage, FailedPage, ConnectionsPage } from './pages/index.js';
+import { TimelinePage, LikedPage, FolderPage, MediaPage, TagsPage, TagPage, TranscodesPage, DuplicatesPage, FailedPage, ConnectionsPage } from './pages/index.js';
 import ToasterMessage from './ToasterMessage';
 
 /** Persists the current view so a sleep/wake reload can resume it. The very
@@ -64,6 +64,7 @@ export default function Router() {
                 <Route path={r.root} element={<Root />}>
                   <Route index element={<IndexRedirect />} />
                   <Route path={r.dashboard} element={<Dashboard />} />
+                  <Route path={r.timeline} element={<TimelinePage />} />
                   <Route path={r.liked} element={<LikedPage />} />
                   <Route path={r.folder} element={<FolderPage />} />
                   <Route path={r.media} element={<MediaPage />} />

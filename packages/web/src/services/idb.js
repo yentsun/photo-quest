@@ -203,7 +203,7 @@ export async function idbDeleteFolder(id) {
  * Read media items from IDB, applying the same filters as the server's
  * listMedia op (folder, subtree, liked, limit, offset).
  *
- * @param {{ folder?: string, subtree?: boolean, liked?: boolean, limit?: number, offset?: number }} opts
+ * @param {{ folder?: string, subtree?: boolean, liked?: boolean, from?: string, to?: string, limit?: number, offset?: number }} opts
  * @returns {Promise<{ items: Object[], total: number }>}
  */
 /**
@@ -239,7 +239,7 @@ function idbCountMedia(db, filters) {
   });
 }
 
-export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort, search, tag, type } = {}) {
+export async function idbGetMedia({ folder, subtree, liked, from, to, limit, offset, sort, search, tag, type } = {}) {
   const db = await openDB();
 
   /* Count-only reads (limit === 0): never clone/sort the whole store. */
@@ -270,6 +270,14 @@ export async function idbGetMedia({ folder, subtree, liked, limit, offset, sort,
   /* Mirror server's liked filter */
   if (liked) {
     items = items.filter(m => m.likes > 0);
+  }
+
+  /* Mirror server's inclusive day range (date prefix of the raw stored value). */
+  if (from || to) {
+    items = items.filter(m => {
+      const day = (m.date_taken || m.created_at || '').slice(0, 10);
+      return (!from || day >= from) && (!to || day <= to);
+    });
   }
 
   /* Mirror server's type filter */

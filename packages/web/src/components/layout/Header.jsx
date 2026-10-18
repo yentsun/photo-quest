@@ -8,6 +8,7 @@ import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { Button, Icon, Modal } from '../ui/index.js';
 
 const NAV_ITEMS = [
+  { to: clientRoutes.timeline, icon: 'calendar', label: 'Timeline' },
   { to: clientRoutes.dashboard, icon: 'folder', label: 'Folders', countKey: 'library' },
   { to: clientRoutes.liked, icon: 'heart', label: 'Liked', countKey: 'liked' },
   { to: clientRoutes.tags, icon: 'list', label: 'Tags', countKey: 'tags' },

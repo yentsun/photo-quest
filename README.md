@@ -5,6 +5,7 @@ A self-hosted media library PWA for browsing, organizing, and enjoying your phot
 ## Features
 
 - **Cross-device access** - View your media library from any device on your network, as an installable PWA or via the QR code in the sidebar
+- **Timeline** - Browse everything grouped by day, filter by a date range, and load more automatically as you scroll
 - **Native folder picker** - Add folders using your browser's file picker, with recursive indexing of multiple folders
 - **Tags** - Tag media and browse everything by tag
 - **Like system** - Like your favorite media, unlimited likes per item, and reset likes from the Info panel
@@ -52,7 +53,7 @@ use `pnpm dev` instead.
 
 1. Click **Add Folder** → **Browse for folder…** to pick a folder with photos/videos (a native folder dialog opens on the server)
 2. Wait for the import to finish (progress bar shown at the top)
-3. Browse your media in the Library view
+3. Browse your media in the Folders view or the day-grouped Timeline
 4. Click a thumbnail to view it, or click **Shuffle** to start a slideshow
 5. Like your favorites — they appear in the **Liked** section
 6. Open a photo and use **Effect** to draw a doodle overlay (rays, arrows, or hearts)

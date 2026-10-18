@@ -124,6 +124,33 @@ test('listMedia op', async (t) => {
     t.assert.strictEqual(result.items.length, 2);
     t.assert.strictEqual(result.total, 3);
   });
+
+  await t.test('filters by an inclusive day range, falling back to created_at', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const insertDated = (filePath, title, dateTaken) => db.prepare(
+      "INSERT INTO media (path, title, status, date_taken) VALUES (?, ?, 'ready', ?)"
+    ).run(filePath, title, dateTaken);
+    const insertCreated = (filePath, title, createdAt) => db.prepare(
+      "INSERT INTO media (path, title, status, created_at) VALUES (?, ?, 'ready', ?)"
+    ).run(filePath, title, createdAt);
+
+    insertDated('/a.jpg', 'A', '2026-10-01T00:00:00.000Z');
+    insertDated('/b.jpg', 'B', '2026-10-02T23:59:59.000Z');
+    insertCreated('/c.jpg', 'C', '2026-10-02 08:00:00');
+    insertDated('/d.jpg', 'D', '2026-10-03T00:00:00.000Z');
+    insertCreated('/e.jpg', 'E', '2026-09-30 12:00:00');
+
+    const result = callOp(listMedia, ctx, { from: '2026-10-01', to: '2026-10-02' });
+    t.assert.strictEqual(result.total, 3);
+    t.assert.deepStrictEqual(result.items.map(r => r.title).sort(), ['A', 'B', 'C']);
+
+    const fromOnly = callOp(listMedia, ctx, { from: '2026-10-02' });
+    t.assert.deepStrictEqual(fromOnly.items.map(r => r.title).sort(), ['B', 'C', 'D']);
+
+    const toOnly = callOp(listMedia, ctx, { to: '2026-10-01' });
+    t.assert.deepStrictEqual(toOnly.items.map(r => r.title).sort(), ['A', 'E']);
+  });
 });
 
 test('listDuplicates op', async (t) => {

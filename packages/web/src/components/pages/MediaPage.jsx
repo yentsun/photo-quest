@@ -125,6 +125,9 @@ export default function MediaPage() {
   const [likedNavList, setLikedNavList] = useState(() =>
     navContext === 'liked' ? (getPageCache('liked')?.data?.likedMedia ?? []) : []
   );
+  const [timelineNavList, setTimelineNavList] = useState(() =>
+    navContext === 'timeline' ? (getPageCache('timeline')?.data?.items ?? []) : []
+  );
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [folder, setFolder] = useState(() => {
     const cachedItem = inSlideshow ? slideshow.current : getLastMediaItem(Number(id));
@@ -264,7 +267,8 @@ export default function MediaPage() {
   }, [id, item?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isLikedNav = navContext === 'liked' && !inSlideshow;
-  const navItems = inSlideshow ? slideshow.items : isLikedNav ? likedNavList : folderMedia;
+  const isTimelineNav = navContext === 'timeline' && !inSlideshow;
+  const navItems = inSlideshow ? slideshow.items : isLikedNav ? likedNavList : isTimelineNav ? timelineNavList : folderMedia;
   /* In a slideshow the index is authoritative slideshow state — after a reload
      the URL may briefly point at a stale id, so deriving it from the URL would
      flash a wrong counter/nav state before the URL is corrected. */
@@ -602,7 +606,7 @@ export default function MediaPage() {
       if (inSlideshow) setItem(nextItem);
       navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
     } else {
-      navigate(isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard'), { replace: true });
+      navigate(isTimelineNav ? '/timeline' : isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard'), { replace: true });
     }
 
     /* Drop the deleted item from both the slideshow and the folder sibling
@@ -610,6 +614,7 @@ export default function MediaPage() {
     if (inSlideshow) removeSlideshowItem(deletedId);
     setFolderMedia(list => list.filter(m => m.id !== deletedId));
     if (isLikedNav) setLikedNavList(list => list.filter(m => m.id !== deletedId));
+    if (isTimelineNav) setTimelineNavList(list => list.filter(m => m.id !== deletedId));
 
     try {
       await deleteMedia(deletedId);
@@ -619,7 +624,7 @@ export default function MediaPage() {
       console.error('Failed to delete media:', err);
       dispatch({ type: actions.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
     }
-  }, [item, navItems, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump, isLikedNav]);
+  }, [item, navItems, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump, isLikedNav, isTimelineNav]);
 
   /* Merge this item's duplicate copies into it. The item on screen is passed as
      `keepId` so the current variant wins the purge; likes and tags are combined
@@ -845,7 +850,7 @@ export default function MediaPage() {
     return chain;
   }, [item?.folder_chain, item?.folder, folders]);
 
-  const backTarget = isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard');
+  const backTarget = isTimelineNav ? '/timeline' : isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard');
   const goBack = useCallback(() => {
     navigate(backTarget);
   }, [navigate, backTarget]);
@@ -893,7 +898,9 @@ export default function MediaPage() {
             onClick={goBack}
           />
           <nav className="breadcrumb-nav">
-            <Button variant="text" onClick={() => navigate('/dashboard')}>Folders</Button>
+            <Button variant="text" onClick={() => navigate(isTimelineNav ? '/timeline' : '/dashboard')}>
+              {isTimelineNav ? 'Timeline' : 'Folders'}
+            </Button>
             {breadcrumbs.map((crumb) => {
               const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
               return (
