@@ -945,7 +945,16 @@ export default function MediaPage() {
         onTouchCancel={cancelTouchGesture}
       >
         {isImage ? (
-          <ImageViewer src={mediaUrl} alt={item.title} mediaRef={mediaElRef} mediaProps={magnifier.mediaProps} />
+          <ImageViewer
+            src={mediaUrl}
+            alt={item.title}
+            mediaRef={mediaElRef}
+            mediaProps={magnifier.mediaProps}
+            /* Clicking the photo zooms it in, matching the zoom-in cursor. While
+               magnified the same drag pans, so the click handler is off and the
+               toolbar button (or Escape) exits. */
+            onClick={magnifier.active || editingEffect ? undefined : toggleMagnifier}
+          />
         ) : item.status === MEDIA_STATUS.ERROR ? (
           <div className="media-error">
             <p className="media-error-msg">Processing failed</p>

@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { createMediaMagnifier } from '../utils/mediaMagnifier.js';
 
 /**
- * Button-toggled magnifier for a single media element.
+ * Magnifier for a single media element, toggled from the viewer.
  *
  * `mediaRef` must point at the `<img>`/`<video>` and `containerRef` at the area
  * it is fitted into. Returns the active state, a `toggle`, and `mediaProps` to
