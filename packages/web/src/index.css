@@ -1295,12 +1295,21 @@ body {
 .media-section { margin-bottom: 4px; }
 .media-section-head {
   display: flex;
+  width: 100%;
   align-items: baseline;
+  justify-content: flex-start;
   gap: 10px;
+  height: auto;
   margin-bottom: 10px;
-  padding-bottom: 6px;
+  padding: 0 0 6px;
   border-bottom: 1px solid var(--sol-border-soft);
+  text-align: left;
+  line-height: 1.4;
+  white-space: normal;
+  color: var(--sol-text-mut);
 }
+.media-section-head:hover { color: var(--sol-text-em); border-color: var(--sol-text-mut); }
+.media-section-chevron { margin-left: 4px; color: var(--sol-text-mut); flex-shrink: 0; align-self: center; }
 .media-section-title {
   font-size: var(--fs-md);
   font-weight: 600;

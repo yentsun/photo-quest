@@ -11,6 +11,8 @@
  *              (parentId, subtreeCounts, previewMediaId)
  */
 
+import { dayKeyForMedia, UNKNOWN_DAY } from '../utils/timeline.js';
+
 const DB_NAME = 'media-browser';
 const DB_VERSION = 1;
 
@@ -239,7 +241,7 @@ function idbCountMedia(db, filters) {
   });
 }
 
-export async function idbGetMedia({ folder, subtree, liked, from, to, limit, offset, sort, search, tag, type } = {}) {
+export async function idbGetMedia({ folder, subtree, liked, from, to, undated, limit, offset, sort, search, tag, type } = {}) {
   const db = await openDB();
 
   /* Count-only reads (limit === 0): never clone/sort the whole store. */
@@ -272,12 +274,17 @@ export async function idbGetMedia({ folder, subtree, liked, from, to, limit, off
     items = items.filter(m => m.likes > 0);
   }
 
-  /* Mirror server's inclusive day range (date prefix of the raw stored value). */
+  /* Mirror server's day range (first ten characters of the raw stored date)
+     and its "unknown" bucket for rows whose date is not `YYYY-MM-DD`. */
   if (from || to) {
     items = items.filter(m => {
-      const day = (m.date_taken || m.created_at || '').slice(0, 10);
+      const day = dayKeyForMedia(m);
       return (!from || day >= from) && (!to || day <= to);
     });
+  }
+
+  if (undated) {
+    items = items.filter(m => dayKeyForMedia(m) === UNKNOWN_DAY);
   }
 
   /* Mirror server's type filter */
@@ -313,8 +320,8 @@ export async function idbGetMedia({ folder, subtree, liked, from, to, limit, off
     items.sort((a, b) => b.likes - a.likes);
   } else {
     items.sort((a, b) => {
-      const aDate = a.date_taken || a.created_at || '';
-      const bDate = b.date_taken || b.created_at || '';
+      const aDate = a.date_taken ?? a.created_at ?? '';
+      const bDate = b.date_taken ?? b.created_at ?? '';
       const dateCompare = bDate.localeCompare(aDate);
       if (dateCompare !== 0) return dateCompare;
       const pathA = a.path || '', pathB = b.path || '';

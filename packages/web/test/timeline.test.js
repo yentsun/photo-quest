@@ -20,6 +20,12 @@ test('timeline grouping', async (t) => {
   await t.test('returns UNKNOWN_DAY without a usable date', (t) => {
     t.assert.strictEqual(dayKeyForMedia({ title: 'x' }), UNKNOWN_DAY);
     t.assert.strictEqual(dayKeyForMedia({ date_taken: 'not-a-date' }), UNKNOWN_DAY);
+    /* Matches the server, where COALESCE keeps an empty date_taken instead of
+       falling back to created_at. */
+    t.assert.strictEqual(
+      dayKeyForMedia({ date_taken: '', created_at: '2026-10-19 08:00:00' }),
+      UNKNOWN_DAY,
+    );
   });
 
   await t.test('groups consecutive items and merges a day split across pages', (t) => {

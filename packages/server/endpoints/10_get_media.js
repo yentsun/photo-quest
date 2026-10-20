@@ -33,6 +33,7 @@ export default async (kojo, logger) => {
     const search = url.searchParams.get('search');
     const tag = url.searchParams.get('tag');
     const type = url.searchParams.get('type');
+    const undated = url.searchParams.get('undated');
 
     const opts = {};
     if (from != null) opts.from = from;
@@ -47,8 +48,17 @@ export default async (kojo, logger) => {
     if (search != null) opts.search = search;
     if (tag != null) opts.tag = tag;
     if (type != null) opts.type = type;
+    if (undated === '1') opts.undated = true;
 
     logger.debug(`[GET /media] opts=${JSON.stringify(opts)}`);
+
+    /* `?days=1` returns per-day totals for the same filters -- Timeline uses
+       them for day headers even when only part of a day has been paged in. */
+    if (url.searchParams.get('days') === '1') {
+      const { days } = kojo.ops.listMedia({ ...opts, daysOnly: true });
+      return json(res, 200, { days });
+    }
+
     const result = kojo.ops.listMedia(opts);
     logger.debug(`[GET /media] → total=${result.total} items=${result.items.length}`);
     json(res, 200, result);

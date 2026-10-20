@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Loader from '../ui/Loader.jsx';
 
-export default function ImageViewer({ src, alt = '', className = '', mediaRef, mediaProps }) {
+export default function ImageViewer({ src, alt = '', className = '', mediaRef, mediaProps, onClick }) {
   const [status, setStatus] = useState('loading');
 
   useEffect(() => {
@@ -32,6 +32,7 @@ export default function ImageViewer({ src, alt = '', className = '', mediaRef, m
       )}
       <img
         {...mediaProps}
+        onClick={onClick}
         ref={mediaRef}
         src={src}
         alt={alt}

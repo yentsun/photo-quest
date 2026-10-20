@@ -18,7 +18,7 @@ const DAY_PREFIX = /^\d{4}-\d{2}-\d{2}$/;
  * @returns {string} `YYYY-MM-DD`, or `UNKNOWN_DAY` when the row has no date.
  */
 export function dayKeyForMedia(item) {
-  const raw = String(item?.date_taken || item?.created_at || '');
+  const raw = String(item?.date_taken ?? item?.created_at ?? '');
   const day = raw.slice(0, 10);
   return DAY_PREFIX.test(day) ? day : UNKNOWN_DAY;
 }

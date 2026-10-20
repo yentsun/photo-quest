@@ -52,6 +52,14 @@ function safeTags(tags) {
   return [];
 }
 
+/** Flatten the timeline page cache into the same day order the page shows. */
+function timelineItemsFromCache() {
+  const data = getPageCache('timeline')?.data;
+  if (!data?.days) return [];
+  const visibleDays = data.days.slice(0, data.visibleDayCount ?? data.days.length);
+  return visibleDays.flatMap(day => data.dayItems?.[day.key] ?? []);
+}
+
 export default function MediaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -130,7 +138,7 @@ export default function MediaPage() {
       : []
   );
   const [timelineNavList, setTimelineNavList] = useState(() =>
-    navContext === 'timeline' ? (getPageCache('timeline')?.data?.items ?? []) : []
+    navContext === 'timeline' ? timelineItemsFromCache() : []
   );
   const [folders, setFolders] = useState(() => getLastFolders() || []);
   const [folder, setFolder] = useState(() => {
@@ -270,9 +278,22 @@ export default function MediaPage() {
     return () => clearInterval(interval);
   }, [id, item?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isLikedNav = navContext === 'liked' && !inSlideshow;
-  const isTimelineNav = navContext === 'timeline' && !inSlideshow;
-  const navItems = inSlideshow ? slideshow.items : isLikedNav ? likedNavList : isTimelineNav ? timelineNavList : folderMedia;
+  /* One source of truth for the list the viewer walks: slideshow, liked and
+     timeline sessions have their own sequence, anything else walks the folder
+     siblings. Deletion and the back target read the same value so they can
+     never continue a different order than the viewer navigates. */
+  const navSource = inSlideshow ? 'slideshow'
+    : navContext === 'liked' ? 'liked'
+    : navContext === 'timeline' ? 'timeline'
+    : 'folder';
+  const navItems = navSource === 'slideshow' ? slideshow.items
+    : navSource === 'liked' ? likedNavList
+    : navSource === 'timeline' ? timelineNavList
+    : folderMedia;
+  /* Where the viewer returns when there is no neighbour to follow. */
+  const navHome = navSource === 'timeline' ? '/timeline'
+    : navSource === 'liked' ? '/liked'
+    : folder ? `/folder/${folder.id}` : '/dashboard';
   /* In a slideshow the index is authoritative slideshow state — after a reload
      the URL may briefly point at a stale id, so deriving it from the URL would
      flash a wrong counter/nav state before the URL is corrected. */
@@ -586,21 +607,19 @@ export default function MediaPage() {
     setShowDelete(false);
     const deletedId = item.id;
 
-    /* Up/down navigation happens within the folder sibling list, even in a
-       slideshow. Pick the next item from the same source we are navigating
-       through, so deletion continues the sequence instead of jumping to a
-       different order (or to the deleted item). */
+    /* Deletion continues the list the viewer navigates: slideshow and folder
+       sessions walk the folder sibling list, while liked and timeline sessions
+       walk their own sequence. Both decisions read `navSource`, so a new nav
+       context cannot delete into a different order. */
     const folderIdx = folderMedia.findIndex(m => m.id === deletedId);
     const folderNext = folderIdx >= 0
       ? (folderMedia[folderIdx + 1] ?? folderMedia[folderIdx - 1])
       : null;
-    const slideshowNext = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
-    /* In a liked nav session the sequence is the liked list itself; otherwise
-       follow the folder sequence, falling back to the slideshow when the
-       deleted item was the sole folder sibling. */
-    const nextItem = isLikedNav
-      ? slideshowNext
-      : folderIdx >= 0 ? (folderNext ?? slideshowNext) : slideshowNext;
+    const sequenceNext = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
+    const followsNavigatedList = navSource !== 'folder' && navSource !== 'slideshow';
+    const nextItem = followsNavigatedList
+      ? sequenceNext
+      : folderIdx >= 0 ? (folderNext ?? sequenceNext) : sequenceNext;
 
     if (nextItem) {
       /* In a slideshow the route change alone does not update the displayed
@@ -610,15 +629,15 @@ export default function MediaPage() {
       if (inSlideshow) setItem(nextItem);
       navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
     } else {
-      navigate(isTimelineNav ? '/timeline' : isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard'), { replace: true });
+      navigate(navHome, { replace: true });
     }
 
     /* Drop the deleted item from both the slideshow and the folder sibling
        list so subsequent up/down navigation doesn't target a dead id. */
     if (inSlideshow) removeSlideshowItem(deletedId);
     setFolderMedia(list => list.filter(m => m.id !== deletedId));
-    if (isLikedNav) setLikedNavList(list => list.filter(m => m.id !== deletedId));
-    if (isTimelineNav) setTimelineNavList(list => list.filter(m => m.id !== deletedId));
+    if (navSource === 'liked') setLikedNavList(list => list.filter(m => m.id !== deletedId));
+    if (navSource === 'timeline') setTimelineNavList(list => list.filter(m => m.id !== deletedId));
 
     try {
       await deleteMedia(deletedId);
@@ -628,7 +647,7 @@ export default function MediaPage() {
       console.error('Failed to delete media:', err);
       dispatch({ type: actions.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
     }
-  }, [item, navItems, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump, isLikedNav, isTimelineNav]);
+  }, [item, navItems, navSource, navHome, currentIndex, folderMedia, navigate, inSlideshow, removeSlideshowItem, deleteMedia, bump]);
 
   /* Merge this item's duplicate copies into it. The item on screen is passed as
      `keepId` so the current variant wins the purge; likes and tags are combined
@@ -647,6 +666,7 @@ export default function MediaPage() {
       if (removed.size > 0) {
         setFolderMedia(list => list.filter(m => !removed.has(m.id)));
         setLikedNavList(list => list.filter(m => !removed.has(m.id)));
+        setTimelineNavList(list => list.filter(m => !removed.has(m.id)));
       }
       if (master) {
         if (master.id !== item.id) {
@@ -854,10 +874,9 @@ export default function MediaPage() {
     return chain;
   }, [item?.folder_chain, item?.folder, folders]);
 
-  const backTarget = isTimelineNav ? '/timeline' : isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard');
   const goBack = useCallback(() => {
-    navigate(backTarget);
-  }, [navigate, backTarget]);
+    navigate(navHome);
+  }, [navigate, navHome]);
 
   if (loading && !item) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
 
@@ -902,8 +921,8 @@ export default function MediaPage() {
             onClick={goBack}
           />
           <nav className="breadcrumb-nav">
-            <Button variant="text" onClick={() => navigate(isTimelineNav ? '/timeline' : '/dashboard')}>
-              {isTimelineNav ? 'Timeline' : 'Folders'}
+            <Button variant="text" onClick={() => navigate(navSource === 'timeline' ? '/timeline' : '/dashboard')}>
+              {navSource === 'timeline' ? 'Timeline' : 'Folders'}
             </Button>
             {breadcrumbs.map((crumb) => {
               const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
@@ -926,7 +945,16 @@ export default function MediaPage() {
         onTouchCancel={cancelTouchGesture}
       >
         {isImage ? (
-          <ImageViewer src={mediaUrl} alt={item.title} mediaRef={mediaElRef} mediaProps={magnifier.mediaProps} />
+          <ImageViewer
+            src={mediaUrl}
+            alt={item.title}
+            mediaRef={mediaElRef}
+            mediaProps={magnifier.mediaProps}
+            /* A mouse click on the photo zooms it in, matching the zoom-in
+               cursor. While magnified the same drag pans, so the click handler
+               is off and the toolbar button (or Escape) exits. */
+            onClick={magnifier.active || editingEffect ? undefined : magnifier.onMediaClick}
+          />
         ) : item.status === MEDIA_STATUS.ERROR ? (
           <div className="media-error">
             <p className="media-error-msg">Processing failed</p>

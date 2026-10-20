@@ -22,9 +22,10 @@ export function isVideoControlPress(rect, clientY) {
 }
 
 /*
- * Button-toggled magnifier. Unlike a hold gesture it never intercepts native
- * long-press / image-menu behaviour: it stays dormant until the user presses
- * the magnifier button, and only then captures pointer drags to pan.
+ * Magnifier toggled from the viewer (toolbar button or a click on the media).
+ * Unlike a hold gesture it never intercepts native long-press / image-menu
+ * behaviour: it stays dormant until the viewer opens it, and only then
+ * captures pointer drags to pan.
  *
  * Framework-independent so the bounds, toggle and pan logic can be tested
  * without a browser; the hook supplies DOM measurement and wires the element.
