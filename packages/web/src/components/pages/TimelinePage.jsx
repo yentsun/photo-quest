@@ -116,20 +116,23 @@ export default function TimelinePage() {
       setLoadingDays(new Set());
     }
 
-    /* A signal-only change (e.g. an import) refreshes the day totals in the
-       background without throwing away loaded items or the scroll position. */
+    /* A signal-only run refreshes the day totals in the background without
+       throwing away loaded items or the scroll position. */
     fetchMediaDays({ from, to, type: typeParam })
       .then((rows) => {
         if (!mountedRef.current || requestId !== requestRef.current) return;
         setDays(rows.map(row => ({ key: row.day, count: row.count })));
-        if (filtersChanged) setLoading(false);
+        /* The winning request clears the loader and any stale error: a
+           signal-only run can replace the run that reset the filters. */
+        setError(null);
+        setLoading(false);
       })
       .catch((err) => {
         if (!mountedRef.current || requestId !== requestRef.current) return;
-        if (filtersChanged) {
-          setError(err.message);
-          setLoading(false);
-        }
+        setLoading(false);
+        /* Only a filter change surfaces the failure; a background refresh must
+           not replace loaded content with an error state. */
+        if (filtersChanged) setError(err.message);
       });
 
     return undefined;
@@ -203,6 +206,9 @@ export default function TimelinePage() {
   }, [range, mediaType, days, dayItems, collapsedDays, visibleDayCount, loading, error, signal]);
 
   const handleRangeChange = useCallback((next) => {
+    /* Re-picking the applied range must not clear the page: the fetch effect
+       compares values, so an equal range would never re-run it. */
+    if ((next?.start ?? null) === from && (next?.end ?? null) === to) return;
     setRange(next);
     setDays([]);
     setDayItems({});
@@ -210,7 +216,7 @@ export default function TimelinePage() {
     dayOffsetsRef.current = {};
     setLoading(true);
     document.querySelector('.page')?.scrollTo({ top: 0, behavior: 'instant' });
-  }, []);
+  }, [from, to]);
 
   const handleTypeChange = useCallback((next) => {
     if (next === mediaType) return;
