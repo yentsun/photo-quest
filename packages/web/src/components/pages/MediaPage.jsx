@@ -280,7 +280,15 @@ export default function MediaPage() {
 
   const isLikedNav = navContext === 'liked' && !inSlideshow;
   const isTimelineNav = navContext === 'timeline' && !inSlideshow;
-  const navItems = inSlideshow ? slideshow.items : isLikedNav ? likedNavList : isTimelineNav ? timelineNavList : folderMedia;
+  /* One source of truth for the list the viewer walks: slideshow, liked and
+     timeline sessions have their own sequence, anything else walks the folder
+     siblings. Deletion reads the same value so it can never continue a
+     different order than the viewer navigates. */
+  const navSource = inSlideshow ? 'slideshow' : isLikedNav ? 'liked' : isTimelineNav ? 'timeline' : 'folder';
+  const navItems = navSource === 'slideshow' ? slideshow.items
+    : navSource === 'liked' ? likedNavList
+    : navSource === 'timeline' ? timelineNavList
+    : folderMedia;
   /* In a slideshow the index is authoritative slideshow state — after a reload
      the URL may briefly point at a stale id, so deriving it from the URL would
      flash a wrong counter/nav state before the URL is corrected. */
@@ -594,19 +602,17 @@ export default function MediaPage() {
     setShowDelete(false);
     const deletedId = item.id;
 
-    /* Up/down navigation happens within the folder sibling list, even in a
-       slideshow. Liked and timeline sessions navigate their own sequence, so
-       pick the next item from the source actually being navigated, or deletion
-       jumps to an item chosen by a different order (or to the deleted item). */
+    /* Deletion continues the list the viewer navigates: slideshow and folder
+       sessions walk the folder sibling list, while liked and timeline sessions
+       walk their own sequence. Both decisions read `navSource`, so a new nav
+       context cannot delete into a different order. */
     const folderIdx = folderMedia.findIndex(m => m.id === deletedId);
     const folderNext = folderIdx >= 0
       ? (folderMedia[folderIdx + 1] ?? folderMedia[folderIdx - 1])
       : null;
     const sequenceNext = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
-    /* Liked and timeline viewers follow their own list; a folder viewer follows
-       the sibling list, falling back to the sequence when the deleted item was
-       its sole sibling. */
-    const nextItem = isLikedNav || isTimelineNav
+    const followsNavigatedList = navSource !== 'folder' && navSource !== 'slideshow';
+    const nextItem = followsNavigatedList
       ? sequenceNext
       : folderIdx >= 0 ? (folderNext ?? sequenceNext) : sequenceNext;
 
@@ -636,7 +642,7 @@ export default function MediaPage() {
       console.error('Failed to delete media:', err);
       dispatch({ type: actions.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
     }
-  }, [item, navItems, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump, isLikedNav, isTimelineNav]);
+  }, [item, navItems, navSource, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump, isLikedNav, isTimelineNav]);
 
   /* Merge this item's duplicate copies into it. The item on screen is passed as
      `keepId` so the current variant wins the purge; likes and tags are combined
