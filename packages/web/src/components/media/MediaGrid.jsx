@@ -30,10 +30,10 @@ export default function MediaGrid({
   const groups = sections ?? [{ key: 'all', items }];
   const itemCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
-  /* Re-arm the observer when content grows: intersection notifications only
-     fire when intersection changes, so a sentinel that stays inside the margin
-     (a short page, e.g. one more sparse day) would otherwise never ask for
-     another page. */
+  /* Re-arm the observer when content or section count grows: intersection
+     notifications only fire when intersection changes, so a sentinel that
+     stays inside the margin (a short page, e.g. one more sparse or collapsed
+     day) would otherwise never ask for another page. */
   useEffect(() => {
     if (!onNearEnd || !sentinelRef.current) return;
     const observer = new IntersectionObserver(
@@ -42,7 +42,7 @@ export default function MediaGrid({
     );
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
-  }, [onNearEnd, itemCount]);
+  }, [onNearEnd, itemCount, groups.length]);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {

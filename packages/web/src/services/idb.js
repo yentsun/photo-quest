@@ -320,8 +320,8 @@ export async function idbGetMedia({ folder, subtree, liked, from, to, undated, l
     items.sort((a, b) => b.likes - a.likes);
   } else {
     items.sort((a, b) => {
-      const aDate = a.date_taken || a.created_at || '';
-      const bDate = b.date_taken || b.created_at || '';
+      const aDate = a.date_taken ?? a.created_at ?? '';
+      const bDate = b.date_taken ?? b.created_at ?? '';
       const dateCompare = bDate.localeCompare(aDate);
       if (dateCompare !== 0) return dateCompare;
       const pathA = a.path || '', pathB = b.path || '';

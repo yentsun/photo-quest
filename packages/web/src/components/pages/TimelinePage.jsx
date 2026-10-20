@@ -42,7 +42,9 @@ export default function TimelinePage() {
   const [error, setError] = useState(null);
 
   const dayOffsetsRef = useRef(previousCache?.dayOffsets ?? {});
-  const loadingDaysRef = useRef(new Set());
+  /* key -> token of the request currently loading that day. The token lets a
+     superseded response avoid clearing a newer request's flag. */
+  const loadingDaysRef = useRef(new Map());
   const requestRef = useRef(0);
   const mountedRef = useRef(true);
 
@@ -110,7 +112,7 @@ export default function TimelinePage() {
       setDayItems({});
       setVisibleDayCount(1);
       dayOffsetsRef.current = {};
-      loadingDaysRef.current = new Set();
+      loadingDaysRef.current = new Map();
       setLoadingDays(new Set());
     }
 
@@ -143,8 +145,9 @@ export default function TimelinePage() {
     if (offset >= day.count) return;
 
     const requestId = requestRef.current;
-    loadingDaysRef.current.add(key);
-    setLoadingDays(new Set(loadingDaysRef.current));
+    const token = {};
+    loadingDaysRef.current.set(key, token);
+    setLoadingDays(new Set(loadingDaysRef.current.keys()));
 
     try {
       /* Undated rows have no `from`/`to` bound the server can express, so they
@@ -174,11 +177,14 @@ export default function TimelinePage() {
     } catch (err) {
       console.error('Failed to load timeline day:', err);
     } finally {
-      /* Always release the key: a newer request (filter or signal change)
-         invalidates this response, but without the delete the day would stay
-         marked as loading and could never be fetched again. */
-      loadingDaysRef.current.delete(key);
-      if (mountedRef.current) setLoadingDays(new Set(loadingDaysRef.current));
+      /* Release the key even when a filter or signal change superseded this
+         response, otherwise the day would stay marked as loading and could
+         never be fetched again. A newer request for the same day owns a
+         different token, so its flag is left intact. */
+      if (loadingDaysRef.current.get(key) === token) {
+        loadingDaysRef.current.delete(key);
+        if (mountedRef.current) setLoadingDays(new Set(loadingDaysRef.current.keys()));
+      }
     }
   }, [days, typeParam]);
 
