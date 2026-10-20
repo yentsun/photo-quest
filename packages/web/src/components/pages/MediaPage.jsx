@@ -950,10 +950,10 @@ export default function MediaPage() {
             alt={item.title}
             mediaRef={mediaElRef}
             mediaProps={magnifier.mediaProps}
-            /* Clicking the photo zooms it in, matching the zoom-in cursor. While
-               magnified the same drag pans, so the click handler is off and the
-               toolbar button (or Escape) exits. */
-            onClick={magnifier.active || editingEffect ? undefined : toggleMagnifier}
+            /* A mouse click on the photo zooms it in, matching the zoom-in
+               cursor. While magnified the same drag pans, so the click handler
+               is off and the toolbar button (or Escape) exits. */
+            onClick={magnifier.active || editingEffect ? undefined : magnifier.onMediaClick}
           />
         ) : item.status === MEDIA_STATUS.ERROR ? (
           <div className="media-error">
