@@ -595,20 +595,20 @@ export default function MediaPage() {
     const deletedId = item.id;
 
     /* Up/down navigation happens within the folder sibling list, even in a
-       slideshow. Pick the next item from the same source we are navigating
-       through, so deletion continues the sequence instead of jumping to a
-       different order (or to the deleted item). */
+       slideshow. Liked and timeline sessions navigate their own sequence, so
+       pick the next item from the source actually being navigated, or deletion
+       jumps to an item chosen by a different order (or to the deleted item). */
     const folderIdx = folderMedia.findIndex(m => m.id === deletedId);
     const folderNext = folderIdx >= 0
       ? (folderMedia[folderIdx + 1] ?? folderMedia[folderIdx - 1])
       : null;
-    const slideshowNext = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
-    /* In a liked nav session the sequence is the liked list itself; otherwise
-       follow the folder sequence, falling back to the slideshow when the
-       deleted item was the sole folder sibling. */
-    const nextItem = isLikedNav
-      ? slideshowNext
-      : folderIdx >= 0 ? (folderNext ?? slideshowNext) : slideshowNext;
+    const sequenceNext = navItems[currentIndex + 1] ?? navItems[currentIndex - 1];
+    /* Liked and timeline viewers follow their own list; a folder viewer follows
+       the sibling list, falling back to the sequence when the deleted item was
+       its sole sibling. */
+    const nextItem = isLikedNav || isTimelineNav
+      ? sequenceNext
+      : folderIdx >= 0 ? (folderNext ?? sequenceNext) : sequenceNext;
 
     if (nextItem) {
       /* In a slideshow the route change alone does not update the displayed
