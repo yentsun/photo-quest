@@ -33,6 +33,7 @@ export default async (kojo, logger) => {
     const search = url.searchParams.get('search');
     const tag = url.searchParams.get('tag');
     const type = url.searchParams.get('type');
+    const undated = url.searchParams.get('undated');
 
     const opts = {};
     if (from != null) opts.from = from;
@@ -47,6 +48,7 @@ export default async (kojo, logger) => {
     if (search != null) opts.search = search;
     if (tag != null) opts.tag = tag;
     if (type != null) opts.type = type;
+    if (undated === '1') opts.undated = true;
 
     logger.debug(`[GET /media] opts=${JSON.stringify(opts)}`);
 

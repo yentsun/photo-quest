@@ -27,6 +27,13 @@ export default function MediaGrid({
   const sectionRefCallbacksRef = useRef(new Map());
   const sectionLoadersRef = useRef(new Map());
 
+  const groups = sections ?? [{ key: 'all', items }];
+  const itemCount = groups.reduce((sum, group) => sum + group.items.length, 0);
+
+  /* Re-arm the observer when content grows: intersection notifications only
+     fire when intersection changes, so a sentinel that stays inside the margin
+     (a short page, e.g. one more sparse day) would otherwise never ask for
+     another page. */
   useEffect(() => {
     if (!onNearEnd || !sentinelRef.current) return;
     const observer = new IntersectionObserver(
@@ -35,7 +42,7 @@ export default function MediaGrid({
     );
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
-  }, [onNearEnd]);
+  }, [onNearEnd, itemCount]);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
@@ -54,9 +61,6 @@ export default function MediaGrid({
       sectionObserverRef.current = null;
     };
   }, []);
-
-  const groups = sections ?? [{ key: 'all', items }];
-  const itemCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
   sectionLoadersRef.current = new Map();
   for (const group of groups) {

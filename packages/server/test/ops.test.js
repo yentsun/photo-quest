@@ -185,6 +185,38 @@ test('listMedia op', async (t) => {
       [{ day: '2026-10-01', count: 2 }],
     );
   });
+
+  await t.test('groups undated rows separately and filters them with `undated`', (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const insert = (filePath, title, type, dateTaken) => db.prepare(
+      "INSERT INTO media (path, title, type, status, date_taken) VALUES (?, ?, ?, 'ready', ?)"
+    ).run(filePath, title, type, dateTaken);
+
+    insert('/a.jpg', 'A', 'image', '2026-10-01T01:00:00.000Z');
+    insert('/b.jpg', 'B', 'image', '');
+    insert('/c.jpg', 'C', 'image', 'not-a-date');
+
+    /* `created_at` is always a valid timestamp, so only a non-null but
+       unparseable `date_taken` lands in the undated bucket. */
+    const days = callOp(listMedia, ctx, { daysOnly: true }).days
+      .map(({ day, count }) => ({ day, count }));
+    t.assert.deepStrictEqual(days, [
+      { day: '2026-10-01', count: 1 },
+      { day: 'unknown', count: 2 },
+    ]);
+
+    const undated = callOp(listMedia, ctx, { undated: true, limit: 10 });
+    t.assert.strictEqual(undated.total, 2);
+    t.assert.deepStrictEqual(undated.items.map(r => r.title).sort(), ['B', 'C']);
+
+    /* The undated bucket stays pageable on its own once a day key is "unknown". */
+    const firstPage = callOp(listMedia, ctx, { undated: true, limit: 1, offset: 0 });
+    const secondPage = callOp(listMedia, ctx, { undated: true, limit: 1, offset: 1 });
+    t.assert.strictEqual(firstPage.items.length, 1);
+    t.assert.strictEqual(secondPage.items.length, 1);
+    t.assert.notStrictEqual(firstPage.items[0].id, secondPage.items[0].id);
+  });
 });
 
 test('listDuplicates op', async (t) => {

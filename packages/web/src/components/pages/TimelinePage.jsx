@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRefresh } from '../../contexts/RefreshContext.jsx';
 import { fetchMedia, fetchMediaDays } from '../../utils/api.js';
 import { getPageCache, isPageCacheValid, setPageCache } from '../../utils/pageCache.js';
-import { formatDayLabel } from '../../utils/timeline.js';
+import { formatDayLabel, UNKNOWN_DAY } from '../../utils/timeline.js';
 import { MediaGrid } from '../media/index.js';
 import { EmptyState } from '../layout/index.js';
 import { DateRangePicker, Icon, Loader, Select } from '../ui/index.js';
@@ -147,9 +147,10 @@ export default function TimelinePage() {
     setLoadingDays(new Set(loadingDaysRef.current));
 
     try {
+      /* Undated rows have no `from`/`to` bound the server can express, so they
+         are paged through the explicit `undated` filter instead. */
       const data = await fetchMedia({
-        from: key,
-        to: key,
+        ...(key === UNKNOWN_DAY ? { undated: true } : { from: key, to: key }),
         type: typeParam,
         limit: PAGE_SIZE,
         offset,
@@ -173,10 +174,11 @@ export default function TimelinePage() {
     } catch (err) {
       console.error('Failed to load timeline day:', err);
     } finally {
-      if (mountedRef.current && requestId === requestRef.current) {
-        loadingDaysRef.current.delete(key);
-        setLoadingDays(new Set(loadingDaysRef.current));
-      }
+      /* Always release the key: a newer request (filter or signal change)
+         invalidates this response, but without the delete the day would stay
+         marked as loading and could never be fetched again. */
+      loadingDaysRef.current.delete(key);
+      if (mountedRef.current) setLoadingDays(new Set(loadingDaysRef.current));
     }
   }, [days, typeParam]);
 
@@ -187,7 +189,7 @@ export default function TimelinePage() {
       type: mediaType,
       days,
       dayItems,
-      dayOffsets: dayOffsetsRef.current,
+      dayOffsets: { ...dayOffsetsRef.current },
       collapsedDays: [...collapsedDays],
       visibleDayCount,
       scrollTop: scrollTopRef.current,
@@ -244,7 +246,7 @@ export default function TimelinePage() {
       type: mediaType,
       days,
       dayItems,
-      dayOffsets: dayOffsetsRef.current,
+      dayOffsets: { ...dayOffsetsRef.current },
       collapsedDays: [...collapsedDays],
       visibleDayCount,
       scrollTop: scrollTopRef.current,

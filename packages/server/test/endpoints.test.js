@@ -386,6 +386,20 @@ test('GET /media', async (t) => {
     t.assert.strictEqual(lastListMediaOpts.to, '2026-10-02');
     t.assert.strictEqual(lastListMediaOpts.type, 'image');
   });
+
+  await t.test('?undated=1 asks for rows without a parseable day', async () => {
+    const route = findRoute('GET', '/media');
+    const req = mockReq('GET', '/media?undated=1&limit=60&offset=0');
+    const res = mockRes();
+
+    await route.handler(req, res);
+
+    t.assert.strictEqual(res._status, 200);
+    t.assert.strictEqual(lastListMediaOpts.undated, true);
+    t.assert.strictEqual(lastListMediaOpts.from, undefined);
+    t.assert.strictEqual(lastListMediaOpts.limit, 60);
+    t.assert.strictEqual(lastListMediaOpts.offset, 0);
+  });
 });
 
 test('GET /media/:id', async (t) => {

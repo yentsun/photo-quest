@@ -545,7 +545,7 @@ export async function deleteDuplicates({ ids }) {
   return data;
 }
 
-export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type, from, to, skipCache = false } = {}) {
+export async function fetchMedia({ limit, offset, folder, subtree, liked, random, sort, search, tag, type, from, to, undated, skipCache = false } = {}) {
   const url = new URL(apiRoutes.media, window.location.origin);
   if (limit != null) url.searchParams.set('limit', limit);
   if (offset != null) url.searchParams.set('offset', offset);
@@ -559,8 +559,9 @@ export async function fetchMedia({ limit, offset, folder, subtree, liked, random
   if (search != null) url.searchParams.set('search', search);
   if (tag != null) url.searchParams.set('tag', tag);
   if (type != null) url.searchParams.set('type', type);
+  if (undated) url.searchParams.set('undated', '1');
 
-  const opts = { limit, offset, folder, subtree, liked, random, sort, search, tag, type, from, to };
+  const opts = { limit, offset, folder, subtree, liked, random, sort, search, tag, type, from, to, undated };
 
   /* Random queries are always server-only. */
   if (random) {

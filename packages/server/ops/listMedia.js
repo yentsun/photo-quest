@@ -7,6 +7,9 @@
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
+/** SQLite GLOB for the `YYYY-MM-DD` prefix of a stored date. */
+const DAY_GLOB = '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
+
 /**
  * Return the day after a `YYYY-MM-DD` date, so a `to` filter can be applied
  * as an exclusive upper bound and still include the whole day.
@@ -19,12 +22,12 @@ function nextDay(date) {
   return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
 }
 
-export default function ({ from, to, daysOnly, limit, offset, folder, subtree, liked, random, sort, search, tag, type } = {}) {
+export default function ({ from, to, daysOnly, undated, limit, offset, folder, subtree, liked, random, sort, search, tag, type } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
   const tStart = performance.now();
 
-  logger.debug(`from=${from} to=${to} daysOnly=${daysOnly} folder=${folder} subtree=${subtree} liked=${liked} random=${random} sort=${sort} search=${search} tag=${tag} type=${type} limit=${limit} offset=${offset}`);
+  logger.debug(`from=${from} to=${to} daysOnly=${daysOnly} undated=${undated} folder=${folder} subtree=${subtree} liked=${liked} random=${random} sort=${sort} search=${search} tag=${tag} type=${type} limit=${limit} offset=${offset}`);
 
   const conditions = ['hidden = 0'];
   const params = [];
@@ -79,16 +82,26 @@ export default function ({ from, to, daysOnly, limit, offset, folder, subtree, l
     params.push(nextDay(to));
   }
 
+  /* Rows whose stored date lacks a `YYYY-MM-DD` prefix. Timeline groups them
+     under an "unknown" day that `from`/`to` cannot express. */
+  if (undated) {
+    logger.debug('filtering undated rows');
+    conditions.push(`substr(${dateExpr}, 1, 10) NOT GLOB '${DAY_GLOB}'`);
+  }
+
   const where = conditions.join(' AND ');
   logger.debug(`WHERE: ${where}`);
 
   /* Timeline uses actual per-day totals, not just the items loaded so far.
      Group with the same filters and day key the client derives from the raw
-     date (first ten characters, or "unknown"). */
+     date (first ten characters, or "unknown"). Undated rows sort last so they
+     never head the timeline. */
   if (daysOnly) {
-    const dayExpr = `CASE WHEN substr(${dateExpr}, 1, 10) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' THEN substr(${dateExpr}, 1, 10) ELSE 'unknown' END`;
+    const dayPrefix = `substr(${dateExpr}, 1, 10)`;
+    const dayExpr = `CASE WHEN ${dayPrefix} GLOB '${DAY_GLOB}' THEN ${dayPrefix} ELSE 'unknown' END`;
     const days = db.prepare(
-      `SELECT ${dayExpr} AS day, COUNT(*) AS count FROM media WHERE ${where} GROUP BY day ORDER BY day DESC`
+      `SELECT ${dayExpr} AS day, COUNT(*) AS count FROM media WHERE ${where}
+       GROUP BY day ORDER BY (day = 'unknown'), day DESC`
     ).all(...params);
     console.log(`[DBG][listMedia] DAYS ${(performance.now() - tStart).toFixed(0)}ms days=${days.length} type=${type}`);
     return { days };
