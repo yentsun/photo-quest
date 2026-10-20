@@ -42,6 +42,9 @@ export default function TimelinePage() {
   const [error, setError] = useState(null);
 
   const dayOffsetsRef = useRef(previousCache?.dayOffsets ?? {});
+  /* Whether the current filters have produced a response yet. Keeps a failed
+     background refresh from replacing loaded content with an error state. */
+  const daysLoadedRef = useRef(Boolean(previousCache));
   /* key -> token of the request currently loading that day. The token lets a
      superseded response avoid clearing a newer request's flag. */
   const loadingDaysRef = useRef(new Map());
@@ -112,6 +115,7 @@ export default function TimelinePage() {
       setDayItems({});
       setVisibleDayCount(1);
       dayOffsetsRef.current = {};
+      daysLoadedRef.current = false;
       loadingDaysRef.current = new Map();
       setLoadingDays(new Set());
     }
@@ -121,6 +125,7 @@ export default function TimelinePage() {
     fetchMediaDays({ from, to, type: typeParam })
       .then((rows) => {
         if (!mountedRef.current || requestId !== requestRef.current) return;
+        daysLoadedRef.current = true;
         setDays(rows.map(row => ({ key: row.day, count: row.count })));
         /* The winning request clears the loader and any stale error: a
            signal-only run can replace the run that reset the filters. */
@@ -130,9 +135,10 @@ export default function TimelinePage() {
       .catch((err) => {
         if (!mountedRef.current || requestId !== requestRef.current) return;
         setLoading(false);
-        /* Only a filter change surfaces the failure; a background refresh must
-           not replace loaded content with an error state. */
-        if (filtersChanged) setError(err.message);
+        /* An error state replaces whatever is on screen, so only surface the
+           failure when the current filters have no loaded result yet -- e.g. a
+           refresh superseded the initial request -- or the user changed them. */
+        if (filtersChanged || !daysLoadedRef.current) setError(err.message);
       });
 
     return undefined;
