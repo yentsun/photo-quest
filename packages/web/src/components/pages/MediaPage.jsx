@@ -278,17 +278,22 @@ export default function MediaPage() {
     return () => clearInterval(interval);
   }, [id, item?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isLikedNav = navContext === 'liked' && !inSlideshow;
-  const isTimelineNav = navContext === 'timeline' && !inSlideshow;
   /* One source of truth for the list the viewer walks: slideshow, liked and
      timeline sessions have their own sequence, anything else walks the folder
-     siblings. Deletion reads the same value so it can never continue a
-     different order than the viewer navigates. */
-  const navSource = inSlideshow ? 'slideshow' : isLikedNav ? 'liked' : isTimelineNav ? 'timeline' : 'folder';
+     siblings. Deletion and the back target read the same value so they can
+     never continue a different order than the viewer navigates. */
+  const navSource = inSlideshow ? 'slideshow'
+    : navContext === 'liked' ? 'liked'
+    : navContext === 'timeline' ? 'timeline'
+    : 'folder';
   const navItems = navSource === 'slideshow' ? slideshow.items
     : navSource === 'liked' ? likedNavList
     : navSource === 'timeline' ? timelineNavList
     : folderMedia;
+  /* Where the viewer returns when there is no neighbour to follow. */
+  const navHome = navSource === 'timeline' ? '/timeline'
+    : navSource === 'liked' ? '/liked'
+    : folder ? `/folder/${folder.id}` : '/dashboard';
   /* In a slideshow the index is authoritative slideshow state — after a reload
      the URL may briefly point at a stale id, so deriving it from the URL would
      flash a wrong counter/nav state before the URL is corrected. */
@@ -624,15 +629,15 @@ export default function MediaPage() {
       if (inSlideshow) setItem(nextItem);
       navigate(`/media/${nextItem.id}`, { replace: true, state: location.state });
     } else {
-      navigate(isTimelineNav ? '/timeline' : isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard'), { replace: true });
+      navigate(navHome, { replace: true });
     }
 
     /* Drop the deleted item from both the slideshow and the folder sibling
        list so subsequent up/down navigation doesn't target a dead id. */
     if (inSlideshow) removeSlideshowItem(deletedId);
     setFolderMedia(list => list.filter(m => m.id !== deletedId));
-    if (isLikedNav) setLikedNavList(list => list.filter(m => m.id !== deletedId));
-    if (isTimelineNav) setTimelineNavList(list => list.filter(m => m.id !== deletedId));
+    if (navSource === 'liked') setLikedNavList(list => list.filter(m => m.id !== deletedId));
+    if (navSource === 'timeline') setTimelineNavList(list => list.filter(m => m.id !== deletedId));
 
     try {
       await deleteMedia(deletedId);
@@ -642,7 +647,7 @@ export default function MediaPage() {
       console.error('Failed to delete media:', err);
       dispatch({ type: actions.TOAST_SHOWN, message: 'Could not delete media', toastType: 'error' });
     }
-  }, [item, navItems, navSource, currentIndex, folderMedia, navigate, folder, inSlideshow, removeSlideshowItem, deleteMedia, bump, isLikedNav, isTimelineNav]);
+  }, [item, navItems, navSource, navHome, currentIndex, folderMedia, navigate, inSlideshow, removeSlideshowItem, deleteMedia, bump]);
 
   /* Merge this item's duplicate copies into it. The item on screen is passed as
      `keepId` so the current variant wins the purge; likes and tags are combined
@@ -869,10 +874,9 @@ export default function MediaPage() {
     return chain;
   }, [item?.folder_chain, item?.folder, folders]);
 
-  const backTarget = isTimelineNav ? '/timeline' : isLikedNav ? '/liked' : (folder ? `/folder/${folder.id}` : '/dashboard');
   const goBack = useCallback(() => {
-    navigate(backTarget);
-  }, [navigate, backTarget]);
+    navigate(navHome);
+  }, [navigate, navHome]);
 
   if (loading && !item) return <div className="page-loader"><Loader message={loadingMessage} /></div>;
 
@@ -917,8 +921,8 @@ export default function MediaPage() {
             onClick={goBack}
           />
           <nav className="breadcrumb-nav">
-            <Button variant="text" onClick={() => navigate(isTimelineNav ? '/timeline' : '/dashboard')}>
-              {isTimelineNav ? 'Timeline' : 'Folders'}
+            <Button variant="text" onClick={() => navigate(navSource === 'timeline' ? '/timeline' : '/dashboard')}>
+              {navSource === 'timeline' ? 'Timeline' : 'Folders'}
             </Button>
             {breadcrumbs.map((crumb) => {
               const name = crumb.path.split(/[/\\]/).filter(Boolean).pop();
