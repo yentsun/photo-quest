@@ -82,6 +82,44 @@ The network URL is shown in the header (e.g., `http://192.168.0.105:7837`). Open
 
 Click **Refresh** on the dashboard to rescan all folders for new files.
 
+## MCP server
+
+`packages/mcp` exposes the library as Model Context Protocol tools so an AI
+assistant can browse, search, and organise it. The server proxies the running
+Photo Quest HTTP API, so it needs no direct database access and works against
+any instance on your network.
+
+Start Photo Quest, then register `packages/mcp/index.js` as a local stdio server
+in your MCP client. MCP clients do not discover servers from a repository, so
+this registration is required once per client or project.
+
+The configuration shape depends on the client; the values it needs are:
+
+```text
+server:       photo-quest
+transport:    stdio
+command:      node <photo-quest>/packages/mcp/index.js
+environment:  PHOTO_QUEST_URL=<photo-quest-url>   # optional
+```
+
+`PHOTO_QUEST_URL` defaults to the `serverPort` from `config.json` (`http://localhost:7837` unless changed).
+
+| Tool | Purpose |
+|------|---------|
+| `get_library` | Show the open database and its item count |
+| `list_media` | Search and page through media with the same filters as the app |
+| `get_media` | Fetch one media item by id |
+| `list_tags` | List tags with usage counts |
+| `list_folders` | List folders with media counts and parents |
+| `list_jobs` | Show transcode queue progress and errors |
+| `list_duplicates` | List groups sharing a stored content hash |
+| `merge_duplicates` | Merge a duplicate group, deleting the extra copies from disk |
+| `list_failed` | List missing/unreadable or failed media |
+| `get_storage` | Report disk usage and free space |
+| `scan_folder` | Index a folder on the server machine |
+| `update_media_tags` | Replace a media item's tags |
+| `like_media` | Add likes to a media item |
+
 ## Updating
 
 ```bash
@@ -101,7 +139,7 @@ pnpm dev:fresh
 # Or, if dependencies are already installed
 pnpm dev
 
-# Run server tests
+# Run server and MCP tests
 pnpm test
 ```
 
@@ -112,6 +150,7 @@ packages/
   shared/   - Shared constants, schema, routes
   server/   - HTTP API server (kojo + node:sqlite) + scan worker thread
   web/      - React PWA (Vite)
+  mcp/      - Model Context Protocol server (stdio, proxies the HTTP API)
   electron/ - Optional headless tray app (spawns the server)
 ```
 
