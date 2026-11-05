@@ -28,6 +28,19 @@ function parseMedia(item) {
 }
 
 /**
+ * Parse the media rows nested inside duplicate/failed groups.
+ *
+ * @param {Object|null} data
+ * @returns {Object|null}
+ */
+function parseGroups(data) {
+  for (const group of data?.groups ?? []) {
+    if (Array.isArray(group.items)) group.items = group.items.map(parseMedia);
+  }
+  return data;
+}
+
+/**
  * Substitute the `:id` placeholder in a shared route template.
  *
  * @param {string} route
@@ -87,6 +100,10 @@ export function createClient({ baseUrl = DEFAULT_BASE_URL, fetchImpl = globalThi
         : `Photo Quest request failed (${response.status})`;
       const error = new Error(message);
       error.status = response.status;
+      if (data && typeof data === 'object') {
+        if (data.code) error.code = data.code;
+        if (data.reconciled != null) error.reconciled = data.reconciled;
+      }
       throw error;
     }
 
@@ -135,11 +152,11 @@ export function createClient({ baseUrl = DEFAULT_BASE_URL, fetchImpl = globalThi
     },
 
     async listDuplicates({ limit, offset } = {}) {
-      return request(apiRoutes.duplicates, { query: { limit, offset } });
+      return parseGroups(await request(apiRoutes.duplicates, { query: { limit, offset } }));
     },
 
     async listFailed({ limit, offset } = {}) {
-      return request(apiRoutes.failed, { query: { limit, offset } });
+      return parseGroups(await request(apiRoutes.failed, { query: { limit, offset } }));
     },
 
     async mergeDuplicates({ ids, keepId }) {
@@ -164,9 +181,10 @@ export function createClient({ baseUrl = DEFAULT_BASE_URL, fetchImpl = globalThi
     },
 
     async updateTags(id, tags) {
+      const unique = [...new Set(tags.map(tag => tag.trim()).filter(Boolean))];
       return parseMedia(await request(withId(apiRoutes.mediaTags, id), {
         method: 'PATCH',
-        body: { tags },
+        body: { tags: unique },
       }));
     },
 

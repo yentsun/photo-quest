@@ -5,10 +5,10 @@
  * only setting it needs is that instance's base URL.
  */
 
-import configDefaults from '@photo-quest/shared/config.defaults';
+import config from '@photo-quest/shared/config.js';
 
 /** Base URL used when no override is supplied. */
-export const DEFAULT_BASE_URL = `http://localhost:${configDefaults.serverPort}`;
+export const DEFAULT_BASE_URL = `http://localhost:${config.serverPort}`;
 
 /**
  * Normalise a base URL by trimming whitespace and trailing slashes so route

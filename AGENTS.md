@@ -65,7 +65,7 @@ Stdio MCP server that exposes the HTTP API as tools (media search, tags, folders
 
 ## Releasing
 
-- Bump the `version` field in all 5 `package.json` files (root, web, server, shared, electron) to the new version.
+- Bump the `version` field in all 6 `package.json` files (root, web, server, shared, mcp, electron) to the new version.
 - Update the changelog in `docs/` with change notes.
 - Commit with the version number as the message (e.g. `0.6.0`), push to master.
 - Create an annotated tag `v<version>` (e.g. `git tag -a v0.6.0 -m "0.6.0"`), push the tag.

@@ -126,6 +126,26 @@ test('API errors are reported as tool errors without crashing', async (t) => {
   t.assert.equal(result.content[0].text, 'Media not found');
 });
 
+test('tool errors include the API code and reconciled count', async (t) => {
+  const apiClient = createStubClient({
+    mergeDuplicates: () => {
+      const err = new Error('These items are no longer duplicates; their hashes were refreshed');
+      err.code = 'STALE_DUPLICATES';
+      err.reconciled = 2;
+      throw err;
+    },
+  });
+  const mcp = await connect(t, apiClient);
+
+  const result = await mcp.callTool({ name: 'merge_duplicates', arguments: { ids: [5, 9] } });
+
+  t.assert.equal(result.isError, true);
+  t.assert.equal(
+    result.content[0].text,
+    'These items are no longer duplicates; their hashes were refreshed (STALE_DUPLICATES, reconciled=2)',
+  );
+});
+
 test('invalid arguments are rejected before reaching the API client', async (t) => {
   const apiClient = createStubClient();
   const mcp = await connect(t, apiClient);

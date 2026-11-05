@@ -15,7 +15,12 @@ function jsonResult(data) {
 
 /** Report a failed API call to the MCP client without crashing the server. */
 function errorResult(err) {
-  return { isError: true, content: [{ type: 'text', text: err.message }] };
+  const details = [
+    err.code,
+    err.reconciled != null ? `reconciled=${err.reconciled}` : null,
+  ].filter(Boolean);
+  const suffix = details.length > 0 ? ` (${details.join(', ')})` : '';
+  return { isError: true, content: [{ type: 'text', text: `${err.message}${suffix}` }] };
 }
 
 /**
@@ -144,7 +149,7 @@ export function registerTools(server, client) {
 
   defineTool(server, 'update_media_tags', {
     title: 'Update media tags',
-    description: 'Replace the tag list for one media item. Pass an empty array to clear its tags.',
+    description: 'Replace the tag list for one media item. Pass an empty array to clear its tags. Duplicate tags are removed.',
     inputSchema: {
       id,
       tags: z.array(z.string().min(1)).describe('Complete replacement tag list.'),
