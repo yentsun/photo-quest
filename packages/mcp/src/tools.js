@@ -117,10 +117,10 @@ export function registerTools(server, client) {
 
   defineTool(server, 'merge_duplicates', {
     title: 'Merge duplicates',
-    description: 'Merge a duplicate group into one record: keeps the copy named by keepId when its file still exists on disk, otherwise the most mature surviving copy; absorbs the union of tags and the sum of likes; and deletes the other records and their files from disk. Copies whose files are already missing are dropped without verification.',
+    description: 'Merge a duplicate group into one record. Keeps the copy named by keepId when that id is one of the group ids and either its file survives or no copy survives; otherwise keeps the most mature copy (preferring copies whose files still exist). Absorbs the union of tags and the sum of likes, then deletes the other records and their files. Missing copies that are not kept are removed without verification.',
     inputSchema: {
       ids: z.array(id).min(2).describe('Ids of the duplicate copies to merge.'),
-      keepId: id.optional().describe('Copy to keep when its file still exists; otherwise the most mature surviving copy is kept.'),
+      keepId: id.optional().describe('Id of the copy to keep; must be one of ids to take effect. A copy whose file is missing is ignored while another copy survives.'),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
   }, ({ ids, keepId }) => client.mergeDuplicates({ ids, keepId }));
