@@ -89,21 +89,20 @@ assistant can browse, search, and organise it. The server proxies the running
 Photo Quest HTTP API, so it needs no direct database access and works against
 any instance on your network.
 
-Start Photo Quest, then register the server with your MCP client:
+Start Photo Quest, then register `packages/mcp/index.js` as a local stdio server
+in your MCP client. MCP clients do not discover servers from a repository, so
+this registration is required once per client or project.
 
-```json
-{
-  "mcpServers": {
-    "photo-quest": {
-      "command": "node",
-      "args": ["C:/path/to/photo-quest/packages/mcp/index.js"],
-      "env": { "PHOTO_QUEST_URL": "http://localhost:7837" }
-    }
-  }
-}
+The configuration shape depends on the client; the values it needs are:
+
+```text
+server:       photo-quest
+transport:    stdio
+command:      node <photo-quest>/packages/mcp/index.js
+environment:  PHOTO_QUEST_URL=<photo-quest-url>   # optional
 ```
 
-`PHOTO_QUEST_URL` is optional and defaults to the `serverPort` from `config.json` (`http://localhost:7837` unless changed).
+`PHOTO_QUEST_URL` defaults to the `serverPort` from `config.json` (`http://localhost:7837` unless changed).
 
 | Tool | Purpose |
 |------|---------|
