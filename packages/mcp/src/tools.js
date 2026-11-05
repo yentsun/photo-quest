@@ -76,7 +76,7 @@ export function registerTools(server, client) {
       liked: z.boolean().optional().describe('Only media with at least one like.'),
       from: date.optional().describe('Earliest capture date (inclusive).'),
       to: date.optional().describe('Latest capture date (inclusive).'),
-      sort: z.enum(['none', 'filename', 'likes']).optional().describe('Explicit ordering; omitted means newest first.'),
+      sort: z.enum(['none', 'filename', 'likes']).optional().describe('Ordering: "none" = id ascending, "filename" = path order, "likes" = most-liked first. Omitted = newest first, or most-liked for liked queries.'),
       limit: z.number().int().min(1).max(200).default(50).describe('Maximum items to return.'),
       offset: z.number().int().min(0).default(0).describe('Number of items to skip.'),
     },
@@ -110,17 +110,17 @@ export function registerTools(server, client) {
 
   defineTool(server, 'list_duplicates', {
     title: 'List duplicates',
-    description: 'List groups of media sharing a stored content hash. Merge verifies the files are byte-identical.',
+    description: 'List groups of media sharing a stored content hash. Merge verifies byte identity of any copies still on disk.',
     inputSchema: paging,
     annotations: READ_ONLY,
   }, (args) => client.listDuplicates(args));
 
   defineTool(server, 'merge_duplicates', {
     title: 'Merge duplicates',
-    description: 'Merge a duplicate group into one record: keeps the most mature copy (or keepId), absorbs the union of tags and the sum of likes, and deletes the other records and their files from disk.',
+    description: 'Merge a duplicate group into one record: keeps the copy named by keepId when its file still exists on disk, otherwise the most mature surviving copy; absorbs the union of tags and the sum of likes; and deletes the other records and their files from disk. Copies whose files are already missing are dropped without verification.',
     inputSchema: {
       ids: z.array(id).min(2).describe('Ids of the duplicate copies to merge.'),
-      keepId: id.optional().describe('Copy to keep; defaults to the most mature surviving copy.'),
+      keepId: id.optional().describe('Copy to keep when its file still exists; otherwise the most mature surviving copy is kept.'),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
   }, ({ ids, keepId }) => client.mergeDuplicates({ ids, keepId }));
