@@ -114,6 +114,7 @@ Start Photo Quest, then register the server with your MCP client:
 | `list_folders` | List folders with media counts and parents |
 | `list_jobs` | Show transcode queue progress and errors |
 | `list_duplicates` | List byte-identical duplicate groups |
+| `merge_duplicates` | Merge a duplicate group into one record |
 | `list_failed` | List missing/unreadable or failed media |
 | `get_storage` | Report disk usage and free space |
 | `scan_folder` | Index a folder on the server machine |

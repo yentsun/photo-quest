@@ -105,7 +105,14 @@ test('a failed API call surfaces the server error and status', async (t) => {
 
 test('write operations use the shared routes and JSON bodies', async (t) => {
   const stub = await startStub(t, ({ req, res }) => {
-    if (req.method === 'POST') return sendJson(res, 200, { scanId: 3, total: 12 });
+    if (req.url === '/media/scan') return sendJson(res, 200, { scanId: 3, total: 12 });
+    if (req.url === '/duplicates/merge') {
+      return sendJson(res, 200, {
+        media: { id: 5, tags: '["keep"]' },
+        merged: 1,
+        deletedFiles: 1,
+      });
+    }
     return sendJson(res, 200, { id: 5, likes: 2, tags: ['keep'] });
   });
   const client = createClient({ baseUrl: stub.baseUrl });
@@ -119,14 +126,19 @@ test('write operations use the shared routes and JSON bodies', async (t) => {
   const tagged = await client.updateTags(5, ['keep']);
   t.assert.deepEqual(tagged.tags, ['keep']);
 
+  const merged = await client.mergeDuplicates({ ids: [5, 9], keepId: 5 });
+  t.assert.deepEqual(merged.media.tags, ['keep']);
+
   t.assert.deepEqual(stub.requests.map(r => `${r.method} ${r.pathname}`), [
     'POST /media/scan',
     'PATCH /media/5/like',
     'PATCH /media/5/tags',
+    'POST /duplicates/merge',
   ]);
   t.assert.deepEqual(JSON.parse(stub.requests[0].body), { path: '/media/photos' });
   t.assert.deepEqual(stub.requests[1].query, { count: '2' });
   t.assert.deepEqual(JSON.parse(stub.requests[2].body), { tags: ['keep'] });
+  t.assert.deepEqual(JSON.parse(stub.requests[3].body), { ids: [5, 9], keepId: 5 });
 });
 
 test('an unreachable server produces a descriptive error', async (t) => {

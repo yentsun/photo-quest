@@ -15,6 +15,7 @@ const TOOL_METHODS = [
   'listJobs',
   'listDuplicates',
   'listFailed',
+  'mergeDuplicates',
   'getStorage',
   'getLibrary',
   'scan',
@@ -71,6 +72,7 @@ test('exposes the basic Photo Quest tool set', async (t) => {
     'list_jobs',
     'list_media',
     'list_tags',
+    'merge_duplicates',
     'scan_folder',
     'update_media_tags',
   ]);
@@ -102,11 +104,13 @@ test('tools forward their arguments to the API client', async (t) => {
   await mcp.callTool({ name: 'scan_folder', arguments: { path: '/media/photos' } });
   await mcp.callTool({ name: 'update_media_tags', arguments: { id: 5, tags: ['trip', 'sky'] } });
   await mcp.callTool({ name: 'like_media', arguments: { id: 5 } });
+  await mcp.callTool({ name: 'merge_duplicates', arguments: { ids: [5, 9], keepId: 5 } });
 
   t.assert.deepEqual(apiClient.calls, [
     { name: 'scan', args: ['/media/photos'] },
     { name: 'updateTags', args: [5, ['trip', 'sky']] },
     { name: 'likeMedia', args: [5, 1] },
+    { name: 'mergeDuplicates', args: [{ ids: [5, 9], keepId: 5 }] },
   ]);
 });
 

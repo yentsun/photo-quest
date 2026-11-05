@@ -110,6 +110,16 @@ export function registerTools(server, client) {
     annotations: READ_ONLY,
   }, (args) => client.listDuplicates(args));
 
+  defineTool(server, 'merge_duplicates', {
+    title: 'Merge duplicates',
+    description: 'Merge a duplicate group into one record: keeps the most mature copy (or keepId), absorbs the union of tags and the sum of likes, and deletes the other records and their files from disk.',
+    inputSchema: {
+      ids: z.array(id).min(2).describe('Ids of the duplicate copies to merge.'),
+      keepId: id.optional().describe('Copy to keep; defaults to the most mature surviving copy.'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+  }, ({ ids, keepId }) => client.mergeDuplicates({ ids, keepId }));
+
   defineTool(server, 'list_failed', {
     title: 'List failed media',
     description: 'List media whose file is missing or unreadable, or whose processing failed, grouped by content hash.',

@@ -142,6 +142,15 @@ export function createClient({ baseUrl = DEFAULT_BASE_URL, fetchImpl = globalThi
       return request(apiRoutes.failed, { query: { limit, offset } });
     },
 
+    async mergeDuplicates({ ids, keepId }) {
+      const result = await request(apiRoutes.duplicatesMerge, {
+        method: 'POST',
+        body: keepId != null ? { ids, keepId } : { ids },
+      });
+      if (result?.media) parseMedia(result.media);
+      return result;
+    },
+
     async getStorage() {
       return request(apiRoutes.storage);
     },
