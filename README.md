@@ -103,7 +103,7 @@ Start Photo Quest, then register the server with your MCP client:
 }
 ```
 
-`PHOTO_QUEST_URL` is optional and defaults to `http://localhost:7837`.
+`PHOTO_QUEST_URL` is optional and defaults to the `serverPort` from `config.json` (`http://localhost:7837` unless changed).
 
 | Tool | Purpose |
 |------|---------|
@@ -113,7 +113,7 @@ Start Photo Quest, then register the server with your MCP client:
 | `list_tags` | List tags with usage counts |
 | `list_folders` | List folders with media counts and parents |
 | `list_jobs` | Show transcode queue progress and errors |
-| `list_duplicates` | List byte-identical duplicate groups |
+| `list_duplicates` | List groups sharing a stored content hash |
 | `merge_duplicates` | Merge a duplicate group, deleting the extra copies from disk |
 | `list_failed` | List missing/unreadable or failed media |
 | `get_storage` | Report disk usage and free space |

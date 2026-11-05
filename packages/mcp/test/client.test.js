@@ -189,6 +189,20 @@ test('merge errors expose the API code and reconciled count', async (t) => {
   t.assert.equal(stub.requests[0].pathname, '/duplicates/merge');
 });
 
+test('mergeDuplicates omits keepId when it is not supplied', async (t) => {
+  const stub = await startStub(t, ({ res }) => sendJson(res, 200, {
+    media: { id: 5 },
+    merged: 1,
+    removedIds: [9],
+    deletedFiles: 1,
+  }));
+  const client = createClient({ baseUrl: stub.baseUrl });
+
+  await client.mergeDuplicates({ ids: [5, 9] });
+
+  t.assert.deepEqual(JSON.parse(stub.requests[0].body), { ids: [5, 9] });
+});
+
 test('an unreachable server produces a descriptive error', async (t) => {
   const client = createClient({ baseUrl: 'http://127.0.0.1:1' });
   await t.assert.rejects(() => client.listTags(), /Cannot reach Photo Quest at http:\/\/127\.0\.0\.1:1/);

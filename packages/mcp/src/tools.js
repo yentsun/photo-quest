@@ -66,7 +66,7 @@ export function registerTools(server, client) {
 
   defineTool(server, 'list_media', {
     title: 'List media',
-    description: 'Search and page through the media library, newest first by default. Returns matching items plus the total match count.',
+    description: 'Search and page through the media library. Newest first by default; `liked` queries default to most-liked unless `sort` is set. Returns matching items plus the total match count.',
     inputSchema: {
       search: z.string().optional().describe('Case-insensitive title substring.'),
       tag: z.string().optional().describe('Only media carrying this exact tag.'),
@@ -110,7 +110,7 @@ export function registerTools(server, client) {
 
   defineTool(server, 'list_duplicates', {
     title: 'List duplicates',
-    description: 'List groups of byte-identical media sharing a content hash.',
+    description: 'List groups of media sharing a stored content hash. Merge verifies the files are byte-identical.',
     inputSchema: paging,
     annotations: READ_ONLY,
   }, (args) => client.listDuplicates(args));
@@ -127,7 +127,7 @@ export function registerTools(server, client) {
 
   defineTool(server, 'list_failed', {
     title: 'List failed media',
-    description: 'List media whose file is missing or unreadable, or whose processing failed, grouped by content hash.',
+    description: 'List media whose file is missing or unreadable, or whose processing failed, grouped by content hash where available.',
     inputSchema: paging,
     annotations: READ_ONLY,
   }, (args) => client.listFailed(args));

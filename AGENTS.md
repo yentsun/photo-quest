@@ -51,7 +51,7 @@ Kojo structure:
 Independent Node.js process that polls the SQLite job queue. Uses Node.js built-in `node:sqlite` for database access. Pipeline: `ffprobe` (probe metadata) → `ffmpeg` (transcode to MP4 H.264/AAC). Communicates with server via shared SQLite database file (`packages/server/photo-quest.db`) with WAL mode for concurrent access.
 
 ### packages/mcp
-Stdio MCP server that exposes the HTTP API as tools (media search, tags, folders, jobs, duplicate listing and merge, failed media, storage, scan, tag and like actions). Talks to a running server via `PHOTO_QUEST_URL` (default `http://localhost:7837`); never opens the database directly.
+Stdio MCP server that exposes the HTTP API as tools (media search, tags, folders, jobs, duplicate listing and merge, failed media, storage, scan, tag and like actions). Talks to a running server via `PHOTO_QUEST_URL` (default: the configured `serverPort` from `config.json`, 7837 unless changed); never opens the database directly.
 
 ### API Endpoints
 - `GET /media` — List all media
