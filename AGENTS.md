@@ -22,10 +22,12 @@ This file provides guidance to coding agents when working with code in this repo
 - `pnpm dev:worker` — Worker process
 - `pnpm build` — Production build of web package
 - `pnpm --filter @photo-quest/server test` — Run server tests
+- `pnpm --filter @photo-quest/mcp test` — Run MCP server tests
+- `pnpm mcp` — Start the MCP server (stdio)
 
 ## Architecture
 
-Plex-like media library app. pnpm workspace monorepo with 4 packages.
+Plex-like media library app. pnpm workspace monorepo.
 
 ### packages/shared
 Shared constants, SQLite schema definitions, route maps. No runtime dependencies. Imported by all other packages.
@@ -47,6 +49,9 @@ Kojo structure:
 
 ### packages/worker
 Independent Node.js process that polls the SQLite job queue. Uses Node.js built-in `node:sqlite` for database access. Pipeline: `ffprobe` (probe metadata) → `ffmpeg` (transcode to MP4 H.264/AAC). Communicates with server via shared SQLite database file (`packages/server/photo-quest.db`) with WAL mode for concurrent access.
+
+### packages/mcp
+Stdio MCP server that exposes the HTTP API as tools (media search, tags, folders, jobs, duplicates, failed media, storage, scan, tag and like actions). Talks to a running server via `PHOTO_QUEST_URL` (default `http://localhost:7837`); never opens the database directly.
 
 ### API Endpoints
 - `GET /media` — List all media
