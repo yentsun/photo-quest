@@ -109,13 +109,6 @@ export default function ({ ids, keepId } = {}) {
   const media = db.prepare('SELECT * FROM media WHERE id = ?').get(master.id);
   media.tags = parseTags(media);
 
-  const { total } = db.prepare(
-    `SELECT COUNT(DISTINCT je.value) AS total
-     FROM media m, json_each(m.tags) je
-     WHERE m.hidden = 0 AND json_valid(m.tags)`
-  ).get();
-  media.tagCount = total;
-
   logger.debug(`merged hash=${hash} master=${master.id} removed=${removals.length} deletedFiles=${deletedFiles}`);
   return { media, merged: removals.length, removedIds: removals.map(r => r.id), deletedFiles };
 }

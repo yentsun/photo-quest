@@ -65,7 +65,7 @@ export default function (id) {
     if (filePath && !keepFile) {
       try {
         fs.unlinkSync(filePath);
-        logger.info(`Deleted file from disk: ${filePath}`);
+        logger.debug(`Deleted file from disk: ${filePath}`);
       } catch (err) {
         logger.warn(`Could not delete file from disk: ${filePath} — ${err.message}`);
       }
@@ -74,7 +74,7 @@ export default function (id) {
     if (transcodedPath && !keepTranscoded) {
       try {
         fs.unlinkSync(transcodedPath);
-        logger.info(`Deleted transcoded file from disk: ${transcodedPath}`);
+        logger.debug(`Deleted transcoded file from disk: ${transcodedPath}`);
       } catch (err) {
         logger.warn(`Could not delete transcoded file from disk: ${transcodedPath} — ${err.message}`);
       }
@@ -89,7 +89,7 @@ export default function (id) {
           if (name === `${prefix}.jpg` || name.startsWith(`${prefix}_`)) {
             try {
               fs.unlinkSync(path.join(THUMBS_DIR, entry));
-              logger.info(`Deleted thumbnail from disk: ${entry}`);
+              logger.debug(`Deleted thumbnail from disk: ${entry}`);
             } catch (err) {
               logger.warn(`Could not delete thumbnail from disk: ${entry} — ${err.message}`);
             }
