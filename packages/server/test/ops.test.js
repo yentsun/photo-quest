@@ -869,12 +869,12 @@ test('mergeDuplicates op', async (t) => {
     return { b, a, c };
   }
 
-  await t.test('keeps the earliest-created master and absorbs tags + likes', (t) => {
+  await t.test('keeps the earliest-created master and absorbs tags + likes', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const { b, a, c } = seedGroup(db);
 
-    const result = callOp(mergeDuplicates, ctx, { ids: [b, a, c] });
+    const result = await callOp(mergeDuplicates, ctx, { ids: [b, a, c] });
 
     t.assert.strictEqual(result.merged, 2);
     t.assert.strictEqual(result.deletedFiles, 2);
@@ -892,7 +892,7 @@ test('mergeDuplicates op', async (t) => {
     t.assert.strictEqual(callOp(getMediaById, ctx, b).id, b);
   });
 
-  await t.test('breaks ties by most likes when created_at is equal', (t) => {
+  await t.test('breaks ties by most likes when created_at is equal', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const lowPath = writeFixtureFile(root, 'low.jpg', 'same');
@@ -904,42 +904,42 @@ test('mergeDuplicates op', async (t) => {
       "INSERT INTO media (path, title, status, hash, tags, likes, created_at) VALUES (?, 'High', 'ready', 'same', '[\"b\"]', 9, '2021-01-01')"
     ).run(highPath).lastInsertRowid;
 
-    const result = callOp(mergeDuplicates, ctx, { ids: [low, high] });
+    const result = await callOp(mergeDuplicates, ctx, { ids: [low, high] });
     t.assert.strictEqual(result.media.id, high);
     t.assert.strictEqual(result.media.likes, 10);
     t.assert.strictEqual(callOp(getMediaById, ctx, low), null);
   });
 
-  await t.test('returns 400 for fewer than two selected records', (t) => {
+  await t.test('returns 400 for fewer than two selected records', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     db.prepare("INSERT INTO media (path, title, status, hash) VALUES ('/only.jpg', 'Only', 'ready', 'same')").run();
 
-    const result = callOp(mergeDuplicates, ctx, { ids: [1] });
+    const result = await callOp(mergeDuplicates, ctx, { ids: [1] });
     t.assert.strictEqual(result.status, 400);
   });
 
-  await t.test('validates required fields', (t) => {
+  await t.test('validates required fields', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
-    t.assert.strictEqual(callOp(mergeDuplicates, ctx, {}).status, 400);
+    t.assert.strictEqual((await callOp(mergeDuplicates, ctx, {})).status, 400);
   });
 
-  await t.test('preserves a removed duplicate as a folder thumbnail', (t) => {
+  await t.test('preserves a removed duplicate as a folder thumbnail', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const { b, a, c } = seedGroup(db);
     db.prepare('INSERT INTO folders (path, thumbnail_media_id, thumbnail_time) VALUES (?, ?, ?)')
       .run(root, a, 12.5);
 
-    callOp(mergeDuplicates, ctx, { ids: [b, a, c] });
+    await callOp(mergeDuplicates, ctx, { ids: [b, a, c] });
 
     const folder = db.prepare('SELECT thumbnail_media_id, thumbnail_time FROM folders WHERE path = ?').get(root);
     t.assert.strictEqual(folder.thumbnail_media_id, b);
     t.assert.strictEqual(folder.thumbnail_time, 12.5);
   });
 
-  await t.test('merges a group whose files are all missing from disk', (t) => {
+  await t.test('merges a group whose files are all missing from disk', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const missingA = db.prepare(
@@ -949,7 +949,7 @@ test('mergeDuplicates op', async (t) => {
       "INSERT INTO media (path, title, status, hash, likes, created_at) VALUES (?, 'B', 'ready', 'same', 1, '2023-01-01')"
     ).run(path.join(root, 'gone-b.jpg')).lastInsertRowid;
 
-    const result = callOp(mergeDuplicates, ctx, { ids: [missingA, missingB] });
+    const result = await callOp(mergeDuplicates, ctx, { ids: [missingA, missingB] });
 
     t.assert.strictEqual(result.merged, 1);
     /* Earliest created_at still wins when nothing is verifiable. */
@@ -959,7 +959,7 @@ test('mergeDuplicates op', async (t) => {
     t.assert.strictEqual(callOp(getMediaById, ctx, missingA).id, missingA);
   });
 
-  await t.test('keeps an existing file as master when a copy is missing', (t) => {
+  await t.test('keeps an existing file as master when a copy is missing', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const existingPath = writeFixtureFile(root, 'present.jpg', 'same');
@@ -971,20 +971,20 @@ test('mergeDuplicates op', async (t) => {
       "INSERT INTO media (path, title, status, hash, created_at) VALUES (?, 'Here', 'ready', 'same', '2024-01-01')"
     ).run(existingPath).lastInsertRowid;
 
-    const result = callOp(mergeDuplicates, ctx, { ids: [missing, present] });
+    const result = await callOp(mergeDuplicates, ctx, { ids: [missing, present] });
 
     t.assert.strictEqual(result.media.id, present);
     t.assert.strictEqual(callOp(getMediaById, ctx, missing), null);
     t.assert.ok(fs.existsSync(existingPath));
   });
 
-  await t.test('keeps an explicitly requested record as master', (t) => {
+  await t.test('keeps an explicitly requested record as master', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const { b, a, c } = seedGroup(db);
 
     /* Without keepId the earliest-created B wins; ask for A instead. */
-    const result = callOp(mergeDuplicates, ctx, { ids: [b, a, c], keepId: a });
+    const result = await callOp(mergeDuplicates, ctx, { ids: [b, a, c], keepId: a });
 
     t.assert.strictEqual(result.media.id, a);
     t.assert.strictEqual(result.media.title, 'A');
@@ -994,7 +994,7 @@ test('mergeDuplicates op', async (t) => {
     t.assert.deepStrictEqual([...result.removedIds].sort((x, y) => x - y), [b, c]);
   });
 
-  await t.test('does not keep a requested record whose file is missing when a copy survives', (t) => {
+  await t.test('does not keep a requested record whose file is missing when a copy survives', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const existingPath = writeFixtureFile(root, 'present.jpg', 'same');
@@ -1007,19 +1007,19 @@ test('mergeDuplicates op', async (t) => {
 
     /* keepId asks for the missing record, but the surviving file must win so it
        is not deleted from disk. */
-    const result = callOp(mergeDuplicates, ctx, { ids: [missing, present], keepId: missing });
+    const result = await callOp(mergeDuplicates, ctx, { ids: [missing, present], keepId: missing });
 
     t.assert.strictEqual(result.media.id, present);
     t.assert.ok(fs.existsSync(existingPath));
     t.assert.strictEqual(callOp(getMediaById, ctx, missing), null);
   });
 
-  await t.test('falls back to the maturity winner when keepId is not in the group', (t) => {
+  await t.test('falls back to the maturity winner when keepId is not in the group', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const { b, a, c } = seedGroup(db);
 
-    const result = callOp(mergeDuplicates, ctx, { ids: [b, a, c], keepId: 9999 });
+    const result = await callOp(mergeDuplicates, ctx, { ids: [b, a, c], keepId: 9999 });
 
     t.assert.strictEqual(result.media.id, b);
   });
@@ -1032,7 +1032,7 @@ test('mergeDuplicates op', async (t) => {
     const a = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'One', 'ready', 'same')").run(onePath).lastInsertRowid;
     const b = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'Two', 'ready', 'same')").run(twoPath).lastInsertRowid;
 
-    const result = callOp(mergeDuplicates, ctx, { ids: [a, b] });
+    const result = await callOp(mergeDuplicates, ctx, { ids: [a, b] });
 
     /* Both stored hashes were stale, so the group was a false positive: the op
        corrects them and reports the conflict instead of deleting either copy. */
@@ -1061,7 +1061,7 @@ test('mergeDuplicates op', async (t) => {
     const keep = db.prepare("INSERT INTO media (path, title, status, hash, hash_version) VALUES (?, 'Keep', 'ready', ?, ?)").run(keepPath, keepHash, HASH_VERSION).lastInsertRowid;
     const stale = db.prepare("INSERT INTO media (path, title, status, hash, hash_version) VALUES (?, 'Stale', 'ready', ?, ?)").run(stalePath, keepHash, HASH_VERSION).lastInsertRowid;
 
-    const result = callOp(mergeDuplicates, ctx, { ids: [keep, stale] });
+    const result = await callOp(mergeDuplicates, ctx, { ids: [keep, stale] });
 
     t.assert.strictEqual(result.status, 409);
     t.assert.strictEqual(result.reconciled, 1);
@@ -1071,6 +1071,27 @@ test('mergeDuplicates op', async (t) => {
     t.assert.strictEqual(callOp(getMediaDuplicates, ctx, keep).count, 0);
     t.assert.strictEqual(callOp(getMediaDuplicates, ctx, stale).count, 0);
   });
+
+  await t.test('keeps the event loop free while hashing large files', async (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const contents = Buffer.alloc(4 * 1024 * 1024, 'a');
+    const aPath = writeFixtureFile(root, 'large-a.bin', contents);
+    const bPath = writeFixtureFile(root, 'large-b.bin', contents);
+    const a = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'A', 'ready', 'same')").run(aPath).lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'B', 'ready', 'same')").run(bPath).lastInsertRowid;
+
+    /* A synchronous hash would run to completion before the event loop could
+       serve this timer, so the timer firing first proves the merge yielded
+       between chunks instead of stalling the whole process. */
+    const order = [];
+    setTimeout(() => order.push('timer'), 0);
+    const result = await callOp(mergeDuplicates, ctx, { ids: [a, b] });
+    order.push('merge');
+
+    t.assert.strictEqual(result.merged, 1);
+    t.assert.deepStrictEqual(order, ['timer', 'merge']);
+  });
 });
 
 test('deleteDuplicates op', async (t) => {
@@ -1078,7 +1099,7 @@ test('deleteDuplicates op', async (t) => {
   t.beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'duplicates-test-')); });
   t.afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
 
-  await t.test('deletes every record in the group', (t) => {
+  await t.test('deletes every record in the group', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const aPath = writeFixtureFile(root, 'a.jpg', 'same');
@@ -1086,7 +1107,7 @@ test('deleteDuplicates op', async (t) => {
     const a = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'A', 'ready', 'same')").run(aPath).lastInsertRowid;
     const b = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'B', 'ready', 'same')").run(bPath).lastInsertRowid;
 
-    const result = callOp(deleteDuplicates, ctx, { ids: [a, b] });
+    const result = await callOp(deleteDuplicates, ctx, { ids: [a, b] });
 
     t.assert.strictEqual(result.deleted, 2);
     t.assert.strictEqual(result.deletedFiles, 2);
@@ -1095,30 +1116,30 @@ test('deleteDuplicates op', async (t) => {
     t.assert.strictEqual(callOp(getMediaById, ctx, b), null);
   });
 
-  await t.test('validates required fields', (t) => {
+  await t.test('validates required fields', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
-    t.assert.strictEqual(callOp(deleteDuplicates, ctx, {}).status, 400);
+    t.assert.strictEqual((await callOp(deleteDuplicates, ctx, {})).status, 400);
   });
 
-  await t.test('rejects a stale singleton selection', (t) => {
+  await t.test('rejects a stale singleton selection', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const filePath = writeFixtureFile(root, 'only.jpg', 'same');
     const id = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'Only', 'ready', 'same')").run(filePath).lastInsertRowid;
 
-    const result = callOp(deleteDuplicates, ctx, { ids: [id] });
+    const result = await callOp(deleteDuplicates, ctx, { ids: [id] });
     t.assert.strictEqual(result.status, 400);
     t.assert.ok(callOp(getMediaById, ctx, id));
   });
 
-  await t.test('deletes a group whose files are missing from disk', (t) => {
+  await t.test('deletes a group whose files are missing from disk', async (t) => {
     const db = freshDb();
     const ctx = makeContext(db);
     const a = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'A', 'ready', 'same')").run(path.join(root, 'gone-a.jpg')).lastInsertRowid;
     const b = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'B', 'ready', 'same')").run(path.join(root, 'gone-b.jpg')).lastInsertRowid;
 
-    const result = callOp(deleteDuplicates, ctx, { ids: [a, b] });
+    const result = await callOp(deleteDuplicates, ctx, { ids: [a, b] });
 
     t.assert.strictEqual(result.deleted, 2);
     t.assert.deepStrictEqual([...result.removedIds].sort((x, y) => x - y), [a, b]);
@@ -1134,7 +1155,7 @@ test('deleteDuplicates op', async (t) => {
     const a = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'One', 'ready', 'same')").run(onePath).lastInsertRowid;
     const b = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'Two', 'ready', 'same')").run(twoPath).lastInsertRowid;
 
-    const result = callOp(deleteDuplicates, ctx, { ids: [a, b] });
+    const result = await callOp(deleteDuplicates, ctx, { ids: [a, b] });
 
     t.assert.strictEqual(result.status, 409);
     t.assert.strictEqual(result.code, 'STALE_DUPLICATES');

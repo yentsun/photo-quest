@@ -207,3 +207,72 @@ test('an unreachable server produces a descriptive error', async (t) => {
   const client = createClient({ baseUrl: 'http://127.0.0.1:1' });
   await t.assert.rejects(() => client.listTags(), /Cannot reach Photo Quest at http:\/\/127\.0\.0\.1:1/);
 });
+
+test('a connection failure surfaces the underlying cause and code', async (t) => {
+  const cause = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+  const client = createClient({
+    baseUrl: 'http://127.0.0.1:7837',
+    fetchImpl: async () => { throw new TypeError('fetch failed', { cause }); },
+  });
+
+  await t.assert.rejects(async () => {
+    try {
+      await client.listTags();
+    } catch (err) {
+      t.assert.equal(err.cause, cause);
+      t.assert.equal(err.code, 'ECONNRESET');
+      t.assert.match(err.message, /ECONNRESET/);
+      throw err;
+    }
+  }, /Cannot reach Photo Quest at http:\/\/127\.0\.0\.1:7837/);
+});
+
+test('retries an idempotent GET once after a transient connection failure', async (t) => {
+  let calls = 0;
+  const client = createClient({
+    baseUrl: 'http://127.0.0.1:7837',
+    fetchImpl: async () => {
+      calls++;
+      if (calls === 1) {
+        throw new TypeError('fetch failed', {
+          cause: Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }),
+        });
+      }
+      return new Response(JSON.stringify({ tags: ['sky'] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
+
+  t.assert.deepEqual(await client.listTags(), { tags: ['sky'] });
+  t.assert.equal(calls, 2);
+});
+
+test('does not replay a merge request after a connection failure', async (t) => {
+  let calls = 0;
+  const client = createClient({
+    baseUrl: 'http://127.0.0.1:7837',
+    fetchImpl: async () => {
+      calls++;
+      throw new TypeError('fetch failed', {
+        cause: Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }),
+      });
+    },
+  });
+
+  await t.assert.rejects(() => client.mergeDuplicates({ ids: [1, 2] }), /ECONNRESET/);
+  t.assert.equal(calls, 1);
+});
+
+test('a request that never answers fails at the configured timeout', async (t) => {
+  const client = createClient({
+    baseUrl: 'http://127.0.0.1:7837',
+    timeoutMs: 20,
+    fetchImpl: (url, init) => new Promise((resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(init.signal.reason));
+    }),
+  });
+
+  await t.assert.rejects(() => client.listTags(), /no response within 20 ms/);
+});

@@ -7,7 +7,7 @@
  * the `removeMedia` op.
  *
  * @param {{ ids: number[] }} params
- * @returns {Object}
+ * @returns {Promise<Object>}
  *   On success: { deleted, deletedFiles }
  *   On error:   { error, status, code?, reconciled? }
  *     400 invalid input / no group; 409 when the group was a stale-hash false
@@ -17,18 +17,18 @@
 import removeMedia from './removeMedia.js';
 import { getVerifiedDuplicateGroup, reconcileStaleHashes, normalizeIds } from '../src/verifiedDuplicates.js';
 
-export default function ({ ids } = {}) {
+export default async function ({ ids } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  const group = getVerifiedDuplicateGroup(db, ids);
+  const group = await getVerifiedDuplicateGroup(db, ids);
   if (!group) {
     /* A stored hash goes stale when a file is replaced after it was scanned, so
        the group can be a false positive. Re-hash the selection to persist the
        correction (the group then stops being offered) and report the conflict
        distinctly from an invalid selection. Only two or more records can form a
        group; a smaller selection is invalid input, not a stale group. */
-    const reconciled = normalizeIds(ids).length >= 2 ? reconcileStaleHashes(db, ids) : 0;
+    const reconciled = normalizeIds(ids).length >= 2 ? await reconcileStaleHashes(db, ids) : 0;
     logger.debug(`no verified duplicate group for selected ids (reconciled=${reconciled})`);
     if (reconciled > 0) {
       return {

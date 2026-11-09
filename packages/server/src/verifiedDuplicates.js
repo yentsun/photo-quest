@@ -3,14 +3,20 @@
  *
  * The database hash was historically a quick fingerprint, so it can only
  * identify candidates. Destructive duplicate actions must compare file bytes.
+ *
+ * Hashing is asynchronous and streamed: the HTTP server runs in the same Node
+ * process, so reading multi-MB videos synchronously would block the event loop
+ * and stall or drop unrelated requests for the whole read.
  */
 
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { HASH_VERSION } from '@photo-quest/shared';
-import { HASH_LENGTH } from './fileHash.js';
+import { computeFileHash } from './fileHash.js';
 
-const CHUNK_SIZE = 1024 * 1024;
+/* Verification feeds a destructive action, so only treat a file as unreadable
+   when its stream makes no progress for this long (e.g. a sleeping network
+   drive). A large file that keeps streaming is never cut off by its size. */
+const HASH_IDLE_TIMEOUT_MS = 30_000;
 
 /** Normalise an id list to unique positive integers. */
 export function normalizeIds(ids) {
@@ -19,26 +25,22 @@ export function normalizeIds(ids) {
     .filter(id => id > 0);
 }
 
-function hashFile(filePath) {
-  let fd;
+/**
+ * Hash one file, yielding to the event loop between chunks.
+ *
+ * Shares `computeFileHash` with the scan pipeline so verification and indexing
+ * cannot drift apart. Missing, unreadable and non-file paths yield `null`.
+ *
+ * @param {string} filePath
+ * @returns {Promise<string|null>}
+ */
+async function hashFile(filePath) {
   try {
-    const stat = fs.statSync(filePath);
+    const stat = await fs.promises.stat(filePath);
     if (!stat.isFile()) return null;
-
-    const hash = crypto.createHash('sha256');
-    const buffer = Buffer.allocUnsafe(CHUNK_SIZE);
-    fd = fs.openSync(filePath, 'r');
-    for (let position = 0; position < stat.size;) {
-      const bytesRead = fs.readSync(fd, buffer, 0, Math.min(buffer.length, stat.size - position), position);
-      if (bytesRead === 0) return null;
-      hash.update(buffer.subarray(0, bytesRead));
-      position += bytesRead;
-    }
-    return hash.digest('hex');
+    return await computeFileHash(filePath, HASH_IDLE_TIMEOUT_MS);
   } catch {
     return null;
-  } finally {
-    if (fd != null) fs.closeSync(fd);
   }
 }
 
@@ -46,10 +48,10 @@ function hashFile(filePath) {
  * Split fingerprint candidates into groups that have identical full contents.
  * Missing or unreadable files are excluded rather than treated as duplicates.
  */
-export function findVerifiedDuplicateGroups(items) {
+export async function findVerifiedDuplicateGroups(items) {
   const groups = new Map();
   for (const item of items) {
-    const hash = hashFile(item.path);
+    const hash = await hashFile(item.path);
     if (!hash) continue;
     const group = groups.get(hash) || { hash, items: [] };
     group.items.push(item);
@@ -61,7 +63,7 @@ export function findVerifiedDuplicateGroups(items) {
 /**
  * Confirm every selected record still exists and has identical file contents.
  */
-export function getVerifiedDuplicateGroup(db, ids) {
+export async function getVerifiedDuplicateGroup(db, ids) {
   const normalizedIds = normalizeIds(ids);
   if (normalizedIds.length < 2) return null;
 
@@ -79,7 +81,7 @@ export function getVerifiedDuplicateGroup(db, ids) {
   const missing = [];
   let contentHash = null;
   for (const item of items) {
-    const itemHash = hashFile(item.path);
+    const itemHash = await hashFile(item.path);
     if (itemHash == null) {
       missing.push(item);
     } else if (contentHash == null) {
@@ -107,9 +109,9 @@ export function getVerifiedDuplicateGroup(db, ids) {
  *
  * @param {import('node:sqlite').DatabaseSync} db
  * @param {number[]} ids
- * @returns {number} Number of records whose stored hash was corrected.
+ * @returns {Promise<number>} Number of records whose stored hash was corrected.
  */
-export function reconcileStaleHashes(db, ids) {
+export async function reconcileStaleHashes(db, ids) {
   const normalizedIds = normalizeIds(ids);
   if (normalizedIds.length === 0) return 0;
 
@@ -124,13 +126,12 @@ export function reconcileStaleHashes(db, ids) {
 
   let reconciled = 0;
   for (const item of items) {
-    const fullHash = hashFile(item.path);
+    const fullHash = await hashFile(item.path);
     if (!fullHash) continue;
-    /* `media.hash` stores only the first `HASH_LENGTH` hex chars, matching
-       `computeFileHash`, so truncate before comparing and persisting. */
-    const actualHash = fullHash.substring(0, HASH_LENGTH);
-    if (actualHash === item.hash) continue;
-    update.run(actualHash, HASH_VERSION, item.id);
+    /* `computeFileHash` already truncates to the length stored in `media.hash`,
+       so the value can be compared and persisted as-is. */
+    if (fullHash === item.hash) continue;
+    update.run(fullHash, HASH_VERSION, item.id);
     reconciled++;
   }
   return reconciled;

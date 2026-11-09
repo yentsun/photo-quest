@@ -19,7 +19,7 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: 'ids are required' });
     }
 
-    const result = kojo.ops.deleteDuplicates({ ids });
+    const result = await kojo.ops.deleteDuplicates({ ids });
     logger.debug(`[POST /duplicates/delete] ids=${ids.join(',')} deleted=${result.deleted} deletedFiles=${result.deletedFiles}`);
 
     if (result.status) {

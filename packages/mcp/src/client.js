@@ -51,13 +51,70 @@ function withId(route, id) {
   return route.replace(':id', encodeURIComponent(String(id)));
 }
 
+/** Default upper bound for a single API request, in milliseconds. A merge hashes
+ * multi-MB files server-side, so a single request can legitimately take minutes. */
+const DEFAULT_TIMEOUT_MS = 120_000;
+
+/**
+ * Connection-level failures that may succeed on a second attempt.
+ *
+ * Retries are limited to idempotent GET requests: a merge POST that was applied
+ * before its connection dropped would report a misleading failure if replayed.
+ */
+const TRANSIENT_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EPIPE',
+  'ETIMEDOUT',
+  'ERR_STREAM_PREMATURE_CLOSE',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
+
+/** The system-level code, if any, behind a failed fetch. */
+function connectionCode(err) {
+  return err?.cause?.code ?? err?.code ?? null;
+}
+
+/**
+ * Build an error that names what actually failed. `fetch` reports every
+ * connection problem as "fetch failed", so the underlying `cause` (ECONNRESET,
+ * UND_ERR_HEADERS_TIMEOUT, ECONNREFUSED, ...) is surfaced here instead of being
+ * discarded.
+ *
+ * @param {Error} err
+ * @param {string} base
+ * @param {number} timeoutMs
+ * @returns {Error}
+ */
+function connectionError(err, base, timeoutMs) {
+  const cause = err?.cause;
+  const timedOut = err?.name === 'TimeoutError' || cause?.name === 'TimeoutError';
+  const code = connectionCode(err);
+  const details = [...new Set([code, cause?.message].filter(Boolean))].join(': ');
+  const message = timedOut
+    ? `Cannot reach Photo Quest at ${base}: no response within ${timeoutMs} ms`
+    : `Cannot reach Photo Quest at ${base}: ${err?.message ?? err}${details ? ` (${details})` : ''}`;
+
+  const error = new Error(message);
+  if (cause) error.cause = cause;
+  if (code) error.code = code;
+  return error;
+}
+
 /**
  * Create an API client bound to one Photo Quest instance.
  *
- * @param {{ baseUrl?: string, fetchImpl?: typeof fetch }} [options]
+ * @param {{ baseUrl?: string, fetchImpl?: typeof fetch, timeoutMs?: number }} [options]
  */
-export function createClient({ baseUrl = DEFAULT_BASE_URL, fetchImpl = globalThis.fetch } = {}) {
+export function createClient({
+  baseUrl = DEFAULT_BASE_URL,
+  fetchImpl = globalThis.fetch,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+} = {}) {
   const base = normalizeBaseUrl(baseUrl);
+  const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
 
   /**
    * @param {string} pathname
@@ -77,14 +134,20 @@ export function createClient({ baseUrl = DEFAULT_BASE_URL, fetchImpl = globalThi
       init.body = JSON.stringify(body);
     }
 
+    const attempts = method === 'GET' ? 2 : 1;
     let response;
-    try {
-      response = await fetchImpl(url, init);
-    } catch (err) {
-      throw new Error(`Cannot reach Photo Quest at ${base}: ${err.message}`);
+    let text;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        response = await fetchImpl(url, { ...init, signal: AbortSignal.timeout(timeout) });
+        text = await response.text();
+        break;
+      } catch (err) {
+        if (attempt < attempts && TRANSIENT_CODES.has(connectionCode(err))) continue;
+        throw connectionError(err, base, timeout);
+      }
     }
 
-    const text = await response.text();
     let data = null;
     if (text) {
       try {
