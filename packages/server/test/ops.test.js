@@ -10,6 +10,7 @@ import test from 'node:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { DatabaseSync as Database } from 'node:sqlite';
 import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE, HASH_VERSION } from '@photo-quest/shared';
 import { computeFileHash } from '../src/fileHash.js';
@@ -1091,6 +1092,30 @@ test('mergeDuplicates op', async (t) => {
 
     t.assert.strictEqual(result.merged, 1);
     t.assert.deepStrictEqual(order, ['timer', 'merge']);
+  });
+
+  await t.test('fails verification instead of dropping a file whose read stalls', async (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const aPath = writeFixtureFile(root, 'stall-a.jpg', 'same');
+    const bPath = writeFixtureFile(root, 'stall-b.jpg', 'same');
+    const a = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'A', 'ready', 'same')").run(aPath).lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, status, hash) VALUES (?, 'B', 'ready', 'same')").run(bPath).lastInsertRowid;
+
+    /* A stalled read must fail the merge closed: treating it as a missing file
+       would delete a copy that was never byte-verified. */
+    const timedOut = Object.assign(new Error('File read timed out'), { code: 'FILE_READ_TIMEOUT' });
+    t.mock.method(fs, 'createReadStream', () => {
+      const stream = new Readable({ read() {} });
+      process.nextTick(() => stream.destroy(timedOut));
+      return stream;
+    });
+
+    await t.assert.rejects(() => callOp(mergeDuplicates, ctx, { ids: [a, b] }), /File read timed out/);
+    t.assert.ok(callOp(getMediaById, ctx, a));
+    t.assert.ok(callOp(getMediaById, ctx, b));
+    t.assert.ok(fs.existsSync(aPath));
+    t.assert.ok(fs.existsSync(bPath));
   });
 });
 

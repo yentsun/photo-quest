@@ -266,13 +266,10 @@ test('does not replay a merge request after a connection failure', async (t) => 
 });
 
 test('a request that never answers fails at the configured timeout', async (t) => {
-  const client = createClient({
-    baseUrl: 'http://127.0.0.1:7837',
-    timeoutMs: 20,
-    fetchImpl: (url, init) => new Promise((resolve, reject) => {
-      init.signal.addEventListener('abort', () => reject(init.signal.reason));
-    }),
-  });
+  /* The stub accepts the request but never responds, so the pending socket (not
+     an unref'd timer) keeps the process alive until the client abandons it. */
+  const stub = await startStub(t, () => {});
+  const client = createClient({ baseUrl: stub.baseUrl, timeoutMs: 20 });
 
   await t.assert.rejects(() => client.listTags(), /no response within 20 ms/);
 });

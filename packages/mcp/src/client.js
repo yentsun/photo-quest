@@ -72,9 +72,11 @@ const TRANSIENT_CODES = new Set([
   'UND_ERR_SOCKET',
 ]);
 
-/** The system-level code, if any, behind a failed fetch. */
+/** The system-level string code, if any, behind a failed fetch. DOMException's
+ * numeric `code` (e.g. 23 for a timeout) is not a connection code. */
 function connectionCode(err) {
-  return err?.cause?.code ?? err?.code ?? null;
+  const candidates = [err?.cause?.code, err?.code];
+  return candidates.find(code => typeof code === 'string') ?? null;
 }
 
 /**

@@ -11,11 +11,11 @@
 
 import fs from 'node:fs';
 import { HASH_VERSION } from '@photo-quest/shared';
-import { computeFileHash } from './fileHash.js';
+import { computeFileHash, FILE_READ_TIMEOUT } from './fileHash.js';
 
-/* Verification feeds a destructive action, so only treat a file as unreadable
-   when its stream makes no progress for this long (e.g. a sleeping network
-   drive). A large file that keeps streaming is never cut off by its size. */
+/* Verification feeds a destructive action: a stream that stops making progress
+   is never treated as a missing file. Give a large file on a slow drive time to
+   resume before the operation fails closed. */
 const HASH_IDLE_TIMEOUT_MS = 30_000;
 
 /** Normalise an id list to unique positive integers. */
@@ -29,7 +29,9 @@ export function normalizeIds(ids) {
  * Hash one file, yielding to the event loop between chunks.
  *
  * Shares `computeFileHash` with the scan pipeline so verification and indexing
- * cannot drift apart. Missing, unreadable and non-file paths yield `null`.
+ * cannot drift apart. Missing and unreadable paths yield `null`; a stalled
+ * stream rejects with `FILE_READ_TIMEOUT` so a destructive action can fail
+ * closed instead of dropping a copy it could not verify.
  *
  * @param {string} filePath
  * @returns {Promise<string|null>}
@@ -38,8 +40,14 @@ async function hashFile(filePath) {
   try {
     const stat = await fs.promises.stat(filePath);
     if (!stat.isFile()) return null;
-    return await computeFileHash(filePath, HASH_IDLE_TIMEOUT_MS);
   } catch {
+    return null;
+  }
+
+  try {
+    return await computeFileHash(filePath, HASH_IDLE_TIMEOUT_MS);
+  } catch (err) {
+    if (err?.code === FILE_READ_TIMEOUT) throw err;
     return null;
   }
 }

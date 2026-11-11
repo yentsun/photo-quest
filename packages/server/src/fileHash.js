@@ -14,6 +14,9 @@ import crypto from 'node:crypto';
 /** Number of hex characters stored in `media.hash`. */
 export const HASH_LENGTH = 32;
 
+/** Error code used when a read stream stops making progress. */
+export const FILE_READ_TIMEOUT = 'FILE_READ_TIMEOUT';
+
 /**
  * Compute a content hash for a file.
  *
@@ -33,7 +36,11 @@ export async function computeFileHash(filePath, timeoutMs = 5000) {
     let timer;
     const resetTimeout = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => stream.destroy(new Error('File read timed out')), timeoutMs);
+      timer = setTimeout(() => {
+        const error = new Error('File read timed out');
+        error.code = FILE_READ_TIMEOUT;
+        stream.destroy(error);
+      }, timeoutMs);
     };
 
     resetTimeout();
