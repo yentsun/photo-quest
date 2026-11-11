@@ -106,6 +106,29 @@ export async function getVerifiedDuplicateGroup(db, ids) {
 }
 
 /**
+ * Confirm every selected record still exists as visible media.
+ *
+ * `getVerifiedDuplicateGroup` awaits file reads, so a concurrent request can
+ * remove one of the records after it resolves. The destructive phase of merge
+ * and delete has no further awaits, so calling this immediately before it makes
+ * the check atomic with the mutations that follow.
+ *
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {number[]} ids
+ * @returns {boolean}
+ */
+export function selectionStillPresent(db, ids) {
+  const normalizedIds = normalizeIds(ids);
+  if (normalizedIds.length === 0) return false;
+
+  const placeholders = normalizedIds.map(() => '?').join(', ');
+  const rows = db.prepare(
+    `SELECT id FROM media WHERE hidden = 0 AND id IN (${placeholders})`
+  ).all(...normalizedIds);
+  return rows.length === normalizedIds.length;
+}
+
+/**
  * Correct stored hashes that no longer match the file on disk.
  *
  * A row stamped with the current `HASH_VERSION` is normally never re-hashed, so

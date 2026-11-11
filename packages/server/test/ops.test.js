@@ -10,7 +10,7 @@ import test from 'node:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, PassThrough } from 'node:stream';
 import { DatabaseSync as Database } from 'node:sqlite';
 import { CREATE_MEDIA_TABLE, CREATE_JOBS_TABLE, CREATE_FOLDERS_TABLE, CREATE_FAILED_SNAPSHOT_TABLE, HASH_VERSION } from '@photo-quest/shared';
 import { computeFileHash } from '../src/fileHash.js';
@@ -1116,6 +1116,40 @@ test('mergeDuplicates op', async (t) => {
     t.assert.ok(callOp(getMediaById, ctx, b));
     t.assert.ok(fs.existsSync(aPath));
     t.assert.ok(fs.existsSync(bPath));
+  });
+
+  await t.test('a concurrent merge cannot delete every copy', async (t) => {
+    const db = freshDb();
+    const ctx = makeContext(db);
+    const aPath = writeFixtureFile(root, 'race-a.jpg', 'same');
+    const bPath = writeFixtureFile(root, 'race-b.jpg', 'same');
+    const a = db.prepare("INSERT INTO media (path, title, status, hash, created_at) VALUES (?, 'A', 'ready', 'same', '2020-01-01')").run(aPath).lastInsertRowid;
+    const b = db.prepare("INSERT INTO media (path, title, status, hash, created_at) VALUES (?, 'B', 'ready', 'same', '2021-01-01')").run(bPath).lastInsertRowid;
+
+    /* Two clients merge the same pair, each keeping a different copy. Both may
+       pass verification before either mutates, so the loser must be rejected
+       instead of deleting the other's master. The mocked streams release two at
+       a time, keeping both verifications in lockstep so they finish together. */
+    const waiting = [];
+    t.mock.method(fs, 'createReadStream', () => {
+      const stream = new PassThrough();
+      waiting.push(stream);
+      while (waiting.length >= 2) {
+        for (const pending of waiting.splice(0, 2)) pending.end('same');
+      }
+      return stream;
+    });
+
+    const settled = await Promise.allSettled([
+      callOp(mergeDuplicates, ctx, { ids: [a, b], keepId: a }),
+      callOp(mergeDuplicates, ctx, { ids: [a, b], keepId: b }),
+    ]);
+
+    t.assert.ok(settled.every(result => result.status === 'fulfilled'));
+    t.assert.strictEqual(settled.filter(result => result.value.media).length, 1);
+    const remaining = db.prepare('SELECT id FROM media').all();
+    t.assert.strictEqual(remaining.length, 1);
+    t.assert.ok(fs.existsSync(remaining[0].id === a ? aPath : bPath));
   });
 });
 

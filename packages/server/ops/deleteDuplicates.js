@@ -15,7 +15,7 @@
  */
 
 import removeMedia from './removeMedia.js';
-import { getVerifiedDuplicateGroup, reconcileStaleHashes, normalizeIds } from '../src/verifiedDuplicates.js';
+import { getVerifiedDuplicateGroup, reconcileStaleHashes, normalizeIds, selectionStillPresent } from '../src/verifiedDuplicates.js';
 
 export default async function ({ ids } = {}) {
   const [kojo, logger] = this;
@@ -38,6 +38,14 @@ export default async function ({ ids } = {}) {
         reconciled,
       };
     }
+    return { error: 'No verified duplicate group for these media items', status: 400 };
+  }
+
+  /* Verification awaits file reads, so a concurrent request can remove one of
+     the selected records in the meantime. Re-check right before mutating: the
+     deletions below run in one turn, which makes the check atomic with them. */
+  if (!selectionStillPresent(db, group.items.map(item => item.id))) {
+    logger.debug('selected records disappeared during duplicate verification');
     return { error: 'No verified duplicate group for these media items', status: 400 };
   }
 
