@@ -15,15 +15,16 @@
  * last file on disk.
  *
  * @param {{ ids: number[], keepId?: number }} params
- * @returns {Object}
+ * @returns {Promise<Object>}
  *   On success: { media, merged, deletedFiles }
  *   On error:   { error, status, code?, reconciled? }
  *     400 invalid input / no group; 409 when the group was a stale-hash false
- *     positive and the stored hashes were corrected.
+ *     positive and the stored hashes were corrected, or when the kept record
+ *     disappeared mid-merge.
  */
 
 import removeMedia from './removeMedia.js';
-import { getVerifiedDuplicateGroup, reconcileStaleHashes, normalizeIds } from '../src/verifiedDuplicates.js';
+import { getVerifiedDuplicateGroup, reconcileStaleHashes, normalizeIds, selectionStillPresent } from '../src/verifiedDuplicates.js';
 
 function parseTags(row) {
   if (Array.isArray(row.tags)) return row.tags;
@@ -45,18 +46,18 @@ function pickMaster(items) {
   })[0];
 }
 
-export default function ({ ids, keepId } = {}) {
+export default async function ({ ids, keepId } = {}) {
   const [kojo, logger] = this;
   const db = kojo.get('db');
 
-  const group = getVerifiedDuplicateGroup(db, ids);
+  const group = await getVerifiedDuplicateGroup(db, ids);
   if (!group) {
     /* A stored hash goes stale when a file is replaced after it was scanned, so
        the group can be a false positive. Re-hash the selection to persist the
        correction (the group then stops being offered) and report the conflict
        distinctly from an invalid selection. Only two or more records can form a
        group; a smaller selection is invalid input, not a stale group. */
-    const reconciled = normalizeIds(ids).length >= 2 ? reconcileStaleHashes(db, ids) : 0;
+    const reconciled = normalizeIds(ids).length >= 2 ? await reconcileStaleHashes(db, ids) : 0;
     logger.debug(`no verified duplicate group for selected ids (reconciled=${reconciled})`);
     if (reconciled > 0) {
       return {
@@ -68,6 +69,16 @@ export default function ({ ids, keepId } = {}) {
     }
     return { error: 'No verified duplicate group for these media items', status: 400 };
   }
+
+  /* Verification awaits file reads, so a concurrent request can remove one of
+     the selected records in the meantime. Re-check right before mutating: the
+     rest of this op is synchronous, which makes the check atomic with the
+     deletions below. */
+  if (!selectionStillPresent(db, group.items.map(item => item.id))) {
+    logger.debug('selected records disappeared during duplicate verification');
+    return { error: 'No verified duplicate group for these media items', status: 400 };
+  }
+
   const { hash, items, existing } = group;
 
   /* A record whose file still exists is always preferred as master so the last
@@ -107,6 +118,12 @@ export default function ({ ids, keepId } = {}) {
   }
 
   const media = db.prepare('SELECT * FROM media WHERE id = ?').get(master.id);
+  if (!media) {
+    /* Unreachable while the check above and the deletions run in one turn; kept
+       so an external writer cannot turn this into a TypeError. */
+    logger.warn(`merged master id=${master.id} disappeared during the merge`);
+    return { error: 'The kept record disappeared during the merge', status: 409 };
+  }
   media.tags = parseTags(media);
 
   logger.debug(`merged hash=${hash} master=${master.id} removed=${removals.length} deletedFiles=${deletedFiles}`);

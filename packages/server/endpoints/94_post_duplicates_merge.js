@@ -22,7 +22,7 @@ export default async (kojo, logger) => {
       return json(res, 400, { error: 'ids are required' });
     }
 
-    const result = kojo.ops.mergeDuplicates({ ids, keepId });
+    const result = await kojo.ops.mergeDuplicates({ ids, keepId });
     logger.debug(`[POST /duplicates/merge] ids=${ids.join(',')} keepId=${keepId} merged=${result.merged} deletedFiles=${result.deletedFiles}`);
 
     if (result.status) {
